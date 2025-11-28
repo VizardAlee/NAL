@@ -23,6 +23,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { createUser } from './actions';
+import { FirebaseError } from 'firebase/app';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -34,7 +36,7 @@ const formSchema = z.object({
 });
 
 type CreateUserFormProps = {
-  onUserCreated: (user: z.infer<typeof formSchema>) => void;
+  onUserCreated: () => void;
 };
 
 export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
@@ -52,20 +54,42 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    console.log('Creating user:', values);
-
-    // In a real app, this is where you would call a server action
-    // to create the user in Firebase Authentication and Firestore.
-    // For now, we'll simulate an async operation.
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    toast({
-      title: 'User Created',
-      description: `Account for ${values.name} has been successfully created.`,
-    });
-
-    onUserCreated(values);
-    setIsLoading(false);
+    try {
+      await createUser(values);
+      toast({
+        title: 'User Created',
+        description: `Account for ${values.name} has been successfully created.`,
+      });
+      onUserCreated();
+    } catch (error) {
+      console.error(error);
+      let errorMessage = "An unknown error occurred.";
+      if (error instanceof FirebaseError) {
+        switch (error.code) {
+          case 'auth/email-already-in-use':
+            errorMessage = 'This email address is already in use by another account.';
+            break;
+          case 'auth/invalid-email':
+            errorMessage = 'The email address is not valid.';
+            break;
+          case 'auth/weak-password':
+            errorMessage = 'The password is not strong enough.';
+            break;
+          default:
+            errorMessage = `An unexpected Firebase error occurred: ${error.message}`;
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      toast({
+        variant: 'destructive',
+        title: 'User Creation Failed',
+        description: errorMessage,
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (

@@ -14,6 +14,7 @@ import {
   useContext,
   type ReactNode,
 } from 'react';
+import { FirebaseErrorListener } from '@/components/firebase-error-listener';
 
 type FirebaseContextValue = {
   app: FirebaseApp;
@@ -43,6 +44,7 @@ export function FirebaseProvider({
       }}
     >
       {children}
+      <FirebaseErrorListener />
     </FirebaseContext.Provider>
   );
 }

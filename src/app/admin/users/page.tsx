@@ -21,22 +21,19 @@ import { Button } from '@/components/ui/button';
 import { PlusCircle, Users } from 'lucide-react';
 import { CreateUserForm } from './create-user-form';
 import { useState } from 'react';
-
-// Mock data for now. This will be replaced with Firestore data.
-const mockUsers = [
-  { id: '1', name: 'Alice Investor', email: 'alice@example.com', role: 'Investor' },
-  { id: '2', name: 'Bob Client', email: 'bob@example.com', role: 'Client' },
-  { id: '3', name: 'Charlie Investor', email: 'charlie@example.com', role: 'Investor' },
-];
-
+import { useCollection } from '@/firebase/firestore/use-collection';
+import { collection, query } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function UsersPage() {
   const [isCreateUserOpen, setCreateUserOpen] = useState(false);
-  const [users, setUsers] = useState(mockUsers); // Later, this will come from useCollection
+  const firestore = useFirestore();
 
-  const handleUserCreated = (newUser: any) => {
-    // This is a mock update. In the future, Firestore's real-time updates will handle this automatically.
-    setUsers(currentUsers => [...currentUsers, { ...newUser, id: (Math.random() * 1000).toString() }]);
+  const usersQuery = query(collection(firestore, 'users'));
+  const { data: users, loading } = useCollection(usersQuery);
+
+  const handleUserCreated = () => {
     setCreateUserOpen(false);
   }
 
@@ -72,7 +69,21 @@ export default function UsersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.map((user) => (
+            {loading &&
+              Array.from({ length: 3 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell>
+                    <Skeleton className="h-5 w-32" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-40" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-20" />
+                  </TableCell>
+                </TableRow>
+              ))}
+            {users?.map((user) => (
               <TableRow key={user.id}>
                 <TableCell className="font-medium">{user.name}</TableCell>
                 <TableCell>{user.email}</TableCell>
