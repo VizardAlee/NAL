@@ -110,13 +110,11 @@ export default function DealsPage() {
               Create Deal
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-h-[90vh] flex flex-col">
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create New Deal</DialogTitle>
             </DialogHeader>
-            <ScrollArea className="pr-6 -mr-6">
-                <CreateDealForm onDealCreated={() => setCreateDealOpen(false)} />
-            </ScrollArea>
+            <CreateDealForm onDealCreated={() => setCreateDealOpen(false)} />
           </DialogContent>
         </Dialog>
       </PageHeader>
