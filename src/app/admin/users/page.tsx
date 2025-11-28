@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Users } from 'lucide-react';
 import { CreateUserForm } from './create-user-form';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -28,11 +28,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export default function UsersPage() {
   const [isCreateUserOpen, setCreateUserOpen] = useState(false);
-  // useFirestore now reliably returns a valid instance.
   const firestore = useFirestore();
 
-  // No need for useMemo or null checks, as firestore is always available.
-  const usersQuery = query(collection(firestore, 'users'));
+  const usersQuery = useMemo(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, 'users'));
+  }, [firestore]);
   
   const { data: users, loading } = useCollection(usersQuery);
 
@@ -86,7 +87,7 @@ export default function UsersPage() {
                   </TableCell>
                 </TableRow>
               ))}
-            {users?.map((user) => (
+            {!loading && users?.map((user) => (
               <TableRow key={user.id}>
                 <TableCell className="font-medium">{user.name}</TableCell>
                 <TableCell>{user.email}</TableCell>

@@ -20,11 +20,12 @@ export function useCollection<T extends DocumentData>(
 
   useEffect(() => {
     if (!q) {
-      setData([]);
       setLoading(false);
+      setData(null); // Set data to null when query is not available
       return;
     }
 
+    // Set loading to true when a new query is provided
     setLoading(true);
 
     const unsubscribe = onSnapshot(

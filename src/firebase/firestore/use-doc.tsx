@@ -19,8 +19,8 @@ export function useDoc<T extends DocumentData>(
 
   useEffect(() => {
     if (!ref) {
-      setData(null);
       setLoading(false);
+      setData(null);
       return;
     }
 
