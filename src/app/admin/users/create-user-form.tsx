@@ -23,7 +23,13 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { createUser } from './actions';
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  updateProfile,
+} from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
 import { FirebaseError } from 'firebase/app';
 
 const formSchema = z.object({
@@ -42,6 +48,8 @@ type CreateUserFormProps = {
 export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const firestore = useFirestore();
+  const auth = getAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -54,20 +62,52 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
+    if (!firestore) {
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Firestore is not available. Please try again later.",
+        });
+        setIsLoading(false);
+        return;
+    }
+
     try {
-      await createUser(values);
+      // 1. Create user in Firebase Authentication
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        values.email,
+        values.password
+      );
+
+      // We need to call a backend function to set custom claims, as this is a privileged operation.
+      // For now, we will proceed without claims and rely on the Firestore role.
+      // In a production app, you would call a Cloud Function here.
+      await updateProfile(userCredential.user, {
+        displayName: values.name,
+      });
+
+      // 2. Create user profile in Firestore
+      const userDocRef = doc(firestore, 'users', userCredential.user.uid);
+      await setDoc(userDocRef, {
+        name: values.name,
+        email: values.email,
+        role: values.role,
+      });
+
       toast({
         title: 'User Created',
         description: `Account for ${values.name} has been successfully created.`,
       });
-      onUserCreated();
+      onUserCreated(); // This will close the dialog
     } catch (error) {
       console.error(error);
-      let errorMessage = "An unknown error occurred.";
+      let errorMessage = 'An unknown error occurred.';
       if (error instanceof FirebaseError) {
         switch (error.code) {
           case 'auth/email-already-in-use':
-            errorMessage = 'This email address is already in use by another account.';
+            errorMessage =
+              'This email address is already in use by another account.';
             break;
           case 'auth/invalid-email':
             errorMessage = 'The email address is not valid.';
@@ -81,7 +121,7 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
       } else if (error instanceof Error) {
         errorMessage = error.message;
       }
-      
+
       toast({
         variant: 'destructive',
         title: 'User Creation Failed',
