@@ -3,10 +3,10 @@
 // please check that the formatting is correct.
 // The file needs to be a single "export const firebaseConfig = { ... }"
 export const firebaseConfig = {
-  "apiKey": "mock-key",
-  "authDomain": "mock.firebaseapp.com",
-  "projectId": "mock-project-id",
-  "storageBucket": "mock.appspot.com",
-  "messagingSenderId": "1234567890",
-  "appId": "1:1234567890:web:1234567890abcdef"
+  "apiKey": "AIzaSyDYitdmm5H_7GkRR8PAmPMIyAQ9sS9Xggc",
+  "authDomain": "studio-1298078893-e7941.firebaseapp.com",
+  "projectId": "studio-1298078893-e7941",
+  "storageBucket": "studio-1298078893-e7941.appspot.com",
+  "messagingSenderId": "1018583979606",
+  "appId": "1:1018583979606:web:d50ec535e8fbc4c231cdf7"
 };
