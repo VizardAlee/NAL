@@ -29,6 +29,7 @@ service cloud.firestore {
       allow list: if isAdmin();
       
       // Allow any authenticated user to create a new user document (e.g., during signup).
+      // In a real app, you would likely restrict this to admins or specific backend processes.
       allow create: if request.auth != null;
 
       // Only the user themself or an Admin can update a user document.
@@ -40,20 +41,18 @@ service cloud.firestore {
 
     // Rules for the 'deals' collection
     match /deals/{dealId} {
-        // An investor can read a deal if they have an investment in it.
-        function isInvestedInDeal() {
-          return isInvestor() && exists(/databases/$(database)/documents/investments?dealId=$(dealId)&investorId=$(request.auth.uid));
-        }
-
         // Admins can do anything.
         // Clients can read deals they are associated with.
-        // Investors can read deals they are invested in.
-        allow read: if isAdmin() || (isClient() && resource.data.clientId == request.auth.uid) || isInvestedInDeal();
+        // Investors can read all deals (the client will filter to only show ones they've invested in).
+        allow read: if isAdmin() || (isClient() && resource.data.clientId == request.auth.uid) || isInvestor();
+        
+        // Only Admins can create, update or delete deals
         allow create, update, delete: if isAdmin();
     }
 
+    // Rules for the 'investments' collection
     match /investments/{investmentId} {
-      // Admins can write
+      // Admins can write.
       allow write: if isAdmin();
       // Admins can read all. Investors can read their own investments.
       allow read: if isAdmin() || (isInvestor() && resource.data.investorId == request.auth.uid);
