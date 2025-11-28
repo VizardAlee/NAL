@@ -1,0 +1,149 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "Represents a user in the system, who can be an Admin, Investor, or Client.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The user's full name."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address.",
+          "format": "email"
+        },
+        "role": {
+          "type": "string",
+          "description": "The role of the user.",
+          "enum": ["Admin", "Investor", "Client"]
+        }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "deal": {
+      "title": "Deal",
+      "description": "Represents a financing deal for a client.",
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "type": "string",
+          "description": "The ID of the client associated with this deal."
+        },
+        "principal": {
+          "type": "number",
+          "description": "The principal amount of the loan."
+        },
+        "interestRate": {
+          "type": "number",
+          "description": "The annual interest rate for the deal."
+        },
+        "duration": {
+          "type": "number",
+          "description": "The duration of the deal in months."
+        },
+        "repaymentType": {
+          "type": "string",
+          "description": "The type of repayment plan.",
+          "enum": ["Equal Installments", "Balloon Payment"]
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the deal.",
+          "enum": ["Pending", "Active", "Completed", "Terminated"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the deal was created."
+        }
+      },
+      "required": ["clientId", "principal", "interestRate", "duration", "repaymentType", "status", "createdAt"]
+    },
+    "fundBatch": {
+      "title": "Fund Batch",
+      "description": "A specific batch of capital from an investor or the platform, available for investment.",
+      "type": "object",
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "description": "The ID of the source (Investor's user ID or 'platform')."
+        },
+        "amount": {
+          "type": "number",
+          "description": "The amount of capital in this batch."
+        },
+        "remainingAmount": {
+          "type": "number",
+          "description": "The amount of capital from this batch that is still available to be invested."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the funds were added."
+        }
+      },
+      "required": ["sourceId", "amount", "remainingAmount", "createdAt"]
+    },
+    "transaction": {
+      "title": "Transaction",
+      "description": "Logs every financial transaction within the platform.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "The type of transaction.",
+          "enum": ["Deposit", "Withdrawal", "Investment", "Repayment", "ProfitDistribution"]
+        },
+        "amount": {
+          "type": "number",
+          "description": "The transaction amount."
+        },
+        "dealId": {
+          "type": "string",
+          "description": "The ID of the deal related to this transaction (if applicable)."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user related to this transaction (if applicable)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp of the transaction."
+        }
+      },
+      "required": ["type", "amount", "createdAt"]
+    }
+  },
+  "auth": {
+    "providers": ["email"]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/user"
+      },
+      "description": "Stores individual user profiles."
+    },
+    "/deals/{dealId}": {
+      "schema": {
+        "$ref": "#/entities/deal"
+      },
+      "description": "Stores all financing deals."
+    },
+    "/fundBatches/{fundBatchId}": {
+      "schema": {
+        "$ref": "#/entities/fundBatch"
+      },
+      "description": "A ledger of all investable capital batches."
+    },
+    "/transactions/{transactionId}": {
+      "schema": {
+        "$ref": "#/entities/transaction"
+      },
+      "description": "A log of all financial transactions."
+    }
+  }
+}
