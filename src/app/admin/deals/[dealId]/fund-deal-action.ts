@@ -1,7 +1,7 @@
 
 'use server';
 
-import { getFirebase } from '@/firebase/server';
+import { initializeFirebase } from '@/firebase/server';
 import { FieldValue, runTransaction } from 'firebase-admin/firestore';
 
 // This is a simplified server-side action using firebase-admin.
@@ -11,7 +11,7 @@ export async function fundDealAction(dealId: string): Promise<{ success: boolean
         return { success: false, message: 'Deal ID is missing.' };
     }
     
-    const { firestore } = getFirebase();
+    const { firestore } = initializeFirebase();
 
     try {
         await runTransaction(firestore, async (transaction) => {
@@ -40,7 +40,9 @@ export async function fundDealAction(dealId: string): Promise<{ success: boolean
             let amountToFund = dealData.principal - totalFunded;
 
             if (amountToFund <= 0) {
-                throw new Error('Deal is already fully funded.');
+                // If it's already funded but still pending, just activate it.
+                transaction.update(dealRef, { status: 'Active' });
+                return;
             }
 
             // 2. Get all available fund batches, ordered by creation date (FIFO)
@@ -51,14 +53,10 @@ export async function fundDealAction(dealId: string): Promise<{ success: boolean
             
             const fundBatchesSnapshot = await transaction.get(fundBatchesQuery);
             
-            if (fundBatchesSnapshot.empty) {
-                throw new Error('No available funds from any investor.');
-            }
-            
             const totalAvailableFunds = fundBatchesSnapshot.docs.reduce((sum, doc) => sum + doc.data().remainingAmount, 0);
             
             if (totalAvailableFunds < amountToFund) {
-                throw new Error(`Insufficient funds available. Need ${amountToFund}, but only ${totalAvailableFunds} is available.`);
+                throw new Error(`Insufficient funds available. Need ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amountToFund)}, but only ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(totalAvailableFunds)} is available.`);
             }
 
             // 3. Iterate through batches and create investments
