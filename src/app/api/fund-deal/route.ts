@@ -1,7 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getApps, initializeApp, cert, type ServiceAccount } from 'firebase-admin/app';
-import { getFirestore, FieldValue, runTransaction } from 'firebase-admin/firestore';
+import * as admin from 'firebase-admin';
+import { ServiceAccount } from 'firebase-admin';
 
 const serviceAccount: ServiceAccount | undefined = process.env.FIREBASE_CLIENT_EMAIL
   ? {
@@ -11,17 +11,17 @@ const serviceAccount: ServiceAccount | undefined = process.env.FIREBASE_CLIENT_E
     }
   : undefined;
 
-function getAdminFirestore() {
-    const apps = getApps();
+function getAdminApp() {
+    const apps = admin.apps;
     if (!apps.length) {
         if (!serviceAccount?.projectId) {
             throw new Error('Firebase Admin SDK environment variables are not set.');
         }
-        initializeApp({
-            credential: cert(serviceAccount),
+        return admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
         });
     }
-    return getFirestore();
+    return apps[0]!;
 }
 
 export async function POST(request: NextRequest) {
@@ -31,10 +31,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, message: 'Deal ID is missing.' }, { status: 400 });
     }
 
-    const firestore = getAdminFirestore();
+    const app = getAdminApp();
+    const firestore = admin.firestore(app);
 
     try {
-        await runTransaction(firestore, async (transaction) => {
+        await firestore.runTransaction(async (transaction) => {
             const dealRef = firestore.collection('deals').doc(dealId);
             const dealDoc = await transaction.get(dealRef);
 
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
                     investorId: batchData.sourceId,
                     dealId: dealId,
                     amount: amountToDeduct,
-                    createdAt: FieldValue.serverTimestamp(),
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
 
                 const transactionRef = firestore.collection('transactions').doc();
@@ -95,12 +96,12 @@ export async function POST(request: NextRequest) {
                     dealId: dealId,
                     type: 'Investment',
                     amount: -amountToDeduct,
-                    createdAt: FieldValue.serverTimestamp(),
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
                     dealName: dealData.dealName,
                 });
 
                 transaction.update(batchDoc.ref, {
-                    remainingAmount: FieldValue.increment(-amountToDeduct)
+                    remainingAmount: admin.firestore.FieldValue.increment(-amountToDeduct)
                 });
                 
                 amountToFund -= amountToDeduct;
