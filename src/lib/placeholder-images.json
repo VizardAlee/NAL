@@ -1,3 +1,34 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "hero-image",
+      "description": "Abstract visualization of financial data and networks, representing a unified management hub.",
+      "imageUrl": "https://images.unsplash.com/photo-1705948734578-54b4e4dbf443?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8ZmluYW5jaWFsJTIwbWFuYWdlbWVudHxlbnwwfHx8fDE3NjQyOTI5NDN8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "financial management"
+    },
+    {
+      "id": "ai-analyzer",
+      "description": "A brain-like network of nodes and connections, symbolizing AI-powered analysis.",
+      "imageUrl": "https://images.unsplash.com/photo-1758626044744-463ce33546a2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxBSSUyMGFuYWx5c2lzfGVufDB8fHx8MTc2NDI2MzQ0N3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "AI analysis"
+    },
+    {
+      "id": "feature-investor",
+      "description": "A dashboard showing charts and graphs of investment portfolio performance.",
+      "imageUrl": "https://images.unsplash.com/photo-1612696877544-9796e268bfcf?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxpbnZlc3RvciUyMGRhc2hib2FyZHxlbnwwfHx8fDE3NjQzMDIwNzl8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "investor dashboard"
+    },
+    {
+      "id": "feature-client",
+      "description": "A user interface showing a loan repayment schedule and status.",
+      "imageUrl": "https://images.unsplash.com/photo-1646505463882-ca5853f7c0a4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxjbGllbnQlMjBkYXNoYm9hcmR8ZW58MHx8fHwxNzY0MzAyMDc5fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "client dashboard"
+    },
+    {
+      "id": "feature-admin",
+      "description": "A complex control panel with various metrics and user management tools.",
+      "imageUrl": "https://images.unsplash.com/photo-1511995352296-e02a292767e5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxhZG1pbiUyMHBhbmVsfGVufDB8fHx8MTc2NDI1Mzc1M3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "admin panel"
+    }
+  ]
 }
