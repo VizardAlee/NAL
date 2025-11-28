@@ -3,8 +3,8 @@ import { getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 
-// Use the mock config to ensure valid keys are present for initialization.
-import { firebaseConfig } from '@/lib/firebase-config';
+// Now reads from .env variables via the config file
+import { firebaseConfig } from '@/firebase/config';
 
 // --- Single, global Firebase instance ---
 let app: FirebaseApp;
@@ -21,7 +21,7 @@ function initializeFirebaseApp() {
     app = apps[0];
   } else {
     // This check ensures we don't try to initialize with an invalid config.
-    if (!firebaseConfig?.apiKey || firebaseConfig.apiKey === 'mock-key') {
+    if (!firebaseConfig?.apiKey || firebaseConfig.apiKey.includes('mock-key')) {
         console.warn("Using mock Firebase configuration. Please set up your environment variables for a real project.");
     }
     app = initializeApp(firebaseConfig);
