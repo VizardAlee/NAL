@@ -1,24 +1,34 @@
+'use client';
 import { getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 
-import { firebaseConfig } from './config';
+// Use the mock config to ensure valid keys are present for initialization.
+import { firebaseConfig } from '@/lib/firebase-config';
 
 // --- Single, global Firebase instance ---
 let app: FirebaseApp;
 let auth: Auth;
 let firestore: Firestore;
 
-// Initialize Firebase once globally
-const apps = getApps();
-if (apps.length > 0) {
-  app = apps[0];
-} else {
-  app = initializeApp(firebaseConfig);
+/**
+ * Initializes Firebase App.
+ * This function is idempotent, meaning it can be called multiple times without re-initializing.
+ */
+function initializeFirebaseApp() {
+  const apps = getApps();
+  if (apps.length > 0) {
+    app = apps[0];
+  } else {
+    app = initializeApp(firebaseConfig);
+  }
+  auth = getAuth(app);
+  firestore = getFirestore(app);
 }
 
-auth = getAuth(app);
-firestore = getFirestore(app);
+// Initialize on module load
+initializeFirebaseApp();
+
 
 /**
  * Returns the initialized Firebase instances.
