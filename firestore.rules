@@ -70,7 +70,17 @@ service cloud.firestore {
         // Admin can do anything
         allow write: if isAdmin();
         // Investor can read their own transactions, Admins can read all.
-        allow read: if isAdmin() || (isInvestor() && resource.data.userId == request.auth.uid);
+        // Clients can read their own repayment transactions.
+        allow read: if isAdmin() || (isInvestor() && resource.data.userId == request.auth.uid) || (isClient() && resource.data.userId == request.auth.uid);
+    }
+
+    // Rules for 'repayments'
+    match /repayments/{repaymentId} {
+      // Admins can read and update all repayments.
+      allow read, update: if isAdmin();
+      // Clients can create their own repayments and read their own.
+      allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
+      allow list: if isClient() && request.resource.data.clientId == request.auth.uid;
     }
   }
 }

@@ -171,6 +171,41 @@
         }
       },
       "required": ["type", "amount", "createdAt"]
+    },
+    "repayment": {
+      "title": "Repayment",
+      "description": "Represents a repayment made by a client for a deal.",
+      "type": "object",
+      "properties": {
+        "dealId": {
+          "type": "string",
+          "description": "The ID of the deal this repayment is for."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "The ID of the client making the payment."
+        },
+        "amount": {
+          "type": "number",
+          "description": "The amount of the repayment."
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the repayment.",
+          "enum": ["Pending", "Approved", "Rejected"]
+        },
+        "lodgedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the client lodged the payment."
+        },
+        "approvedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the admin approved the payment."
+        }
+      },
+      "required": ["dealId", "clientId", "amount", "status", "lodgedAt"]
     }
   },
   "auth": {
@@ -206,6 +241,12 @@
         "$ref": "#/entities/transaction"
       },
       "description": "A log of all financial transactions."
+    },
+    "/repayments/{repaymentId}": {
+      "schema": {
+        "$ref": "#/entities/repayment"
+      },
+      "description": "Tracks client repayments that are pending or completed."
     }
   }
 }
