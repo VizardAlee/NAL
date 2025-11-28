@@ -1,3 +1,4 @@
+
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -10,9 +11,9 @@ const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 let serviceAccount: any;
 if (serviceAccountString) {
   try {
-    // The replace is necessary to handle the newline characters in the private key
-    // when it's read from an environment variable.
-    serviceAccount = JSON.parse(serviceAccountString.replace(/\\n/g, '\n'));
+    // Decode the Base64 string to get the JSON string
+    const decodedString = Buffer.from(serviceAccountString, 'base64').toString('utf8');
+    serviceAccount = JSON.parse(decodedString);
   } catch (error) {
     console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:', error);
     serviceAccount = undefined;
