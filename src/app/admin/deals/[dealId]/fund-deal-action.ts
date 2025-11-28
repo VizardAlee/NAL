@@ -5,7 +5,6 @@ import { initializeFirebase } from '@/firebase/server';
 import { FieldValue, runTransaction } from 'firebase-admin/firestore';
 
 // This is a simplified server-side action using firebase-admin.
-// In a real app, you would have more robust error handling and validation.
 export async function fundDealAction(dealId: string): Promise<{ success: boolean, message: string }> {
     if (!dealId) {
         return { success: false, message: 'Deal ID is missing.' };
@@ -48,7 +47,6 @@ export async function fundDealAction(dealId: string): Promise<{ success: boolean
             // 2. Get all available fund batches, ordered by creation date (FIFO)
             const fundBatchesQuery = firestore.collection('fundBatches')
                 .where('remainingAmount', '>', 0)
-                .orderBy('remainingAmount')
                 .orderBy('createdAt', 'asc');
             
             const fundBatchesSnapshot = await transaction.get(fundBatchesQuery);
