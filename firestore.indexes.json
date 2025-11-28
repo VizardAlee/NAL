@@ -1,0 +1,18 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "fundBatches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "remainingAmount",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ]
+}
