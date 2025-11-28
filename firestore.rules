@@ -40,12 +40,25 @@ service cloud.firestore {
 
     // Rules for the 'deals' collection
     match /deals/{dealId} {
+        // An investor can read a deal if they have an investment in it.
+        function isInvestedInDeal() {
+          return isInvestor() && exists(/databases/$(database)/documents/investments?dealId=$(dealId)&investorId=$(request.auth.uid));
+        }
+
         // Admins can do anything.
         // Clients can read deals they are associated with.
-        allow read: if isAdmin() || (isClient() && resource.data.clientId == request.auth.uid);
+        // Investors can read deals they are invested in.
+        allow read: if isAdmin() || (isClient() && resource.data.clientId == request.auth.uid) || isInvestedInDeal();
         allow create, update, delete: if isAdmin();
     }
 
+    match /investments/{investmentId} {
+      // Admins can write
+      allow write: if isAdmin();
+      // Admins can read all. Investors can read their own investments.
+      allow read: if isAdmin() || (isInvestor() && resource.data.investorId == request.auth.uid);
+    }
+    
     // Rules for 'fundBatches' and 'transactions'
     match /fundBatches/{batchId} {
         // Admin can do anything

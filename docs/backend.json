@@ -117,6 +117,31 @@
       },
       "required": ["sourceId", "amount", "remainingAmount", "createdAt"]
     },
+    "investment": {
+      "title": "Investment",
+      "description": "Links an investor to a deal and the amount they invested.",
+      "type": "object",
+      "properties": {
+        "investorId": {
+          "type": "string",
+          "description": "The ID of the investor user."
+        },
+        "dealId": {
+          "type": "string",
+          "description": "The ID of the deal being invested in."
+        },
+        "amount": {
+          "type": "number",
+          "description": "The amount invested."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp of the investment."
+        }
+      },
+      "required": ["investorId", "dealId", "amount", "createdAt"]
+    },
     "transaction": {
       "title": "Transaction",
       "description": "Logs every financial transaction within the platform.",
@@ -169,6 +194,12 @@
         "$ref": "#/entities/fundBatch"
       },
       "description": "A ledger of all investable capital batches."
+    },
+    "/investments/{investmentId}": {
+      "schema": {
+        "$ref": "#/entities/investment"
+      },
+      "description": "Tracks which investor has invested in which deal."
     },
     "/transactions/{transactionId}": {
       "schema": {

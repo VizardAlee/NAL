@@ -29,8 +29,15 @@ import { CreateDealForm } from './create-deal-form';
 import { Deal } from '@/lib/types';
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useRouter } from 'next/navigation';
 
 function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean }) {
+  const router = useRouter();
+
+  const handleRowClick = (dealId: string) => {
+    router.push(`/admin/deals/${dealId}`);
+  };
+
   const formatDate = (timestamp: Timestamp | Date | string | undefined) => {
     if (!timestamp) return 'N/A';
     if (timestamp instanceof Timestamp) {
@@ -70,7 +77,7 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
               </TableRow>
             ))}
           {!loading && deals?.map((deal) => (
-            <TableRow key={deal.id}>
+            <TableRow key={deal.id} onClick={() => handleRowClick(deal.id)} className="cursor-pointer">
               <TableCell className="font-medium">{deal.dealName}</TableCell>
               <TableCell>{deal.clientName}</TableCell>
               <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
