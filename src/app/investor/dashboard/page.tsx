@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, Landmark, History } from "lucide-react";
-import { Naira } from "@/components/icons";
 import { useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp } from 'firebase/firestore';
@@ -88,7 +87,7 @@ export default function InvestorDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Capital</CardTitle>
-            <Naira className="h-4 w-4 text-muted-foreground" />
+            <span className="h-4 w-4 text-muted-foreground">₦</span>
           </CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(totalCapital)}</div>}
@@ -98,7 +97,7 @@ export default function InvestorDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
-            <Naira className="h-4 w-4 text-muted-foreground" />
+            <span className="h-4 w-4 text-muted-foreground">₦</span>
           </CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(portfolioValue)}</div>}
