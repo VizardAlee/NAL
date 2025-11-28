@@ -27,6 +27,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, type DocumentData } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useRouter } from 'next/navigation';
 
 type User = DocumentData & {
     id: string;
@@ -36,6 +37,12 @@ type User = DocumentData & {
 };
 
 function UsersTable({ users, loading }: { users: User[] | null, loading: boolean }) {
+  const router = useRouter();
+
+  const handleRowClick = (userId: string) => {
+    router.push(`/admin/users/${userId}`);
+  };
+  
   return (
     <div className="rounded-lg border shadow-sm">
       <Table>
@@ -62,7 +69,7 @@ function UsersTable({ users, loading }: { users: User[] | null, loading: boolean
               </TableRow>
             ))}
           {!loading && users?.map((user) => (
-            <TableRow key={user.id}>
+            <TableRow key={user.id} onClick={() => handleRowClick(user.id)} className="cursor-pointer">
               <TableCell className="font-medium">{user.name}</TableCell>
               <TableCell>{user.email}</TableCell>
               <TableCell>

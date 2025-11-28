@@ -3,10 +3,9 @@
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, PlusCircle, Landmark, History, Loader2 } from "lucide-react";
+import { TrendingUp, Landmark, History } from "lucide-react";
 import { Naira } from "@/components/icons";
 import { useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
@@ -75,12 +74,7 @@ export default function InvestorDashboard() {
         title="Investor Dashboard"
         description="Welcome to your personal investment hub."
         icon={Landmark}
-      >
-        <Button>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add Funds
-        </Button>
-      </PageHeader>
+      />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card>
