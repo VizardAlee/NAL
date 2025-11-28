@@ -1,16 +1,37 @@
 
 'use server';
 
-import { initializeFirebase } from '@/firebase/server';
-import { FieldValue, runTransaction } from 'firebase-admin/firestore';
+import { getApps, initializeApp, cert, type ServiceAccount } from 'firebase-admin/app';
+import { getFirestore, FieldValue, runTransaction } from 'firebase-admin/firestore';
 
-// This is a simplified server-side action using firebase-admin.
+const serviceAccount: ServiceAccount | undefined = process.env.FIREBASE_CLIENT_EMAIL
+  ? {
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    }
+  : undefined;
+
+function getAdminFirestore() {
+    const apps = getApps();
+    if (!apps.length) {
+        if (!serviceAccount?.projectId) {
+            throw new Error('Firebase Admin SDK environment variables are not set.');
+        }
+        initializeApp({
+            credential: cert(serviceAccount),
+        });
+    }
+    return getFirestore();
+}
+
+
 export async function fundDealAction(dealId: string): Promise<{ success: boolean, message: string }> {
     if (!dealId) {
         return { success: false, message: 'Deal ID is missing.' };
     }
     
-    const { firestore } = initializeFirebase();
+    const firestore = getAdminFirestore();
 
     try {
         await runTransaction(firestore, async (transaction) => {
