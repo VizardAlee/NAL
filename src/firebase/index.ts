@@ -20,6 +20,10 @@ function initializeFirebaseApp() {
   if (apps.length > 0) {
     app = apps[0];
   } else {
+    // This check ensures we don't try to initialize with an invalid config.
+    if (!firebaseConfig?.apiKey || firebaseConfig.apiKey === 'mock-key') {
+        console.warn("Using mock Firebase configuration. Please set up your environment variables for a real project.");
+    }
     app = initializeApp(firebaseConfig);
   }
   auth = getAuth(app);
