@@ -3,11 +3,28 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
  
-    // TEMPORARY: Allow public read access to the users collection for testing.
-    match /users/{userId} {
-      allow read, write: if true;
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
     }
-
+ 
+    function isAdmin() {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+    }
+ 
+    match /users/{userId} {
+      // Admins can list all users. Regular users cannot.
+      allow list: if isAdmin();
+      // Admins can get any user. Regular users can only get their own document.
+      allow get: if isOwner(userId) || isAdmin();
+      // Allow user creation for authenticated users (e.g., signup).
+      // The role is set on the client/server and should be validated.
+      allow create: if request.auth != null;
+      // Admins can update any user. Regular users can only update their own document.
+      allow update: if isOwner(userId) || isAdmin();
+      // Only admins can delete users.
+      allow delete: if isAdmin();
+    }
+ 
     // Deny all other reads and writes by default.
     match /{document=**} {
       allow read, write: if false;
