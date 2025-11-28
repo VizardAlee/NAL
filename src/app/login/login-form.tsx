@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,8 +16,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { signInWithEmailAndPassword, type User } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { useAuth, useFirestore } from "@/firebase";
+import { FirebaseError } from "firebase/app";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -26,6 +32,9 @@ const formSchema = z.object({
 export function LoginForm() {
   const { toast } = useToast();
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+  const auth = useAuth();
+  const firestore = useFirestore();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -35,15 +44,89 @@ export function LoginForm() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    // Mock login logic
-    console.log(values);
-    toast({
-      title: "Login Successful",
-      description: "Redirecting to your dashboard...",
-    });
-    // In a real app, you'd handle Firebase auth here.
-    router.push("/admin/dashboard");
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsLoading(true);
+    if (!auth || !firestore) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Firebase is not available. Please try again later.",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        values.email,
+        values.password
+      );
+      
+      const user = userCredential.user;
+      
+      // Fetch user role from Firestore
+      const userDocRef = doc(firestore, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (!userDoc.exists()) {
+        throw new Error("User profile not found in database.");
+      }
+
+      const userData = userDoc.data();
+      const role = userData.role;
+
+      toast({
+        title: "Login Successful",
+        description: "Redirecting to your dashboard...",
+      });
+
+      // Redirect based on role
+      switch (role) {
+        case 'Admin':
+          router.push("/admin/dashboard");
+          break;
+        case 'Investor':
+          router.push("/investor/dashboard");
+          break;
+        case 'Client':
+          router.push("/client/dashboard");
+          break;
+        default:
+          router.push("/"); // Fallback to home page
+      }
+
+    } catch (error) {
+      console.error("Login Error:", error);
+      let errorMessage = "An unknown error occurred.";
+      if (error instanceof FirebaseError) {
+         switch (error.code) {
+          case 'auth/user-not-found':
+          case 'auth/wrong-password':
+          case 'auth/invalid-credential':
+            errorMessage = 'Invalid email or password.';
+            break;
+          case 'auth/invalid-email':
+            errorMessage = 'Please enter a valid email address.';
+            break;
+          case 'auth/user-disabled':
+            errorMessage = 'This account has been disabled.';
+            break;
+          default:
+            errorMessage = `An unexpected error occurred. Please try again.`;
+        }
+      } else if (error instanceof Error) {
+         errorMessage = error.message;
+      }
+      
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: errorMessage,
+      });
+    } finally {
+        setIsLoading(false);
+    }
   }
 
   return (
@@ -80,7 +163,8 @@ export function LoginForm() {
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full" size="lg">
+            <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Login <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </form>

@@ -1,3 +1,6 @@
+
+'use client';
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell } from "lucide-react";
+import { Bell, LogOut } from "lucide-react";
 import {
   SidebarProvider,
   Sidebar,
@@ -21,13 +24,54 @@ import {
 import { AdminNav } from "@/components/admin-nav";
 import { Logo } from "@/components/icons";
 import Link from "next/link";
-import { loggedInUser } from "@/lib/data";
+import { useUser } from "@/firebase";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/firebase/provider";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { user, loading } = useUser();
+  const auth = useAuth();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await auth.signOut();
+    router.push('/login');
+  };
+
+  // If loading, show a skeleton layout
+  if (loading) {
+    return (
+      <div className="flex h-screen w-full">
+        <div className="hidden md:flex flex-col w-64 border-r p-4 gap-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-3/4" />
+        </div>
+        <div className="flex-1">
+            <header className="flex items-center h-16 border-b px-6 justify-end">
+                <Skeleton className="h-8 w-8 rounded-full" />
+            </header>
+            <main className="p-6">
+                <Skeleton className="h-32 w-full" />
+            </main>
+        </div>
+      </div>
+    );
+  }
+
+  // If not logged in, redirect to login
+  if (!user) {
+    router.push('/login');
+    return null; // or a loading spinner
+  }
+
+
   return (
     <SidebarProvider>
       <Sidebar>
@@ -63,8 +107,8 @@ export default function AdminLayout({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={loggedInUser.avatarUrl} alt={loggedInUser.name} />
-                  <AvatarFallback>{loggedInUser.name.charAt(0)}</AvatarFallback>
+                  <AvatarImage src={user?.photoURL ?? ''} alt={user?.displayName ?? ''} />
+                  <AvatarFallback>{user?.displayName?.charAt(0) ?? user?.email?.charAt(0)}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
@@ -74,8 +118,9 @@ export default function AdminLayout({
               <DropdownMenuItem asChild><Link href="/admin/settings">Settings</Link></DropdownMenuItem>
               <DropdownMenuItem>Support</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/login">Logout</Link>
+              <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2 cursor-pointer">
+                <LogOut className="h-4 w-4" />
+                <span>Logout</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
