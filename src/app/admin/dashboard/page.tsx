@@ -7,22 +7,15 @@ import { LayoutDashboard, Users, AlertTriangle, Activity } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Naira } from "@/components/icons";
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { useCollection } from "@/firebase/firestore/use-collection";
-import { collection, query, Timestamp, DocumentData } from "firebase/firestore";
+import { collection, query, Timestamp, DocumentData, where, orderBy, limit } from "firebase/firestore";
 import { useFirestore } from "@/firebase";
 import { useMemo } from "react";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const recentActivities = [
-  { id: 1, user: "John Doe", action: "Approved Withdrawal #W001", timestamp: "2 mins ago", type: "Approval" },
-  { id: 2, user: "Jane Smith", action: "Lodged Repayment for Deal #D012", timestamp: "15 mins ago", type: "Repayment" },
-  { id: 3, user: "Admin", action: "Created new Deal #D024", timestamp: "1 hour ago", type: "Deal" },
-  { id: 4, user: "Mike Johnson", action: "Requested Reinvestment of ₦500,000", timestamp: "3 hours ago", type: "Request" },
-  { id: 5, user: "Sarah Brown", action: "User profile updated", timestamp: "5 hours ago", type: "User" },
-];
+import { Deal } from "@/lib/types";
 
 const chartConfig = {
     tvl: {
@@ -36,7 +29,19 @@ type FundBatch = DocumentData & {
   createdAt: Timestamp;
 };
 
-type User = DocumentData;
+type User = DocumentData & {
+    id: string;
+    name: string;
+};
+
+type Transaction = DocumentData & {
+    id: string;
+    userId: string;
+    type: string;
+    amount: number;
+    createdAt: Timestamp;
+    dealName?: string;
+};
 
 export default function AdminDashboardPage() {
     const firestore = useFirestore();
@@ -51,18 +56,48 @@ export default function AdminDashboardPage() {
         return query(collection(firestore, 'users'));
     }, [firestore]);
 
+    const transactionsQuery = useMemo(() => {
+      if (!firestore) return null;
+      return query(
+        collection(firestore, 'transactions'),
+        orderBy('createdAt', 'desc'),
+        limit(5)
+      );
+    }, [firestore]);
+    
+    const investmentTransactionsQuery = useMemo(() => {
+      if (!firestore) return null;
+      return query(
+        collection(firestore, 'transactions'),
+        where('type', '==', 'Investment')
+      );
+    }, [firestore]);
+
+    const thirtyDaysAgo = useMemo(() => subDays(new Date(), 30), []);
+    const overdueDealsQuery = useMemo(() => {
+      if (!firestore) return null;
+      return query(
+        collection(firestore, 'deals'),
+        where('status', '==', 'Active'),
+        where('createdAt', '<', Timestamp.fromDate(thirtyDaysAgo))
+      );
+    }, [firestore, thirtyDaysAgo]);
+
+
     const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
     const { data: users, loading: usersLoading } = useCollection<User>(usersQuery);
+    const { data: recentTransactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
+    const { data: investmentTransactions, loading: investmentTransactionsLoading } = useCollection<Transaction>(investmentTransactionsQuery);
+    const { data: overdueDeals, loading: overdueDealsLoading } = useCollection<Deal>(overdueDealsQuery);
+    
+    const allUsers = useCollection<User>(usersQuery); // A separate fetch for user mapping
+
+    const isLoading = fundBatchesLoading || usersLoading || transactionsLoading || investmentTransactionsLoading || overdueDealsLoading || allUsers.loading;
 
     const chartData = useMemo(() => {
         if (!fundBatches) return [];
-
-        // Sort batches by creation date
         const sortedBatches = [...fundBatches].sort((a, b) => a.createdAt.toMillis() - b.createdAt.toMillis());
-
         const monthlyData: { [key: string]: number } = {};
-
-        // Aggregate fund amounts by month
         sortedBatches.forEach(batch => {
             const month = format(batch.createdAt.toDate(), 'yyyy-MM');
             if (!monthlyData[month]) {
@@ -70,16 +105,12 @@ export default function AdminDashboardPage() {
             }
             monthlyData[month] += batch.amount;
         });
-
         const chartEntries = Object.keys(monthlyData).map(month => ({
-            month: format(new Date(month + '-02'), 'MMM'), // Use a date to format to 'Jan', 'Feb' etc.
+            month: format(new Date(month + '-02'), 'MMM'),
             yearMonth: month,
             monthlyTotal: monthlyData[month]
         }));
-
-        // Sort by date and calculate cumulative TVL
         chartEntries.sort((a, b) => a.yearMonth.localeCompare(b.yearMonth));
-        
         let cumulativeTvl = 0;
         return chartEntries.map(entry => {
             cumulativeTvl += entry.monthlyTotal;
@@ -88,9 +119,28 @@ export default function AdminDashboardPage() {
                 tvl: cumulativeTvl
             };
         });
-
     }, [fundBatches]);
 
+    const platformEarnings = useMemo(() => {
+        if (!investmentTransactions) return 0;
+        const totalInvested = investmentTransactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+        return totalInvested * 0.01; // 1% of total investments
+    }, [investmentTransactions]);
+
+    const recentActivities = useMemo(() => {
+        if (!recentTransactions || !allUsers.data) return [];
+        return recentTransactions.map(tx => {
+            const user = allUsers.data?.find(u => u.id === tx.userId);
+            const actionText = `${tx.type} of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Math.abs(tx.amount))}${tx.dealName ? ` in ${tx.dealName}`: ''}`;
+            return {
+                id: tx.id,
+                user: user?.name || 'Unknown User',
+                action: actionText,
+                timestamp: format(tx.createdAt.toDate(), 'PPp'),
+                type: tx.type,
+            };
+        });
+    }, [recentTransactions, allUsers.data]);
 
   return (
     <div>
@@ -105,54 +155,18 @@ export default function AdminDashboardPage() {
                 <CardTitle>Total Value Locked (TVL)</CardTitle>
             </CardHeader>
             <CardContent className="pl-2">
-                {fundBatchesLoading ? (
+                {isLoading ? (
                     <div className="h-[250px] w-full flex items-center justify-center">
                         <Skeleton className="h-full w-full" />
                     </div>
                 ) : (
                  <ChartContainer config={chartConfig} className="h-[250px] w-full">
-                    <LineChart
-                        accessibilityLayer
-                        data={chartData}
-                        margin={{
-                            left: 12,
-                            right: 12,
-                        }}
-                    >
+                    <LineChart accessibilityLayer data={chartData} margin={{ left: 12, right: 12 }}>
                         <CartesianGrid vertical={false} />
-                        <XAxis
-                            dataKey="month"
-                            tickLine={false}
-                            axisLine={false}
-                            tickMargin={8}
-                        />
-                        <YAxis
-                            tickFormatter={(value) => `₦${Number(value) / 1000000}M`}
-                            tickLine={false}
-                            axisLine={false}
-                            tickMargin={8}
-                        />
-                        <Tooltip
-                            cursor={false}
-                            content={
-                                <ChartTooltipContent
-                                    indicator="dot"
-                                    formatter={(value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(value))}
-                                />
-                            }
-                        />
-                        <Line
-                            dataKey="tvl"
-                            type="natural"
-                            stroke="var(--color-tvl)"
-                            strokeWidth={2}
-                            dot={{
-                                fill: "var(--color-tvl)",
-                            }}
-                            activeDot={{
-                                r: 6,
-                            }}
-                        />
+                        <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
+                        <YAxis tickFormatter={(value) => `₦${Number(value) / 1000000}M`} tickLine={false} axisLine={false} tickMargin={8} />
+                        <Tooltip cursor={false} content={<ChartTooltipContent indicator="dot" formatter={(value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(value))} />} />
+                        <Line dataKey="tvl" type="natural" stroke="var(--color-tvl)" strokeWidth={2} dot={{ fill: "var(--color-tvl)" }} activeDot={{ r: 6 }} />
                     </LineChart>
                 </ChartContainer>
                 )}
@@ -165,8 +179,8 @@ export default function AdminDashboardPage() {
                 <Naira className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-                <div className="text-2xl font-bold">₦231,580.50</div>
-                <p className="text-xs text-muted-foreground">(mock data)</p>
+                {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(platformEarnings)}</div>}
+                <p className="text-xs text-muted-foreground">Based on 1% of investments</p>
             </CardContent>
             </Card>
             <Card>
@@ -189,8 +203,8 @@ export default function AdminDashboardPage() {
                 <AlertTriangle className="h-4 w-4 text-destructive" />
             </CardHeader>
             <CardContent>
-                <div className="text-2xl font-bold">12</div>
-                <p className="text-xs text-muted-foreground">(mock data)</p>
+                {overdueDealsLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{overdueDeals?.length ?? 0}</div>}
+                <p className="text-xs text-muted-foreground">Active deals older than 30 days</p>
             </CardContent>
             </Card>
         </div>
@@ -214,7 +228,15 @@ export default function AdminDashboardPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {recentActivities.map((activity) => (
+              {isLoading && Array.from({length: 5}).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-48" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                </TableRow>
+              ))}
+              {!isLoading && recentActivities.map((activity) => (
                 <TableRow key={activity.id}>
                   <TableCell className="font-medium">{activity.user}</TableCell>
                   <TableCell>{activity.action}</TableCell>
@@ -224,6 +246,13 @@ export default function AdminDashboardPage() {
                   </TableCell>
                 </TableRow>
               ))}
+              {!isLoading && recentActivities.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="h-24 text-center">
+                    No recent activity found.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>
