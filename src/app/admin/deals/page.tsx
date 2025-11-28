@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { FileText, PlusCircle } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, DocumentData } from 'firebase/firestore';
+import { collection, query, DocumentData, Timestamp } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreateDealForm } from './create-deal-form';
@@ -31,6 +31,19 @@ import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean }) {
+  const formatDate = (timestamp: Timestamp | Date | string | undefined) => {
+    if (!timestamp) return 'N/A';
+    if (timestamp instanceof Timestamp) {
+      return format(timestamp.toDate(), 'PPP');
+    }
+    // Handle cases where it might already be a Date object or a string
+    try {
+      return format(new Date(timestamp as any), 'PPP');
+    } catch (e) {
+      return 'Invalid Date';
+    }
+  };
+  
   return (
     <div className="rounded-lg border shadow-sm">
       <Table>
@@ -68,7 +81,7 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
                 </Badge>
               </TableCell>
                <TableCell>
-                {deal.createdAt ? format(new Date(deal.createdAt), 'PPP') : 'N/A'}
+                {formatDate(deal.createdAt as any)}
               </TableCell>
             </TableRow>
           ))}
@@ -110,11 +123,15 @@ export default function DealsPage() {
               Create Deal
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>Create New Deal</DialogTitle>
             </DialogHeader>
-            <CreateDealForm onDealCreated={() => setCreateDealOpen(false)} />
+            <ScrollArea className="max-h-[80vh] p-0">
+                <div className="p-6">
+                    <CreateDealForm onDealCreated={() => setCreateDealOpen(false)} />
+                </div>
+            </ScrollArea>
           </DialogContent>
         </Dialog>
       </PageHeader>

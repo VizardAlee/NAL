@@ -13,5 +13,5 @@ export type Deal = DocumentData & {
   repaymentType: 'Equal Installments' | 'Balloon Payment';
   repaymentFrequency: 'Daily' | 'Weekly' | 'Fortnightly' | 'Monthly';
   status: 'Pending' | 'Active' | 'Completed' | 'Terminated';
-  createdAt: string; // Stored as a server-generated Timestamp, but comes to client as string
+  createdAt: Timestamp; // Firestore Timestamp object
 };
