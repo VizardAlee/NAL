@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { initializeFirebase } from '@/firebase/server';
 import { doc, setDoc, getCountFromServer, collection } from 'firebase/firestore';
+import { getAuth } from 'firebase-admin/auth';
 
 const userSchema = z.object({
   name: z.string().min(2),
@@ -15,15 +16,6 @@ export async function createUser(values: z.infer<typeof userSchema>) {
   const validatedData = userSchema.safeParse(values);
   if (!validatedData.success) {
     throw new Error('Invalid user data provided.');
-  }
-  
-  if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-    console.log("Simulating user creation for:", validatedData.data.email);
-    // Return a mock success response
-    return {
-      uid: `mock-uid-${Date.now()}`,
-      ...validatedData.data,
-    };
   }
 
   const { auth, firestore } = initializeFirebase();
@@ -39,14 +31,14 @@ export async function createUser(values: z.infer<typeof userSchema>) {
 
   try {
     // 1. Create user in Firebase Authentication
-    const userCredential = await auth.createUser({
+    const userCredential = await getAuth().createUser({
       email,
       password,
       displayName: name,
     });
     
     // Set custom claim for the user's role
-    await auth.setCustomUserClaims(userCredential.uid, { role });
+    await getAuth().setCustomUserClaims(userCredential.uid, { role });
     
     // 2. Create user profile in Firestore
     const userDocRef = doc(firestore, 'users', userCredential.uid);
