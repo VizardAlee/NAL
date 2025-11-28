@@ -3,33 +3,17 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   onSnapshot,
-  query,
-  collection,
-  where,
-  orderBy,
-  limit,
-  startAfter,
-  endBefore,
-  limitToLast,
-  doc,
-  getDoc,
-  type DocumentData,
   type Query,
-  type CollectionReference,
+  type DocumentData,
   type FirestoreError,
+  type CollectionReference,
 } from 'firebase/firestore';
-import { useFirestore } from '@/firebase/provider';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-
-interface UseCollectionOptions {
-  // Define any options here, e.g., for pagination
-}
-
 export function useCollection<T extends DocumentData>(
-  q: Query<T> | null,
-  options?: UseCollectionOptions
+  q: Query<T> | CollectionReference<T> | null | undefined,
+  options?: any
 ) {
   const [data, setData] = useState<T[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,7 +31,7 @@ export function useCollection<T extends DocumentData>(
 
 
   useEffect(() => {
-    if (!queryRef.current) {
+    if (!q) {
       setData([]);
       setLoading(false);
       return;
@@ -56,7 +40,7 @@ export function useCollection<T extends DocumentData>(
     setLoading(true);
 
     const unsubscribe = onSnapshot(
-      queryRef.current,
+      q,
       (snapshot) => {
         const docs = snapshot.docs.map(
           (doc) => ({ ...doc.data(), id: doc.id } as T)
@@ -73,7 +57,7 @@ export function useCollection<T extends DocumentData>(
         // Emit a custom, more detailed error for permission issues
         if (err.code === 'permission-denied') {
           errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: (queryRef.current as CollectionReference).path,
+            path: (q as CollectionReference).path,
             operation: 'list'
           }));
         }
@@ -81,7 +65,7 @@ export function useCollection<T extends DocumentData>(
     );
 
     return () => unsubscribe();
-  }, [queryRef.current]);
+  }, [q]);
 
   return { data, loading, error };
 }
