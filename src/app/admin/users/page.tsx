@@ -31,7 +31,8 @@ export default function UsersPage() {
   const firestore = useFirestore();
 
   const usersQuery = useMemo(() => {
-    if (!firestore) return null;
+    // Stricter check as you recommended: ensures firestore is a valid object.
+    if (!firestore || Object.keys(firestore).length === 0) return null;
     return query(collection(firestore, 'users'));
   }, [firestore]);
   
