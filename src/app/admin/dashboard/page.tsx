@@ -1,10 +1,14 @@
 
+'use client';
+
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LayoutDashboard, Users, AlertTriangle, Activity } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Naira } from "@/components/icons";
+import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 const recentActivities = [
   { id: 1, user: "John Doe", action: "Approved Withdrawal #W001", timestamp: "2 mins ago", type: "Approval" },
@@ -14,6 +18,22 @@ const recentActivities = [
   { id: 5, user: "Sarah Brown", action: "User profile updated", timestamp: "5 hours ago", type: "User" },
 ];
 
+const chartData = [
+    { month: "January", tvl: 1860000 },
+    { month: "February", tvl: 3050000 },
+    { month: "March", tvl: 2370000 },
+    { month: "April", tvl: 3730000 },
+    { month: "May", tvl: 4523189 },
+    { month: "June", tvl: 4890000 },
+];
+
+const chartConfig = {
+    tvl: {
+        label: "TVL",
+        color: "hsl(var(--primary))",
+    },
+};
+
 export default function AdminDashboardPage() {
   return (
     <div>
@@ -22,47 +42,92 @@ export default function AdminDashboardPage() {
         description="A high-level overview of platform-wide metrics."
         icon={LayoutDashboard}
       />
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Value Locked</CardTitle>
-            <Naira className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₦4,523,189.00</div>
-            <p className="text-xs text-muted-foreground">+20.1% from last month</p>
-          </CardContent>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+            <CardHeader>
+                <CardTitle>Total Value Locked (TVL)</CardTitle>
+            </CardHeader>
+            <CardContent className="pl-2">
+                 <ChartContainer config={chartConfig} className="h-[250px] w-full">
+                    <LineChart
+                        accessibilityLayer
+                        data={chartData}
+                        margin={{
+                            left: 12,
+                            right: 12,
+                        }}
+                    >
+                        <CartesianGrid vertical={false} />
+                        <XAxis
+                            dataKey="month"
+                            tickLine={false}
+                            axisLine={false}
+                            tickMargin={8}
+                            tickFormatter={(value) => value.slice(0, 3)}
+                        />
+                        <YAxis
+                            tickFormatter={(value) => `₦${Number(value) / 1000000}M`}
+                            tickLine={false}
+                            axisLine={false}
+                            tickMargin={8}
+                        />
+                        <Tooltip
+                            cursor={false}
+                            content={
+                                <ChartTooltipContent
+                                    indicator="dot"
+                                    formatter={(value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(value))}
+                                />
+                            }
+                        />
+                        <Line
+                            dataKey="tvl"
+                            type="natural"
+                            stroke="var(--color-tvl)"
+                            strokeWidth={2}
+                            dot={{
+                                fill: "var(--color-tvl)",
+                            }}
+                            activeDot={{
+                                r: 6,
+                            }}
+                        />
+                    </LineChart>
+                </ChartContainer>
+            </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Platform Earnings</CardTitle>
-            <Naira className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₦231,580.50</div>
-            <p className="text-xs text-muted-foreground">+18.3% from last month</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">+12,234</div>
-            <p className="text-xs text-muted-foreground">+15% from last month</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">12</div>
-            <p className="text-xs text-muted-foreground">2 new since last login</p>
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Platform Earnings</CardTitle>
+                <Naira className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">₦231,580.50</div>
+                <p className="text-xs text-muted-foreground">+18.3% from last month</p>
+            </CardContent>
+            </Card>
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">+12,234</div>
+                <p className="text-xs text-muted-foreground">+15% from last month</p>
+            </CardContent>
+            </Card>
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">12</div>
+                <p className="text-xs text-muted-foreground">2 new since last login</p>
+            </CardContent>
+            </Card>
+        </div>
       </div>
 
       <Card className="mt-8">
@@ -100,3 +165,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    
