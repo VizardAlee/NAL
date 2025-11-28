@@ -28,6 +28,33 @@ import { useUser } from "@/firebase";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/firebase/provider";
 import { Skeleton } from "@/components/ui/skeleton";
+import React, { useEffect } from "react";
+
+function AdminSkeleton() {
+    return (
+      <div className="flex h-screen w-full">
+        <div className="hidden md:flex flex-col w-64 border-r p-4 gap-4">
+            <Skeleton className="h-10 w-full" />
+            <div className="flex flex-col gap-2 mt-4">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-3/4" />
+            </div>
+        </div>
+        <div className="flex-1">
+            <header className="flex items-center h-16 border-b px-6 justify-end">
+                <Skeleton className="h-8 w-8 rounded-full" />
+            </header>
+            <main className="p-6">
+                <Skeleton className="h-32 w-full" />
+                <Skeleton className="mt-4 h-64 w-full" />
+            </main>
+        </div>
+      </div>
+    );
+}
+
 
 export default function AdminLayout({
   children,
@@ -39,39 +66,27 @@ export default function AdminLayout({
   const router = useRouter();
 
   const handleLogout = async () => {
-    await auth.signOut();
+    if (auth) {
+        await auth.signOut();
+    }
     router.push('/login');
   };
 
-  // If loading, show a skeleton layout
-  if (loading) {
-    return (
-      <div className="flex h-screen w-full">
-        <div className="hidden md:flex flex-col w-64 border-r p-4 gap-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-3/4" />
-        </div>
-        <div className="flex-1">
-            <header className="flex items-center h-16 border-b px-6 justify-end">
-                <Skeleton className="h-8 w-8 rounded-full" />
-            </header>
-            <main className="p-6">
-                <Skeleton className="h-32 w-full" />
-            </main>
-        </div>
-      </div>
-    );
+  // On initial load, user is null and loading is true. Wait until loading is false.
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+  
+
+  // While loading, or if there's no user, show a skeleton screen.
+  // This is the critical fix: we do not render `children` until we're sure we have a user.
+  if (loading || !user) {
+    return <AdminSkeleton />;
   }
 
-  // If not logged in, redirect to login
-  if (!user) {
-    router.push('/login');
-    return null; // or a loading spinner
-  }
-
-
+  // Once loading is false and we have a user, render the full layout.
   return (
     <SidebarProvider>
       <Sidebar>
