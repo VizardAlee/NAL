@@ -1,128 +1,13 @@
 
 'use server';
 
-import { getApps, initializeApp, cert, type ServiceAccount } from 'firebase-admin/app';
-import { getFirestore, FieldValue, runTransaction } from 'firebase-admin/firestore';
-
-const serviceAccount: ServiceAccount | undefined = process.env.FIREBASE_CLIENT_EMAIL
-  ? {
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    }
-  : undefined;
-
-function getAdminFirestore() {
-    const apps = getApps();
-    if (!apps.length) {
-        if (!serviceAccount?.projectId) {
-            throw new Error('Firebase Admin SDK environment variables are not set.');
-        }
-        initializeApp({
-            credential: cert(serviceAccount),
-        });
-    }
-    return getFirestore();
-}
-
+// This file is being deprecated in favor of an API route handler
+// to resolve issues with Turbopack and the Firebase Admin SDK.
+// The logic has been moved to /api/fund-deal/route.ts.
 
 export async function fundDealAction(dealId: string): Promise<{ success: boolean, message: string }> {
-    if (!dealId) {
-        return { success: false, message: 'Deal ID is missing.' };
-    }
-    
-    const firestore = getAdminFirestore();
-
-    try {
-        await runTransaction(firestore, async (transaction) => {
-            const dealRef = firestore.collection('deals').doc(dealId);
-            const dealDoc = await transaction.get(dealRef);
-
-            if (!dealDoc.exists) {
-                throw new Error('Deal not found.');
-            }
-
-            const dealData = dealDoc.data();
-            if (!dealData) {
-                throw new Error('Deal data is invalid.');
-            }
-
-            if (dealData.status !== 'Pending') {
-                throw new Error(`Deal is already ${dealData.status}.`);
-            }
-
-            // 1. Calculate how much has already been funded
-            const investmentsSnapshot = await transaction.get(
-                firestore.collection('investments').where('dealId', '==', dealId)
-            );
-            const totalFunded = investmentsSnapshot.docs.reduce((sum, doc) => sum + doc.data().amount, 0);
-            
-            let amountToFund = dealData.principal - totalFunded;
-
-            if (amountToFund <= 0) {
-                // If it's already funded but still pending, just activate it.
-                transaction.update(dealRef, { status: 'Active' });
-                return;
-            }
-
-            // 2. Get all available fund batches, ordered by creation date (FIFO)
-            const fundBatchesQuery = firestore.collection('fundBatches')
-                .where('remainingAmount', '>', 0)
-                .orderBy('createdAt', 'asc');
-            
-            const fundBatchesSnapshot = await transaction.get(fundBatchesQuery);
-            
-            const totalAvailableFunds = fundBatchesSnapshot.docs.reduce((sum, doc) => sum + doc.data().remainingAmount, 0);
-            
-            if (totalAvailableFunds < amountToFund) {
-                throw new Error(`Insufficient funds available. Need ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amountToFund)}, but only ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(totalAvailableFunds)} is available.`);
-            }
-
-            // 3. Iterate through batches and create investments
-            for (const batchDoc of fundBatchesSnapshot.docs) {
-                if (amountToFund <= 0) break;
-
-                const batchData = batchDoc.data();
-                const amountToDeduct = Math.min(amountToFund, batchData.remainingAmount);
-
-                // a. Create investment record
-                const investmentRef = firestore.collection('investments').doc();
-                transaction.set(investmentRef, {
-                    investorId: batchData.sourceId,
-                    dealId: dealId,
-                    amount: amountToDeduct,
-                    createdAt: FieldValue.serverTimestamp(),
-                });
-
-                // b. Create transaction log
-                const transactionRef = firestore.collection('transactions').doc();
-                transaction.set(transactionRef, {
-                    userId: batchData.sourceId,
-                    dealId: dealId,
-                    type: 'Investment',
-                    amount: -amountToDeduct,
-                    createdAt: FieldValue.serverTimestamp(),
-                    dealName: dealData.dealName,
-                });
-
-                // c. Update the fund batch
-                transaction.update(batchDoc.ref, {
-                    remainingAmount: FieldValue.increment(-amountToDeduct)
-                });
-                
-                amountToFund -= amountToDeduct;
-            }
-
-            // 4. If fully funded, update the deal status to 'Active'
-            if (amountToFund <= 0) {
-                transaction.update(dealRef, { status: 'Active' });
-            }
-        });
-
-        return { success: true, message: 'Deal has been successfully funded and is now Active.' };
-
-    } catch (error: any) {
-        console.error('DEAL FUNDING FAILED:', error);
-        return { success: false, message: error.message || 'An unknown error occurred during funding.' };
-    }
+    return {
+        success: false,
+        message: "This server action is deprecated. Please use the API route.",
+    };
 }

@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -18,7 +19,7 @@ type FirebaseContextValue = {
   firestore: Firestore;
 };
 
-// Get the initialized instances immediately
+// Get the initialized instances immediately by calling the function
 const { app, auth, firestore } = getFirebase();
 
 // Create the context with the already-initialized instances.

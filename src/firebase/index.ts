@@ -1,3 +1,4 @@
+
 'use client';
 import { getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
@@ -7,15 +8,15 @@ import { getFirestore, type Firestore } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
 
 // --- Single, global Firebase instance ---
-let app: FirebaseApp;
-let auth: Auth;
-let firestore: Firestore;
+let app: FirebaseApp | undefined;
+let auth: Auth | undefined;
+let firestore: Firestore | undefined;
 
 /**
  * Initializes Firebase App.
  * This function is idempotent, meaning it can be called multiple times without re-initializing.
  */
-function initializeFirebaseApp() {
+function initializeFirebase() {
   const apps = getApps();
   if (apps.length > 0) {
     app = apps[0];
@@ -28,10 +29,8 @@ function initializeFirebaseApp() {
   }
   auth = getAuth(app);
   firestore = getFirestore(app);
+  return { app, auth, firestore };
 }
-
-// Initialize on module load
-initializeFirebaseApp();
 
 
 /**
@@ -39,7 +38,10 @@ initializeFirebaseApp();
  * This is a simple getter function to access the global instances.
  */
 export function getFirebase() {
-  return { app, auth, firestore };
+  if (!app) {
+    return initializeFirebase();
+  }
+  return { app, auth: auth!, firestore: firestore! };
 }
 
 // --- Exports for React components ---

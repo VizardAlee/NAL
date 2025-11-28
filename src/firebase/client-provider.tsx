@@ -1,3 +1,4 @@
+
 'use client';
 import { FirebaseProvider } from '.';
 import { ReactNode } from 'react';

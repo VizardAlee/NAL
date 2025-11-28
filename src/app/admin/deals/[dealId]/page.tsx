@@ -17,7 +17,6 @@ import { format } from 'date-fns';
 import { Deal } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { fundDealAction } from './fund-deal-action';
 import { useToast } from '@/hooks/use-toast';
 
 type Investment = DocumentData & {
@@ -137,11 +136,9 @@ export default function DealDetailPage() {
 
     const eligibleBatches = fundBatches.filter(batch => {
         const batchTenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
-        // Eligibility is met if batch tenure is >= deal duration - 5 days
         return batchTenureInDays >= (dealDurationInDays - 5);
     });
 
-    // Aggregate by investor
     const investorMap = new Map<string, { name: string; totalAvailable: number }>();
     eligibleBatches.forEach(batch => {
         const user = users.find(u => u.id === batch.sourceId);
@@ -157,17 +154,27 @@ export default function DealDetailPage() {
 
   const handleFundDeal = () => {
     startTransition(async () => {
-        const result = await fundDealAction(dealId);
-        if(result.success) {
+        try {
+            const response = await fetch('/api/fund-deal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dealId }),
+            });
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.message || 'An unexpected error occurred.');
+            }
+
             toast({
                 title: "Deal Funding Complete",
                 description: result.message,
             });
-        } else {
+        } catch (error) {
             toast({
                 variant: 'destructive',
                 title: "Funding Failed",
-                description: result.message,
+                description: error instanceof Error ? error.message : "An unknown error occurred.",
             });
         }
     });
