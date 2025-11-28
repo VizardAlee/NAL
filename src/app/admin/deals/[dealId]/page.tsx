@@ -171,6 +171,7 @@ export default function DealDetailPage() {
                 description: result.message,
             });
         } catch (error) {
+            console.error("Funding Error:", error);
             toast({
                 variant: 'destructive',
                 title: "Funding Failed",
