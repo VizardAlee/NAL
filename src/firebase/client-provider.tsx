@@ -1,9 +1,9 @@
 'use client';
-import { FirebaseProvider, initializeFirebase } from '.';
-import { ReactNode, useMemo } from 'react';
+import { FirebaseProvider } from '.';
+import { ReactNode } from 'react';
 
 export function FirebaseClientProvider({ children }: { children: ReactNode }) {
-  const firebaseApp = useMemo(() => initializeFirebase(), []);
-
-  return <FirebaseProvider {...firebaseApp}>{children}</FirebaseProvider>;
+  // The FirebaseProvider now handles its own initialization via useEffect.
+  // We just need to render it.
+  return <FirebaseProvider>{children}</FirebaseProvider>;
 }

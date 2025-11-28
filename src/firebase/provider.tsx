@@ -13,38 +13,47 @@ import {
   createContext,
   useContext,
   type ReactNode,
+  useState,
+  useEffect,
 } from 'react';
 import { FirebaseErrorListener } from '@/components/firebase-error-listener';
+import { initializeFirebase } from '.';
 
 type FirebaseContextValue = {
-  app: FirebaseApp;
-  auth: Auth;
-  firestore: Firestore;
+  app: FirebaseApp | null;
+  auth: Auth | null;
+  firestore: Firestore | null;
+  ready: boolean;
 };
 
-const FirebaseContext = createContext<FirebaseContextValue | undefined>(
-  undefined
-);
+const FirebaseContext = createContext<FirebaseContextValue>({
+  app: null,
+  auth: null,
+  firestore: null,
+  ready: false,
+});
 
 export function FirebaseProvider({
   children,
-  app,
-  auth,
-  firestore,
 }: {
   children: ReactNode;
-} & FirebaseContextValue) {
+}) {
+  const [state, setState] = useState<FirebaseContextValue>({
+    app: null,
+    auth: null,
+    firestore: null,
+    ready: false,
+  });
+
+  useEffect(() => {
+    const { app, auth, firestore } = initializeFirebase();
+    setState({ app, auth, firestore, ready: true });
+  }, []);
 
   return (
-    <FirebaseContext.Provider
-      value={{
-        app,
-        auth,
-        firestore,
-      }}
-    >
+    <FirebaseContext.Provider value={state}>
       {children}
-      <FirebaseErrorListener />
+      {state.ready && <FirebaseErrorListener />}
     </FirebaseContext.Provider>
   );
 }
@@ -57,6 +66,15 @@ export const useFirebase = () => {
   return context;
 };
 
-export const useFirebaseApp = () => useFirebase().app;
-export const useAuth = () => useFirebase().auth;
-export const useFirestore = () => useFirebase().firestore;
+export const useFirebaseApp = () => {
+    const { app, ready } = useFirebase();
+    return ready ? app : null;
+}
+export const useAuth = () => {
+    const { auth, ready } = useFirebase();
+    return ready ? auth : null;
+}
+export const useFirestore = () => {
+    const { firestore, ready } = useFirebase();
+    return ready ? firestore : null;
+}
