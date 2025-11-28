@@ -137,7 +137,8 @@ export default function DealDetailPage() {
 
     const eligibleBatches = fundBatches.filter(batch => {
         const batchTenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
-        return batchTenureInDays >= dealDurationInDays;
+        // Eligibility is met if batch tenure is >= deal duration - 5 days
+        return batchTenureInDays >= (dealDurationInDays - 5);
     });
 
     // Aggregate by investor
@@ -216,7 +217,7 @@ export default function DealDetailPage() {
                                 <UserCheck className="h-5 w-5" />
                                 <span>Eligible Investors</span>
                             </CardTitle>
-                            <CardDescription>Investors with available fund batches whose tenure meets or exceeds the deal's duration.</CardDescription>
+                            <CardDescription>Investors with available fund batches whose tenure meets or exceeds the deal's duration (with a 5-day grace period).</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <Table>
