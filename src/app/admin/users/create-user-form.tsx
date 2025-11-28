@@ -24,12 +24,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import {
-  getAuth,
   createUserWithEmailAndPassword,
   updateProfile,
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useAuth } from '@/firebase';
 import { FirebaseError } from 'firebase/app';
 
 const formSchema = z.object({
@@ -49,7 +48,7 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const firestore = useFirestore();
-  const auth = getAuth();
+  const auth = useAuth(); // Correct: Use the hook to get the initialized auth instance
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -62,11 +61,11 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    if (!firestore) {
+    if (!firestore || !auth) {
         toast({
             variant: "destructive",
             title: "Error",
-            description: "Firestore is not available. Please try again later.",
+            description: "Firebase is not available. Please try again later.",
         });
         setIsLoading(false);
         return;
@@ -114,6 +113,9 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
             break;
           case 'auth/weak-password':
             errorMessage = 'The password is not strong enough.';
+            break;
+           case 'auth/api-key-not-valid':
+            errorMessage = 'The Firebase API Key is not valid. Please check your configuration.';
             break;
           default:
             errorMessage = `An unexpected Firebase error occurred: ${error.message}`;
