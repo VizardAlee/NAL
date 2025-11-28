@@ -1,8 +1,8 @@
 'use server';
 
 import { z } from 'zod';
-// import { initializeFirebase } from '@/firebase/server';
-// import { doc, setDoc } from 'firebase/firestore';
+import { initializeFirebase } from '@/firebase/server';
+import { doc, setDoc, getCountFromServer, collection } from 'firebase/firestore';
 
 const userSchema = z.object({
   name: z.string().min(2),
@@ -17,12 +17,8 @@ export async function createUser(values: z.infer<typeof userSchema>) {
     throw new Error('Invalid user data provided.');
   }
   
-  // const { auth, firestore } = initializeFirebase();
-  const { name, email, password, role } = validatedData.data;
-
-  // Temporarily bypass Firebase Admin SDK for local development
   if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-    console.log("Simulating user creation for:", email);
+    console.log("Simulating user creation for:", validatedData.data.email);
     // Return a mock success response
     return {
       uid: `mock-uid-${Date.now()}`,
@@ -30,12 +26,16 @@ export async function createUser(values: z.infer<typeof userSchema>) {
     };
   }
 
-  // The original code will run if FIREBASE_SERVICE_ACCOUNT_KEY is set.
-  // This part of the code is currently unreachable and is left here for when
-  // the service account is configured.
-  const { initializeFirebase } = await import('@/firebase/server');
-  const { doc, setDoc } = await import('firebase/firestore');
   const { auth, firestore } = initializeFirebase();
+  const { name, email, password } = validatedData.data;
+  let { role } = validatedData.data;
+
+  // Check if this is the first user. If so, make them an Admin.
+  const usersCollection = collection(firestore, 'users');
+  const snapshot = await getCountFromServer(usersCollection);
+  if (snapshot.data().count === 0) {
+    role = 'Admin';
+  }
 
   try {
     // 1. Create user in Firebase Authentication
@@ -45,9 +45,9 @@ export async function createUser(values: z.infer<typeof userSchema>) {
       displayName: name,
     });
     
-    // Disable the user by default, admin can enable them later.
-    await auth.updateUser(userCredential.uid, { disabled: false });
-
+    // Set custom claim for the user's role
+    await auth.setCustomUserClaims(userCredential.uid, { role });
+    
     // 2. Create user profile in Firestore
     const userDocRef = doc(firestore, 'users', userCredential.uid);
     await setDoc(userDocRef, {
@@ -58,7 +58,9 @@ export async function createUser(values: z.infer<typeof userSchema>) {
 
     return {
       uid: userCredential.uid,
-      ...validatedData.data,
+      name,
+      email,
+      role,
     };
   } catch (error: any) {
     console.error('Error creating user:', error);

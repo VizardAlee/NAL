@@ -7,13 +7,22 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
-const serviceAccount = serviceAccountString
-  ? JSON.parse(serviceAccountString)
-  : undefined;
+let serviceAccount: any;
+if (serviceAccountString) {
+  try {
+    // The replace is necessary to handle the newline characters in the private key
+    // when it's read from an environment variable.
+    serviceAccount = JSON.parse(serviceAccountString.replace(/\\n/g, '\n'));
+  } catch (error) {
+    console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:', error);
+    serviceAccount = undefined;
+  }
+}
+
 
 if (!serviceAccount && process.env.NODE_ENV === 'production') {
   console.warn(
-    'FIREBASE_SERVICE_ACCOUNT_KEY is not set. Firebase Admin SDK will not be initialized in production.'
+    'FIREBASE_SERVICE_ACCOUNT_KEY is not set or invalid. Firebase Admin SDK will not be initialized in production.'
   );
 }
 
@@ -24,7 +33,7 @@ const getFirebaseAdminApp = () => {
   }
 
   if (!serviceAccount) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY is not set. Cannot initialize Firebase Admin SDK.');
+    throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY is not set or is invalid. Cannot initialize Firebase Admin SDK.');
   }
   
   return initializeApp({
