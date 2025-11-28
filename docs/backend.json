@@ -109,13 +109,22 @@
           "type": "number",
           "description": "The amount of capital from this batch that is still available to be invested."
         },
+        "tenureValue": {
+            "type": "number",
+            "description": "The numeric value for the tenure of the investment."
+        },
+        "tenureUnit": {
+            "type": "string",
+            "description": "The unit of time for the investment's tenure.",
+            "enum": ["Days", "Weeks", "Fortnights", "Months", "Years"]
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
           "description": "The timestamp when the funds were added."
         }
       },
-      "required": ["sourceId", "amount", "remainingAmount", "createdAt"]
+      "required": ["sourceId", "amount", "remainingAmount", "tenureValue", "tenureUnit", "createdAt"]
     },
     "investment": {
       "title": "Investment",

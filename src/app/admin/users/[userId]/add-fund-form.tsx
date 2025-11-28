@@ -17,12 +17,15 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { addDoc, collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { doc, collection, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { FirebaseError } from 'firebase/app';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const formSchema = z.object({
   amount: z.coerce.number().positive({ message: 'Amount must be a positive number.' }),
+  tenureValue: z.coerce.number().positive().int({ message: 'Tenure must be a positive number.' }),
+  tenureUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
 });
 
 type AddFundFormProps = {
@@ -38,6 +41,8 @@ export function AddFundForm({ userId }: AddFundFormProps) {
     resolver: zodResolver(formSchema),
     defaultValues: {
       amount: 50000,
+      tenureValue: 12,
+      tenureUnit: 'Months',
     },
   });
 
@@ -50,20 +55,19 @@ export function AddFundForm({ userId }: AddFundFormProps) {
     }
 
     try {
-      // Use a batch to ensure both writes succeed or fail together
       const batch = writeBatch(firestore);
       const timestamp = serverTimestamp();
 
-      // 1. Create new fund batch
       const fundBatchRef = doc(collection(firestore, 'fundBatches'));
       batch.set(fundBatchRef, {
         sourceId: userId,
         amount: values.amount,
         remainingAmount: values.amount,
+        tenureValue: values.tenureValue,
+        tenureUnit: values.tenureUnit,
         createdAt: timestamp,
       });
 
-      // 2. Create corresponding transaction log
       const transactionRef = doc(collection(firestore, 'transactions'));
       batch.set(transactionRef, {
           userId: userId,
@@ -112,6 +116,41 @@ export function AddFundForm({ userId }: AddFundFormProps) {
             </FormItem>
           )}
         />
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="tenureValue"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tenure</FormLabel>
+                <FormControl><Input type="number" placeholder="12" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="tenureUnit"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>&nbsp;</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="Days">Days</SelectItem>
+                    <SelectItem value="Weeks">Weeks</SelectItem>
+                    <SelectItem value="Fortnights">Fortnights</SelectItem>
+                    <SelectItem value="Months">Months</SelectItem>
+                    <SelectItem value="Years">Years</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Deposit Funds
