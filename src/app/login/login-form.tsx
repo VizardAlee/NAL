@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -24,6 +25,7 @@ const formSchema = z.object({
 
 export function LoginForm() {
   const { toast } = useToast();
+  const router = useRouter();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -37,10 +39,11 @@ export function LoginForm() {
     // Mock login logic
     console.log(values);
     toast({
-      title: "Login Submitted",
-      description: "In a real app, you would be authenticated and redirected.",
+      title: "Login Successful",
+      description: "Redirecting to your dashboard...",
     });
     // In a real app, you'd handle Firebase auth here.
+    router.push("/admin/dashboard");
   }
 
   return (
