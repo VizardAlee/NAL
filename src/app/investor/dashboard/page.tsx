@@ -6,18 +6,69 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, PlusCircle, Landmark, History } from "lucide-react";
+import { TrendingUp, PlusCircle, Landmark, History, Loader2 } from "lucide-react";
 import { Naira } from "@/components/icons";
+import { useMemo } from 'react';
+import { useCollection } from '@/firebase/firestore/use-collection';
+import { collection, query, where, DocumentData, Timestamp } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
+import { Skeleton } from '@/components/ui/skeleton';
+import { format } from 'date-fns';
 
-// Mock data, to be replaced with Firestore data
-const transactions = [
-  { id: 'T01', date: '2024-07-20', type: 'Profit Distribution', deal: 'TechCorp Series A', amount: 15000 },
-  { id: 'T02', date: '2024-07-15', type: 'Investment', deal: 'GreenEnergy Loan', amount: -250000 },
-  { id: 'T03', date: '2024-07-01', type: 'Deposit', deal: 'N/A', amount: 500000 },
-  { id: 'T04', date: '2024-06-20', type: 'Profit Distribution', deal: 'Retail Expansion Fund', amount: 12000 },
-];
+type FundBatch = DocumentData & {
+  id: string;
+  sourceId: string;
+  amount: number;
+};
+
+type Transaction = DocumentData & {
+  id: string;
+  type: 'Deposit' | 'Withdrawal' | 'Investment' | 'Repayment' | 'ProfitDistribution';
+  amount: number;
+  dealId?: string;
+  userId: string;
+  createdAt: Timestamp;
+  dealName?: string; // Denormalized for display
+};
 
 export default function InvestorDashboard() {
+  const firestore = useFirestore();
+  const { user, loading: userLoading } = useUser();
+
+  const fundBatchesQuery = useMemo(() => {
+    if (!firestore || !user?.uid) return null;
+    return query(collection(firestore, 'fundBatches'), where('sourceId', '==', user.uid));
+  }, [firestore, user]);
+
+  const transactionsQuery = useMemo(() => {
+    if (!firestore || !user?.uid) return null;
+    return query(collection(firestore, 'transactions'), where('userId', '==', user.uid));
+  }, [firestore, user]);
+
+  const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
+  const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
+
+  const isLoading = userLoading || fundBatchesLoading || transactionsLoading;
+
+  const totalCapital = useMemo(() => {
+    return fundBatches?.reduce((sum, batch) => sum + batch.amount, 0) ?? 0;
+  }, [fundBatches]);
+
+  const portfolioValue = useMemo(() => {
+    return transactions?.reduce((sum, tx) => sum + tx.amount, 0) ?? 0;
+  }, [transactions]);
+  
+  const formatDate = (timestamp: Timestamp | Date | undefined) => {
+    if (!timestamp) return 'N/A';
+    const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
+    try {
+      return format(date, 'PPP');
+    } catch {
+      return 'Invalid Date';
+    }
+  };
+
+
   return (
     <div>
       <PageHeader
@@ -38,7 +89,7 @@ export default function InvestorDashboard() {
             <Naira className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₦1,250,000.00</div>
+            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(totalCapital)}</div>}
             <p className="text-xs text-muted-foreground">Total funds deposited</p>
           </CardContent>
         </Card>
@@ -48,8 +99,8 @@ export default function InvestorDashboard() {
             <Naira className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₦1,327,500.00</div>
-            <p className="text-xs text-muted-foreground">+6.2% all-time return</p>
+            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(portfolioValue)}</div>}
+            <p className="text-xs text-muted-foreground">Based on all transactions</p>
           </CardContent>
         </Card>
         <Card>
@@ -59,7 +110,7 @@ export default function InvestorDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">12.8%</div>
-            <p className="text-xs text-muted-foreground">Based on current performance</p>
+            <p className="text-xs text-muted-foreground">Based on current performance (mock)</p>
           </CardContent>
         </Card>
       </div>
@@ -77,23 +128,38 @@ export default function InvestorDashboard() {
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead>Related Deal</TableHead>
+                <TableHead>Details</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {transactions.map((tx) => (
+              {isLoading && Array.from({length: 3}).map((_, i) => (
+                <TableRow key={i}>
+                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
+                </TableRow>
+              ))}
+              {!isLoading && transactions?.map((tx) => (
                 <TableRow key={tx.id}>
-                  <TableCell>{tx.date}</TableCell>
+                  <TableCell>{formatDate(tx.createdAt)}</TableCell>
                   <TableCell>
-                    <Badge variant={tx.type === 'Deposit' || tx.type === 'Profit Distribution' ? 'secondary' : 'outline'}>{tx.type}</Badge>
+                    <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
                   </TableCell>
-                  <TableCell>{tx.deal}</TableCell>
+                  <TableCell>{tx.dealName || 'N/A'}</TableCell>
                   <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-green-500' : 'text-foreground'}`}>
                     {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
                   </TableCell>
                 </TableRow>
               ))}
+               {!isLoading && transactions?.length === 0 && (
+                <TableRow>
+                    <TableCell colSpan={4} className="h-24 text-center">
+                        No transactions yet.
+                    </TableCell>
+                </TableRow>
+               )}
             </TableBody>
           </Table>
         </CardContent>
