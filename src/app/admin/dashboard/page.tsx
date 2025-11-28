@@ -7,7 +7,7 @@ import { LayoutDashboard, Users, AlertTriangle, Activity } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Naira } from "@/components/icons";
-import { LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import { LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Line } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, Timestamp, DocumentData, where, orderBy, limit } from "firebase/firestore";
@@ -259,4 +259,5 @@ export default function AdminDashboardPage() {
       </Card>
     </div>
   );
-}
+
+    
