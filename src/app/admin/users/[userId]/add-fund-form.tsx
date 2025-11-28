@@ -17,10 +17,9 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { addDoc, collection, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { addDoc, collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { FirebaseError } from 'firebase/app';
-import { Naira } from '@/components/icons';
 
 const formSchema = z.object({
   amount: z.coerce.number().positive({ message: 'Amount must be a positive number.' }),
@@ -105,7 +104,7 @@ export function AddFundForm({ userId }: AddFundFormProps) {
               <FormLabel>Amount to Deposit</FormLabel>
               <FormControl>
                 <div className="relative">
-                    <Naira className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₦</span>
                     <Input type="number" placeholder="50000" className="pl-8" {...field} />
                 </div>
               </FormControl>
