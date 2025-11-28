@@ -1,14 +1,16 @@
+
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, LayoutDashboard, Users, AlertTriangle, Activity } from "lucide-react";
+import { LayoutDashboard, Users, AlertTriangle, Activity } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Naira } from "@/components/icons";
 
 const recentActivities = [
   { id: 1, user: "John Doe", action: "Approved Withdrawal #W001", timestamp: "2 mins ago", type: "Approval" },
   { id: 2, user: "Jane Smith", action: "Lodged Repayment for Deal #D012", timestamp: "15 mins ago", type: "Repayment" },
   { id: 3, user: "Admin", action: "Created new Deal #D024", timestamp: "1 hour ago", type: "Deal" },
-  { id: 4, user: "Mike Johnson", action: "Requested Reinvestment of $500", timestamp: "3 hours ago", type: "Request" },
+  { id: 4, user: "Mike Johnson", action: "Requested Reinvestment of ₦500,000", timestamp: "3 hours ago", type: "Request" },
   { id: 5, user: "Sarah Brown", action: "User profile updated", timestamp: "5 hours ago", type: "User" },
 ];
 
@@ -24,20 +26,20 @@ export default function AdminDashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Value Locked</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <Naira className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$4,523,189.00</div>
+            <div className="text-2xl font-bold">₦4,523,189.00</div>
             <p className="text-xs text-muted-foreground">+20.1% from last month</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Platform Earnings</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <Naira className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$231,580.50</div>
+            <div className="text-2xl font-bold">₦231,580.50</div>
             <p className="text-xs text-muted-foreground">+18.3% from last month</p>
           </CardContent>
         </Card>

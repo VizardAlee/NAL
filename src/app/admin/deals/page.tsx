@@ -73,7 +73,7 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
             <TableRow key={deal.id}>
               <TableCell className="font-medium">{deal.dealName}</TableCell>
               <TableCell>{deal.clientName}</TableCell>
-              <TableCell>{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(deal.principal)}</TableCell>
+              <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
               <TableCell>{deal.durationValue} {deal.durationUnit}</TableCell>
               <TableCell>
                 <Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>
@@ -81,7 +81,7 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
                 </Badge>
               </TableCell>
                <TableCell>
-                {formatDate(deal.createdAt as any)}
+                {formatDate(deal.createdAt)}
               </TableCell>
             </TableRow>
           ))}
