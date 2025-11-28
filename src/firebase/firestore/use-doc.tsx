@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   onSnapshot,
   type DocumentData,
@@ -17,16 +17,8 @@ export function useDoc<T extends DocumentData>(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<FirestoreError | null>(null);
 
-  const docRef = useRef(ref);
-
   useEffect(() => {
-    if (docRef.current?.path !== ref?.path) {
-      docRef.current = ref;
-    }
-  }, [ref]);
-
-  useEffect(() => {
-    if (!docRef.current) {
+    if (!ref) {
       setData(null);
       setLoading(false);
       return;
@@ -35,7 +27,7 @@ export function useDoc<T extends DocumentData>(
     setLoading(true);
 
     const unsubscribe = onSnapshot(
-      docRef.current,
+      ref,
       (doc) => {
         if (doc.exists()) {
           setData({ ...doc.data(), id: doc.id } as T);
@@ -50,17 +42,20 @@ export function useDoc<T extends DocumentData>(
         setError(err);
         setLoading(false);
 
-        if (err.code === 'permission-denied' && docRef.current) {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: docRef.current.path,
-            operation: 'get',
-          }));
+        if (err.code === 'permission-denied' && ref) {
+          errorEmitter.emit(
+            'permission-error',
+            new FirestorePermissionError({
+              path: ref.path,
+              operation: 'get',
+            })
+          );
         }
       }
     );
 
     return () => unsubscribe();
-  }, [docRef.current]);
+  }, [ref]);
 
   return { data, loading, error };
 }

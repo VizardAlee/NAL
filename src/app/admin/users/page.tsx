@@ -30,15 +30,14 @@ export default function UsersPage() {
   const [isCreateUserOpen, setCreateUserOpen] = useState(false);
   const firestore = useFirestore();
 
-  // This is now safe. `firestore` will be null until Firebase is ready,
-  // preventing `collection()` from being called with an invalid argument.
+  // This is now 100% safe. `usersQuery` will be null until `firestore` is ready.
   const usersQuery = firestore ? query(collection(firestore, 'users')) : null;
   
   const { data: users, loading } = useCollection(usersQuery);
 
   const handleUserCreated = () => {
     setCreateUserOpen(false);
-  }
+  };
 
   return (
     <div>

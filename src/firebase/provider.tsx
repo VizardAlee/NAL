@@ -1,23 +1,18 @@
 'use client';
 
 import {
-  FirebaseApp,
-} from 'firebase/app';
-import {
-  Auth,
-} from 'firebase/auth';
-import {
-  Firestore,
-} from 'firebase/firestore';
-import {
   createContext,
   useContext,
   type ReactNode,
   useState,
   useEffect,
 } from 'react';
-import { FirebaseErrorListener } from '@/components/firebase-error-listener';
 import { initializeFirebase } from '.';
+import { FirebaseErrorListener } from '@/components/firebase-error-listener';
+
+import type { FirebaseApp } from 'firebase/app';
+import type { Auth } from 'firebase/auth';
+import type { Firestore } from 'firebase/firestore';
 
 type FirebaseContextValue = {
   app: FirebaseApp | null;
@@ -33,11 +28,7 @@ const FirebaseContext = createContext<FirebaseContextValue>({
   ready: false,
 });
 
-export function FirebaseProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export function FirebaseProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<FirebaseContextValue>({
     app: null,
     auth: null,
@@ -52,8 +43,12 @@ export function FirebaseProvider({
 
   return (
     <FirebaseContext.Provider value={state}>
-      {children}
-      {state.ready && <FirebaseErrorListener />}
+      {state.ready ? (
+        <>
+          {children}
+          <FirebaseErrorListener />
+        </>
+      ) : null}
     </FirebaseContext.Provider>
   );
 }
@@ -66,15 +61,15 @@ export const useFirebase = () => {
   return context;
 };
 
-export const useFirebaseApp = () => {
-    const { app, ready } = useFirebase();
-    return ready ? app : null;
-}
-export const useAuth = () => {
-    const { auth, ready } = useFirebase();
-    return ready ? auth : null;
-}
-export const useFirestore = () => {
-    const { firestore, ready } = useFirebase();
-    return ready ? firestore : null;
-}
+export const useFirebaseApp = (): FirebaseApp | null => {
+  const { app, ready } = useFirebase();
+  return ready ? app : null;
+};
+export const useAuth = (): Auth | null => {
+  const { auth, ready } = useFirebase();
+  return ready ? auth : null;
+};
+export const useFirestore = (): Firestore | null => {
+  const { firestore, ready } = useFirebase();
+  return ready ? firestore : null;
+};

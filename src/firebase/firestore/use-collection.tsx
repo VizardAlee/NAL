@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   onSnapshot,
   type Query,
@@ -12,23 +12,11 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
 export function useCollection<T extends DocumentData>(
-  q: Query<T> | CollectionReference<T> | null | undefined,
-  options?: any
+  q: Query<T> | CollectionReference<T> | null | undefined
 ) {
   const [data, setData] = useState<T[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<FirestoreError | null>(null);
-
-  // Use a ref to store the query to prevent re-subscribing on every render
-  const queryRef = useRef(q);
-
-  useEffect(() => {
-    // Simple deep comparison for the query object
-    if (JSON.stringify(queryRef.current) !== JSON.stringify(q)) {
-      queryRef.current = q;
-    }
-  }, [q]);
-
 
   useEffect(() => {
     if (!q) {
@@ -50,22 +38,25 @@ export function useCollection<T extends DocumentData>(
         setError(null);
       },
       (err) => {
-        console.error("onSnapshot error:", err);
+        console.error('onSnapshot error:', err);
         setError(err);
         setLoading(false);
 
-        // Emit a custom, more detailed error for permission issues
         if (err.code === 'permission-denied') {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: (q as CollectionReference).path,
-            operation: 'list'
-          }));
+          const path = 'path' in q ? (q as any).path : 'unknown';
+          errorEmitter.emit(
+            'permission-error',
+            new FirestorePermissionError({
+              path,
+              operation: 'list',
+            })
+          );
         }
       }
     );
 
     return () => unsubscribe();
-  }, [q]);
+  }, [q]); 
 
   return { data, loading, error };
 }
