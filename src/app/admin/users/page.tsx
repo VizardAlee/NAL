@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Users } from 'lucide-react';
 import { CreateUserForm } from './create-user-form';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -30,9 +30,12 @@ export default function UsersPage() {
   const [isCreateUserOpen, setCreateUserOpen] = useState(false);
   const firestore = useFirestore();
 
-  // This is now safe because useFirestore returns null until ready,
-  // and useCollection is designed to handle a null query.
-  const usersQuery = firestore ? query(collection(firestore, 'users')) : null;
+  // Memoize the query to prevent re-creating it on every render.
+  // This stabilizes the query object reference.
+  const usersQuery = useMemo(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, 'users'));
+  }, [firestore]);
 
   const { data: users, loading } = useCollection(usersQuery);
 
