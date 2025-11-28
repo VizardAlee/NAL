@@ -65,11 +65,11 @@ export default function AdminDashboardPage() {
       );
     }, [firestore]);
     
-    const investmentTransactionsQuery = useMemo(() => {
+    const activeDealsQuery = useMemo(() => {
       if (!firestore) return null;
       return query(
-        collection(firestore, 'transactions'),
-        where('type', '==', 'Investment')
+        collection(firestore, 'deals'),
+        where('status', '==', 'Active')
       );
     }, [firestore]);
 
@@ -87,12 +87,12 @@ export default function AdminDashboardPage() {
     const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
     const { data: users, loading: usersLoading } = useCollection<User>(usersQuery);
     const { data: recentTransactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
-    const { data: investmentTransactions, loading: investmentTransactionsLoading } = useCollection<Transaction>(investmentTransactionsQuery);
+    const { data: activeDeals, loading: activeDealsLoading } = useCollection<Deal>(activeDealsQuery);
     const { data: overdueDeals, loading: overdueDealsLoading } = useCollection<Deal>(overdueDealsQuery);
     
-    const allUsers = useCollection<User>(usersQuery); // A separate fetch for user mapping
+    const allUsers = useCollection<User>(usersQuery); 
 
-    const isLoading = fundBatchesLoading || usersLoading || transactionsLoading || investmentTransactionsLoading || overdueDealsLoading || allUsers.loading;
+    const isLoading = fundBatchesLoading || usersLoading || transactionsLoading || activeDealsLoading || overdueDealsLoading || allUsers.loading;
 
     const chartData = useMemo(() => {
         if (!fundBatches) return [];
@@ -122,10 +122,13 @@ export default function AdminDashboardPage() {
     }, [fundBatches]);
 
     const platformEarnings = useMemo(() => {
-        if (!investmentTransactions) return 0;
-        const totalInvested = investmentTransactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-        return totalInvested * 0.01; // 1% of total investments
-    }, [investmentTransactions]);
+        if (!activeDeals) return 0;
+        const totalProjectedInterest = activeDeals.reduce((sum, deal) => {
+            const interest = deal.principal * (deal.interestRate / 100);
+            return sum + interest;
+        }, 0);
+        return totalProjectedInterest * 0.60; // Platform takes 60% of interest
+    }, [activeDeals]);
 
     const recentActivities = useMemo(() => {
         if (!recentTransactions || !allUsers.data) return [];
@@ -180,7 +183,7 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent>
                 {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(platformEarnings)}</div>}
-                <p className="text-xs text-muted-foreground">Based on 1% of investments</p>
+                <p className="text-xs text-muted-foreground">Projected 60% of interest from active deals</p>
             </CardContent>
             </Card>
             <Card>
@@ -259,5 +262,7 @@ export default function AdminDashboardPage() {
       </Card>
     </div>
   );
+
+    
 
     
