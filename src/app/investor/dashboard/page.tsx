@@ -64,7 +64,7 @@ export default function InvestorDashboard() {
   
   // Now, fetch the actual deal documents
   const dealsQuery = useMemo(() => {
-      if (!firestore || investedDealIds.length === 0) return null; // FIX: Don't run query if there are no IDs
+      if (!firestore || investedDealIds.length === 0) return null;
       return query(collection(firestore, 'deals'), where('__name__', 'in', investedDealIds));
   }, [firestore, investedDealIds]);
   
