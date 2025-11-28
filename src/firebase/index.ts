@@ -1,51 +1,43 @@
 
 'use client';
+
 import { getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
-
-// Now reads from .env variables via the config file
 import { firebaseConfig } from '@/firebase/config';
 
-// --- Single, global Firebase instance ---
-let app: FirebaseApp | undefined;
-let auth: Auth | undefined;
-let firestore: Firestore | undefined;
+// Use a function that lazily initializes — no top-level mutation
+let _app: FirebaseApp | undefined;
+let _auth: Auth | undefined;
+let _firestore: Firestore | undefined;
 
-/**
- * Initializes Firebase App.
- * This function is idempotent, meaning it can be called multiple times without re-initializing.
- */
-function initializeFirebase() {
-  const apps = getApps();
-  if (apps.length > 0) {
-    app = apps[0];
+function ensureInitialized(): { app: FirebaseApp; auth: Auth; firestore: Firestore } {
+  if (_app) {
+    return { app: _app, auth: _auth!, firestore: _firestore! };
+  }
+
+  const existingApp = getApps().length ? getApps()[0] : undefined;
+  if (existingApp) {
+    _app = existingApp;
   } else {
-    // This check ensures we don't try to initialize with an invalid config.
     if (!firebaseConfig?.apiKey || firebaseConfig.apiKey.includes('mock-key')) {
         console.warn("Using mock Firebase configuration. Please set up your environment variables for a real project.");
     }
-    app = initializeApp(firebaseConfig);
+    _app = initializeApp(firebaseConfig);
   }
-  auth = getAuth(app);
-  firestore = getFirestore(app);
-  return { app, auth, firestore };
+
+  _auth = getAuth(_app);
+  _firestore = getFirestore(_app);
+
+  return { app: _app, auth: _auth, firestore: _firestore };
 }
 
-
-/**
- * Returns the initialized Firebase instances.
- * This is a simple getter function to access the global instances.
- * It initializes the app if it hasn't been already.
- */
+// This is now safe to call from anywhere, even at module top level
 export function getFirebase() {
-  if (!app) {
-    return initializeFirebase();
-  }
-  return { app, auth: auth!, firestore: firestore! };
+  return ensureInitialized();
 }
 
-// --- Exports for React components ---
+// Re-exports
 export * from './provider';
 export * from './auth/use-user';
 export * from './firestore/use-collection';
