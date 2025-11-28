@@ -28,10 +28,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export default function UsersPage() {
   const [isCreateUserOpen, setCreateUserOpen] = useState(false);
+  // useFirestore now reliably returns a valid instance.
   const firestore = useFirestore();
 
-  // This is now 100% safe. `usersQuery` will be null until `firestore` is ready.
-  const usersQuery = firestore ? query(collection(firestore, 'users')) : null;
+  // No need for useMemo or null checks, as firestore is always available.
+  const usersQuery = query(collection(firestore, 'users'));
   
   const { data: users, loading } = useCollection(usersQuery);
 
