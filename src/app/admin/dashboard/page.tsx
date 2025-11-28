@@ -36,6 +36,8 @@ type FundBatch = DocumentData & {
   createdAt: Timestamp;
 };
 
+type User = DocumentData;
+
 export default function AdminDashboardPage() {
     const firestore = useFirestore();
 
@@ -43,8 +45,14 @@ export default function AdminDashboardPage() {
         if (!firestore) return null;
         return query(collection(firestore, 'fundBatches'));
     }, [firestore]);
+    
+    const usersQuery = useMemo(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'users'));
+    }, [firestore]);
 
     const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
+    const { data: users, loading: usersLoading } = useCollection<User>(usersQuery);
 
     const chartData = useMemo(() => {
         if (!fundBatches) return [];
@@ -158,7 +166,7 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent>
                 <div className="text-2xl font-bold">₦231,580.50</div>
-                <p className="text-xs text-muted-foreground">+18.3% from last month</p>
+                <p className="text-xs text-muted-foreground">(mock data)</p>
             </CardContent>
             </Card>
             <Card>
@@ -167,8 +175,12 @@ export default function AdminDashboardPage() {
                 <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-                <div className="text-2xl font-bold">+12,234</div>
-                <p className="text-xs text-muted-foreground">+15% from last month</p>
+                {usersLoading ? (
+                    <Skeleton className="h-8 w-1/2" />
+                ) : (
+                    <div className="text-2xl font-bold">{users?.length ?? 0}</div>
+                )}
+                <p className="text-xs text-muted-foreground">Total users on the platform</p>
             </CardContent>
             </Card>
             <Card>
@@ -178,7 +190,7 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent>
                 <div className="text-2xl font-bold">12</div>
-                <p className="text-xs text-muted-foreground">2 new since last login</p>
+                <p className="text-xs text-muted-foreground">(mock data)</p>
             </CardContent>
             </Card>
         </div>
