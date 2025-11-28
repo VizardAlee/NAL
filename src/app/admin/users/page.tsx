@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Users } from 'lucide-react';
 import { CreateUserForm } from './create-user-form';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -30,7 +30,11 @@ export default function UsersPage() {
   const [isCreateUserOpen, setCreateUserOpen] = useState(false);
   const firestore = useFirestore();
 
-  const usersQuery = query(collection(firestore, 'users'));
+  const usersQuery = useMemo(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, 'users'));
+  }, [firestore]);
+  
   const { data: users, loading } = useCollection(usersQuery);
 
   const handleUserCreated = () => {
