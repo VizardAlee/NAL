@@ -15,6 +15,10 @@ service cloud.firestore {
     function isClient() {
         return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Client';
     }
+    
+    function isInvestor() {
+        return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Investor';
+    }
 
     // Rules for the 'users' collection
     match /users/{userId} {
@@ -41,13 +45,18 @@ service cloud.firestore {
     }
 
     // Rules for 'fundBatches' and 'transactions'
-    // These are sensitive financial collections, only admins should have access.
     match /fundBatches/{batchId} {
-        allow read, write: if isAdmin();
+        // Admin can do anything
+        allow write: if isAdmin();
+        // Investor can read their own fund batches, Admins can read all.
+        allow read: if isAdmin() || (isInvestor() && resource.data.sourceId == request.auth.uid);
     }
 
     match /transactions/{transactionId} {
-        allow read, write: if isAdmin();
+        // Admin can do anything
+        allow write: if isAdmin();
+        // Investor can read their own transactions, Admins can read all.
+        allow read: if isAdmin() || (isInvestor() && resource.data.userId == request.auth.uid);
     }
   }
 }
