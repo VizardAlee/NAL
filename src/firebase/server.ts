@@ -5,8 +5,10 @@ import { getFirestore } from 'firebase-admin/firestore';
 // IMPORTANT: Do not use this in client-side code.
 // This is a server-only module.
 
-const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-  ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
+const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+
+const serviceAccount = serviceAccountString
+  ? JSON.parse(serviceAccountString)
   : undefined;
 
 if (!serviceAccount && process.env.NODE_ENV === 'production') {
