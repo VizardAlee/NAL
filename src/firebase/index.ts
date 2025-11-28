@@ -36,6 +36,7 @@ function initializeFirebase() {
 /**
  * Returns the initialized Firebase instances.
  * This is a simple getter function to access the global instances.
+ * It initializes the app if it hasn't been already.
  */
 export function getFirebase() {
   if (!app) {

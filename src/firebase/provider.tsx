@@ -19,11 +19,10 @@ type FirebaseContextValue = {
   firestore: Firestore;
 };
 
-// Get the initialized instances immediately by calling the function
+// Call getFirebase to initialize and get the instances.
 const { app, auth, firestore } = getFirebase();
 
-// Create the context with the already-initialized instances.
-// The context value will never be null or undefined.
+// The context can be created with the initialized instances.
 const FirebaseContext = createContext<FirebaseContextValue>({
   app,
   auth,
@@ -35,8 +34,10 @@ const FirebaseContext = createContext<FirebaseContextValue>({
  * available to the entire React component tree.
  */
 export function FirebaseProvider({ children }: { children: ReactNode }) {
+  // The value is stable because getFirebase() is idempotent.
+  const value = { app, auth, firestore };
   return (
-    <FirebaseContext.Provider value={{ app, auth, firestore }}>
+    <FirebaseContext.Provider value={value}>
       {children}
       <FirebaseErrorListener />
     </FirebaseContext.Provider>
