@@ -8,8 +8,10 @@ export type Deal = DocumentData & {
   clientName: string;
   principal: number;
   interestRate: number;
-  duration: number;
+  durationValue: number;
+  durationUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
   repaymentType: 'Equal Installments' | 'Balloon Payment';
+  repaymentFrequency: 'Daily' | 'Weekly' | 'Fortnightly' | 'Monthly';
   status: 'Pending' | 'Active' | 'Completed' | 'Terminated';
   createdAt: string; // Stored as a server-generated Timestamp, but comes to client as string
 };

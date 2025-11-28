@@ -25,7 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { addDoc, collection, query, where, serverTimestamp } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
+import { useFirestore } from '@/firebase';
 import { FirebaseError } from 'firebase/app';
 import { useCollection } from '@/firebase/firestore/use-collection';
 
@@ -34,8 +34,10 @@ const formSchema = z.object({
   clientId: z.string({ required_error: 'Please select a client.' }),
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   interestRate: z.coerce.number().min(0, { message: 'Interest rate cannot be negative.' }),
-  duration: z.coerce.number().positive().int({ message: 'Duration must be a positive number of months.' }),
+  durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
+  durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
+  repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
 });
 
 type CreateDealFormProps = {
@@ -67,8 +69,10 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
       dealName: '',
       principal: 10000,
       interestRate: 5,
-      duration: 12,
+      durationValue: 12,
+      durationUnit: 'Months',
       repaymentType: 'Equal Installments',
+      repaymentFrequency: 'Monthly',
     },
   });
 
@@ -91,6 +95,7 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
       const dealsCollection = collection(firestore, 'deals');
       await addDoc(dealsCollection, {
         ...values,
+        duration: `${values.durationValue} ${values.durationUnit}`, // Combine for backward compatibility if needed
         clientName: selectedClient.name, // Denormalize client name
         status: 'Pending',
         createdAt: serverTimestamp(),
@@ -175,17 +180,41 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
               )}
             />
         </div>
-        <FormField
-          control={form.control}
-          name="duration"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Duration (in months)</FormLabel>
-              <FormControl><Input type="number" placeholder="12" {...field} /></FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="durationValue"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Duration</FormLabel>
+                <FormControl><Input type="number" placeholder="12" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="durationUnit"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>&nbsp;</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="Days">Days</SelectItem>
+                    <SelectItem value="Weeks">Weeks</SelectItem>
+                    <SelectItem value="Fortnights">Fortnights</SelectItem>
+                    <SelectItem value="Months">Months</SelectItem>
+                    <SelectItem value="Years">Years</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
         <FormField
           control={form.control}
           name="repaymentType"
@@ -199,6 +228,27 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
                 <SelectContent>
                   <SelectItem value="Equal Installments">Equal Installments</SelectItem>
                   <SelectItem value="Balloon Payment">Balloon Payment</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+         <FormField
+          control={form.control}
+          name="repaymentFrequency"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Repayment Frequency</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger><SelectValue placeholder="Select repayment frequency" /></SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="Daily">Daily</SelectItem>
+                  <SelectItem value="Weekly">Weekly</SelectItem>
+                  <SelectItem value="Fortnightly">Fortnightly</SelectItem>
+                  <SelectItem value="Monthly">Monthly</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />

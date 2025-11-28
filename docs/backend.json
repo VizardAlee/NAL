@@ -48,14 +48,24 @@
           "type": "number",
           "description": "The annual interest rate for the deal."
         },
-        "duration": {
+        "durationValue": {
           "type": "number",
-          "description": "The duration of the deal in months."
+          "description": "The numeric value for the duration of the deal."
+        },
+        "durationUnit": {
+          "type": "string",
+          "description": "The unit of time for the deal's duration.",
+          "enum": ["Days", "Weeks", "Fortnights", "Months", "Years"]
         },
         "repaymentType": {
           "type": "string",
           "description": "The type of repayment plan.",
           "enum": ["Equal Installments", "Balloon Payment"]
+        },
+        "repaymentFrequency": {
+          "type": "string",
+          "description": "The frequency of repayments.",
+          "enum": ["Daily", "Weekly", "Fortnightly", "Monthly"]
         },
         "status": {
           "type": "string",
@@ -68,7 +78,19 @@
           "description": "The timestamp when the deal was created."
         }
       },
-      "required": ["dealName", "clientId", "clientName", "principal", "interestRate", "duration", "repaymentType", "status", "createdAt"]
+      "required": [
+        "dealName",
+        "clientId",
+        "clientName",
+        "principal",
+        "interestRate",
+        "durationValue",
+        "durationUnit",
+        "repaymentType",
+        "repaymentFrequency",
+        "status",
+        "createdAt"
+      ]
     },
     "fundBatch": {
       "title": "Fund Batch",

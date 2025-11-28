@@ -28,6 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { CreateDealForm } from './create-deal-form';
 import { Deal } from '@/lib/types';
 import { format } from 'date-fns';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean }) {
   return (
@@ -38,7 +39,7 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
             <TableHead>Deal Name</TableHead>
             <TableHead>Client</TableHead>
             <TableHead>Principal</TableHead>
-            <TableHead>Interest Rate</TableHead>
+            <TableHead>Duration</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Created At</TableHead>
           </TableRow>
@@ -50,7 +51,7 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
                 <TableCell><Skeleton className="h-5 w-32" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-24" /></TableCell>
               </TableRow>
@@ -60,7 +61,7 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
               <TableCell className="font-medium">{deal.dealName}</TableCell>
               <TableCell>{deal.clientName}</TableCell>
               <TableCell>{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(deal.principal)}</TableCell>
-              <TableCell>{deal.interestRate}%</TableCell>
+              <TableCell>{deal.durationValue} {deal.durationUnit}</TableCell>
               <TableCell>
                 <Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>
                   {deal.status}
@@ -109,11 +110,13 @@ export default function DealsPage() {
               Create Deal
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] flex flex-col">
             <DialogHeader>
               <DialogTitle>Create New Deal</DialogTitle>
             </DialogHeader>
-            <CreateDealForm onDealCreated={() => setCreateDealOpen(false)} />
+            <ScrollArea className="pr-6 -mr-6">
+                <CreateDealForm onDealCreated={() => setCreateDealOpen(false)} />
+            </ScrollArea>
           </DialogContent>
         </Dialog>
       </PageHeader>
