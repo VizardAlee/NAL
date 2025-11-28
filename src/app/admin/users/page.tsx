@@ -28,6 +28,7 @@ import { collection, query, type DocumentData } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type User = DocumentData & {
     id: string;
@@ -58,7 +59,10 @@ function UsersTable({ users, loading }: { users: User[] | null, loading: boolean
             Array.from({ length: 5 }).map((_, i) => (
               <TableRow key={i}>
                 <TableCell>
-                  <Skeleton className="h-5 w-32" />
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <Skeleton className="h-5 w-32" />
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Skeleton className="h-5 w-40" />
@@ -70,7 +74,15 @@ function UsersTable({ users, loading }: { users: User[] | null, loading: boolean
             ))}
           {!loading && users?.map((user) => (
             <TableRow key={user.id} onClick={() => handleRowClick(user.id)} className="cursor-pointer">
-              <TableCell className="font-medium">{user.name}</TableCell>
+              <TableCell className="font-medium">
+                <div className="flex items-center gap-3">
+                    <Avatar>
+                        <AvatarImage src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user.id}`} alt={user.name} />
+                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <span>{user.name}</span>
+                </div>
+              </TableCell>
               <TableCell>{user.email}</TableCell>
               <TableCell>
                 <Badge variant={user.role === 'Admin' ? 'default' : 'secondary'}>

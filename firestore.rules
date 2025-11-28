@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -22,9 +23,10 @@ service cloud.firestore {
 
     // Rules for the 'users' collection
     match /users/{userId} {
-      // Allow any authenticated user to list and read user profiles.
-      // This is generally safe as user documents contain non-sensitive info.
-      allow list, get: if request.auth != null;
+      // Admins can read all profiles. Other users can only read their own.
+      allow get: if isAdmin() || isOwner(userId);
+      // Admins can list all users.
+      allow list: if isAdmin();
       
       // Allow any authenticated user to create a new user document (e.g., during signup).
       allow create: if request.auth != null;
@@ -39,8 +41,8 @@ service cloud.firestore {
     // Rules for the 'deals' collection
     match /deals/{dealId} {
         // Admins can do anything.
-        // Clients can read deals (assuming they need to see deal details).
-        allow read: if isAdmin() || isClient();
+        // Clients can read deals they are associated with.
+        allow read: if isAdmin() || (isClient() && resource.data.clientId == request.auth.uid);
         allow create, update, delete: if isAdmin();
     }
 
