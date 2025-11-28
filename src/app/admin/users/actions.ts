@@ -19,19 +19,10 @@ export async function createUser(values: z.infer<typeof userSchema>) {
   }
 
   const { firestore } = initializeFirebase();
-  const { name, email, password, role: initialRole } = validatedData.data;
-  let finalRole = initialRole;
-
+  const { name, email, password, role } = validatedData.data;
+  
   try {
-    // Check if this is the first user. If so, make them an Admin.
-    const usersCollection = firestore.collection('users'); // Use Admin SDK collection method
-    const snapshot = await usersCollection.count().get(); // Use Admin SDK count method
-    if (snapshot.data().count === 0) {
-      finalRole = 'Admin';
-      console.log('First user detected. Assigning Admin role.');
-    }
-
-    console.log(`Creating user with email: ${email} and role: ${finalRole}`);
+    console.log(`Creating user with email: ${email} and role: ${role}`);
     
     // 1. Create user in Firebase Authentication
     const userCredential = await getAuth().createUser({
@@ -42,15 +33,15 @@ export async function createUser(values: z.infer<typeof userSchema>) {
     console.log(`Successfully created Auth user with UID: ${userCredential.uid}`);
     
     // Set custom claim for the user's role
-    await getAuth().setCustomUserClaims(userCredential.uid, { role: finalRole });
-    console.log(`Successfully set custom claim: { role: '${finalRole}' }`);
+    await getAuth().setCustomUserClaims(userCredential.uid, { role });
+    console.log(`Successfully set custom claim: { role: '${role}' }`);
 
     // 2. Create user profile in Firestore
-    const userDocRef = firestore.collection('users').doc(userCredential.uid); // Use Admin SDK doc method
+    const userDocRef = firestore.collection('users').doc(userCredential.uid);
     await userDocRef.set({
       name,
       email,
-      role: finalRole,
+      role,
     });
     console.log(`Successfully created Firestore document in /users/${userCredential.uid}`);
     
@@ -61,7 +52,7 @@ export async function createUser(values: z.infer<typeof userSchema>) {
       uid: userCredential.uid,
       name,
       email,
-      role: finalRole,
+      role,
     };
   } catch (error: any) {
     console.error('Error creating user:', error);
