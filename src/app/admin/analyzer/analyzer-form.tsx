@@ -1,12 +1,13 @@
+
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState, useEffect } from "react";
+import { useFormStatus } from "react-dom";
 import { getAnalysis } from "./actions";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bot, Loader2, BarChart, Shield, Sparkles } from "lucide-react";
-import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 const initialState = {
@@ -27,7 +28,7 @@ function SubmitButton() {
 }
 
 export function AnalyzerForm() {
-  const [state, formAction] = useFormState(getAnalysis, initialState);
+  const [state, formAction] = useActionState(getAnalysis, initialState);
   const { toast } = useToast();
 
   useEffect(() => {
