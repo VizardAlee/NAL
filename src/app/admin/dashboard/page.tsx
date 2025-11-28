@@ -7,8 +7,14 @@ import { LayoutDashboard, Users, AlertTriangle, Activity } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Naira } from "@/components/icons";
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { useCollection } from "@/firebase/firestore/use-collection";
+import { collection, query, Timestamp, DocumentData } from "firebase/firestore";
+import { useFirestore } from "@/firebase";
+import { useMemo } from "react";
+import { format } from "date-fns";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const recentActivities = [
   { id: 1, user: "John Doe", action: "Approved Withdrawal #W001", timestamp: "2 mins ago", type: "Approval" },
@@ -18,15 +24,6 @@ const recentActivities = [
   { id: 5, user: "Sarah Brown", action: "User profile updated", timestamp: "5 hours ago", type: "User" },
 ];
 
-const chartData = [
-    { month: "January", tvl: 1860000 },
-    { month: "February", tvl: 3050000 },
-    { month: "March", tvl: 2370000 },
-    { month: "April", tvl: 3730000 },
-    { month: "May", tvl: 4523189 },
-    { month: "June", tvl: 4890000 },
-];
-
 const chartConfig = {
     tvl: {
         label: "TVL",
@@ -34,7 +31,59 @@ const chartConfig = {
     },
 };
 
+type FundBatch = DocumentData & {
+  amount: number;
+  createdAt: Timestamp;
+};
+
 export default function AdminDashboardPage() {
+    const firestore = useFirestore();
+
+    const fundBatchesQuery = useMemo(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'fundBatches'));
+    }, [firestore]);
+
+    const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
+
+    const chartData = useMemo(() => {
+        if (!fundBatches) return [];
+
+        // Sort batches by creation date
+        const sortedBatches = [...fundBatches].sort((a, b) => a.createdAt.toMillis() - b.createdAt.toMillis());
+
+        const monthlyData: { [key: string]: number } = {};
+
+        // Aggregate fund amounts by month
+        sortedBatches.forEach(batch => {
+            const month = format(batch.createdAt.toDate(), 'yyyy-MM');
+            if (!monthlyData[month]) {
+                monthlyData[month] = 0;
+            }
+            monthlyData[month] += batch.amount;
+        });
+
+        const chartEntries = Object.keys(monthlyData).map(month => ({
+            month: format(new Date(month + '-02'), 'MMM'), // Use a date to format to 'Jan', 'Feb' etc.
+            yearMonth: month,
+            monthlyTotal: monthlyData[month]
+        }));
+
+        // Sort by date and calculate cumulative TVL
+        chartEntries.sort((a, b) => a.yearMonth.localeCompare(b.yearMonth));
+        
+        let cumulativeTvl = 0;
+        return chartEntries.map(entry => {
+            cumulativeTvl += entry.monthlyTotal;
+            return {
+                month: entry.month,
+                tvl: cumulativeTvl
+            };
+        });
+
+    }, [fundBatches]);
+
+
   return (
     <div>
       <PageHeader
@@ -48,6 +97,11 @@ export default function AdminDashboardPage() {
                 <CardTitle>Total Value Locked (TVL)</CardTitle>
             </CardHeader>
             <CardContent className="pl-2">
+                {fundBatchesLoading ? (
+                    <div className="h-[250px] w-full flex items-center justify-center">
+                        <Skeleton className="h-full w-full" />
+                    </div>
+                ) : (
                  <ChartContainer config={chartConfig} className="h-[250px] w-full">
                     <LineChart
                         accessibilityLayer
@@ -63,7 +117,6 @@ export default function AdminDashboardPage() {
                             tickLine={false}
                             axisLine={false}
                             tickMargin={8}
-                            tickFormatter={(value) => value.slice(0, 3)}
                         />
                         <YAxis
                             tickFormatter={(value) => `₦${Number(value) / 1000000}M`}
@@ -94,6 +147,7 @@ export default function AdminDashboardPage() {
                         />
                     </LineChart>
                 </ChartContainer>
+                )}
             </CardContent>
         </Card>
         <div className="space-y-6">
@@ -165,5 +219,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-
-    
