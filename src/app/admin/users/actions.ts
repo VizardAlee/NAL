@@ -2,7 +2,6 @@
 
 import { z } from 'zod';
 import { initializeFirebase } from '@/firebase/server';
-import { doc, setDoc, getCountFromServer, collection } from 'firebase/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { revalidatePath } from 'next/cache';
 
@@ -25,8 +24,8 @@ export async function createUser(values: z.infer<typeof userSchema>) {
 
   try {
     // Check if this is the first user. If so, make them an Admin.
-    const usersCollection = collection(firestore, 'users');
-    const snapshot = await getCountFromServer(usersCollection);
+    const usersCollection = firestore.collection('users'); // Use Admin SDK collection method
+    const snapshot = await usersCollection.count().get(); // Use Admin SDK count method
     if (snapshot.data().count === 0) {
       finalRole = 'Admin';
       console.log('First user detected. Assigning Admin role.');
@@ -47,8 +46,8 @@ export async function createUser(values: z.infer<typeof userSchema>) {
     console.log(`Successfully set custom claim: { role: '${finalRole}' }`);
 
     // 2. Create user profile in Firestore
-    const userDocRef = doc(firestore, 'users', userCredential.uid);
-    await setDoc(userDocRef, {
+    const userDocRef = firestore.collection('users').doc(userCredential.uid); // Use Admin SDK doc method
+    await userDocRef.set({
       name,
       email,
       role: finalRole,
