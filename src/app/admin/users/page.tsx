@@ -1,3 +1,4 @@
+
 'use client';
 
 import { PageHeader } from '@/components/page-header';
@@ -23,19 +24,22 @@ import { CreateUserForm } from './create-user-form';
 import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function UsersPage() {
   const [isCreateUserOpen, setCreateUserOpen] = useState(false);
   const firestore = useFirestore();
+  const { user } = useUser(); // Get the authenticated user
 
   // Memoize the query to prevent re-creating it on every render.
-  // This stabilizes the query object reference.
+  // CRITICAL FIX: Add `user` to the dependency array.
+  // The query will now be `null` until the user is authenticated,
+  // preventing the hook from running with insufficient permissions.
   const usersQuery = useMemo(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return query(collection(firestore, 'users'));
-  }, [firestore]);
+  }, [firestore, user]);
 
   const { data: users, loading } = useCollection(usersQuery);
 
