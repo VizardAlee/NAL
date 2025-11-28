@@ -56,6 +56,14 @@ export default function InvestorDashboard() {
   const portfolioValue = useMemo(() => {
     return transactions?.reduce((sum, tx) => sum + tx.amount, 0) ?? 0;
   }, [transactions]);
+
+  const simpleROI = useMemo(() => {
+    if (totalCapital === 0) {
+      return 0;
+    }
+    const returns = portfolioValue - totalCapital;
+    return (returns / totalCapital) * 100;
+  }, [totalCapital, portfolioValue]);
   
   const formatDate = (timestamp: Timestamp | Date | undefined) => {
     if (!timestamp) return 'N/A';
@@ -103,8 +111,8 @@ export default function InvestorDashboard() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12.8%</div>
-            <p className="text-xs text-muted-foreground">Based on current performance (mock)</p>
+             {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{simpleROI.toFixed(2)}%</div>}
+            <p className="text-xs text-muted-foreground">Simple ROI</p>
           </CardContent>
         </Card>
       </div>
