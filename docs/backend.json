@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "user": {
@@ -27,9 +28,17 @@
       "description": "Represents a financing deal for a client.",
       "type": "object",
       "properties": {
+        "dealName": {
+          "type": "string",
+          "description": "A descriptive name for the deal."
+        },
         "clientId": {
           "type": "string",
           "description": "The ID of the client associated with this deal."
+        },
+        "clientName": {
+          "type": "string",
+          "description": "The name of the client (denormalized for display)."
         },
         "principal": {
           "type": "number",
@@ -59,7 +68,7 @@
           "description": "The timestamp when the deal was created."
         }
       },
-      "required": ["clientId", "principal", "interestRate", "duration", "repaymentType", "status", "createdAt"]
+      "required": ["dealName", "clientId", "clientName", "principal", "interestRate", "duration", "repaymentType", "status", "createdAt"]
     },
     "fundBatch": {
       "title": "Fund Batch",
