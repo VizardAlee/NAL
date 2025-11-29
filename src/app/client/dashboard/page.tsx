@@ -4,16 +4,98 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, PlusCircle } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { FileText, PlusCircle, History } from "lucide-react";
 import { useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Deal } from '@/lib/types';
 import { Naira } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { format } from "date-fns";
+
+type Repayment = DocumentData & {
+  id: string;
+  dealId: string;
+  amount: number;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  lodgedAt: Timestamp;
+};
+
+function DealRepayments({ deal }: { deal: Deal }) {
+  const firestore = useFirestore();
+
+  const repaymentsQuery = useMemo(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, 'repayments'), where('dealId', '==', deal.id));
+  }, [firestore, deal.id]);
+
+  const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery);
+
+  const totalRepaid = useMemo(() => {
+    return repayments?.filter(r => r.status === 'Approved').reduce((sum, r) => sum + r.amount, 0) ?? 0;
+  }, [repayments]);
+
+  const outstandingPrincipal = useMemo(() => {
+    // This is a simplified calculation. A real system would track this more precisely.
+    return Math.max(0, deal.principal - totalRepaid);
+  }, [deal.principal, totalRepaid]);
+
+  const getRepaymentBreakdown = (repaymentAmount: number) => {
+    // Simplified amortization: assumes repayment covers monthly interest first, then principal.
+    // A more accurate calculation would need the outstanding principal at the time of repayment.
+    const monthlyInterest = deal.principal * (deal.interestRate / 100) / 12;
+    const profitPaid = Math.min(repaymentAmount, monthlyInterest);
+    const principalPaid = repaymentAmount - profitPaid;
+    return { principalPaid, profitPaid };
+  };
+  
+  if (repaymentsLoading) {
+    return <Skeleton className="h-24 w-full" />
+  }
+
+  if (!repayments || repayments.length === 0) {
+    return <p className="text-sm text-muted-foreground px-6 pb-4">No repayments have been lodged for this deal yet.</p>;
+  }
+
+  return (
+    <div className="px-6 pb-4">
+      <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+        <History className="h-4 w-4" />
+        Repayment History
+      </h4>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Date</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Principal</TableHead>
+            <TableHead>Profit</TableHead>
+            <TableHead className="text-right">Total</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {repayments.map(repayment => {
+            const { principalPaid, profitPaid } = getRepaymentBreakdown(repayment.amount);
+            return (
+              <TableRow key={repayment.id}>
+                <TableCell>{format(repayment.lodgedAt.toDate(), 'PPP')}</TableCell>
+                <TableCell><Badge variant={repayment.status === 'Approved' ? 'default' : 'secondary'}>{repayment.status}</Badge></TableCell>
+                <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(principalPaid)}</TableCell>
+                <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(profitPaid)}</TableCell>
+                <TableCell className="text-right font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(repayment.amount)}</TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
 
 function DealCard({ deal }: { deal: Deal }) {
     const statusVariant = {
@@ -24,7 +106,7 @@ function DealCard({ deal }: { deal: Deal }) {
     } as const;
 
     return (
-        <Card>
+        <Card className="flex flex-col">
             <CardHeader>
                 <div className="flex items-start justify-between">
                     <CardTitle className="font-headline text-xl">{deal.dealName}</CardTitle>
@@ -59,6 +141,9 @@ function DealCard({ deal }: { deal: Deal }) {
                     </div>
                 </div>
             </CardContent>
+            <div className="mt-auto">
+              <DealRepayments deal={deal} />
+            </div>
         </Card>
     )
 }
@@ -137,3 +222,5 @@ export default function ClientDashboard() {
         </div>
     );
 }
+
+    
