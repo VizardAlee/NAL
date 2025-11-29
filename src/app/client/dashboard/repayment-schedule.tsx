@@ -48,18 +48,20 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
     if (!schedule) return [];
 
     const today = startOfToday();
+    // Sort schedule by due date ascending first
+    const sortedSchedule = schedule.sort((a,b) => a.dueDate.getTime() - b.dueDate.getTime());
     const processedInstallments = new Set<number>();
 
-    return schedule.map(installment => {
+    return sortedSchedule.map(installment => {
         let status: RepaymentStatus = 'Upcoming';
-        // Find if a repayment was lodged for this specific installment
         // This is a simplification. A real system would need a more robust way
         // to link a repayment to a specific installment, perhaps by saving the
         // installment number or due date with the repayment document.
-        const matchingRepayment = allRepayments?.find(r => 
-            isSameDay(r.lodgedAt.toDate(), installment.dueDate) || // Lodged on the due date
-            (r.lodgedAt.toDate() < installment.dueDate && !processedInstallments.has(installment.installment))
-        );
+        const matchingRepayment = allRepayments?.find(r => {
+            if (processedInstallments.has(installment.installment)) return false;
+            // A simple check: if repayment is lodged on the same day as due date
+            return isSameDay(r.lodgedAt.toDate(), installment.dueDate)
+        });
 
         if (matchingRepayment) {
             processedInstallments.add(installment.installment);
@@ -72,26 +74,34 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
             status = 'Due';
         }
 
-        return { ...installment, status };
-    }).sort((a, b) => {
-        // Sort by due date ascending
-        return a.dueDate.getTime() - b.dueDate.getTime();
-    }).sort((a, b) => {
-        // Bring the first 'Due' or 'Upcoming' to the top
-        const isADue = a.status === 'Due' || a.status === 'Upcoming';
-        const isBDue = b.status === 'Due' || b.status === 'Upcoming';
-        if (isADue && !isBDue) return -1;
-        if (!isADue && isBDue) return 1;
-        return 0;
+        return { ...installment, status, isActionable: false }; // isActionable will be set next
     });
   }, [schedule, allRepayments]);
 
+  // Find the next payable installment and create the final list
+  const finalSchedule = useMemo(() => {
+    const nextPayableInstallmentIndex = enhancedSchedule.findIndex(
+      p => p.status === 'Due' || p.status === 'Upcoming'
+    );
+    
+    return enhancedSchedule.map((installment, index) => ({
+      ...installment,
+      isActionable: index === nextPayableInstallmentIndex
+    })).sort((a, b) => {
+        // Custom sort: bring the single actionable item to the top
+        if (a.isActionable) return -1;
+        if (b.isActionable) return 1;
+        // Then sort by due date
+        return a.dueDate.getTime() - b.dueDate.getTime();
+    });
+  }, [enhancedSchedule]);
+
   const paginatedSchedule = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return enhancedSchedule.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [enhancedSchedule, currentPage]);
+    return finalSchedule.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [finalSchedule, currentPage]);
 
-  const totalPages = Math.ceil(enhancedSchedule.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(finalSchedule.length / ITEMS_PER_PAGE);
 
   const StatusBadge = ({ status }: { status: RepaymentStatus }) => {
     const variantMap: { [key in RepaymentStatus]: 'default' | 'secondary' | 'outline' | 'destructive' } = {
@@ -157,7 +167,7 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
                         <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.interest)}</TableCell>
                         <TableCell><StatusBadge status={item.status} /></TableCell>
                         <TableCell className="text-right">
-                        {item.status === 'Due' && (
+                        {(item.isActionable) && (
                             <Button size="sm" onClick={() => router.push('/client/lodge-payment')}>
                                 Lodge Payment
                             </Button>
