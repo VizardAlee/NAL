@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LayoutDashboard, Users, AlertTriangle, Activity } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, Timestamp, DocumentData, where, orderBy, limit } from "firebase/firestore";
@@ -97,6 +97,7 @@ export default function AdminDashboardPage() {
         if (!fundBatches) return [];
         const sortedBatches = [...fundBatches].sort((a, b) => a.createdAt.toMillis() - b.createdAt.toMillis());
         const monthlyData: { [key: string]: number } = {};
+        
         sortedBatches.forEach(batch => {
             const month = format(batch.createdAt.toDate(), 'yyyy-MM');
             if (!monthlyData[month]) {
@@ -104,20 +105,16 @@ export default function AdminDashboardPage() {
             }
             monthlyData[month] += batch.amount;
         });
+
         const chartEntries = Object.keys(monthlyData).map(month => ({
             month: format(new Date(month + '-02'), 'MMM'),
             yearMonth: month,
-            monthlyTotal: monthlyData[month]
+            tvl: monthlyData[month]
         }));
+
         chartEntries.sort((a, b) => a.yearMonth.localeCompare(b.yearMonth));
-        let cumulativeTvl = 0;
-        return chartEntries.map(entry => {
-            cumulativeTvl += entry.monthlyTotal;
-            return {
-                month: entry.month,
-                tvl: cumulativeTvl
-            };
-        });
+        
+        return chartEntries;
     }, [fundBatches]);
 
     const platformEarnings = useMemo(() => {
@@ -154,7 +151,7 @@ export default function AdminDashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="lg:col-span-3">
             <CardHeader>
-                <CardTitle>Total Value Locked (TVL)</CardTitle>
+                <CardTitle>Total Value Locked (TVL) by Month</CardTitle>
             </CardHeader>
             <CardContent className="pl-2">
                 {isLoading ? (
@@ -163,27 +160,13 @@ export default function AdminDashboardPage() {
                     </div>
                 ) : (
                  <ChartContainer config={chartConfig} className="h-[250px] w-full">
-                    <AreaChart accessibilityLayer data={chartData} margin={{ left: 12, right: 12 }}>
+                    <BarChart accessibilityLayer data={chartData} margin={{ left: 12, right: 12 }}>
                         <CartesianGrid vertical={false} />
                         <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
                         <YAxis tickFormatter={(value) => `₦${Number(value) / 1000000}M`} tickLine={false} axisLine={false} tickMargin={8} />
                         <Tooltip cursor={false} content={<ChartTooltipContent indicator="dot" formatter={(value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(value))} />} />
-                        <defs>
-                            <linearGradient id="fillTvl" x1="0" y1="0" x2="0" y2="1">
-                            <stop
-                                offset="5%"
-                                stopColor="var(--color-tvl)"
-                                stopOpacity={0.8}
-                            />
-                            <stop
-                                offset="95%"
-                                stopColor="var(--color-tvl)"
-                                stopOpacity={0.1}
-                            />
-                            </linearGradient>
-                        </defs>
-                        <Area dataKey="tvl" type="natural" fill="url(#fillTvl)" fillOpacity={0.4} stroke="var(--color-tvl)" stackId="a" />
-                    </AreaChart>
+                        <Bar dataKey="tvl" fill="var(--color-tvl)" radius={4} />
+                    </BarChart>
                 </ChartContainer>
                 )}
             </CardContent>
@@ -196,7 +179,7 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent>
                 {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(platformEarnings)}</div>}
-                <p className="text-xs text-muted-foreground">Projected 60% of interest from active deals</p>
+                <div className="text-xs text-muted-foreground">Projected 60% of interest from active deals</div>
             </CardContent>
             </Card>
             <Card>
@@ -276,5 +259,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-
-    
