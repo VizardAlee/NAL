@@ -78,6 +78,9 @@ export default function ForgotPasswordPage() {
                 <AlertTitle>Check your email</AlertTitle>
                 <AlertDescription>
                   {state.message}
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    If you don't see the email in your inbox, please check your spam or junk folder.
+                  </p>
                 </AlertDescription>
               </Alert>
             ) : (
