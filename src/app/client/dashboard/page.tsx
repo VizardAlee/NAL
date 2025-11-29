@@ -4,10 +4,10 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2 } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, ArrowRight } from "lucide-react";
 import { useMemo, useTransition } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData, Timestamp } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Deal } from '@/lib/types';
@@ -17,6 +17,10 @@ import { RepaymentHistory } from "./repayment-history";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { requestTerminationAction } from "./actions";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { format } from "date-fns";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 
 export type Repayment = DocumentData & {
@@ -27,6 +31,13 @@ export type Repayment = DocumentData & {
   lodgedAt: Timestamp;
   dueDate: Timestamp;
 };
+
+const statusVariant = {
+    Pending: 'secondary',
+    Active: 'default',
+    Completed: 'outline',
+    Terminated: 'destructive',
+} as const;
 
 
 function DealCard({ deal }: { deal: Deal }) {
@@ -41,13 +52,6 @@ function DealCard({ deal }: { deal: Deal }) {
     }, [firestore, user, deal.id]);
 
     const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery as any);
-
-    const statusVariant = {
-        Pending: 'secondary',
-        Active: 'default',
-        Completed: 'outline',
-        Terminated: 'destructive',
-    } as const;
 
     const lodgedRepayments = useMemo(() => {
         if (!repayments) return [];
@@ -139,23 +143,21 @@ function DealCard({ deal }: { deal: Deal }) {
 
 function DealsSkeleton() {
     return (
-        <div className="grid gap-6 md:grid-cols-2">
-            {Array.from({ length: 2 }).map((_, i) => (
-                <Card key={i}>
-                    <CardHeader>
-                        <Skeleton className="h-6 w-3/4" />
-                        <Skeleton className="h-4 w-1/2 mt-2" />
-                    </CardHeader>
-                    <CardContent>
-                        <Skeleton className="h-12 w-full" />
-                        <div className="grid grid-cols-2 gap-4 mt-4">
-                            <Skeleton className="h-8 w-full" />
-                            <Skeleton className="h-8 w-full" />
-                        </div>
-                        <Skeleton className="h-40 w-full mt-4" />
-                    </CardContent>
-                </Card>
-            ))}
+        <div>
+            <Card>
+                <CardHeader>
+                    <Skeleton className="h-6 w-3/4" />
+                    <Skeleton className="h-4 w-1/2 mt-2" />
+                </CardHeader>
+                <CardContent>
+                    <Skeleton className="h-12 w-full" />
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                        <Skeleton className="h-8 w-full" />
+                        <Skeleton className="h-8 w-full" />
+                    </div>
+                    <Skeleton className="h-40 w-full mt-4" />
+                </CardContent>
+            </Card>
         </div>
     )
 }
@@ -163,16 +165,20 @@ function DealsSkeleton() {
 
 export default function ClientDashboard() {
     const firestore = useFirestore();
+    const router = useRouter();
     const { user, loading: userLoading } = useUser();
 
     const dealsQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
-        return query(collection(firestore, 'deals'), where('clientId', '==', user.uid));
+        return query(collection(firestore, 'deals'), where('clientId', '==', user.uid), orderBy('createdAt', 'desc'));
     }, [firestore, user]);
 
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
     
     const isLoading = userLoading || dealsLoading;
+
+    const mostRecentDeal = useMemo(() => deals?.[0], [deals]);
+    const olderDeals = useMemo(() => deals?.slice(1) || [], [deals]);
 
     return (
         <div>
@@ -184,11 +190,48 @@ export default function ClientDashboard() {
             
             {isLoading ? (
                 <DealsSkeleton />
-            ) : deals && deals.length > 0 ? (
-                 <div className="grid gap-8 lg:grid-cols-2">
-                    {deals.map(deal => (
-                        <DealCard key={deal.id} deal={deal} />
-                    ))}
+            ) : mostRecentDeal ? (
+                <div className="grid gap-8">
+                    <DealCard deal={mostRecentDeal} />
+
+                    {olderDeals.length > 0 && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Previous Deals</CardTitle>
+                                <CardDescription>A history of your past financing deals.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Deal Name</TableHead>
+                                            <TableHead>Principal</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead className="text-right"></TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {olderDeals.map(deal => (
+                                            <TableRow key={deal.id}>
+                                                <TableCell className="font-medium">{deal.dealName}</TableCell>
+                                                <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button asChild variant="outline" size="sm">
+                                                        <Link href={`/client/deals/${deal.id}`}>
+                                                            View Details <ArrowRight className="ml-2 h-4 w-4" />
+                                                        </Link>
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
             ) : (
                 <Card className="mt-6 border-dashed">

@@ -59,6 +59,8 @@ export default function ClientLayout({
     if (!loading && !user) {
       router.push('/login');
     }
+    // Add a check for user role if necessary
+    // Example: fetch user doc and redirect if role is not 'Client'
   }, [user, loading, router]);
   
 
