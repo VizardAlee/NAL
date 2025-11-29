@@ -372,5 +372,4 @@ export default function InvestorDashboard() {
       </Card>
     </div>
   );
-
-    
+}
