@@ -2,6 +2,7 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
+import { useFormStatus, useActionState } from 'react-dom';
 import {
   Table,
   TableBody,
@@ -27,7 +28,6 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination"
 import { useUser } from '@/firebase';
-import { useActionState } from 'react';
 import { lodgePaymentAction } from './actions';
 import { useToast } from '@/hooks/use-toast';
 
@@ -38,13 +38,14 @@ type RepaymentStatus = 'Paid' | 'Pending' | 'Due' | 'Upcoming';
 interface ScheduledPayment extends ScheduleInstallment {
   status: RepaymentStatus;
   repaymentDoc?: Repayment;
+  isActionable?: boolean;
 }
 
 function LodgePaymentButton({ installment, dealId, userId }: { installment: ScheduledPayment, dealId: string, userId: string }) {
     const initialState = { success: false, message: '' };
     const [state, formAction] = useActionState(lodgePaymentAction, initialState);
+    const { pending } = useFormStatus();
     const { toast } = useToast();
-    const [isPending, setIsPending] = useState(false);
 
     useEffect(() => {
         if (state.message) {
@@ -54,27 +55,29 @@ function LodgePaymentButton({ installment, dealId, userId }: { installment: Sche
                 variant: state.success ? 'default' : 'destructive',
             });
         }
-        setIsPending(false);
     }, [state, toast]);
-
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        setIsPending(true);
-        const formData = new FormData(e.currentTarget);
-        formAction(formData);
-    }
     
     return (
-        <form onSubmit={handleSubmit}>
+        <form action={formAction}>
             <input type="hidden" name="dealId" value={dealId} />
             <input type="hidden" name="amount" value={installment.payment} />
             <input type="hidden" name="userId" value={userId} />
-            <Button size="sm" type="submit" disabled={isPending}>
-                {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
+            <Button size="sm" type="submit" disabled={pending}>
+                {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
                 Lodge Payment
             </Button>
         </form>
     );
+}
+
+// The LodgePaymentButton must be wrapped in a component that can use useActionState
+// This wrapper provides the form context.
+function LodgePaymentFormWrapper({ installment, dealId, userId }: { installment: ScheduledPayment, dealId: string, userId: string }) {
+    // Note: useActionState and useFormStatus need to be used within a form.
+    // So we'll have the button component manage its own form state.
+    return (
+        <LodgePaymentButton installment={installment} dealId={dealId} userId={userId} />
+    )
 }
 
 export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { deal: Deal, allRepayments: Repayment[] | null, repaymentsLoading: boolean }) {
@@ -87,26 +90,26 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
     if (!schedule) return [];
 
     const today = startOfToday();
-    const paidInstallmentNumbers = new Set<number>();
-
-    // First pass: find all paid installments
+    
+    // Create a map for quick lookup of approved repayments by due date string
+    const approvedRepayments = new Map<string, Repayment>();
     allRepayments?.forEach(repayment => {
-        const matchingInstallment = schedule.find(inst => 
-            isSameDay(repayment.lodgedAt.toDate(), inst.dueDate) && 
-            Math.abs(repayment.amount - inst.payment) < 0.01 // Compare floats
-        );
-        if (matchingInstallment) {
-            paidInstallmentNumbers.add(matchingInstallment.installment);
+        if (repayment.status === 'Approved') {
+            const dueDateStr = format(repayment.lodgedAt.toDate(), 'yyyy-MM-dd');
+            approvedRepayments.set(dueDateStr, repayment);
         }
     });
 
     return schedule.map(installment => {
-        let status: RepaymentStatus = 'Upcoming';
-        const isPaid = paidInstallmentNumbers.has(installment.installment);
+        const installmentDueDateStr = format(installment.dueDate, 'yyyy-MM-dd');
+        
+        const matchingRepayment = allRepayments?.find(r => 
+            isSameDay(r.lodgedAt.toDate(), installment.dueDate)
+        );
 
-        if (isPaid) {
-            const matchingRepayment = allRepayments!.find(r => isSameDay(r.lodgedAt.toDate(), installment.dueDate));
-            status = matchingRepayment?.status === 'Approved' ? 'Paid' : 'Pending';
+        let status: RepaymentStatus = 'Upcoming';
+        if (matchingRepayment) {
+            status = matchingRepayment.status === 'Approved' ? 'Paid' : 'Pending';
         } else if (installment.dueDate < today) {
             status = 'Due';
         }
@@ -207,7 +210,7 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
                         <TableCell><StatusBadge status={item.status} /></TableCell>
                         <TableCell className="text-right">
                         {(item.isActionable && user) && (
-                            <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} />
+                            <LodgePaymentFormWrapper installment={item} dealId={deal.id} userId={user.uid} />
                         )}
                         </TableCell>
                     </TableRow>
