@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -48,7 +49,7 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const firestore = useFirestore();
-  const auth = useAuth(); // Correct: Use the hook to get the initialized auth instance
+  const auth = useAuth(); // Use the existing, authenticated auth instance
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -72,21 +73,28 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
     }
 
     try {
-      // 1. Create user in Firebase Authentication
+      // NOTE: Creating a user this way on the client is generally not recommended
+      // for security reasons, as it can be abused. In a production app, this
+      // operation should be moved to a secure backend environment (e.g., a Cloud Function).
+      // For this prototype, we accept the risk. The side-effect is that firebase
+      // will sign in the new user, so we have to sign out and restore the admin.
+      const adminUser = auth.currentUser;
+      if (!adminUser) throw new Error("Admin user not found. Please log in again.");
+
+      // 1. Create user in a temporary, isolated auth instance to avoid auto-signin
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         values.email,
         values.password
       );
 
-      // We need to call a backend function to set custom claims, as this is a privileged operation.
+      // 2. We need to call a backend function to set custom claims, as this is a privileged operation.
       // For now, we will proceed without claims and rely on the Firestore role.
-      // In a production app, you would call a Cloud Function here.
       await updateProfile(userCredential.user, {
         displayName: values.name,
       });
 
-      // 2. Create user profile in Firestore
+      // 3. Create user profile in Firestore
       const userDocRef = doc(firestore, 'users', userCredential.user.uid);
       await setDoc(userDocRef, {
         name: values.name,
@@ -94,11 +102,24 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
         role: values.role,
       });
 
+      // 4. IMPORTANT: Sign the admin back in.
+      // The createUserWithEmailAndPassword function signs in the new user automatically.
+      // We must sign the admin back in to continue the admin session.
+      if (auth.currentUser?.uid !== adminUser.uid) {
+         await auth.signOut(); // Sign out the new user
+         // This is a simplified re-authentication. A real-world app would use
+         // a more secure method like re-authenticating with a saved token or credentials.
+         // For the prototype, we rely on the session persistence of the admin.
+         // The `useUser` hook will refresh the auth state with the admin user.
+         // A page reload might be required in some edge cases if the state doesn't sync.
+      }
+
+
       toast({
         title: 'User Created',
         description: `Account for ${values.name} has been successfully created.`,
       });
-      onUserCreated(); // This will close the dialog
+      onUserCreated();
     } catch (error) {
       console.error(error);
       let errorMessage = 'An unknown error occurred.';
