@@ -164,7 +164,7 @@ export default function UserDetailPage() {
   }, [firestore, userId]);
 
   const zakatSettingsRef = useMemo(() => {
-      if (!firestore || !user) return null; // Wait for user to be authenticated
+      if (!firestore || !user) return null;
       return doc(firestore, 'platformSettings', 'zakat');
   }, [firestore, user]);
 
@@ -425,4 +425,3 @@ export default function UserDetailPage() {
     </div>
   );
 }
-
