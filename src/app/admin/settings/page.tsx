@@ -104,7 +104,7 @@ function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoadin
                 variant: state.success ? "default" : "destructive",
             });
         }
-    }, [state, toast]);
+    }, [state.message, state.success, toast]);
 
     function SubmitButton() {
         const { pending } = useFormStatus();
@@ -176,5 +176,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
-    
