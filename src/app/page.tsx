@@ -25,7 +25,7 @@ export default function Home() {
           <Link href="/" className="mr-6 flex items-center space-x-2">
             <Logo imageUrl={logoUrl} className="h-6 w-6 text-primary" />
             <span className="font-bold font-headline sm:inline-block">
-              NAL
+              FinHub Central
             </span>
           </Link>
           <nav className="flex flex-1 items-center space-x-4">
@@ -47,10 +47,10 @@ export default function Home() {
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
             <div className="flex flex-col justify-center space-y-6">
               <h1 className="text-4xl font-bold tracking-tighter font-headline sm:text-5xl xl:text-6xl/none">
-                Unified Financial Management for Modern Enterprise
+                The Central Hub for Your Financing Ecosystem
               </h1>
               <p className="max-w-[600px] text-muted-foreground md:text-xl">
-                NAL provides a comprehensive suite of tools for investors, clients, and administrators to manage financing deals with unparalleled efficiency and insight.
+                FinHub Central connects investors, clients, and administrators on a single platform to manage financing deals with unparalleled efficiency and insight.
               </p>
               <div className="flex flex-col gap-4 sm:flex-row">
                 <Button size="lg" asChild>
@@ -93,19 +93,19 @@ export default function Home() {
               <FeatureCard 
                 icon={<LineChart className="h-8 w-8 text-accent" />} 
                 title="Investor Dashboard" 
-                description="Track portfolio performance, manage funds, and monitor earnings with a personalized, data-rich interface." 
+                description="View your portfolio, reinvest funds, and track earnings. Deploy capital into new financing deals as they become available." 
                 image={featureImages.find(img => img.id === 'feature-investor')}
               />
               <FeatureCard 
                 icon={<Users className="h-8 w-8 text-accent" />} 
                 title="Client Dashboard" 
-                description="Stay on top of loan status, view repayment schedules, and easily lodge payments for administrative confirmation." 
+                description="Manage your financing deals. Track loan status, view your repayment schedule, and easily lodge payments for confirmation." 
                 image={featureImages.find(img => img.id === 'feature-client')}
               />
               <FeatureCard 
                 icon={<CheckCircle className="h-8 w-8 text-accent" />} 
                 title="Admin Control Panel" 
-                description="Oversee platform-wide metrics, manage users and deals, and approve all financial transactions from a central hub." 
+                description="Get a platform-wide view. Oversee all deals, manage users, approve financial requests, and activate new deals." 
                 image={featureImages.find(img => img.id === 'feature-admin')}
               />
             </div>
@@ -148,7 +148,7 @@ export default function Home() {
           <div className="flex flex-col items-center gap-4 px-8 md:flex-row md:gap-2 md:px-0">
             <Logo imageUrl={logoUrl} className="h-6 w-6 text-primary" />
             <p className="text-center text-sm leading-loose md:text-left">
-              Built by NAL. &copy; {new Date().getFullYear()} All rights reserved.
+              Built by FinHub Central. &copy; {new Date().getFullYear()} All rights reserved.
             </p>
           </div>
         </div>

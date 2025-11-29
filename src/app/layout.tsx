@@ -13,7 +13,7 @@ import { CompanyLogoProvider } from '@/components/company-logo-provider';
 // Metadata cannot be exported from a client component,
 // so we define it here statically.
 // export const metadata: Metadata = {
-//   title: 'NAL',
+//   title: 'FinHub Central',
 //   description: 'The future of financial management.',
 // };
 
@@ -25,7 +25,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <title>NAL</title>
+        <title>FinHub Central</title>
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />

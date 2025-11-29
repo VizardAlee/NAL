@@ -11,7 +11,7 @@ export default function SignupPage() {
           <Link href="/" className="flex items-center space-x-2 text-primary">
             <Logo className="h-8 w-8" />
             <span className="text-2xl font-bold font-headline">
-              NAL
+              FinHub Central
             </span>
           </Link>
         </div>
@@ -32,4 +32,3 @@ export default function SignupPage() {
     </div>
   );
 }
-
