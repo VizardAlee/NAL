@@ -136,8 +136,8 @@ service cloud.firestore {
 
     // Rules for 'platformSettings'
     match /platformSettings/{settingId} {
-        // Any authenticated user can read settings.
-        allow read: if request.auth != null;
+        // Allow public read for settings like branding
+        allow read: if true;
         // Only admins can change settings.
         allow write: if isAdmin();
     }
