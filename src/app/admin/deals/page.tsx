@@ -68,26 +68,26 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
           {loading &&
             Array.from({ length: 3 }).map((_, i) => (
               <TableRow key={i}>
-                <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                <TableCell data-label="Deal Name"><Skeleton className="h-5 w-32" /></TableCell>
+                <TableCell data-label="Client"><Skeleton className="h-5 w-24" /></TableCell>
+                <TableCell data-label="Principal"><Skeleton className="h-5 w-20" /></TableCell>
+                <TableCell data-label="Duration"><Skeleton className="h-5 w-24" /></TableCell>
+                <TableCell data-label="Status"><Skeleton className="h-5 w-20" /></TableCell>
+                <TableCell data-label="Created At"><Skeleton className="h-5 w-24" /></TableCell>
               </TableRow>
             ))}
           {!loading && deals?.map((deal) => (
             <TableRow key={deal.id} onClick={() => handleRowClick(deal.id)} className="cursor-pointer">
-              <TableCell className="font-medium">{deal.dealName}</TableCell>
-              <TableCell>{deal.clientName}</TableCell>
-              <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
-              <TableCell>{deal.durationValue} {deal.durationUnit}</TableCell>
-              <TableCell>
+              <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
+              <TableCell data-label="Client">{deal.clientName}</TableCell>
+              <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
+              <TableCell data-label="Duration">{deal.durationValue} {deal.durationUnit}</TableCell>
+              <TableCell data-label="Status">
                 <Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>
                   {deal.status}
                 </Badge>
               </TableCell>
-               <TableCell>
+               <TableCell data-label="Created At">
                 {formatDate(deal.createdAt)}
               </TableCell>
             </TableRow>

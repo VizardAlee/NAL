@@ -129,7 +129,7 @@ export default function ActivityPage() {
             >
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="outline">
+                        <Button variant="outline" className="shrink-0">
                             <ListFilter className="mr-2 h-4 w-4" />
                             Filter by Type
                         </Button>
@@ -165,22 +165,22 @@ export default function ActivityPage() {
                         <TableBody>
                         {isLoading && Array.from({ length: 10 }).map((_, i) => (
                             <TableRow key={i}>
-                                <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                                <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                                <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                                <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-                                <TableCell><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
+                                <TableCell data-label="Date"><Skeleton className="h-5 w-32" /></TableCell>
+                                <TableCell data-label="User/Source"><Skeleton className="h-5 w-24" /></TableCell>
+                                <TableCell data-label="Type"><Skeleton className="h-5 w-28" /></TableCell>
+                                <TableCell data-label="Details"><Skeleton className="h-5 w-40" /></TableCell>
+                                <TableCell data-label="Amount" className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
                             </TableRow>
                         ))}
                         {!isLoading && paginatedTransactions.map((tx) => (
                             <TableRow key={tx.id}>
-                                <TableCell className="text-xs text-muted-foreground">{formatDate(tx.createdAt)}</TableCell>
-                                <TableCell className="font-medium">{getUserName(tx.userId)}</TableCell>
-                                <TableCell>
+                                <TableCell data-label="Date" className="text-xs text-muted-foreground">{formatDate(tx.createdAt)}</TableCell>
+                                <TableCell data-label="User/Source" className="font-medium">{getUserName(tx.userId)}</TableCell>
+                                <TableCell data-label="Type">
                                     <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
                                 </TableCell>
-                                <TableCell>{tx.dealName || 'N/A'}</TableCell>
-                                <TableCell className={`text-right font-medium ${tx.amount > 0 && tx.type !== 'Withdrawal' ? 'text-primary' : 'text-foreground'}`}>
+                                <TableCell data-label="Details">{tx.dealName || 'N/A'}</TableCell>
+                                <TableCell data-label="Amount" className={`text-right font-medium ${tx.amount > 0 && tx.type !== 'Withdrawal' ? 'text-primary' : 'text-foreground'}`}>
                                     {tx.amount > 0 && tx.type !== 'Withdrawal' ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
                                 </TableCell>
                             </TableRow>
@@ -222,4 +222,3 @@ export default function ActivityPage() {
         </div>
     );
 }
-

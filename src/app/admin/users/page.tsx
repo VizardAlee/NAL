@@ -58,23 +58,23 @@ function UsersTable({ users, loading }: { users: User[] | null, loading: boolean
           {loading &&
             Array.from({ length: 5 }).map((_, i) => (
               <TableRow key={i}>
-                <TableCell>
+                <TableCell data-label="Name">
                   <div className="flex items-center gap-3">
                     <Skeleton className="h-10 w-10 rounded-full" />
                     <Skeleton className="h-5 w-32" />
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell data-label="Email">
                   <Skeleton className="h-5 w-40" />
                 </TableCell>
-                <TableCell>
+                <TableCell data-label="Role">
                   <Skeleton className="h-5 w-20" />
                 </TableCell>
               </TableRow>
             ))}
           {!loading && users?.map((user) => (
             <TableRow key={user.id} onClick={() => handleRowClick(user.id)} className="cursor-pointer">
-              <TableCell className="font-medium">
+              <TableCell data-label="Name" className="font-medium">
                 <div className="flex items-center gap-3">
                     <Avatar>
                         <AvatarImage src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user.id}`} alt={user.name} />
@@ -83,8 +83,8 @@ function UsersTable({ users, loading }: { users: User[] | null, loading: boolean
                     <span>{user.name}</span>
                 </div>
               </TableCell>
-              <TableCell>{user.email}</TableCell>
-              <TableCell>
+              <TableCell data-label="Email">{user.email}</TableCell>
+              <TableCell data-label="Role">
                 <Badge variant={user.role === 'Admin' ? 'default' : 'secondary'}>
                   {user.role}
                 </Badge>
@@ -152,7 +152,7 @@ export default function UsersPage() {
       </PageHeader>
       
       <Tabs defaultValue="all" className="w-full">
-        <TabsList>
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
           <TabsTrigger value="all">All Users</TabsTrigger>
           <TabsTrigger value="admin">Admins</TabsTrigger>
           <TabsTrigger value="investor">Investors</TabsTrigger>

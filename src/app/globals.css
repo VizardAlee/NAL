@@ -87,3 +87,29 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  @media (max-width: 768px) {
+    .responsive-table table {
+      @apply block;
+    }
+    .responsive-table thead {
+      @apply hidden;
+    }
+    .responsive-table tbody {
+      @apply block w-full;
+    }
+    .responsive-table tr {
+      @apply mb-4 block rounded-lg border;
+    }
+    .responsive-table td {
+      @apply flex items-center justify-between text-right;
+      text-align: right;
+    }
+    .responsive-table td::before {
+      content: attr(data-label);
+      @apply float-left text-left font-medium text-muted-foreground;
+      text-align: left;
+    }
+  }
+}
