@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState, useEffect, useActionState } from 'react';
+import { useMemo, useState, useEffect, useActionState, useCallback } from 'react';
 import { useFormStatus } from 'react-dom';
 import {
   Table,
@@ -88,14 +88,14 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
     setAllRepayments(initialRepayments);
   }, [initialRepayments]);
 
-  const handlePaymentLodged = (newRepayment: Repayment) => {
+  const handlePaymentLodged = useCallback((newRepayment: Repayment) => {
     setAllRepayments((prev: Repayment[] | null) => {
         if (prev) {
             return [...prev, newRepayment];
         }
         return [newRepayment];
     });
-  };
+  }, []);
   
   const schedule = useMemo(() => generateAmortizationSchedule(deal), [deal]);
   
