@@ -204,12 +204,13 @@ export default function ActivityPage() {
                             <PaginationItem>
                                 <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} />
                             </PaginationItem>
-                            {/* Simplified pagination for brevity, doesn't show all page numbers */}
-                             <PaginationItem>
-                                <PaginationLink href="#" isActive>
-                                    Page {currentPage} of {totalPages}
-                                </PaginationLink>
-                            </PaginationItem>
+                            {[...Array(totalPages)].map((_, i) => (
+                                <PaginationItem key={i}>
+                                    <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>
+                                        {i + 1}
+                                    </PaginationLink>
+                                </PaginationItem>
+                            ))}
                             <PaginationItem>
                                 <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} />
                             </PaginationItem>
