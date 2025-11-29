@@ -18,6 +18,7 @@ import { Deal } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
+import { ViewPageNav } from '@/components/view-page-nav';
 
 type Investment = DocumentData & {
   id: string;
@@ -200,7 +201,10 @@ export default function DealDetailPage() {
   return (
     <div>
         <PageHeader title={deal.dealName} icon={FileText}>
+          <div className="flex items-center gap-4">
            <Badge variant={statusVariant[deal.status] || 'secondary'} className="text-base px-4 py-2">{deal.status}</Badge>
+           <ViewPageNav homePath="/admin/dashboard" />
+          </div>
         </PageHeader>
         <div className="grid gap-6 lg:grid-cols-3">
             {/* Left Column */}

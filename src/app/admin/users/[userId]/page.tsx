@@ -25,6 +25,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { ViewPageNav } from '@/components/view-page-nav';
 
 type UserProfile = DocumentData & {
     id: string;
@@ -129,7 +130,9 @@ export default function UserDetailPage() {
             title={user.name}
             description={user.email}
             icon={User}
-        />
+        >
+            <ViewPageNav homePath="/admin/dashboard" />
+        </PageHeader>
         <div className="grid gap-6 lg:grid-cols-3">
             {/* Left Column */}
             <div className="lg:col-span-1 space-y-6">
