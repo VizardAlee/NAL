@@ -13,6 +13,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Deal } from '@/lib/types';
 import Link from "next/link";
 import { RepaymentSchedule } from "./repayment-schedule";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RepaymentHistory } from "./repayment-history";
+
 
 export type Repayment = DocumentData & {
   id: string;
@@ -20,7 +23,7 @@ export type Repayment = DocumentData & {
   amount: number;
   status: 'Pending' | 'Approved' | 'Rejected';
   lodgedAt: Timestamp;
-  dueDate: Timestamp; // Assuming we add this when lodging payment
+  dueDate: Timestamp;
 };
 
 
@@ -42,6 +45,11 @@ function DealCard({ deal }: { deal: Deal }) {
         Completed: 'outline',
         Terminated: 'destructive',
     } as const;
+
+    const lodgedRepayments = useMemo(() => {
+        if (!repayments) return [];
+        return repayments.filter(r => r.status === 'Pending' || r.status === 'Approved');
+    }, [repayments]);
 
     return (
         <Card className="flex flex-col">
@@ -79,7 +87,18 @@ function DealCard({ deal }: { deal: Deal }) {
                 </div>
             </CardContent>
             <div className="mt-auto flex-grow">
-              <RepaymentSchedule deal={deal} initialRepayments={repayments} repaymentsLoading={repaymentsLoading} />
+                 <Tabs defaultValue="schedule" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="schedule">Upcoming Schedule</TabsTrigger>
+                        <TabsTrigger value="history">Repayment History</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="schedule">
+                        <RepaymentSchedule deal={deal} initialRepayments={repayments} repaymentsLoading={repaymentsLoading} />
+                    </TabsContent>
+                    <TabsContent value="history">
+                        <RepaymentHistory repayments={lodgedRepayments} loading={repaymentsLoading} />
+                    </TabsContent>
+                </Tabs>
             </div>
         </Card>
     )
