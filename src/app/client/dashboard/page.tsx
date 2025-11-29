@@ -4,7 +4,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Loader2 } from "lucide-react";
+import { FileText, PlusCircle } from "lucide-react";
 import { useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData } from 'firebase/firestore';
@@ -12,6 +12,8 @@ import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Deal } from '@/lib/types';
 import { Naira } from "@/components/icons";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 function DealCard({ deal }: { deal: Deal }) {
     const statusVariant = {
@@ -104,7 +106,14 @@ export default function ClientDashboard() {
                 title="My Deals"
                 description="Here is an overview of your current and past financing deals."
                 icon={FileText}
-            />
+            >
+                <Button asChild>
+                    <Link href="/client/lodge-payment">
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Lodge Payment
+                    </Link>
+                </Button>
+            </PageHeader>
             
             {isLoading ? (
                 <DealsSkeleton />
