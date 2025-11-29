@@ -4,8 +4,8 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText } from "lucide-react";
-import { useMemo } from 'react';
+import { FileText, Naira } from "lucide-react";
+import { useMemo, useState } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
@@ -24,7 +24,18 @@ export type Repayment = DocumentData & {
 };
 
 
-function DealCard({ deal, allRepayments, repaymentsLoading }: { deal: Deal, allRepayments: Repayment[] | null, repaymentsLoading: boolean }) {
+function DealCard({ deal }: { deal: Deal }) {
+    const firestore = useFirestore();
+    const { user } = useUser();
+
+    // Fetch repayments specifically for this deal
+    const repaymentsQuery = useMemo(() => {
+        if (!firestore || !user?.uid) return null;
+        return query(collection(firestore, 'repayments'), where('clientId', '==', user.uid), where('dealId', '==', deal.id));
+    }, [firestore, user, deal.id]);
+
+    const { data: repayments, loading: repaymentsLoading, setData: setRepayments } = useCollection<Repayment>(repaymentsQuery as any);
+
     const statusVariant = {
         Pending: 'secondary',
         Active: 'default',
@@ -68,7 +79,7 @@ function DealCard({ deal, allRepayments, repaymentsLoading }: { deal: Deal, allR
                 </div>
             </CardContent>
             <div className="mt-auto flex-grow">
-              <RepaymentSchedule deal={deal} allRepayments={allRepayments} repaymentsLoading={repaymentsLoading} />
+              <RepaymentSchedule deal={deal} repayments={repayments} setRepayments={setRepayments} repaymentsLoading={repaymentsLoading} />
             </div>
         </Card>
     )
@@ -107,14 +118,7 @@ export default function ClientDashboard() {
         return query(collection(firestore, 'deals'), where('clientId', '==', user.uid));
     }, [firestore, user]);
 
-    const repaymentsQuery = useMemo(() => {
-        if (!firestore || !user?.uid) return null;
-        return query(collection(firestore, 'repayments'), where('clientId', '==', user.uid));
-    }, [firestore, user]);
-
-
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
-    const { data: allRepayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery);
     
     const isLoading = userLoading || dealsLoading;
 
@@ -131,7 +135,7 @@ export default function ClientDashboard() {
             ) : deals && deals.length > 0 ? (
                  <div className="grid gap-8 lg:grid-cols-2">
                     {deals.map(deal => (
-                        <DealCard key={deal.id} deal={deal} allRepayments={allRepayments} repaymentsLoading={repaymentsLoading} />
+                        <DealCard key={deal.id} deal={deal} />
                     ))}
                 </div>
             ) : (

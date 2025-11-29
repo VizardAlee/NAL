@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -11,6 +12,7 @@ import {
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
+// Make setData available to consumers of the hook
 export function useCollection<T extends DocumentData>(
   q: Query<T> | CollectionReference<T> | null | undefined
 ) {
@@ -59,5 +61,5 @@ export function useCollection<T extends DocumentData>(
     return () => unsubscribe();
   }, [q]); 
 
-  return { data, loading, error };
+  return { data, loading, error, setData };
 }

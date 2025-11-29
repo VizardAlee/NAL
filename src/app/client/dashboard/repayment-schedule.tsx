@@ -30,6 +30,7 @@ import {
 import { useUser } from '@/firebase';
 import { lodgePaymentAction } from './actions';
 import { useToast } from '@/hooks/use-toast';
+import { Timestamp } from 'firebase/firestore';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -41,8 +42,8 @@ interface ScheduledPayment extends ScheduleInstallment {
   isActionable?: boolean;
 }
 
-function LodgePaymentButton({ installment, dealId, userId }: { installment: ScheduledPayment, dealId: string, userId: string }) {
-    const initialState = { success: false, message: '' };
+function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { installment: ScheduledPayment, dealId: string, userId: string, onPaymentLodged: (repayment: any) => void }) {
+    const initialState = { success: false, message: '', repayment: null };
     const [state, formAction] = useActionState(lodgePaymentAction, initialState);
     const { pending } = useFormStatus();
     const { toast } = useToast();
@@ -54,8 +55,16 @@ function LodgePaymentButton({ installment, dealId, userId }: { installment: Sche
                 description: state.message,
                 variant: state.success ? 'default' : 'destructive',
             });
+            if (state.success && state.repayment) {
+                // Convert plain object back to a structure with a Timestamp
+                const newRepayment = {
+                    ...state.repayment,
+                    lodgedAt: new Timestamp(state.repayment.lodgedAt._seconds, state.repayment.lodgedAt._nanoseconds)
+                }
+                onPaymentLodged(newRepayment);
+            }
         }
-    }, [state, toast]);
+    }, [state, toast, onPaymentLodged]);
     
     return (
         <form action={formAction}>
@@ -70,19 +79,18 @@ function LodgePaymentButton({ installment, dealId, userId }: { installment: Sche
     );
 }
 
-// The LodgePaymentButton must be wrapped in a component that can use useActionState
-// This wrapper provides the form context.
-function LodgePaymentFormWrapper({ installment, dealId, userId }: { installment: ScheduledPayment, dealId: string, userId: string }) {
-    // Note: useActionState and useFormStatus need to be used within a form.
-    // So we'll have the button component manage its own form state.
-    return (
-        <LodgePaymentButton installment={installment} dealId={dealId} userId={userId} />
-    )
-}
-
-export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { deal: Deal, allRepayments: Repayment[] | null, repaymentsLoading: boolean }) {
+export function RepaymentSchedule({ deal, repayments, setRepayments, repaymentsLoading }: { deal: Deal, repayments: Repayment[] | null, setRepayments: (data: any) => void, repaymentsLoading: boolean }) {
   const [currentPage, setCurrentPage] = useState(1);
   const { user } = useUser();
+  
+  const handlePaymentLodged = (newRepayment: Repayment) => {
+    setRepayments((prev: Repayment[] | null) => {
+        if (prev) {
+            return [...prev, newRepayment];
+        }
+        return [newRepayment];
+    });
+  };
   
   const schedule = useMemo(() => generateAmortizationSchedule(deal), [deal]);
   
@@ -92,7 +100,7 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
 
     return schedule.map(installment => {
       // Find any repayment (pending or approved) for the same day.
-      const matchingRepayment = allRepayments?.find(r => 
+      const matchingRepayment = repayments?.find(r => 
         isSameDay(r.lodgedAt.toDate(), installment.dueDate)
       );
 
@@ -105,7 +113,7 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
 
       return { ...installment, status, repaymentDoc: matchingRepayment };
     });
-  }, [schedule, allRepayments]);
+  }, [schedule, repayments]);
 
   // Find the next payable installment and create the final list
   const finalSchedule = useMemo(() => {
@@ -202,7 +210,7 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
                         <TableCell><StatusBadge status={item.status} /></TableCell>
                         <TableCell className="text-right">
                         {(item.isActionable && !item.isButtonDisabled && user) && (
-                            <LodgePaymentFormWrapper installment={item} dealId={deal.id} userId={user.uid} />
+                            <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
                         )}
                         </TableCell>
                     </TableRow>
