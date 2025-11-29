@@ -72,7 +72,7 @@ export default function InvestorLayout({
     <div className="flex min-h-screen w-full flex-col">
         <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
             <Link href="/investor/dashboard" className="flex items-center gap-2 font-bold font-headline text-primary">
-              <Logo imageUrl='/logo.png' className="h-7 w-7" />
+              <Logo imageUrl='/LOGO.jpg' className="h-7 w-7" />
               <span>NAL</span>
             </Link>
             <div className="flex-1" />

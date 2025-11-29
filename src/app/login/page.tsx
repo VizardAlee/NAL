@@ -12,7 +12,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 flex justify-center">
           <Link href="/" className="flex items-center space-x-2 text-primary">
-            <Logo imageUrl='/logo.png' className="h-8 w-8" />
+            <Logo imageUrl='/LOGO.jpg' className="h-8 w-8" />
             <span className="text-2xl font-bold font-headline">
               NAL
             </span>

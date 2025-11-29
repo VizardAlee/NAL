@@ -161,7 +161,7 @@ export default function AdminLayout({
         <SidebarHeader>
           <div className="flex items-center gap-2 p-2">
              <Link href="/admin/dashboard" className="flex items-center gap-2">
-              <Logo imageUrl='/logo.png' className="h-7 w-7 text-primary" />
+              <Logo imageUrl='/LOGO.jpg' className="h-7 w-7 text-primary" />
               <span className="text-lg font-bold font-headline text-primary group-data-[collapsible=icon]:hidden">
                 NAL
               </span>
