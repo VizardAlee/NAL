@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LayoutDashboard, Users, AlertTriangle, Activity } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Line } from "recharts";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, Timestamp, DocumentData, where, orderBy, limit } from "firebase/firestore";
@@ -152,7 +152,7 @@ export default function AdminDashboardPage() {
         icon={LayoutDashboard}
       />
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-3">
             <CardHeader>
                 <CardTitle>Total Value Locked (TVL)</CardTitle>
             </CardHeader>
@@ -163,18 +163,32 @@ export default function AdminDashboardPage() {
                     </div>
                 ) : (
                  <ChartContainer config={chartConfig} className="h-[250px] w-full">
-                    <LineChart accessibilityLayer data={chartData} margin={{ left: 12, right: 12 }}>
+                    <AreaChart accessibilityLayer data={chartData} margin={{ left: 12, right: 12 }}>
                         <CartesianGrid vertical={false} />
                         <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
                         <YAxis tickFormatter={(value) => `₦${Number(value) / 1000000}M`} tickLine={false} axisLine={false} tickMargin={8} />
                         <Tooltip cursor={false} content={<ChartTooltipContent indicator="dot" formatter={(value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(value))} />} />
-                        <Line dataKey="tvl" type="natural" stroke="var(--color-tvl)" strokeWidth={2} dot={{ fill: "var(--color-tvl)" }} activeDot={{ r: 6 }} />
-                    </LineChart>
+                        <defs>
+                            <linearGradient id="fillTvl" x1="0" y1="0" x2="0" y2="1">
+                            <stop
+                                offset="5%"
+                                stopColor="var(--color-tvl)"
+                                stopOpacity={0.8}
+                            />
+                            <stop
+                                offset="95%"
+                                stopColor="var(--color-tvl)"
+                                stopOpacity={0.1}
+                            />
+                            </linearGradient>
+                        </defs>
+                        <Area dataKey="tvl" type="natural" fill="url(#fillTvl)" fillOpacity={0.4} stroke="var(--color-tvl)" stackId="a" />
+                    </AreaChart>
                 </ChartContainer>
                 )}
             </CardContent>
         </Card>
-        <div className="space-y-6">
+        <div className="grid gap-6 sm:grid-cols-2 lg:col-span-3 lg:grid-cols-3">
             <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Platform Earnings</CardTitle>
@@ -196,7 +210,7 @@ export default function AdminDashboardPage() {
                 ) : (
                     <div className="text-2xl font-bold">{users?.length ?? 0}</div>
                 )}
-                <p className="text-xs text-muted-foreground">Total users on the platform</p>
+                <div className="text-xs text-muted-foreground">Total users on the platform</div>
             </CardContent>
             </Card>
             <Card>
@@ -206,7 +220,7 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent>
                 {overdueDealsLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{overdueDeals?.length ?? 0}</div>}
-                <p className="text-xs text-muted-foreground">Active deals older than 30 days</p>
+                <div className="text-xs text-muted-foreground">Active deals older than 30 days</div>
             </CardContent>
             </Card>
         </div>
@@ -262,3 +276,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    

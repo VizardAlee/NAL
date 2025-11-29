@@ -16,7 +16,7 @@ import { Deal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { WithdrawForm } from "./withdraw-form";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { reinvestAction } from "./actions";
 import { useToast } from "@/hooks/use-toast";
@@ -48,9 +48,7 @@ type FundBatch = DocumentData & {
 
 
 const chartConfig = {
-  capital: { label: "Capital", color: "hsl(var(--chart-1))" },
-  invested: { label: "Invested", color: "hsl(var(--chart-2))" },
-  profit: { label: "Profit", color: "hsl(var(--chart-3))" },
+  portfolioValue: { label: "Portfolio Value", color: "hsl(var(--chart-1))" },
 };
 
 function ReinvestButton({ balance, user }: { balance: number, user: User }) {
@@ -162,40 +160,29 @@ export default function InvestorDashboard() {
   
   const chartData = useMemo(() => {
     if (!allTransactions || allTransactions.length === 0) return [];
-    
-    let runningCapital = 0;
-    let runningInvested = 0;
-    let runningProfit = 0;
 
-    const dataByMonth: { [month: string]: { capital: number; invested: number; profit: number } } = {};
+    let runningCapital = 0;
+    let runningProfit = 0;
+    let runningWithdrawn = 0;
+
+    const dataByMonth: { [month: string]: number } = {};
 
     allTransactions.forEach(tx => {
         const month = format(tx.createdAt.toDate(), 'yyyy-MM');
-        if (!dataByMonth[month]) {
-            dataByMonth[month] = { capital: 0, invested: 0, profit: 0 };
-        }
-
+        
         if (tx.type === 'Deposit') runningCapital += tx.amount;
-        if (tx.type === 'Withdrawal') runningCapital += tx.amount; // Withdrawals are negative
-        if (tx.type === 'Investment') {
-            runningInvested += Math.abs(tx.amount);
-            runningCapital += tx.amount; // Investments are negative, so this subtracts from capital
-        }
+        if (tx.type === 'Withdrawal') runningWithdrawn += Math.abs(tx.amount);
         if (tx.type === 'ProfitDistribution') runningProfit += tx.amount;
-
-        dataByMonth[month] = {
-            capital: runningCapital,
-            invested: runningInvested,
-            profit: runningProfit,
-        }
+        
+        dataByMonth[month] = (runningCapital + runningProfit) - runningWithdrawn;
     });
     
     return Object.keys(dataByMonth).map(month => ({
         month: format(new Date(month + '-02'), 'MMM yy'), // Add day to avoid timezone issues
-        ...dataByMonth[month]
+        portfolioValue: dataByMonth[month]
     })).sort((a,b) => a.month.localeCompare(b.month));
 
-}, [allTransactions]);
+  }, [allTransactions]);
 
 
   const formatDate = (timestamp: Timestamp | Date | undefined) => {
@@ -273,7 +260,7 @@ export default function InvestorDashboard() {
        <Card className="mt-8">
         <CardHeader>
             <CardTitle>Financial Activity</CardTitle>
-            <CardDescription>An overview of your capital, investments, and profit over time.</CardDescription>
+            <CardDescription>The growth of your total portfolio value over time.</CardDescription>
         </CardHeader>
         <CardContent className="pl-2">
             {isLoading ? (
@@ -282,7 +269,7 @@ export default function InvestorDashboard() {
                 </div>
             ) : (
              <ChartContainer config={chartConfig} className="h-[250px] w-full">
-                <LineChart
+                <AreaChart
                     accessibilityLayer
                     data={chartData}
                     margin={{
@@ -304,28 +291,29 @@ export default function InvestorDashboard() {
                         tickMargin={8}
                     />
                     <Tooltip content={<ChartTooltipContent indicator="dot" />} />
-                    <Line
-                        dataKey="capital"
+                    <defs>
+                        <linearGradient id="fillPortfolioValue" x1="0" y1="0" x2="0" y2="1">
+                        <stop
+                            offset="5%"
+                            stopColor="var(--color-portfolioValue)"
+                            stopOpacity={0.8}
+                        />
+                        <stop
+                            offset="95%"
+                            stopColor="var(--color-portfolioValue)"
+                            stopOpacity={0.1}
+                        />
+                        </linearGradient>
+                    </defs>
+                    <Area
+                        dataKey="portfolioValue"
                         type="natural"
-                        stroke="var(--color-capital)"
-                        strokeWidth={2}
-                        dot={true}
+                        fill="url(#fillPortfolioValue)"
+                        fillOpacity={0.4}
+                        stroke="var(--color-portfolioValue)"
+                        stackId="a"
                     />
-                    <Line
-                        dataKey="invested"
-                        type="natural"
-                        stroke="var(--color-invested)"
-                        strokeWidth={2}
-                        dot={true}
-                    />
-                     <Line
-                        dataKey="profit"
-                        type="natural"
-                        stroke="var(--color-profit)"
-                        strokeWidth={2}
-                        dot={true}
-                    />
-                </LineChart>
+                </AreaChart>
             </ChartContainer>
             )}
         </CardContent>
@@ -340,37 +328,39 @@ export default function InvestorDashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Deal Name</TableHead>
-                <TableHead>Principal</TableHead>
-                <TableHead>Interest Rate</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && Array.from({length: 1}).map((_, i) => (
-                <TableRow key={i}>
-                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+           <div className="relative w-full overflow-auto">
+                <Table>
+                <TableHeader>
+                <TableRow>
+                    <TableHead>Deal Name</TableHead>
+                    <TableHead>Principal</TableHead>
+                    <TableHead>Interest Rate</TableHead>
+                    <TableHead>Status</TableHead>
                 </TableRow>
-              ))}
-              {!isLoading && deals?.map((deal) => (
-                 <TableRow key={deal.id}>
-                    <TableCell className="font-medium">{deal.dealName}</TableCell>
-                    <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
-                    <TableCell>{deal.interestRate}%</TableCell>
-                    <TableCell><Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>{deal.status}</Badge></TableCell>
-                 </TableRow>
-              ))}
-              {!isLoading && deals?.length === 0 && (
-                <TableRow><TableCell colSpan={4} className="h-24 text-center">You have not invested in any deals yet.</TableCell></TableRow>
-              )}
-            </TableBody>
-           </Table>
+                </TableHeader>
+                <TableBody>
+                {isLoading && Array.from({length: 1}).map((_, i) => (
+                    <TableRow key={i}>
+                        <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                    </TableRow>
+                ))}
+                {!isLoading && deals?.map((deal) => (
+                    <TableRow key={deal.id}>
+                        <TableCell className="font-medium">{deal.dealName}</TableCell>
+                        <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
+                        <TableCell>{deal.interestRate}%</TableCell>
+                        <TableCell><Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>{deal.status}</Badge></TableCell>
+                    </TableRow>
+                ))}
+                {!isLoading && deals?.length === 0 && (
+                    <TableRow><TableCell colSpan={4} className="h-24 text-center">You have not invested in any deals yet.</TableCell></TableRow>
+                )}
+                </TableBody>
+            </Table>
+           </div>
         </CardContent>
       </Card>
 
@@ -387,47 +377,51 @@ export default function InvestorDashboard() {
           </Button>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Details</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && Array.from({length: 3}).map((_, i) => (
-                <TableRow key={i}>
-                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
-                </TableRow>
-              ))}
-              {!isLoading && recentTransactions?.map((tx) => (
-                <TableRow key={tx.id}>
-                  <TableCell>{formatDate(tx.createdAt)}</TableCell>
-                  <TableCell>
-                    <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
-                  </TableCell>
-                  <TableCell>{tx.dealName || 'N/A'}</TableCell>
-                  <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-green-500' : 'text-foreground'}`}>
-                    {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
-                  </TableCell>
-                </TableRow>
-              ))}
-               {!isLoading && recentTransactions?.length === 0 && (
+          <div className="relative w-full overflow-auto">
+            <Table>
+                <TableHeader>
                 <TableRow>
-                    <TableCell colSpan={4} className="h-24 text-center">
-                        No transactions yet.
-                    </TableCell>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Details</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
                 </TableRow>
-               )}
-            </TableBody>
-          </Table>
+                </TableHeader>
+                <TableBody>
+                {isLoading && Array.from({length: 3}).map((_, i) => (
+                    <TableRow key={i}>
+                        <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
+                    </TableRow>
+                ))}
+                {!isLoading && recentTransactions?.map((tx) => (
+                    <TableRow key={tx.id}>
+                    <TableCell>{formatDate(tx.createdAt)}</TableCell>
+                    <TableCell>
+                        <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
+                    </TableCell>
+                    <TableCell>{tx.dealName || 'N/A'}</TableCell>
+                    <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-green-500' : 'text-foreground'}`}>
+                        {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                    </TableCell>
+                    </TableRow>
+                ))}
+                {!isLoading && recentTransactions?.length === 0 && (
+                    <TableRow>
+                        <TableCell colSpan={4} className="h-24 text-center">
+                            No transactions yet.
+                        </TableCell>
+                    </TableRow>
+                )}
+                </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
   );
 }
+
+    
