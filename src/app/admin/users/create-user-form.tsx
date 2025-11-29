@@ -24,15 +24,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import {
-  createUserWithEmailAndPassword,
-  updateProfile,
-  signOut,
-  signInWithCredential,
-} from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { useFirestore, useAuth } from '@/firebase';
-import { FirebaseError } from 'firebase/app';
+import { createUserAction } from './actions';
+
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -50,8 +43,6 @@ type CreateUserFormProps = {
 export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const firestore = useFirestore();
-  const auth = useAuth(); // Use the existing, authenticated auth instance
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -64,88 +55,29 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    if (!firestore || !auth) {
-        toast({
-            variant: "destructive",
-            title: "Error",
-            description: "Firebase is not available. Please try again later.",
-        });
-        setIsLoading(false);
-        return;
-    }
 
-    const adminUser = auth.currentUser;
-    if (!adminUser) {
-        toast({ variant: "destructive", title: "Authentication Error", description: "Admin user not found. Please log in again." });
-        setIsLoading(false);
-        return;
-    }
+    const result = await createUserAction({
+      name: values.name,
+      email: values.email,
+      password: values.password,
+      role: values.role,
+    });
 
-    try {
-      // 1. Create the new user. This will sign them in temporarily.
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        values.email,
-        values.password
-      );
-
-      // 2. Update their profile (e.g., display name)
-      await updateProfile(userCredential.user, {
-        displayName: values.name,
-      });
-
-      // 3. Create their user document in Firestore
-      const userDocRef = doc(firestore, 'users', userCredential.user.uid);
-      await setDoc(userDocRef, {
-        name: values.name,
-        email: values.email,
-        role: values.role,
-      });
-
-      // 4. Sign out the newly created user. Firebase auth persistence
-      // will automatically restore the previous (admin) user session.
-      if (auth.currentUser?.uid !== adminUser.uid) {
-         await signOut(auth);
-      }
-
+    if (result.success) {
       toast({
         title: 'User Created',
-        description: `Account for ${values.name} has been successfully created.`,
+        description: result.message,
       });
       onUserCreated();
-    } catch (error) {
-      console.error(error);
-      let errorMessage = 'An unknown error occurred.';
-      if (error instanceof FirebaseError) {
-        switch (error.code) {
-          case 'auth/email-already-in-use':
-            errorMessage =
-              'This email address is already in use by another account.';
-            break;
-          case 'auth/invalid-email':
-            errorMessage = 'The email address is not valid.';
-            break;
-          case 'auth/weak-password':
-            errorMessage = 'The password is not strong enough.';
-            break;
-           case 'auth/api-key-not-valid':
-            errorMessage = 'The Firebase API Key is not valid. Please check your configuration.';
-            break;
-          default:
-            errorMessage = `An unexpected Firebase error occurred: ${error.message}`;
-        }
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-
+    } else {
       toast({
         variant: 'destructive',
         title: 'User Creation Failed',
-        description: errorMessage,
+        description: result.message,
       });
-    } finally {
-      setIsLoading(false);
     }
+    
+    setIsLoading(false);
   }
 
   return (
