@@ -25,7 +25,7 @@ import Link from "next/link";
 
 type Transaction = DocumentData & {
   id: string;
-  type: 'Deposit' | 'Withdrawal' | 'Investment' | 'Repayment' | 'ProfitDistribution';
+  type: 'Deposit' | 'Withdrawal' | 'Investment' | 'Repayment' | 'ProfitDistribution' | 'Zakat';
   amount: number;
   dealId?: string;
   userId: string;
@@ -146,7 +146,7 @@ export default function InvestorDashboard() {
       .reduce((sum, tx) => sum + tx.amount, 0);
 
     const totalWithdrawn = allTransactions
-      .filter(tx => tx.type === 'Withdrawal')
+      .filter(tx => tx.type === 'Withdrawal' || tx.type === 'Zakat')
       .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
     
     const portfolioValue = (totalCapital + totalProfit) - totalWithdrawn;
@@ -171,7 +171,7 @@ export default function InvestorDashboard() {
         const month = format(tx.createdAt.toDate(), 'yyyy-MM');
         
         if (tx.type === 'Deposit') runningCapital += tx.amount;
-        if (tx.type === 'Withdrawal') runningWithdrawn += Math.abs(tx.amount);
+        if (tx.type === 'Withdrawal' || tx.type === 'Zakat') runningWithdrawn += Math.abs(tx.amount);
         if (tx.type === 'ProfitDistribution') runningProfit += tx.amount;
         
         dataByMonth[month] = (runningCapital + runningProfit) - runningWithdrawn;
@@ -423,3 +423,5 @@ export default function InvestorDashboard() {
     </div>
   );
 }
+
+    

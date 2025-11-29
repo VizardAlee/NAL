@@ -17,7 +17,7 @@ import { ViewPageNav } from "@/components/view-page-nav";
 
 type Transaction = DocumentData & {
   id: string;
-  type: 'Deposit' | 'Withdrawal' | 'Investment' | 'Repayment' | 'ProfitDistribution';
+  type: 'Deposit' | 'Withdrawal' | 'Investment' | 'Repayment' | 'ProfitDistribution' | 'Zakat';
   amount: number;
   dealId?: string;
   userId: string;
@@ -55,7 +55,7 @@ export default function TransactionsPage() {
 
   const formatDate = (timestamp: Timestamp | Date | undefined) => {
     if (!timestamp) return 'N/A';
-    const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
+    const date = timestamp instanceof Timestamp ? timestamp.toDate() : date;
     try { return format(date, 'PPP p'); } catch { return 'Invalid Date'; }
   };
 
@@ -133,3 +133,5 @@ export default function TransactionsPage() {
     </div>
   );
 }
+
+    

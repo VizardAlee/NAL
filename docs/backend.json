@@ -159,7 +159,7 @@
         "type": {
           "type": "string",
           "description": "The type of transaction.",
-          "enum": ["Deposit", "Withdrawal", "Investment", "Repayment", "ProfitDistribution", "PlatformEarning"]
+          "enum": ["Deposit", "Withdrawal", "Investment", "Repayment", "ProfitDistribution", "PlatformEarning", "Zakat"]
         },
         "amount": {
           "type": "number",
@@ -383,6 +383,17 @@
         }
       },
       "required": ["title", "message", "link", "read", "createdAt"]
+    },
+    "platformSetting": {
+      "title": "Platform Setting",
+      "description": "A global setting for the platform, like the Zakat Nisab.",
+      "type": "object",
+      "properties": {
+        "nisab": {
+          "type": "number",
+          "description": "The minimum wealth threshold for Zakat eligibility in Naira."
+        }
+      }
     }
   },
   "auth": {
@@ -454,6 +465,12 @@
             "$ref": "#/entities/notification"
         },
         "description": "Stores admin notifications for pending actions."
+    },
+    "/platformSettings/zakat": {
+      "schema": {
+        "$ref": "#/entities/platformSetting"
+      },
+      "description": "Stores global platform settings, specifically the Zakat configuration."
     }
   }
 }

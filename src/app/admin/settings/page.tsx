@@ -2,15 +2,21 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Settings, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Settings, Image as ImageIcon, Loader2, HandCoins } from "lucide-react";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { useCompanyLogo } from "@/hooks/use-company-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useActionState } from "react";
+import { useFormStatus } from 'react-dom';
 import { useToast } from "@/hooks/use-toast";
+import { useDoc } from "@/firebase/firestore/use-doc";
+import { doc } from 'firebase/firestore';
+import { useFirestore } from "@/firebase";
+import { Skeleton } from "@/components/ui/skeleton";
+import { setNisabAction } from "./actions";
 
 function CompanyLogoForm() {
     const { logoUrl, setLogo } = useCompanyLogo();
@@ -22,7 +28,6 @@ function CompanyLogoForm() {
         const file = event.target.files?.[0];
         if (file) {
             setIsLoading(true);
-            // Check file type and size
             if (!file.type.startsWith('image/')) {
                 toast({ variant: 'destructive', title: 'Invalid File', description: 'Please upload an image file.' });
                 setIsLoading(false);
@@ -86,7 +91,68 @@ function CompanyLogoForm() {
     );
 }
 
+function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoading: boolean }) {
+    const { toast } = useToast();
+    const initialState = { success: false, message: '' };
+    const [state, formAction] = useActionState(setNisabAction, initialState);
+
+    useEffect(() => {
+        if (state.message) {
+            toast({
+                title: state.success ? "Success" : "Error",
+                description: state.message,
+                variant: state.success ? "default" : "destructive",
+            });
+        }
+    }, [state, toast]);
+
+    function SubmitButton() {
+        const { pending } = useFormStatus();
+        return (
+            <Button type="submit" disabled={pending}>
+                {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
+                Set Nisab
+            </Button>
+        );
+    }
+    
+    return (
+         <Card>
+            <CardHeader>
+                <CardTitle>Zakat Nisab Threshold</CardTitle>
+                <CardDescription>Set the minimum portfolio value in Naira for an investor to be considered Zakat-eligible.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {isLoading ? (
+                    <Skeleton className="h-10 w-64" />
+                ) : (
+                <form action={formAction} className="flex items-end gap-4">
+                    <div className="relative">
+                        <label htmlFor="nisab" className="block text-sm font-medium text-muted-foreground mb-1">Nisab Amount (NGN)</label>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pt-3">₦</span>
+                        <Input
+                            id="nisab"
+                            name="nisab"
+                            type="number"
+                            defaultValue={currentNisab}
+                            className="pl-8"
+                            required
+                        />
+                    </div>
+                    <SubmitButton />
+                </form>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+
 export default function SettingsPage() {
+  const firestore = useFirestore();
+  const zakatSettingsRef = firestore ? doc(firestore, 'platformSettings', 'zakat') : null;
+  const { data: zakatSettings, loading: zakatLoading } = useDoc<{ nisab: number }>(zakatSettingsRef);
+
   return (
     <div>
         <PageHeader
@@ -96,6 +162,7 @@ export default function SettingsPage() {
         />
         <div className="space-y-6">
             <CompanyLogoForm />
+            <NisabForm currentNisab={zakatSettings?.nisab || 0} isLoading={zakatLoading} />
             <Card>
                 <CardHeader>
                     <CardTitle>Change Password</CardTitle>
@@ -109,3 +176,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+    
