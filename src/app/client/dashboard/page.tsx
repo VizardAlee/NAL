@@ -11,7 +11,6 @@ import { collection, query, where, DocumentData, Timestamp } from 'firebase/fire
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Deal } from '@/lib/types';
-import { Naira } from "@/components/icons";
 import Link from "next/link";
 import { RepaymentSchedule } from "./repayment-schedule";
 
@@ -45,9 +44,8 @@ function DealCard({ deal, allRepayments, repaymentsLoading }: { deal: Deal, allR
             <CardContent className="grid gap-4">
                <div className="flex items-center justify-between p-3 rounded-md bg-muted/50">
                     <span className="text-sm text-muted-foreground">Principal Amount</span>
-                    <span className="font-bold flex items-center gap-1">
-                        <Naira className="h-4 w-4" />
-                        {new Intl.NumberFormat('en-NG').format(deal.principal)}
+                    <span className="font-bold">
+                        {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}
                     </span>
                </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
