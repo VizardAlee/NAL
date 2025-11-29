@@ -16,7 +16,6 @@ import { Deal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { WithdrawForm } from "./withdraw-form";
-import { Naira } from "@/components/icons";
 
 type Transaction = DocumentData & {
   id: string;
@@ -118,7 +117,7 @@ export default function InvestorDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
-            <Naira className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground font-bold text-lg">₦</span>
           </CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.portfolioValue)}</div>}
@@ -151,7 +150,7 @@ export default function InvestorDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Capital Deposited</CardTitle>
-            <Naira className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground font-bold text-lg">₦</span>
           </CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.totalCapital)}</div>}
@@ -264,5 +263,3 @@ export default function InvestorDashboard() {
     </div>
   );
 }
-
-    
