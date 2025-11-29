@@ -34,9 +34,11 @@ export function Logo({ imageUrl, className, ...props }: LogoProps) {
       className={className}
       {...props}
     >
-      <path d="M12 2L2 7l10 5 10-5-10-5z" />
-      <path d="M2 17l10 5 10-5" />
-      <path d="M2 12l10 5 10-5" />
+        <path d="M12 2L2 7v10l10 5 10-5V7L12 2z"></path>
+        <path d="M2 7l10 5 10-5"></path>
+        <path d="M12 22V12"></path>
+        <path d="M7 4.5l5 2.5 5-2.5"></path>
+        <path d="M17 19.5l-5-2.5-5 2.5"></path>
     </svg>
   );
 }
@@ -63,3 +65,4 @@ export function Naira(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+

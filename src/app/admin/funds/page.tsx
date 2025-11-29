@@ -392,7 +392,7 @@ export default function PlatformFundsPage() {
                             <TableRow key={batch.id}>
                                 <TableCell>{formatDate(batch.createdAt)}</TableCell>
                                 <TableCell className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</TableCell>
-                                <TableCell className="text-right text-green-500 font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
+                                <TableCell className="text-right text-primary font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
                             </TableRow>
                         ))}
                         {!isLoading && !fundBatches?.length && (
@@ -469,7 +469,7 @@ export default function PlatformFundsPage() {
                                 <TableCell>{formatDate(tx.createdAt)}</TableCell>
                                 <TableCell><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell>
                                 <TableCell>{tx.description}</TableCell>
-                                <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-green-500' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell>
+                                <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell>
                             </TableRow>
                         ))}
                         {!isLoading && !adminTransactions?.length && (

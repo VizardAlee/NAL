@@ -1,3 +1,4 @@
+
 import { Logo } from "@/components/icons";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,7 +11,7 @@ export default function SignupPage() {
           <Link href="/" className="flex items-center space-x-2 text-primary">
             <Logo className="h-8 w-8" />
             <span className="text-2xl font-bold font-headline">
-              FinHub Central
+              NAL
             </span>
           </Link>
         </div>
@@ -31,3 +32,4 @@ export default function SignupPage() {
     </div>
   );
 }
+

@@ -20,7 +20,7 @@ function CompanyLogoProvider({ children }: { children: React.ReactNode }) {
 // so we define it here statically.
 // The favicon will be dynamically updated by the useCompanyLogo hook.
 // export const metadata: Metadata = {
-//   title: 'FinHub Central',
+//   title: 'NAL',
 //   description: 'The future of financial management.',
 // };
 
@@ -32,7 +32,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <title>FinHub Central</title>
+        <title>NAL</title>
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
@@ -57,3 +57,4 @@ export default function RootLayout({
     </html>
   );
 }
+

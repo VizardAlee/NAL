@@ -165,7 +165,7 @@ export default function AdminLayout({
              <Link href="/admin/dashboard" className="flex items-center gap-2">
               <Logo imageUrl={logoUrl} className="h-7 w-7 text-primary" />
               <span className="text-lg font-bold font-headline text-primary group-data-[collapsible=icon]:hidden">
-                FinHub
+                NAL
               </span>
             </Link>
           </div>
@@ -213,3 +213,4 @@ export default function AdminLayout({
     </SidebarProvider>
   );
 }
+

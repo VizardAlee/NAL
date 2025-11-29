@@ -240,7 +240,7 @@ export default function UserDetailPage() {
                                             <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
                                         </TableCell>
                                         <TableCell className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</TableCell>
-                                        <TableCell className="text-right text-green-500 font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
+                                        <TableCell className="text-right text-primary font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
                                     </TableRow>
                                 ))}
                                 {!processedFundBatches?.length && (
@@ -275,7 +275,7 @@ export default function UserDetailPage() {
                                     <TableRow key={tx.id}>
                                         <TableCell>{formatDate(tx.createdAt)}</TableCell>
                                         <TableCell><Badge variant={tx.type === 'Deposit' ? 'default' : 'secondary'}>{tx.type}</Badge></TableCell>
-                                        <TableCell className={`text-right font-medium ${tx.type === 'Deposit' ? 'text-green-500' : ''}`}>
+                                        <TableCell className={`text-right font-medium ${tx.type === 'Deposit' ? 'text-primary' : ''}`}>
                                             {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
                                         </TableCell>
                                     </TableRow>
@@ -297,3 +297,4 @@ export default function UserDetailPage() {
     </div>
   );
 }
+

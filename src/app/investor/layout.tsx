@@ -75,7 +75,7 @@ export default function InvestorLayout({
         <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
             <Link href="/investor/dashboard" className="flex items-center gap-2 font-bold font-headline text-primary">
               <Logo imageUrl={logoUrl} className="h-7 w-7" />
-              <span>FinHub</span>
+              <span>NAL</span>
             </Link>
             <div className="flex-1" />
             <ThemeToggle />
@@ -112,3 +112,4 @@ export default function InvestorLayout({
     </div>
   );
 }
+

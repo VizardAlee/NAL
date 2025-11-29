@@ -180,7 +180,7 @@ export default function ActivityPage() {
                                     <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
                                 </TableCell>
                                 <TableCell>{tx.dealName || 'N/A'}</TableCell>
-                                <TableCell className={`text-right font-medium ${tx.amount > 0 && tx.type !== 'Withdrawal' ? 'text-green-500' : 'text-foreground'}`}>
+                                <TableCell className={`text-right font-medium ${tx.amount > 0 && tx.type !== 'Withdrawal' ? 'text-primary' : 'text-foreground'}`}>
                                     {tx.amount > 0 && tx.type !== 'Withdrawal' ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
                                 </TableCell>
                             </TableRow>
@@ -222,3 +222,4 @@ export default function ActivityPage() {
         </div>
     );
 }
+
