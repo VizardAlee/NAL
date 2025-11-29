@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Naira } from "lucide-react";
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
@@ -34,7 +34,7 @@ function DealCard({ deal }: { deal: Deal }) {
         return query(collection(firestore, 'repayments'), where('clientId', '==', user.uid), where('dealId', '==', deal.id));
     }, [firestore, user, deal.id]);
 
-    const { data: repayments, loading: repaymentsLoading, setData: setRepayments } = useCollection<Repayment>(repaymentsQuery as any);
+    const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery as any);
 
     const statusVariant = {
         Pending: 'secondary',
@@ -79,7 +79,7 @@ function DealCard({ deal }: { deal: Deal }) {
                 </div>
             </CardContent>
             <div className="mt-auto flex-grow">
-              <RepaymentSchedule deal={deal} repayments={repayments} setRepayments={setRepayments} repaymentsLoading={repaymentsLoading} />
+              <RepaymentSchedule deal={deal} initialRepayments={repayments} repaymentsLoading={repaymentsLoading} />
             </div>
         </Card>
     )

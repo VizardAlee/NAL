@@ -79,12 +79,17 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
     );
 }
 
-export function RepaymentSchedule({ deal, repayments, setRepayments, repaymentsLoading }: { deal: Deal, repayments: Repayment[] | null, setRepayments: (data: any) => void, repaymentsLoading: boolean }) {
+export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }: { deal: Deal, initialRepayments: Repayment[] | null, repaymentsLoading: boolean }) {
   const [currentPage, setCurrentPage] = useState(1);
   const { user } = useUser();
+  const [allRepayments, setAllRepayments] = useState<Repayment[] | null>(initialRepayments);
   
+  useEffect(() => {
+    setAllRepayments(initialRepayments);
+  }, [initialRepayments]);
+
   const handlePaymentLodged = (newRepayment: Repayment) => {
-    setRepayments((prev: Repayment[] | null) => {
+    setAllRepayments((prev: Repayment[] | null) => {
         if (prev) {
             return [...prev, newRepayment];
         }
@@ -100,7 +105,7 @@ export function RepaymentSchedule({ deal, repayments, setRepayments, repaymentsL
 
     return schedule.map(installment => {
       // Find any repayment (pending or approved) for the same day.
-      const matchingRepayment = repayments?.find(r => 
+      const matchingRepayment = allRepayments?.find(r => 
         isSameDay(r.lodgedAt.toDate(), installment.dueDate)
       );
 
@@ -113,7 +118,7 @@ export function RepaymentSchedule({ deal, repayments, setRepayments, repaymentsL
 
       return { ...installment, status, repaymentDoc: matchingRepayment };
     });
-  }, [schedule, repayments]);
+  }, [schedule, allRepayments]);
 
   // Find the next payable installment and create the final list
   const finalSchedule = useMemo(() => {
