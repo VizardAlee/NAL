@@ -5,10 +5,10 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote } from "lucide-react";
+import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight } from "lucide-react";
 import { useMemo, useState, useTransition } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp, orderBy, limit } from 'firebase/firestore';
 import { useFirestore, useUser, type User } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
@@ -20,6 +20,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { reinvestAction } from "./actions";
 import { useToast } from "@/hooks/use-toast";
+import Link from "next/link";
 
 
 type Transaction = DocumentData & {
@@ -93,9 +94,16 @@ export default function InvestorDashboard() {
   const { user, loading: userLoading } = useUser();
   const [isWithdrawOpen, setWithdrawOpen] = useState(false);
 
-  const transactionsQuery = useMemo(() => {
+  // Query for all transactions for chart and metrics
+  const allTransactionsQuery = useMemo(() => {
     if (!firestore || !user?.uid) return null;
     return query(collection(firestore, 'transactions'), where('userId', '==', user.uid), orderBy('createdAt', 'asc'));
+  }, [firestore, user]);
+
+  // Query for recent transactions for the dashboard card
+  const recentTransactionsQuery = useMemo(() => {
+    if (!firestore || !user?.uid) return null;
+    return query(collection(firestore, 'transactions'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'), limit(10));
   }, [firestore, user]);
   
   const investmentsQuery = useMemo(() => {
@@ -110,6 +118,9 @@ export default function InvestorDashboard() {
 
   const { data: investments, loading: investmentsLoading } = useCollection<Investment>(investmentsQuery);
   const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
+  const { data: allTransactions, loading: allTransactionsLoading } = useCollection<Transaction>(allTransactionsQuery);
+  const { data: recentTransactions, loading: recentTransactionsLoading } = useCollection<Transaction>(recentTransactionsQuery);
+
 
   const investedDealIds = useMemo(() => {
       return investments?.map(inv => inv.dealId) || [];
@@ -121,24 +132,22 @@ export default function InvestorDashboard() {
   }, [firestore, investedDealIds]);
   
   const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
-  const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
 
-  const isLoading = userLoading || transactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading;
+  const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading;
 
   const financialMetrics = useMemo(() => {
-    if (!transactions) {
+    if (!allTransactions) {
       return { totalCapital: 0, totalProfit: 0, totalWithdrawn: 0, portfolioValue: 0, withdrawableBalance: 0, investableBalance: 0, simpleROI: 0 };
     }
-    const totalCapital = transactions
+    const totalCapital = allTransactions
       .filter(tx => tx.type === 'Deposit')
       .reduce((sum, tx) => sum + tx.amount, 0);
 
-    const totalProfit = transactions
+    const totalProfit = allTransactions
       .filter(tx => tx.type === 'ProfitDistribution')
       .reduce((sum, tx) => sum + tx.amount, 0);
 
-    // This now correctly includes withdrawals from reinvestment requests
-    const totalWithdrawn = transactions
+    const totalWithdrawn = allTransactions
       .filter(tx => tx.type === 'Withdrawal')
       .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
     
@@ -149,10 +158,10 @@ export default function InvestorDashboard() {
     const investableBalance = fundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
 
     return { totalCapital, totalProfit, totalWithdrawn, portfolioValue, withdrawableBalance, investableBalance, simpleROI };
-  }, [transactions, fundBatches]);
+  }, [allTransactions, fundBatches]);
   
   const chartData = useMemo(() => {
-    if (!transactions || transactions.length === 0) return [];
+    if (!allTransactions || allTransactions.length === 0) return [];
     
     let runningCapital = 0;
     let runningInvested = 0;
@@ -160,7 +169,7 @@ export default function InvestorDashboard() {
 
     const dataByMonth: { [month: string]: { capital: number; invested: number; profit: number } } = {};
 
-    transactions.forEach(tx => {
+    allTransactions.forEach(tx => {
         const month = format(tx.createdAt.toDate(), 'yyyy-MM');
         if (!dataByMonth[month]) {
             dataByMonth[month] = { capital: 0, invested: 0, profit: 0 };
@@ -186,7 +195,7 @@ export default function InvestorDashboard() {
         ...dataByMonth[month]
     })).sort((a,b) => a.month.localeCompare(b.month));
 
-}, [transactions]);
+}, [allTransactions]);
 
 
   const formatDate = (timestamp: Timestamp | Date | undefined) => {
@@ -366,11 +375,16 @@ export default function InvestorDashboard() {
       </Card>
 
       <Card className="mt-8">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+        <CardHeader className="flex-row items-center justify-between">
+          <div className="flex items-center gap-2">
             <History className="h-5 w-5" />
-            Transaction History
-          </CardTitle>
+            <CardTitle>Recent Transaction History</CardTitle>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/investor/transactions">
+                View All <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
         </CardHeader>
         <CardContent>
           <Table>
@@ -391,7 +405,7 @@ export default function InvestorDashboard() {
                     <TableCell><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
                 </TableRow>
               ))}
-              {!isLoading && transactions?.slice().reverse().map((tx) => (
+              {!isLoading && recentTransactions?.map((tx) => (
                 <TableRow key={tx.id}>
                   <TableCell>{formatDate(tx.createdAt)}</TableCell>
                   <TableCell>
@@ -403,7 +417,7 @@ export default function InvestorDashboard() {
                   </TableCell>
                 </TableRow>
               ))}
-               {!isLoading && transactions?.length === 0 && (
+               {!isLoading && recentTransactions?.length === 0 && (
                 <TableRow>
                     <TableCell colSpan={4} className="h-24 text-center">
                         No transactions yet.
@@ -417,5 +431,3 @@ export default function InvestorDashboard() {
     </div>
   );
 }
-
-    
