@@ -1,13 +1,28 @@
+
+'use client';
+
 import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { ThemeProvider } from '@/components/theme-provider';
+import { useCompanyLogo } from '@/hooks/use-company-logo';
+import React from 'react';
 
-export const metadata: Metadata = {
-  title: 'FinHub Central',
-  description: 'The future of financial management.',
-};
+// This component ensures the logo and favicon are loaded on initial render
+function CompanyLogoProvider({ children }: { children: React.ReactNode }) {
+  useCompanyLogo(); // This hook will handle setting the favicon
+  return <>{children}</>;
+}
+
+
+// Metadata cannot be exported from a client component,
+// so we define it here statically.
+// The favicon will be dynamically updated by the useCompanyLogo hook.
+// export const metadata: Metadata = {
+//   title: 'FinHub Central',
+//   description: 'The future of financial management.',
+// };
 
 export default function RootLayout({
   children,
@@ -17,6 +32,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <title>FinHub Central</title>
+        <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -30,7 +47,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <FirebaseClientProvider>
-            {children}
+            <CompanyLogoProvider>
+              {children}
+            </CompanyLogoProvider>
           </FirebaseClientProvider>
           <Toaster />
         </ThemeProvider>

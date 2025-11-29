@@ -1,3 +1,6 @@
+
+'use client';
+
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Bot, CheckCircle, LineChart, Users } from "lucide-react";
@@ -6,18 +9,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Logo } from "@/components/icons";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useCompanyLogo } from "@/hooks/use-company-logo";
 
 const featureImages = PlaceHolderImages.filter(img => ['feature-investor', 'feature-client', 'feature-admin'].includes(img.id));
 const heroImage = PlaceHolderImages.find(img => img.id === 'hero-image');
 const aiImage = PlaceHolderImages.find(img => img.id === 'ai-analyzer');
 
 export default function Home() {
+  const { logoUrl } = useCompanyLogo();
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center">
           <Link href="/" className="mr-6 flex items-center space-x-2">
-            <Logo className="h-6 w-6 text-primary" />
+            <Logo imageUrl={logoUrl} className="h-6 w-6 text-primary" />
             <span className="font-bold font-headline sm:inline-block">
               FinHub Central
             </span>
@@ -140,7 +146,7 @@ export default function Home() {
       <footer className="border-t">
         <div className="container flex flex-col items-center justify-between gap-4 py-10 md:h-24 md:flex-row md:py-0">
           <div className="flex flex-col items-center gap-4 px-8 md:flex-row md:gap-2 md:px-0">
-            <Logo className="h-6 w-6 text-primary" />
+            <Logo imageUrl={logoUrl} className="h-6 w-6 text-primary" />
             <p className="text-center text-sm leading-loose md:text-left">
               Built by FinHub Central. &copy; {new Date().getFullYear()} All rights reserved.
             </p>

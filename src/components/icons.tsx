@@ -1,7 +1,27 @@
 
+import Image from 'next/image';
 import type { SVGProps } from "react";
+import { cn } from '@/lib/utils';
 
-export function Logo(props: SVGProps<SVGSVGElement>) {
+type LogoProps = SVGProps<SVGSVGElement> & {
+  imageUrl?: string | null;
+};
+
+
+export function Logo({ imageUrl, className, ...props }: LogoProps) {
+  if (imageUrl) {
+    return (
+      <div className={cn("relative", className)}>
+        <Image
+          src={imageUrl}
+          alt="Company Logo"
+          layout="fill"
+          objectFit="contain"
+        />
+      </div>
+    );
+  }
+
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -11,6 +31,7 @@ export function Logo(props: SVGProps<SVGSVGElement>) {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
+      className={className}
       {...props}
     >
       <path d="M12 2L2 7l10 5 10-5-10-5z" />
@@ -19,6 +40,7 @@ export function Logo(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
 
 export function Naira(props: SVGProps<SVGSVGElement>) {
   return (
