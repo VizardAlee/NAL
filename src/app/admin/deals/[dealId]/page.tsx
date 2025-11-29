@@ -38,13 +38,15 @@ const DURATION_IN_DAYS = {
     Days: 1,
     Weeks: 7,
     Fortnights: 14,
-    Months: 30, // Approximation
-    Years: 365,
+    Months: 30.4375, // Average days in month
+    Years: 365.25,
 };
 
 function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): number {
     return value * (DURATION_IN_DAYS[unit] || 0);
 }
+
+const EIGHTEEN_MONTHS_IN_DAYS = 18 * DURATION_IN_DAYS.Months;
 
 
 function DealDetailSkeleton() {
@@ -112,7 +114,7 @@ export default function DealDetailPage() {
     const investorMap = new Map<string, { name: string; amount: number }>();
     investments.forEach(inv => {
         const user = users.find(u => u.id === inv.investorId);
-        const name = user?.name || 'Unknown Investor';
+        const name = user?.name || (inv.investorId === 'platform' ? 'Platform' : 'Unknown Investor');
         const currentAmount = investorMap.get(inv.investorId)?.amount || 0;
         investorMap.set(inv.investorId, { name, amount: currentAmount + inv.amount });
     });
@@ -127,10 +129,20 @@ export default function DealDetailPage() {
     if (!deal || !fundBatches || !users) return [];
     
     const dealDurationInDays = convertToDays(deal.durationValue, deal.durationUnit);
+    const isShortTermDeal = dealDurationInDays < EIGHTEEN_MONTHS_IN_DAYS;
 
     return fundBatches
         .filter(batch => {
             const batchTenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
+            const isShortTermBatch = batchTenureInDays < EIGHTEEN_MONTHS_IN_DAYS;
+
+            // Tier 1 Rule: Short-term capital can fund short-term deals.
+            if (isShortTermBatch) {
+                return isShortTermDeal;
+            }
+
+            // Tier 2 Rule: Long-term capital matches deal duration.
+            // The batch tenure must be greater than or equal to the deal duration (minus a 5-day grace period).
             return batchTenureInDays >= (dealDurationInDays - 5);
         })
         .map(batch => {

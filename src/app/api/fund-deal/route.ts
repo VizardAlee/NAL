@@ -24,13 +24,15 @@ const DURATION_IN_DAYS = {
     Days: 1,
     Weeks: 7,
     Fortnights: 14,
-    Months: 30, // Approximation
-    Years: 365,
+    Months: 30.4375, // Average days in month
+    Years: 365.25,
 };
 
 function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): number {
     return value * (DURATION_IN_DAYS[unit] || 0);
 }
+
+const EIGHTEEN_MONTHS_IN_DAYS = 18 * DURATION_IN_DAYS.Months;
 
 const serviceAccount: ServiceAccount | undefined = process.env.FIREBASE_CLIENT_EMAIL
   ? {
@@ -94,6 +96,8 @@ export async function POST(request: NextRequest) {
             }
             
             const dealDurationInDays = convertToDays(dealData.durationValue, dealData.durationUnit);
+            const isShortTermDeal = dealDurationInDays < EIGHTEEN_MONTHS_IN_DAYS;
+
 
             const fundBatchesQuery = firestore.collection('fundBatches')
                 .where('remainingAmount', '>', 0)
@@ -104,6 +108,14 @@ export async function POST(request: NextRequest) {
             const eligibleBatches = fundBatchesSnapshot.docs.filter(doc => {
                 const batchData = doc.data() as FundBatch;
                 const batchTenureInDays = convertToDays(batchData.tenureValue, batchData.tenureUnit);
+                const isShortTermBatch = batchTenureInDays < EIGHTEEN_MONTHS_IN_DAYS;
+                
+                // Tier 1 Rule: Short-term capital can fund short-term deals.
+                if (isShortTermBatch) {
+                    return isShortTermDeal;
+                }
+
+                // Tier 2 Rule: Long-term capital matches deal duration.
                 // The batch tenure must be greater than or equal to the deal duration (minus a 5-day grace period).
                 return batchTenureInDays >= (dealDurationInDays - 5);
             });
