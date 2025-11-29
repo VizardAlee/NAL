@@ -14,7 +14,7 @@ import { useFormStatus } from 'react-dom';
 import { useToast } from "@/hooks/use-toast";
 import { useDoc } from "@/firebase/firestore/use-doc";
 import { doc } from 'firebase/firestore';
-import { useFirestore } from "@/firebase";
+import { useFirestore, useUser } from "@/firebase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { setNisabAction } from "./actions";
 
@@ -94,23 +94,28 @@ function CompanyLogoForm() {
 function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoading: boolean }) {
     const { toast } = useToast();
     const initialState = { success: false, message: '' };
-    const [state, formAction] = useActionState(setNisabAction, initialState);
+    const [state, formAction, isPending] = useActionState(setNisabAction, initialState);
+    const [toastShown, setToastShown] = useState(false);
 
     useEffect(() => {
-        if (state.message) {
+        if (state.message && !isPending && !toastShown) {
             toast({
                 title: state.success ? "Success" : "Error",
                 description: state.message,
                 variant: state.success ? "default" : "destructive",
             });
+            setToastShown(true);
         }
-    }, [state.message, state.success, toast]);
+        if (isPending) {
+            setToastShown(false);
+        }
+    }, [state, isPending, toast, toastShown]);
+
 
     function SubmitButton() {
-        const { pending } = useFormStatus();
         return (
-            <Button type="submit" disabled={pending}>
-                {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
+            <Button type="submit" disabled={isPending}>
+                {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
                 Set Nisab
             </Button>
         );
@@ -150,7 +155,13 @@ function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoadin
 
 export default function SettingsPage() {
   const firestore = useFirestore();
-  const zakatSettingsRef = firestore ? doc(firestore, 'platformSettings', 'zakat') : null;
+  const { user } = useUser();
+  
+  const zakatSettingsRef = useMemo(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, 'platformSettings', 'zakat');
+  }, [firestore, user]);
+  
   const { data: zakatSettings, loading: zakatLoading } = useDoc<{ nisab: number }>(zakatSettingsRef);
 
   return (
