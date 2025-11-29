@@ -23,6 +23,7 @@ import { Deal } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { generateAmortizationSchedule } from '@/lib/amortization';
 
 type Repayment = DocumentData & {
   id: string;
@@ -188,21 +189,30 @@ export default function RepaymentsPage() {
 
 
     const handleApprove = async (repayment: RepaymentRow) => {
-        if (!firestore) return;
+        if (!firestore || !deals) return;
         setApprovingId(repayment.id);
 
         try {
             await runTransaction(firestore, async (transaction) => {
+                const deal = deals.find(d => d.id === repayment.dealId);
+                if (!deal) throw new Error("Associated deal not found.");
+
+                const schedule = generateAmortizationSchedule(deal);
+                const currentInstallment = schedule.find(inst => inst.installment === (repayment.installmentNumber || 1));
+                if (!currentInstallment) throw new Error("Could not find matching installment in amortization schedule.");
+                
+                const totalInterestForPeriod = currentInstallment.interest;
+
                 const investmentsForDeal = investments?.filter(inv => inv.dealId === repayment.dealId) || [];
 
                 if (investmentsForDeal.length === 0) throw new Error("No investors found for this deal.");
 
                 const totalInvested = investmentsForDeal.reduce((sum, inv) => sum + inv.amount, 0);
 
+                // 1. Distribute profit to investors
                 for (const investment of investmentsForDeal) {
                     const investorProportion = investment.amount / totalInvested;
-                    const repaymentSlice = repayment.amount * investorProportion;
-                    const investorProfit = repaymentSlice * 0.40;
+                    const investorProfit = totalInterestForPeriod * investorProportion * 0.40; // 40% of their proportional interest share
 
                     const profitTxRef = doc(collection(firestore, 'transactions'));
                     transaction.set(profitTxRef, {
@@ -215,10 +225,36 @@ export default function RepaymentsPage() {
                     });
                 }
                 
+                // 2. Log platform earning and batch it
+                const platformProfit = totalInterestForPeriod * 0.60;
+                const now = Timestamp.now();
+
+                const platformTxRef = doc(collection(firestore, 'transactions'));
+                transaction.set(platformTxRef, {
+                    userId: 'platform',
+                    dealId: repayment.dealId,
+                    type: 'PlatformEarning',
+                    amount: platformProfit,
+                    createdAt: now,
+                    dealName: repayment.dealName
+                });
+
+                const platformFundBatchRef = doc(collection(firestore, 'fundBatches'));
+                transaction.set(platformFundBatchRef, {
+                    sourceId: 'platform',
+                    amount: platformProfit,
+                    remainingAmount: platformProfit,
+                    createdAt: now,
+                    tenureValue: 10, // Default long tenure for platform earnings
+                    tenureUnit: 'Years',
+                    details: `Profit from ${repayment.dealName}`
+                });
+
+                // 3. Update repayment status
                 const repaymentRef = doc(firestore, 'repayments', repayment.id);
                 transaction.update(repaymentRef, {
                     status: 'Approved',
-                    approvedAt: Timestamp.now(),
+                    approvedAt: now,
                 });
             });
 

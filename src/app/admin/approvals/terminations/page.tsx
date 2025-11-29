@@ -35,6 +35,7 @@ type TerminationRequest = DocumentData & {
   status: 'Pending' | 'Approved' | 'Rejected';
   requestedAt: Timestamp;
   processedAt?: Timestamp;
+  platformEarning?: number;
 };
 
 function TerminationsTable({
@@ -156,14 +157,21 @@ export default function TerminationsPage() {
                 if (!dealDoc.exists()) throw new Error("Deal not found.");
                 
                 const deal = { ...dealDoc.data(), id: dealDoc.id } as Deal;
+                const now = Timestamp.now();
 
                 // 1. Calculate and distribute final profit
                 const schedule = generateAmortizationSchedule(deal);
                 const today = new Date();
                 const finalInstallment = schedule.find(inst => inst.dueDate >= today) || schedule[schedule.length - 1];
+                let finalInterest = 0;
+                let remainingPrincipal = deal.principal;
 
                 if (finalInstallment) {
-                    const finalInterest = finalInstallment.interest;
+                    finalInterest = finalInstallment.interest;
+                    remainingPrincipal = finalInstallment.balance + finalInstallment.principal;
+                }
+
+                if (finalInterest > 0) {
                     const investmentsQuery = query(collection(firestore, 'investments'), where('dealId', '==', deal.id));
                     const investmentsSnapshot = await getDocs(investmentsQuery); // Use getDocs inside transaction
                     const investments = investmentsSnapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Investment[];
@@ -180,13 +188,13 @@ export default function TerminationsPage() {
                             dealId: deal.id,
                             type: 'ProfitDistribution',
                             amount: investorProfit,
-                            createdAt: Timestamp.now(),
+                            createdAt: now,
                             dealName: deal.dealName,
                             details: 'Final profit on early termination'
                         });
                     }
 
-                    // Platform Earning Transaction
+                    // Platform Earning Transaction & Batching
                      const platformProfit = finalInterest * 0.60;
                      const platformTxRef = doc(collection(firestore, 'transactions'));
                      transaction.set(platformTxRef, {
@@ -194,14 +202,24 @@ export default function TerminationsPage() {
                         dealId: deal.id,
                         type: 'PlatformEarning',
                         amount: platformProfit,
-                        createdAt: Timestamp.now(),
+                        createdAt: now,
                         dealName: deal.dealName,
                         details: 'Platform share on early termination'
+                     });
+                     
+                     const platformFundBatchRef = doc(collection(firestore, 'fundBatches'));
+                     transaction.set(platformFundBatchRef, {
+                        sourceId: 'platform',
+                        amount: platformProfit,
+                        remainingAmount: platformProfit,
+                        createdAt: now,
+                        tenureValue: 10,
+                        tenureUnit: 'Years',
+                        details: `Profit from ${deal.dealName}`
                      });
                 }
 
                 // 2. Return remaining principal
-                const remainingPrincipal = finalInstallment ? (finalInstallment.balance + finalInstallment.principal) : 0;
                 if (remainingPrincipal > 0) {
                      const investmentsQuery = query(collection(firestore, 'investments'), where('dealId', '==', deal.id));
                      const investmentsSnapshot = await getDocs(investmentsQuery);
@@ -217,7 +235,7 @@ export default function TerminationsPage() {
                             sourceId: investment.investorId,
                             amount: principalToReturn,
                             remainingAmount: principalToReturn,
-                            createdAt: Timestamp.now(),
+                            createdAt: now,
                             tenureValue: 10, // Default long tenure for returned principal
                             tenureUnit: 'Years',
                             details: `Returned principal from terminated deal: ${deal.dealName}`
@@ -235,7 +253,11 @@ export default function TerminationsPage() {
                 // 4. Update deal and request status
                 transaction.update(dealRef, { status: 'Terminated' });
                 const requestRef = doc(firestore, 'terminationRequests', request.id);
-                transaction.update(requestRef, { status: 'Approved', processedAt: Timestamp.now() });
+                transaction.update(requestRef, { 
+                    status: 'Approved', 
+                    processedAt: now,
+                    platformEarning: finalInterest * 0.60,
+                });
             });
 
             toast({
@@ -286,5 +308,3 @@ export default function TerminationsPage() {
         </div>
     );
 }
-
-    

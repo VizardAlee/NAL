@@ -321,6 +321,10 @@
           "type": "string",
           "format": "date-time",
           "description": "The timestamp when an admin processed the request."
+        },
+         "platformEarning": {
+          "type": "number",
+          "description": "The profit earned by the platform upon termination."
         }
       },
       "required": ["dealId", "clientId", "clientName", "dealName", "status", "requestedAt"]
@@ -386,5 +390,3 @@
     }
   }
 }
-
-    
