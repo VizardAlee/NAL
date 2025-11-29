@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/firebase/provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import React, { useEffect } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 function InvestorSkeleton() {
     return (
@@ -75,6 +76,7 @@ export default function InvestorLayout({
               <span>FinHub</span>
             </Link>
             <div className="flex-1" />
+            <ThemeToggle />
             <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">

@@ -29,6 +29,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/firebase/provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import React, { useEffect } from "react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 function AdminSkeleton() {
     return (
@@ -114,6 +115,7 @@ export default function AdminLayout({
              {/* Mobile sidebar trigger */}
             <SidebarTrigger className="md:hidden" />
           </div>
+          <ThemeToggle />
           <Button variant="ghost" size="icon" className="rounded-full">
             <Bell className="h-5 w-5" />
             <span className="sr-only">Toggle notifications</span>

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Logo } from "@/components/icons";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const featureImages = PlaceHolderImages.filter(img => ['feature-investor', 'feature-client', 'feature-admin'].includes(img.id));
 const heroImage = PlaceHolderImages.find(img => img.id === 'hero-image');
@@ -24,7 +25,8 @@ export default function Home() {
           <nav className="flex flex-1 items-center space-x-4">
             {/* Future nav links can go here */}
           </nav>
-          <div className="flex items-center justify-end space-x-4">
+          <div className="flex items-center justify-end space-x-2">
+            <ThemeToggle />
             <Button asChild>
               <Link href="/login">
                 Login <ArrowRight className="ml-2 h-4 w-4" />
