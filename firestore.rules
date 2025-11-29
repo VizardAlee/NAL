@@ -77,10 +77,12 @@ service cloud.firestore {
     // Rules for 'repayments'
     match /repayments/{repaymentId} {
       // Admins can read and update all repayments.
-      allow read, update: if isAdmin();
+      allow get, update: if isAdmin();
       // Clients can create their own repayments and read their own.
       allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
-      allow list: if isClient() && request.resource.data.clientId == request.auth.uid;
+      allow read: if isClient() && resource.data.clientId == request.auth.uid;
+      // Allow a client to query for their own repayments
+      allow list: if isClient() && request.query.get("where")[0][2] == request.auth.uid;
     }
   }
 }
