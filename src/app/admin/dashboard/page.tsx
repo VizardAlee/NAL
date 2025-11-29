@@ -89,9 +89,9 @@ export default function AdminDashboardPage() {
     const { data: activeDeals, loading: activeDealsLoading } = useCollection<Deal>(activeDealsQuery);
     const { data: overdueDeals, loading: overdueDealsLoading } = useCollection<Deal>(overdueDealsQuery);
     
-    const allUsers = useCollection<User>(usersQuery); 
+    const allUsersResult = useCollection<User>(usersQuery); 
 
-    const isLoading = fundBatchesLoading || usersLoading || transactionsLoading || activeDealsLoading || overdueDealsLoading || allUsers.loading;
+    const isLoading = fundBatchesLoading || usersLoading || transactionsLoading || activeDealsLoading || overdueDealsLoading || allUsersResult.loading;
 
     const chartData = useMemo(() => {
         if (!fundBatches) return [];
@@ -130,19 +130,19 @@ export default function AdminDashboardPage() {
     }, [activeDeals]);
 
     const recentActivities = useMemo(() => {
-        if (!recentTransactions || !allUsers.data) return [];
+        if (!recentTransactions || !allUsersResult.data) return [];
         return recentTransactions.map(tx => {
-            const user = allUsers.data?.find(u => u.id === tx.userId);
+            const user = allUsersResult.data?.find(u => u.id === tx.userId);
             const actionText = `${tx.type} of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Math.abs(tx.amount))}${tx.dealName ? ` in ${tx.dealName}`: ''}`;
             return {
                 id: tx.id,
-                user: user?.name || 'Unknown User',
+                user: user?.name || (tx.userId === 'platform' ? 'Platform' : 'Unknown User'),
                 action: actionText,
                 timestamp: format(tx.createdAt.toDate(), 'PPp'),
                 type: tx.type,
             };
         });
-    }, [recentTransactions, allUsers.data]);
+    }, [recentTransactions, allUsersResult.data]);
 
   return (
     <div>
