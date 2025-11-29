@@ -328,6 +328,32 @@
         }
       },
       "required": ["dealId", "clientId", "clientName", "dealName", "status", "requestedAt"]
+    },
+    "administrativeTransaction": {
+      "title": "Administrative Transaction",
+      "description": "Logs financial activities related to the platform's operational account (e.g., expenses, admin deposits).",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "The type of administrative transaction.",
+          "enum": ["AdminDeposit", "Expense", "TransferToInvestible", "TransferFromInvestible"]
+        },
+        "amount": {
+          "type": "number",
+          "description": "The transaction amount. Positive for deposits/inflows, negative for expenses/outflows."
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief description of the transaction (e.g., 'Office Supplies', 'Initial float')."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp of the transaction."
+        }
+      },
+      "required": ["type", "amount", "description", "createdAt"]
     }
   },
   "auth": {
@@ -387,6 +413,12 @@
         "$ref": "#/entities/terminationRequest"
       },
       "description": "Tracks client requests to terminate a deal."
+    },
+    "/administrativeTransactions/{transactionId}": {
+        "schema": {
+            "$ref": "#/entities/administrativeTransaction"
+        },
+        "description": "Stores all administrative financial transactions."
     }
   }
 }

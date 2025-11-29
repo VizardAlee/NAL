@@ -116,7 +116,11 @@ service cloud.firestore {
       allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
       allow read: if isClient() && resource.data.clientId == request.auth.uid;
     }
+    
+    // Rules for 'administrativeTransactions'
+    match /administrativeTransactions/{transactionId} {
+        // Only admins can read or write administrative transactions.
+        allow read, write: if isAdmin();
+    }
   }
 }
-
-    
