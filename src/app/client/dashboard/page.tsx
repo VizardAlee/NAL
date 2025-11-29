@@ -25,19 +25,16 @@ type Repayment = DocumentData & {
   lodgedAt: Timestamp;
 };
 
-function DealRepayments({ deal }: { deal: Deal }) {
-  const firestore = useFirestore();
+function DealRepayments({ deal, allRepayments, repaymentsLoading }: { deal: Deal, allRepayments: Repayment[] | null, repaymentsLoading: boolean }) {
 
-  const repaymentsQuery = useMemo(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'repayments'), where('dealId', '==', deal.id));
-  }, [firestore, deal.id]);
-
-  const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery);
+  const repaymentsForThisDeal = useMemo(() => {
+    if (!allRepayments) return [];
+    return allRepayments.filter(r => r.dealId === deal.id);
+  }, [allRepayments, deal.id]);
 
   const totalRepaid = useMemo(() => {
-    return repayments?.filter(r => r.status === 'Approved').reduce((sum, r) => sum + r.amount, 0) ?? 0;
-  }, [repayments]);
+    return repaymentsForThisDeal?.filter(r => r.status === 'Approved').reduce((sum, r) => sum + r.amount, 0) ?? 0;
+  }, [repaymentsForThisDeal]);
 
   const outstandingPrincipal = useMemo(() => {
     // This is a simplified calculation. A real system would track this more precisely.
@@ -57,7 +54,7 @@ function DealRepayments({ deal }: { deal: Deal }) {
     return <Skeleton className="h-24 w-full" />
   }
 
-  if (!repayments || repayments.length === 0) {
+  if (!repaymentsForThisDeal || repaymentsForThisDeal.length === 0) {
     return <p className="text-sm text-muted-foreground px-6 pb-4">No repayments have been lodged for this deal yet.</p>;
   }
 
@@ -78,7 +75,7 @@ function DealRepayments({ deal }: { deal: Deal }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {repayments.map(repayment => {
+          {repaymentsForThisDeal.map(repayment => {
             const { principalPaid, profitPaid } = getRepaymentBreakdown(repayment.amount);
             return (
               <TableRow key={repayment.id}>
@@ -97,7 +94,7 @@ function DealRepayments({ deal }: { deal: Deal }) {
 }
 
 
-function DealCard({ deal }: { deal: Deal }) {
+function DealCard({ deal, allRepayments, repaymentsLoading }: { deal: Deal, allRepayments: Repayment[] | null, repaymentsLoading: boolean }) {
     const statusVariant = {
         Pending: 'secondary',
         Active: 'default',
@@ -142,7 +139,7 @@ function DealCard({ deal }: { deal: Deal }) {
                 </div>
             </CardContent>
             <div className="mt-auto">
-              <DealRepayments deal={deal} />
+              <DealRepayments deal={deal} allRepayments={allRepayments} repaymentsLoading={repaymentsLoading} />
             </div>
         </Card>
     )
@@ -181,9 +178,17 @@ export default function ClientDashboard() {
         return query(collection(firestore, 'deals'), where('clientId', '==', user.uid));
     }, [firestore, user]);
 
+    const repaymentsQuery = useMemo(() => {
+        if (!firestore || !user?.uid) return null;
+        // Query for all repayments belonging to the current client.
+        return query(collection(firestore, 'repayments'), where('clientId', '==', user.uid));
+    }, [firestore, user]);
+
+
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
+    const { data: allRepayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery);
     
-    const isLoading = userLoading || dealsLoading;
+    const isLoading = userLoading || dealsLoading || repaymentsLoading;
 
     return (
         <div>
@@ -205,7 +210,7 @@ export default function ClientDashboard() {
             ) : deals && deals.length > 0 ? (
                  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {deals.map(deal => (
-                        <DealCard key={deal.id} deal={deal} />
+                        <DealCard key={deal.id} deal={deal} allRepayments={allRepayments} repaymentsLoading={repaymentsLoading} />
                     ))}
                 </div>
             ) : (
@@ -222,5 +227,7 @@ export default function ClientDashboard() {
         </div>
     );
 }
+
+    
 
     

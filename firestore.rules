@@ -81,8 +81,11 @@ service cloud.firestore {
       // Clients can create their own repayments and read their own.
       allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
       allow read: if isClient() && resource.data.clientId == request.auth.uid;
-      // Allow a client to query for their own repayments
-      allow list: if isClient() && request.query.get("where")[0][2] == request.auth.uid;
+      
+      // A client can list their OWN repayments by querying on their clientId.
+      allow list: if isClient() && request.query.where.size() > 0 && request.query.where[0].field == "clientId" && request.query.where[0].op == "==" && request.query.where[0].value == request.auth.uid;
     }
   }
 }
+
+    
