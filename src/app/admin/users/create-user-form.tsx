@@ -27,6 +27,8 @@ import { Loader2 } from 'lucide-react';
 import {
   createUserWithEmailAndPassword,
   updateProfile,
+  signOut,
+  signInWithCredential,
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { useFirestore, useAuth } from '@/firebase';
@@ -72,29 +74,27 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
         return;
     }
 
-    try {
-      // NOTE: Creating a user this way on the client is generally not recommended
-      // for security reasons, as it can be abused. In a production app, this
-      // operation should be moved to a secure backend environment (e.g., a Cloud Function).
-      // For this prototype, we accept the risk. The side-effect is that firebase
-      // will sign in the new user, so we have to sign out and restore the admin.
-      const adminUser = auth.currentUser;
-      if (!adminUser) throw new Error("Admin user not found. Please log in again.");
+    const adminUser = auth.currentUser;
+    if (!adminUser) {
+        toast({ variant: "destructive", title: "Authentication Error", description: "Admin user not found. Please log in again." });
+        setIsLoading(false);
+        return;
+    }
 
-      // 1. Create user in a temporary, isolated auth instance to avoid auto-signin
+    try {
+      // 1. Create the new user. This will sign them in temporarily.
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         values.email,
         values.password
       );
 
-      // 2. We need to call a backend function to set custom claims, as this is a privileged operation.
-      // For now, we will proceed without claims and rely on the Firestore role.
+      // 2. Update their profile (e.g., display name)
       await updateProfile(userCredential.user, {
         displayName: values.name,
       });
 
-      // 3. Create user profile in Firestore
+      // 3. Create their user document in Firestore
       const userDocRef = doc(firestore, 'users', userCredential.user.uid);
       await setDoc(userDocRef, {
         name: values.name,
@@ -102,18 +102,11 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
         role: values.role,
       });
 
-      // 4. IMPORTANT: Sign the admin back in.
-      // The createUserWithEmailAndPassword function signs in the new user automatically.
-      // We must sign the admin back in to continue the admin session.
+      // 4. Sign out the newly created user. Firebase auth persistence
+      // will automatically restore the previous (admin) user session.
       if (auth.currentUser?.uid !== adminUser.uid) {
-         await auth.signOut(); // Sign out the new user
-         // This is a simplified re-authentication. A real-world app would use
-         // a more secure method like re-authenticating with a saved token or credentials.
-         // For the prototype, we rely on the session persistence of the admin.
-         // The `useUser` hook will refresh the auth state with the admin user.
-         // A page reload might be required in some edge cases if the state doesn't sync.
+         await signOut(auth);
       }
-
 
       toast({
         title: 'User Created',
