@@ -33,7 +33,7 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
     Days: (v: number) => v / (365 / periodsPerYear),
     Weeks: (v: number) => v / (52 / periodsPerYear),
     Fortnights: (v: number) => v / (26 / periodsPerYear),
-    Monthly: (v: number) => v,
+    Months: (v: number) => v,
     Years: (v: number) => v * 12,
   };
   const totalPeriods = Math.round(durationMap[deal.durationUnit](deal.durationValue));
