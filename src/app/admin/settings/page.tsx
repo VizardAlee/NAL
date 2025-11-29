@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -9,7 +10,7 @@ import { useCompanyLogo } from "@/hooks/use-company-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
-import { useRef, useState, useEffect, useActionState, useMemo } from "react";
+import { useRef, useState, useEffect, useActionState } from "react";
 import { useFormStatus } from 'react-dom';
 import { useToast } from "@/hooks/use-toast";
 import { useDoc } from "@/firebase/firestore/use-doc";
@@ -19,12 +20,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { setNisabAction } from "./actions";
 
 function CompanyLogoForm() {
-    const { logoUrl, setLogo } = useCompanyLogo();
+    const { logoUrl, setLogo, isLoaded } = useCompanyLogo();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isLoading, setIsLoading] = useState(false);
     const { toast } = useToast();
 
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
             setIsLoading(true);
@@ -40,11 +41,16 @@ function CompanyLogoForm() {
             }
 
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 const result = e.target?.result as string;
-                setLogo(result);
-                setIsLoading(false);
-                toast({ title: 'Logo Updated', description: 'Your company logo has been changed.' });
+                try {
+                    await setLogo(result);
+                    toast({ title: 'Logo Updated', description: 'Your company logo has been changed.' });
+                } catch (error) {
+                    toast({ variant: 'destructive', title: 'Error', description: 'Failed to save the logo.' });
+                } finally {
+                    setIsLoading(false);
+                }
             };
             reader.onerror = () => {
                 setIsLoading(false);
@@ -62,11 +68,13 @@ function CompanyLogoForm() {
         <Card>
             <CardHeader>
                 <CardTitle>Company Logo</CardTitle>
-                <CardDescription>Upload your company logo. This will be displayed in the sidebar and as the browser favicon.</CardDescription>
+                <CardDescription>Upload your company logo. This will be displayed across the app for all users.</CardDescription>
             </CardHeader>
             <CardContent className="flex items-center gap-6">
                 <div className="relative h-20 w-20 rounded-md border p-2 flex items-center justify-center bg-muted/50">
-                    {logoUrl ? (
+                    {!isLoaded ? (
+                        <Skeleton className="h-full w-full" />
+                    ) : logoUrl ? (
                         <Image src={logoUrl} alt="Company Logo" layout="fill" objectFit="contain" />
                     ) : (
                         <ImageIcon className="h-10 w-10 text-muted-foreground" />
@@ -99,17 +107,17 @@ function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoadin
 
     const { pending: isPending } = useFormStatus();
 
-    useEffect(() => {
+     useEffect(() => {
         if (state.message && !isPending && !toastShown) {
             toast({
                 title: state.success ? "Success" : "Error",
                 description: state.message,
                 variant: state.success ? "default" : "destructive",
             });
-            setToastShown(true); // Prevent toast from showing again on re-render
+            setToastShown(true);
         }
-        if (isPending) {
-            setToastShown(false); // Reset when a new action starts
+         if (isPending) {
+            setToastShown(false); 
         }
     }, [state, isPending, toast, toastShown]);
 

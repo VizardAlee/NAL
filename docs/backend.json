@@ -19,6 +19,11 @@
           "type": "string",
           "description": "The role of the user.",
           "enum": ["Admin", "Investor", "Client"]
+        },
+        "lastZakatPaymentDate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp of the user's last Zakat payment."
         }
       },
       "required": ["name", "email", "role"]
@@ -212,6 +217,15 @@
           "type": "string",
           "format": "date-time",
           "description": "The timestamp when the admin approved the payment."
+        },
+        "dueDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The original due date for this repayment from the schedule."
+        },
+        "installmentNumber": {
+            "type": "number",
+            "description": "The installment number from the amortization schedule."
         }
       },
       "required": ["dealId", "clientId", "amount", "status", "lodgedAt"]
@@ -386,12 +400,16 @@
     },
     "platformSetting": {
       "title": "Platform Setting",
-      "description": "A global setting for the platform, like the Zakat Nisab.",
+      "description": "A global setting for the platform, like the Zakat Nisab or company logo.",
       "type": "object",
       "properties": {
         "nisab": {
           "type": "number",
           "description": "The minimum wealth threshold for Zakat eligibility in Naira."
+        },
+        "logoUrl": {
+          "type": "string",
+          "description": "A base64 data URI of the company logo."
         }
       }
     }
@@ -468,11 +486,23 @@
     },
     "/platformSettings/zakat": {
       "schema": {
-        "$ref": "#/entities/platformSetting"
+        "properties": {
+            "nisab": {
+                "$ref": "#/entities/platformSetting/properties/nisab"
+            }
+        }
       },
       "description": "Stores global platform settings, specifically the Zakat configuration."
+    },
+    "/platformSettings/branding": {
+      "schema": {
+        "properties": {
+            "logoUrl": {
+                "$ref": "#/entities/platformSetting/properties/logoUrl"
+            }
+        }
+      },
+      "description": "Stores global platform settings, specifically the company branding."
     }
   }
 }
-
-    
