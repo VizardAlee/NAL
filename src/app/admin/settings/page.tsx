@@ -9,7 +9,7 @@ import { useCompanyLogo } from "@/hooks/use-company-logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
-import { useRef, useState, useEffect, useActionState } from "react";
+import { useRef, useState, useEffect, useActionState, useMemo } from "react";
 import { useFormStatus } from 'react-dom';
 import { useToast } from "@/hooks/use-toast";
 import { useDoc } from "@/firebase/firestore/use-doc";
@@ -94,8 +94,10 @@ function CompanyLogoForm() {
 function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoading: boolean }) {
     const { toast } = useToast();
     const initialState = { success: false, message: '' };
-    const [state, formAction, isPending] = useActionState(setNisabAction, initialState);
+    const [state, formAction] = useActionState(setNisabAction, initialState);
     const [toastShown, setToastShown] = useState(false);
+
+    const { pending: isPending } = useFormStatus();
 
     useEffect(() => {
         if (state.message && !isPending && !toastShown) {
@@ -104,18 +106,19 @@ function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoadin
                 description: state.message,
                 variant: state.success ? "default" : "destructive",
             });
-            setToastShown(true);
+            setToastShown(true); // Prevent toast from showing again on re-render
         }
         if (isPending) {
-            setToastShown(false);
+            setToastShown(false); // Reset when a new action starts
         }
     }, [state, isPending, toast, toastShown]);
 
 
     function SubmitButton() {
+      const { pending } = useFormStatus();
         return (
-            <Button type="submit" disabled={isPending}>
-                {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
+            <Button type="submit" disabled={pending}>
+                {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
                 Set Nisab
             </Button>
         );
