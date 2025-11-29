@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useMemo, useState, useEffect, useActionState, useCallback } from 'react';
-import { useFormStatus } from 'react-dom';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useFormStatus, useFormState } from 'react-dom';
 import {
   Table,
   TableBody,
@@ -44,24 +44,31 @@ interface ScheduledPayment extends ScheduleInstallment {
 
 function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { installment: ScheduledPayment, dealId: string, userId: string, onPaymentLodged: (repayment: any) => void }) {
     const initialState = { success: false, message: '', repayment: null };
-    const [state, formAction] = useActionState(lodgePaymentAction, initialState);
+    const [state, formAction] = useFormState(lodgePaymentAction, initialState);
     const { pending } = useFormStatus();
     const { toast } = useToast();
 
     useEffect(() => {
         if (state.message) {
-            toast({
-                title: state.success ? 'Success' : 'Error',
-                description: state.message,
-                variant: state.success ? 'default' : 'destructive',
-            });
-            if (state.success && state.repayment) {
-                // Convert plain object back to a structure with a Timestamp
-                const newRepayment = {
-                    ...state.repayment,
-                    lodgedAt: new Timestamp(state.repayment.lodgedAt._seconds, state.repayment.lodgedAt._nanoseconds)
+            if (state.success) {
+                toast({
+                    title: 'Success',
+                    description: state.message,
+                });
+                if (state.repayment) {
+                    const newRepayment = {
+                        ...state.repayment,
+                        lodgedAt: new Timestamp(state.repayment.lodgedAt._seconds, state.repayment.lodgedAt._nanoseconds),
+                        dueDate: new Timestamp(state.repayment.dueDate._seconds, state.repayment.dueDate._nanoseconds)
+                    };
+                    onPaymentLodged(newRepayment);
                 }
-                onPaymentLodged(newRepayment);
+            } else {
+                toast({
+                    title: 'Error',
+                    description: state.message,
+                    variant: 'destructive',
+                });
             }
         }
     }, [state, toast, onPaymentLodged]);
@@ -71,6 +78,7 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
             <input type="hidden" name="dealId" value={dealId} />
             <input type="hidden" name="amount" value={installment.payment} />
             <input type="hidden" name="userId" value={userId} />
+            <input type="hidden" name="dueDate" value={installment.dueDate.toISOString()} />
             <Button size="sm" type="submit" disabled={pending}>
                 {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
                 Lodge Payment
@@ -89,11 +97,24 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
   }, [initialRepayments]);
 
   const handlePaymentLodged = useCallback((newRepayment: Repayment) => {
-    setAllRepayments((prev: Repayment[] | null) => {
-        if (prev) {
-            return [...prev, newRepayment];
+    setAllRepayments(prev => {
+        if (!prev) return [newRepayment];
+
+        // Find and replace by dealId + dueDate (most reliable)
+        const index = prev.findIndex(r =>
+        r.dealId === newRepayment.dealId &&
+        r.dueDate && newRepayment.dueDate &&
+        r.dueDate.toMillis() === newRepayment.dueDate.toMillis()
+        );
+
+        if (index !== -1) {
+        const updated = [...prev];
+        updated[index] = newRepayment;
+        return updated;
         }
-        return [newRepayment];
+
+        // If not found, add it. This handles the initial load case.
+        return [...prev, newRepayment];
     });
   }, []);
   
@@ -105,9 +126,10 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
 
     return schedule.map(installment => {
       // Find any repayment (pending or approved) for the same day.
-      const matchingRepayment = allRepayments?.find(r => 
-        isSameDay(r.lodgedAt.toDate(), installment.dueDate)
-      );
+      const matchingRepayment = allRepayments?.find(r => {
+          if (!r.dueDate) return false;
+          return isSameDay(r.dueDate.toDate(), installment.dueDate);
+      });
 
       let status: RepaymentStatus = 'Upcoming';
       if (matchingRepayment) {
@@ -207,7 +229,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                 </TableHeader>
                 <TableBody>
                 {paginatedSchedule.map(item => (
-                    <TableRow key={item.installment} className={item.isActionable ? 'bg-muted/50' : ''}>
+                    <TableRow key={`${item.installment}-${item.status}`} className={item.isActionable ? 'bg-muted/50' : ''}>
                         <TableCell>{format(item.dueDate, 'PPP')}</TableCell>
                         <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.principal)}</TableCell>
                         <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.interest)}</TableCell>

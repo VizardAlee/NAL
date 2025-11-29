@@ -10,6 +10,7 @@ const lodgePaymentSchema = z.object({
   dealId: z.string().min(1, "Deal ID is required."),
   amount: z.coerce.number().positive("Amount must be a positive number."),
   userId: z.string().min(1, "User ID is required."),
+  dueDate: z.string().min(1, "Due date is required."), // Add dueDate to schema
 });
 
 type RepaymentData = {
@@ -19,6 +20,10 @@ type RepaymentData = {
     amount: number;
     status: 'Pending';
     lodgedAt: {
+        _seconds: number;
+        _nanoseconds: number;
+    };
+    dueDate: {
         _seconds: number;
         _nanoseconds: number;
     };
@@ -39,6 +44,7 @@ export async function lodgePaymentAction(
     dealId: formData.get('dealId'),
     amount: formData.get('amount'),
     userId: formData.get('userId'),
+    dueDate: formData.get('dueDate'),
   });
 
   if (!validatedFields.success) {
@@ -49,11 +55,12 @@ export async function lodgePaymentAction(
     };
   }
 
-  const { dealId, amount, userId } = validatedFields.data;
+  const { dealId, amount, userId, dueDate } = validatedFields.data;
 
   try {
     const { firestore } = initializeFirebase();
     const lodgedAt = Timestamp.now();
+    const dueDateTimestamp = Timestamp.fromDate(new Date(dueDate));
     
     const newRepaymentRef = await firestore.collection('repayments').add({
       dealId,
@@ -61,11 +68,12 @@ export async function lodgePaymentAction(
       amount,
       status: 'Pending',
       lodgedAt: lodgedAt,
+      dueDate: dueDateTimestamp, // Save the due date
     });
 
     revalidatePath('/client/dashboard');
 
-    const repaymentData = {
+    const repaymentData: RepaymentData = {
         id: newRepaymentRef.id,
         dealId,
         clientId: userId,
@@ -74,6 +82,10 @@ export async function lodgePaymentAction(
         lodgedAt: {
             _seconds: lodgedAt.seconds,
             _nanoseconds: lodgedAt.nanoseconds,
+        },
+        dueDate: {
+             _seconds: dueDateTimestamp.seconds,
+            _nanoseconds: dueDateTimestamp.nanoseconds,
         }
     };
 
