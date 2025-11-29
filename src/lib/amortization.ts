@@ -1,5 +1,5 @@
 
-import { add, formatISO } from 'date-fns';
+import { add, differenceInCalendarMonths, differenceInDays, differenceInWeeks } from 'date-fns';
 import { Deal } from './types';
 
 export interface ScheduleInstallment {
@@ -11,73 +11,127 @@ export interface ScheduleInstallment {
   balance: number;
 }
 
-export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] {
-  if (deal.repaymentType === 'Balloon Payment' || !deal.createdAt) {
-    // Simplified handling for balloon payments for now
-    return [];
-  }
-
-  const principal = deal.principal;
-  // Note: The interest rate from the deal is annual. We need to convert it to the rate per period.
-  const frequencyMap = {
-    Daily: 365,
-    Weekly: 52,
-    Fortnightly: 26,
-    Monthly: 12,
-    Years: 1, // This is likely wrong, but let's assume monthly if years
-  };
-  const periodsPerYear = frequencyMap[deal.repaymentFrequency] || 12;
-  const interestRatePerPeriod = deal.interestRate / 100 / periodsPerYear;
-
-  const durationMap = {
-    Days: (v: number) => v / (365 / periodsPerYear),
-    Weeks: (v: number) => v / (52 / periodsPerYear),
-    Fortnights: (v: number) => v / (26 / periodsPerYear),
-    Months: (v: number) => v,
-    Years: (v: number) => v * 12,
-  };
-  const totalPeriods = Math.round(durationMap[deal.durationUnit](deal.durationValue));
-
-  if (interestRatePerPeriod === 0 || totalPeriods === 0) return [];
-  
-  // Standard formula for equal installment payment (EMI)
-  const monthlyPayment = principal * interestRatePerPeriod * 
-    (Math.pow(1 + interestRatePerPeriod, totalPeriods)) / 
-    (Math.pow(1 + interestRatePerPeriod, totalPeriods) - 1);
-
-  const schedule: ScheduleInstallment[] = [];
-  let remainingBalance = principal;
+function getPeriods(deal: Deal): { totalPeriods: number; addPeriod: (date: Date, count: number) => Date } {
   const startDate = deal.createdAt.toDate();
+  let totalPeriods = 0;
+  let addPeriod: (date: Date, count: number) => Date;
 
-  for (let i = 1; i <= totalPeriods; i++) {
-    const interestPayment = remainingBalance * interestRatePerPeriod;
-    const principalPayment = monthlyPayment - interestPayment;
-    remainingBalance -= principalPayment;
-
-    // Make sure balance doesn't go negative on the last payment due to rounding
-    if (i === totalPeriods && remainingBalance < 1 && remainingBalance > -1) {
-        remainingBalance = 0;
+  const durationInDays = (() => {
+    switch (deal.durationUnit) {
+      case 'Days': return deal.durationValue;
+      case 'Weeks': return deal.durationValue * 7;
+      case 'Fortnights': return deal.durationValue * 14;
+      case 'Months': return deal.durationValue * 30.4375; // Average days in month
+      case 'Years': return deal.durationValue * 365.25;
+      default: return 0;
     }
+  })();
 
-    const getDueDate = () => {
-        switch (deal.repaymentFrequency) {
-            case 'Daily': return add(startDate, { days: i });
-            case 'Weekly': return add(startDate, { weeks: i });
-            case 'Fortnightly': return add(startDate, { weeks: i * 2 });
-            case 'Monthly': return add(startDate, { months: i });
-            case 'Years': return add(startDate, { years: i });
-            default: return add(startDate, { months: i });
+  const endDate = add(startDate, { days: Math.round(durationInDays) });
+
+  switch (deal.repaymentFrequency) {
+    case 'Daily':
+      totalPeriods = differenceInDays(endDate, startDate);
+      addPeriod = (date, count) => add(date, { days: count });
+      break;
+    case 'Weekly':
+      totalPeriods = differenceInWeeks(endDate, startDate);
+      addPeriod = (date, count) => add(date, { weeks: count });
+      break;
+    case 'Fortnightly':
+      totalPeriods = Math.floor(differenceInWeeks(endDate, startDate) / 2);
+      addPeriod = (date, count) => add(date, { weeks: count * 2 });
+      break;
+    case 'Monthly':
+      totalPeriods = differenceInCalendarMonths(endDate, startDate);
+      addPeriod = (date, count) => add(date, { months: count });
+      break;
+    default:
+      totalPeriods = differenceInCalendarMonths(endDate, startDate);
+      addPeriod = (date, count) => add(date, { months: count });
+      break;
+  }
+  return { totalPeriods, addPeriod };
+}
+
+
+export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] {
+  if (!deal.createdAt) return [];
+  const principal = deal.principal;
+  const annualRate = deal.interestRate / 100;
+  const startDate = deal.createdAt.toDate();
+  const { totalPeriods, addPeriod } = getPeriods(deal);
+
+  if (totalPeriods === 0) return [];
+  
+  const schedule: ScheduleInstallment[] = [];
+
+  if (deal.repaymentType === 'Balloon Payment') {
+    const durationInYears = (() => {
+        switch (deal.durationUnit) {
+            case 'Days': return deal.durationValue / 365.25;
+            case 'Weeks': return deal.durationValue / 52;
+            case 'Fortnights': return deal.durationValue / 26;
+            case 'Months': return deal.durationValue / 12;
+            case 'Years': return deal.durationValue;
+            default: return 0;
         }
+    })();
+    const totalInterest = principal * annualRate * durationInYears;
+    const interestPerInstallment = totalInterest / totalPeriods;
+
+    for (let i = 1; i <= totalPeriods; i++) {
+        const isLastPayment = i === totalPeriods;
+        const payment = isLastPayment ? interestPerInstallment + principal : interestPerInstallment;
+        const principalPayment = isLastPayment ? principal : 0;
+        const balance = isLastPayment ? 0 : principal;
+        
+        schedule.push({
+            installment: i,
+            dueDate: addPeriod(startDate, i),
+            payment: payment,
+            principal: principalPayment,
+            interest: interestPerInstallment,
+            balance: balance,
+        });
     }
 
-    schedule.push({
-      installment: i,
-      dueDate: getDueDate(),
-      payment: monthlyPayment,
-      principal: principalPayment,
-      interest: interestPayment,
-      balance: remainingBalance,
-    });
+  } else { // Equal Installments
+      const frequencyMap = {
+        Daily: 365,
+        Weekly: 52,
+        Fortnightly: 26,
+        Monthly: 12,
+      };
+      const periodsPerYear = frequencyMap[deal.repaymentFrequency] || 12;
+      const interestRatePerPeriod = annualRate / periodsPerYear;
+      
+      if (interestRatePerPeriod === 0) return [];
+
+      const emi = principal * interestRatePerPeriod * 
+        (Math.pow(1 + interestRatePerPeriod, totalPeriods)) / 
+        (Math.pow(1 + interestRatePerPeriod, totalPeriods) - 1);
+
+      let remainingBalance = principal;
+
+      for (let i = 1; i <= totalPeriods; i++) {
+        const interestPayment = remainingBalance * interestRatePerPeriod;
+        const principalPayment = emi - interestPayment;
+        remainingBalance -= principalPayment;
+
+        if (i === totalPeriods && remainingBalance < 1 && remainingBalance > -1) {
+            remainingBalance = 0;
+        }
+
+        schedule.push({
+          installment: i,
+          dueDate: addPeriod(startDate, i),
+          payment: emi,
+          principal: principalPayment,
+          interest: interestPayment,
+          balance: remainingBalance,
+        });
+      }
   }
 
   return schedule;

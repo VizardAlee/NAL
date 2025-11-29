@@ -158,40 +158,51 @@ export default function TerminationsPage() {
                 
                 const deal = { ...dealDoc.data(), id: dealDoc.id } as Deal;
                 const now = Timestamp.now();
-
-                // 1. Calculate and distribute final profit
-                const schedule = generateAmortizationSchedule(deal);
-                const today = new Date();
-                const finalInstallment = schedule.find(inst => inst.dueDate >= today) || schedule[schedule.length - 1];
+                
                 let finalInterest = 0;
-                let remainingPrincipal = deal.principal;
-
-                if (finalInstallment) {
-                    finalInterest = finalInstallment.interest;
-                    remainingPrincipal = finalInstallment.balance + finalInstallment.principal;
+                let remainingPrincipal = 0;
+                
+                // 1. Calculate final profit and principal based on repayment type
+                if (deal.repaymentType === 'Balloon Payment') {
+                    // For balloon, pay interest for the current period and return full principal
+                    const schedule = generateAmortizationSchedule(deal);
+                    const finalInstallment = schedule.find(inst => inst.dueDate >= now) || schedule[schedule.length - 1];
+                    finalInterest = finalInstallment ? finalInstallment.interest : 0;
+                    remainingPrincipal = deal.principal; // Always return full principal
+                } else { // Equal Installments
+                    const schedule = generateAmortizationSchedule(deal);
+                    const finalInstallment = schedule.find(inst => inst.dueDate >= now) || schedule[schedule.length - 1];
+                    if (finalInstallment) {
+                        finalInterest = finalInstallment.interest;
+                        // For equal installments, remaining principal is the balance *before* this payment
+                        remainingPrincipal = finalInstallment.balance + finalInstallment.principal;
+                    }
                 }
 
+                // 2. Distribute final interest profit if any
                 if (finalInterest > 0) {
                     const investmentsQuery = query(collection(firestore, 'investments'), where('dealId', '==', deal.id));
                     const investmentsSnapshot = await getDocs(investmentsQuery); // Use getDocs inside transaction
                     const investments = investmentsSnapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Investment[];
                     
-                    const totalInvested = investments.reduce((sum, inv) => sum + inv.amount, 0);
+                    if (investments.length > 0) {
+                        const totalInvested = investments.reduce((sum, inv) => sum + inv.amount, 0);
 
-                    for (const investment of investments) {
-                        const investorProportion = investment.amount / totalInvested;
-                        const investorProfit = finalInterest * investorProportion * 0.40; // 40% to investor
-                        
-                        const profitTxRef = doc(collection(firestore, 'transactions'));
-                        transaction.set(profitTxRef, {
-                            userId: investment.investorId,
-                            dealId: deal.id,
-                            type: 'ProfitDistribution',
-                            amount: investorProfit,
-                            createdAt: now,
-                            dealName: deal.dealName,
-                            details: 'Final profit on early termination'
-                        });
+                        for (const investment of investments) {
+                            const investorProportion = investment.amount / totalInvested;
+                            const investorProfit = finalInterest * investorProportion * 0.40; // 40% to investor
+                            
+                            const profitTxRef = doc(collection(firestore, 'transactions'));
+                            transaction.set(profitTxRef, {
+                                userId: investment.investorId,
+                                dealId: deal.id,
+                                type: 'ProfitDistribution',
+                                amount: investorProfit,
+                                createdAt: now,
+                                dealName: deal.dealName,
+                                details: 'Final profit on early termination'
+                            });
+                        }
                     }
 
                     // Platform Earning Transaction & Batching
@@ -215,42 +226,44 @@ export default function TerminationsPage() {
                         createdAt: now,
                         tenureValue: 10,
                         tenureUnit: 'Years',
-                        details: `Profit from ${deal.dealName}`
                      });
                 }
 
-                // 2. Return remaining principal
+                // 3. Return remaining principal
                 if (remainingPrincipal > 0) {
                      const investmentsQuery = query(collection(firestore, 'investments'), where('dealId', '==', deal.id));
                      const investmentsSnapshot = await getDocs(investmentsQuery);
                      const investments = investmentsSnapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Investment[];
-                     const totalInvested = investments.reduce((sum, inv) => sum + inv.amount, 0);
+                     
+                     if (investments.length > 0) {
+                        const totalInvested = investments.reduce((sum, inv) => sum + inv.amount, 0);
 
-                     for (const investment of investments) {
-                         const investorProportion = investment.amount / totalInvested;
-                         const principalToReturn = remainingPrincipal * investorProportion;
+                        for (const investment of investments) {
+                            const investorProportion = investment.amount / totalInvested;
+                            const principalToReturn = remainingPrincipal * investorProportion;
 
-                         const fundBatchRef = doc(collection(firestore, 'fundBatches'));
-                         transaction.set(fundBatchRef, {
-                            sourceId: investment.investorId,
-                            amount: principalToReturn,
-                            remainingAmount: principalToReturn,
-                            createdAt: now,
-                            tenureValue: 10, // Default long tenure for returned principal
-                            tenureUnit: 'Years',
-                            details: `Returned principal from terminated deal: ${deal.dealName}`
-                         });
+                            const fundBatchRef = doc(collection(firestore, 'fundBatches'));
+                            transaction.set(fundBatchRef, {
+                                sourceId: investment.investorId,
+                                amount: principalToReturn,
+                                remainingAmount: principalToReturn,
+                                createdAt: now,
+                                tenureValue: 10, // Default long tenure for returned principal
+                                tenureUnit: 'Years',
+                                details: `Returned principal from terminated deal: ${deal.dealName}`
+                            });
+                        }
                      }
                 }
                 
-                // 3. Nullify pending repayments
+                // 4. Nullify pending repayments for this deal
                 const repaymentsQuery = query(collection(firestore, 'repayments'), where('dealId', '==', deal.id), where('status', '==', 'Pending'));
                 const repaymentsSnapshot = await getDocs(repaymentsQuery);
                 repaymentsSnapshot.forEach(repaymentDoc => {
                     transaction.update(repaymentDoc.ref, { status: 'Cancelled' });
                 });
 
-                // 4. Update deal and request status
+                // 5. Update deal and request status
                 transaction.update(dealRef, { status: 'Terminated' });
                 const requestRef = doc(firestore, 'terminationRequests', request.id);
                 transaction.update(requestRef, { 
