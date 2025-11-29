@@ -1,8 +1,8 @@
+
 'use server';
 
 import { adminDb } from '@/firebase/admin-app';
 import { getAuth } from 'firebase-admin/auth';
-import { doc, setDoc, getDocs, collection } from 'firebase-admin/firestore';
 import { z } from 'zod';
 
 const createUserSchema = z.object({
@@ -32,15 +32,15 @@ export async function createUserAction(data: z.infer<typeof createUserSchema>) {
     });
 
     // 2. Make first user an Admin
-    const usersCollection = collection(adminDb, 'users');
-    const snapshot = await getDocs(usersCollection);
+    const usersCollection = adminDb.collection('users');
+    const snapshot = await usersCollection.get();
     const finalRole = snapshot.empty ? 'Admin' : role;
 
     // 3. Set custom claim for the role
     await auth.setCustomUserClaims(userRecord.uid, { role: finalRole });
 
     // 4. Create user document in Firestore
-    await setDoc(doc(adminDb, 'users', userRecord.uid), {
+    await usersCollection.doc(userRecord.uid).set({
       name,
       email,
       role: finalRole,
