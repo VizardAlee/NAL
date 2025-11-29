@@ -250,6 +250,41 @@
         }
       },
       "required": ["investorId", "investorName", "amount", "status", "requestedAt"]
+    },
+    "reinvestmentRequest": {
+      "title": "Reinvestment Request",
+      "description": "A request from an investor to reinvest their profits.",
+      "type": "object",
+      "properties": {
+        "investorId": {
+          "type": "string",
+          "description": "The ID of the investor making the request."
+        },
+        "investorName": {
+          "type": "string",
+          "description": "The name of the investor (denormalized for display)."
+        },
+        "amount": {
+          "type": "number",
+          "description": "The amount of profit to reinvest."
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the reinvestment request.",
+          "enum": ["Pending", "Approved", "Rejected"]
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the investor made the request."
+        },
+        "processedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when an admin processed the request."
+        }
+      },
+      "required": ["investorId", "investorName", "amount", "status", "requestedAt"]
     }
   },
   "auth": {
@@ -297,6 +332,12 @@
         "$ref": "#/entities/withdrawalRequest"
       },
       "description": "Tracks investor requests to withdraw funds."
+    },
+    "/reinvestmentRequests/{reinvestmentRequestId}": {
+      "schema": {
+        "$ref": "#/entities/reinvestmentRequest"
+      },
+      "description": "Tracks investor requests to reinvest their profits."
     }
   }
 }
