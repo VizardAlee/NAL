@@ -13,6 +13,7 @@ import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { ViewPageNav } from "@/components/view-page-nav";
 
 type Transaction = DocumentData & {
   id: string;
@@ -64,7 +65,9 @@ export default function TransactionsPage() {
         title="Transaction History"
         description="A complete record of all your financial activities on the platform."
         icon={History}
-      />
+      >
+        <ViewPageNav homePath="/investor/dashboard" />
+      </PageHeader>
       <Card>
         <CardContent className="p-0">
           <Table>

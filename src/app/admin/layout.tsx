@@ -92,7 +92,7 @@ export default function AdminLayout({
       <Sidebar>
         <SidebarHeader>
           <div className="flex items-center gap-2 p-2">
-             <Link href="/" className="flex items-center gap-2">
+             <Link href="/admin/dashboard" className="flex items-center gap-2">
               <Logo className="h-7 w-7 text-primary" />
               <span className="text-lg font-bold font-headline text-primary group-data-[collapsible=icon]:hidden">
                 FinHub
