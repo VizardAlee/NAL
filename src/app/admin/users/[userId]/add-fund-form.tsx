@@ -83,6 +83,7 @@ export function AddFundForm({ userId }: AddFundFormProps) {
         description: `${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(values.amount)} added to investor's account.`,
       });
       form.reset();
+      // Note: We won't close the dialog here, let the user close it manually.
     } catch (error) {
       console.error('Add Fund Error:', error);
       let errorMessage = 'An unknown error occurred while adding funds.';
@@ -99,7 +100,7 @@ export function AddFundForm({ userId }: AddFundFormProps) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
         <FormField
           control={form.control}
           name="amount"

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { notFound, useParams } from 'next/navigation';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { useCollection } from '@/firebase/firestore/use-collection';
@@ -9,7 +9,7 @@ import { doc, collection, query, where, DocumentData, Timestamp } from 'firebase
 import { useFirestore } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { User, Landmark, History, Banknote } from 'lucide-react';
+import { User, Landmark, History, Banknote, PlusCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +17,14 @@ import { AddFundForm } from './add-fund-form';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
 import { Naira } from '@/components/icons';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 type UserProfile = DocumentData & {
     id: string;
@@ -79,6 +87,7 @@ const formatDate = (timestamp: Timestamp | Date | undefined) => {
 export default function UserDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const firestore = useFirestore();
+  const [isAddFundOpen, setAddFundOpen] = useState(false);
 
   const userRef = useMemo(() => {
     if (!firestore || !userId) return null;
@@ -100,6 +109,11 @@ export default function UserDetailPage() {
   const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
 
   const isLoading = userLoading || fundBatchesLoading || transactionsLoading;
+
+  const investibleBalance = useMemo(() => {
+      if (!fundBatches) return 0;
+      return fundBatches.reduce((sum, batch) => sum + batch.remainingAmount, 0);
+  }, [fundBatches]);
 
   if (isLoading) {
     return <UserDetailSkeleton />;
@@ -135,16 +149,29 @@ export default function UserDetailPage() {
                 {user.role === 'Investor' && (
                      <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Banknote className="h-5 w-5" />
-                                <span>Add Funds</span>
-                            </CardTitle>
-                            <CardDescription>
-                                Deposit capital into the investor's account. This will create a new fund batch and a deposit transaction.
+                            <CardTitle className="text-sm font-medium">Investible Balance</CardTitle>
+                             <CardDescription>
+                                Total capital available for new deals.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
-                           <AddFundForm userId={userId} />
+                        <CardContent className="space-y-4">
+                            <div className="text-3xl font-bold font-headline">
+                                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(investibleBalance)}
+                            </div>
+                           <Dialog open={isAddFundOpen} onOpenChange={setAddFundOpen}>
+                            <DialogTrigger asChild>
+                                <Button className="w-full">
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Add Funds
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                <DialogTitle>Add Funds to Investor Account</DialogTitle>
+                                </DialogHeader>
+                                <AddFundForm userId={userId} />
+                            </DialogContent>
+                            </Dialog>
                         </CardContent>
                     </Card>
                 )}
@@ -168,16 +195,16 @@ export default function UserDetailPage() {
                                 <TableHeader>
                                 <TableRow>
                                     <TableHead>Date</TableHead>
-                                    <TableHead className="text-right">Amount</TableHead>
-                                    <TableHead className="text-right">Remaining</TableHead>
+                                    <TableHead>Total Amount</TableHead>
+                                    <TableHead className="text-right">Investible Balance</TableHead>
                                 </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                 {fundBatches?.map(batch => (
                                     <TableRow key={batch.id}>
                                         <TableCell>{formatDate(batch.createdAt)}</TableCell>
-                                        <TableCell className="text-right font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</TableCell>
-                                        <TableCell className="text-right text-green-500">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
+                                        <TableCell className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</TableCell>
+                                        <TableCell className="text-right text-green-500 font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
                                     </TableRow>
                                 ))}
                                 {!fundBatches?.length && (
