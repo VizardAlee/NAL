@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -12,8 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { HandCoins, CheckCircle, Hourglass } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { HandCoins, CheckCircle, Hourglass, Loader2 } from 'lucide-react';
 import { generateAmortizationSchedule, ScheduleInstallment } from '@/lib/amortization';
 import { Deal } from '@/lib/types';
 import { Repayment } from './page';
@@ -22,14 +21,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Pagination,
   PaginationContent,
-  PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
+import { useUser } from '@/firebase';
+import { useActionState } from 'react';
+import { lodgePaymentAction } from './actions';
+import { useToast } from '@/hooks/use-toast';
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 5;
 
 type RepaymentStatus = 'Paid' | 'Pending' | 'Due' | 'Upcoming';
 
@@ -38,9 +40,46 @@ interface ScheduledPayment extends ScheduleInstallment {
   repaymentDoc?: Repayment;
 }
 
+function LodgePaymentButton({ installment, dealId, userId }: { installment: ScheduledPayment, dealId: string, userId: string }) {
+    const initialState = { success: false, message: '' };
+    const [state, formAction] = useActionState(lodgePaymentAction, initialState);
+    const { toast } = useToast();
+    const [isPending, setIsPending] = useState(false);
+
+    useEffect(() => {
+        if (state.message) {
+            toast({
+                title: state.success ? 'Success' : 'Error',
+                description: state.message,
+                variant: state.success ? 'default' : 'destructive',
+            });
+        }
+        setIsPending(false);
+    }, [state, toast]);
+
+    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setIsPending(true);
+        const formData = new FormData(e.currentTarget);
+        formAction(formData);
+    }
+    
+    return (
+        <form onSubmit={handleSubmit}>
+            <input type="hidden" name="dealId" value={dealId} />
+            <input type="hidden" name="amount" value={installment.payment} />
+            <input type="hidden" name="userId" value={userId} />
+            <Button size="sm" type="submit" disabled={isPending}>
+                {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
+                Lodge Payment
+            </Button>
+        </form>
+    );
+}
+
 export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { deal: Deal, allRepayments: Repayment[] | null, repaymentsLoading: boolean }) {
-  const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
+  const { user } = useUser();
   
   const schedule = useMemo(() => generateAmortizationSchedule(deal), [deal]);
   
@@ -48,33 +87,31 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
     if (!schedule) return [];
 
     const today = startOfToday();
-    // Sort schedule by due date ascending first
-    const sortedSchedule = schedule.sort((a,b) => a.dueDate.getTime() - b.dueDate.getTime());
-    const processedInstallments = new Set<number>();
+    const paidInstallmentNumbers = new Set<number>();
 
-    return sortedSchedule.map(installment => {
+    // First pass: find all paid installments
+    allRepayments?.forEach(repayment => {
+        const matchingInstallment = schedule.find(inst => 
+            isSameDay(repayment.lodgedAt.toDate(), inst.dueDate) && 
+            Math.abs(repayment.amount - inst.payment) < 0.01 // Compare floats
+        );
+        if (matchingInstallment) {
+            paidInstallmentNumbers.add(matchingInstallment.installment);
+        }
+    });
+
+    return schedule.map(installment => {
         let status: RepaymentStatus = 'Upcoming';
-        // This is a simplification. A real system would need a more robust way
-        // to link a repayment to a specific installment, perhaps by saving the
-        // installment number or due date with the repayment document.
-        const matchingRepayment = allRepayments?.find(r => {
-            if (processedInstallments.has(installment.installment)) return false;
-            // A simple check: if repayment is lodged on the same day as due date
-            return isSameDay(r.lodgedAt.toDate(), installment.dueDate)
-        });
+        const isPaid = paidInstallmentNumbers.has(installment.installment);
 
-        if (matchingRepayment) {
-            processedInstallments.add(installment.installment);
-            if (matchingRepayment.status === 'Approved') {
-                status = 'Paid';
-            } else {
-                status = 'Pending';
-            }
+        if (isPaid) {
+            const matchingRepayment = allRepayments!.find(r => isSameDay(r.lodgedAt.toDate(), installment.dueDate));
+            status = matchingRepayment?.status === 'Approved' ? 'Paid' : 'Pending';
         } else if (installment.dueDate < today) {
             status = 'Due';
         }
 
-        return { ...installment, status, isActionable: false }; // isActionable will be set next
+        return { ...installment, status };
     });
   }, [schedule, allRepayments]);
 
@@ -89,10 +126,10 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
       isActionable: index === nextPayableInstallmentIndex
     })).sort((a, b) => {
         // Custom sort: bring the single actionable item to the top
-        if (a.isActionable) return -1;
-        if (b.isActionable) return 1;
-        // Then sort by due date
-        return a.dueDate.getTime() - b.dueDate.getTime();
+        if (a.isActionable && !b.isActionable) return -1;
+        if (!a.isActionable && b.isActionable) return 1;
+        // Then sort by installment number
+        return a.installment - b.installment;
     });
   }, [enhancedSchedule]);
 
@@ -152,25 +189,25 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
             <Table>
                 <TableHeader>
                 <TableRow>
-                    <TableHead>Due Date</TableHead>
+                    <TableHead>Due</TableHead>
                     <TableHead>Principal</TableHead>
                     <TableHead>Profit</TableHead>
+                    <TableHead>Total</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Action</TableHead>
                 </TableRow>
                 </TableHeader>
                 <TableBody>
                 {paginatedSchedule.map(item => (
-                    <TableRow key={item.installment}>
+                    <TableRow key={item.installment} className={item.isActionable ? 'bg-muted/50' : ''}>
                         <TableCell>{format(item.dueDate, 'PPP')}</TableCell>
                         <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.principal)}</TableCell>
                         <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.interest)}</TableCell>
+                        <TableCell className="font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.payment)}</TableCell>
                         <TableCell><StatusBadge status={item.status} /></TableCell>
                         <TableCell className="text-right">
-                        {(item.isActionable) && (
-                            <Button size="sm" onClick={() => router.push('/client/lodge-payment')}>
-                                Lodge Payment
-                            </Button>
+                        {(item.isActionable && user) && (
+                            <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} />
                         )}
                         </TableCell>
                     </TableRow>
@@ -185,7 +222,7 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
                         <PaginationItem>
                             <PaginationPrevious href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1))}} disabled={currentPage === 1}/>
                         </PaginationItem>
-                        {Array.from({length: totalPages}).map((_, i) => (
+                        {[...Array(totalPages)].map((_, i) => (
                              <PaginationItem key={i}>
                                 <PaginationLink href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(i + 1)}} isActive={currentPage === i+1}>{i+1}</PaginationLink>
                              </PaginationItem>
