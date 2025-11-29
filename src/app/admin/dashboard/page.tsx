@@ -188,7 +188,7 @@ export default function AdminDashboardPage() {
                     </div>
                 ) : (
                  <ChartContainer config={chartConfig} className="h-[250px] w-full">
-                    <BarChart accessibilityLayer data={chartData} margin={{ left: 12, right: 12 }}>
+                    <BarChart accessibilityLayer data={chartData} margin={{ top: 20, right: 0, bottom: 20, left: 0 }}>
                         <CartesianGrid vertical={false} />
                         <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
                         <YAxis tickFormatter={(value) => `₦${Number(value) / 1000000}M`} tickLine={false} axisLine={false} tickMargin={8} />
@@ -288,5 +288,4 @@ export default function AdminDashboardPage() {
       </Card>
     </div>
   );
-
-    
+}
