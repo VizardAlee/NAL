@@ -13,7 +13,7 @@ import { FileText, Users, Landmark, Zap, Loader2, UserCheck } from 'lucide-react
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { format } from 'date-fns';
+import { format, differenceInDays as fnsDifferenceInDays } from 'date-fns';
 import { Deal, Investment } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -129,21 +129,26 @@ export default function DealDetailPage() {
     if (!deal || !fundBatches || !users) return [];
     
     const dealDurationInDays = convertToDays(deal.durationValue, deal.durationUnit);
-    const isShortTermDeal = dealDurationInDays < EIGHTEEN_MONTHS_IN_DAYS;
+    const today = new Date();
 
     return fundBatches
         .map(batch => {
-            const batchTenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
-            const isShortTermBatch = batchTenureInDays < EIGHTEEN_MONTHS_IN_DAYS;
+            const originalBatchTenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
+            const isShortTermBatch = originalBatchTenureInDays < EIGHTEEN_MONTHS_IN_DAYS;
+            
             let isEligible = false;
 
-            // Tier 1 Rule: Short-term capital can fund short-term deals.
             if (isShortTermBatch) {
+                // Tier 1 Rule: Short-term capital can fund short-term deals.
+                const isShortTermDeal = dealDurationInDays < EIGHTEEN_MONTHS_IN_DAYS;
                 isEligible = isShortTermDeal;
             } else {
-            // Tier 2 Rule: Long-term capital matches deal duration.
-            // The batch tenure must be greater than or equal to the deal duration (minus a 5-day grace period).
-                isEligible = batchTenureInDays >= (dealDurationInDays - 5);
+                // Tier 2 Rule: Long-term capital must have enough remaining tenure.
+                const expiryDate = batch.createdAt.toDate();
+                expiryDate.setDate(expiryDate.getDate() + originalBatchTenureInDays);
+                const remainingTenureInDays = fnsDifferenceInDays(expiryDate, today);
+                
+                isEligible = remainingTenureInDays >= (dealDurationInDays - 5);
             }
             
             const source = users.find(u => u.id === batch.sourceId);

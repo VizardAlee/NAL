@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as admin from 'firebase-admin';
 import { ServiceAccount } from 'firebase-admin';
+import { differenceInDays } from 'date-fns';
 
 // Defines the shape of the data for a Deal document
 interface Deal {
@@ -18,6 +19,7 @@ interface FundBatch {
     sourceId: string;
     tenureValue: number;
     tenureUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
+    createdAt: admin.firestore.Timestamp;
 }
 
 const DURATION_IN_DAYS = {
@@ -96,8 +98,7 @@ export async function POST(request: NextRequest) {
             }
             
             const dealDurationInDays = convertToDays(dealData.durationValue, dealData.durationUnit);
-            const isShortTermDeal = dealDurationInDays < EIGHTEEN_MONTHS_IN_DAYS;
-
+            const today = new Date();
 
             const fundBatchesQuery = firestore.collection('fundBatches')
                 .where('remainingAmount', '>', 0)
@@ -107,17 +108,18 @@ export async function POST(request: NextRequest) {
             
             const eligibleBatches = fundBatchesSnapshot.docs.filter(doc => {
                 const batchData = doc.data() as FundBatch;
-                const batchTenureInDays = convertToDays(batchData.tenureValue, batchData.tenureUnit);
-                const isShortTermBatch = batchTenureInDays < EIGHTEEN_MONTHS_IN_DAYS;
-                
-                // Tier 1 Rule: Short-term capital can fund short-term deals.
-                if (isShortTermBatch) {
-                    return isShortTermDeal;
-                }
+                const originalBatchTenureInDays = convertToDays(batchData.tenureValue, batchData.tenureUnit);
+                const isShortTermBatch = originalBatchTenureInDays < EIGHTEEN_MONTHS_IN_DAYS;
 
-                // Tier 2 Rule: Long-term capital matches deal duration.
-                // The batch tenure must be greater than or equal to the deal duration (minus a 5-day grace period).
-                return batchTenureInDays >= (dealDurationInDays - 5);
+                if (isShortTermBatch) {
+                    const isShortTermDeal = dealDurationInDays < EIGHTEEN_MONTHS_IN_DAYS;
+                    return isShortTermDeal;
+                } else {
+                    const expiryDate = batchData.createdAt.toDate();
+                    expiryDate.setDate(expiryDate.getDate() + originalBatchTenureInDays);
+                    const remainingTenureInDays = differenceInDays(expiryDate, today);
+                    return remainingTenureInDays >= (dealDurationInDays - 5);
+                }
             });
 
             const totalAvailableFunds = eligibleBatches.reduce((sum, doc) => sum + (doc.data() as FundBatch).remainingAmount, 0);
