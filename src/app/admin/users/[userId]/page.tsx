@@ -189,6 +189,11 @@ export default function UserDetailPage() {
 
   const { isZakatEligible, isZakatPayable, zakatAmount } = useMemo(() => {
     if (!userProfile) return { isZakatEligible: false, isZakatPayable: false, zakatAmount: 0 };
+    
+    if (userProfile.role !== 'Investor') {
+        return { isZakatEligible: false, isZakatPayable: false, zakatAmount: 0 };
+    }
+
     const nisab = zakatSettings?.nisab || 0;
     const isEligible = financialMetrics.portfolioValue >= nisab;
     const amount = financialMetrics.portfolioValue * 0.025;
@@ -270,7 +275,7 @@ export default function UserDetailPage() {
                         <CardHeader>
                             <div className="flex justify-between items-center">
                                 <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
-                                <Naira className="h-4 w-4 text-muted-foreground" />
+                                
                             </div>
                              <CardDescription>Total current value including all capital and profits.</CardDescription>
                         </CardHeader>
@@ -287,7 +292,7 @@ export default function UserDetailPage() {
                         <CardHeader>
                              <div className="flex justify-between items-center">
                                 <CardTitle className="text-sm font-medium">Investible Balance</CardTitle>
-                                <Naira className="h-4 w-4 text-muted-foreground" />
+                                
                             </div>
                              <CardDescription>Total capital available for new deals.</CardDescription>
                         </CardHeader>
