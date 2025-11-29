@@ -77,16 +77,25 @@ service cloud.firestore {
     // Rules for 'repayments'
     match /repayments/{repaymentId} {
       // Admins can read and update all repayments.
-      allow get, update: if isAdmin();
+      allow get, update, list: if isAdmin();
       // Clients can create their own repayments and read their own.
       allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
       allow read: if isClient() && resource.data.clientId == request.auth.uid;
       
       // A client can list their OWN repayments by querying on their clientId.
-      // An Admin can list all repayments.
-      allow list: if isAdmin() || (isClient() && request.query.where.size() > 0 && request.query.where[0].field == "clientId" && request.query.where[0].op == "==" && request.query.where[0].value == request.auth.uid);
+      allow list: if (isClient() && request.query.where.size() > 0 && request.query.where[0].field == "clientId" && request.query.where[0].op == "==" && request.query.where[0].value == request.auth.uid);
+    }
+
+    // Rules for 'withdrawalRequests'
+    match /withdrawalRequests/{requestId} {
+      // Admins can read and update any request
+      allow get, update, list: if isAdmin();
+
+      // Investors can create their own requests
+      allow create: if isInvestor() && request.resource.data.investorId == request.auth.uid;
+
+      // Investors can read their own requests
+      allow get, list: if isInvestor() && resource.data.investorId == request.auth.uid;
     }
   }
 }
-
-    

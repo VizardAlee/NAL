@@ -5,14 +5,17 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Landmark, History, FileText } from "lucide-react";
-import { useMemo } from 'react';
+import { TrendingUp, Landmark, History, FileText, Download } from "lucide-react";
+import { useMemo, useState } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { Deal } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { WithdrawForm } from "./withdraw-form";
 
 type FundBatch = DocumentData & {
   id: string;
@@ -38,6 +41,7 @@ type Investment = DocumentData & {
 export default function InvestorDashboard() {
   const firestore = useFirestore();
   const { user, loading: userLoading } = useUser();
+  const [isWithdrawOpen, setWithdrawOpen] = useState(false);
 
   const fundBatchesQuery = useMemo(() => {
     if (!firestore || !user?.uid) return null;
@@ -128,7 +132,20 @@ export default function InvestorDashboard() {
           </CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(portfolioValue)}</div>}
-            <p className="text-xs text-muted-foreground">Based on all transactions</p>
+            <Dialog open={isWithdrawOpen} onOpenChange={setWithdrawOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="w-full mt-2">
+                  <Download className="mr-2 h-4 w-4"/>
+                  Withdraw Funds
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Request Fund Withdrawal</DialogTitle>
+                </DialogHeader>
+                <WithdrawForm portfolioValue={portfolioValue} onWithdrawalRequested={() => setWithdrawOpen(false)} />
+              </DialogContent>
+            </Dialog>
           </CardContent>
         </Card>
         <Card>

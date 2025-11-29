@@ -215,6 +215,41 @@
         }
       },
       "required": ["dealId", "clientId", "amount", "status", "lodgedAt"]
+    },
+    "withdrawalRequest": {
+      "title": "Withdrawal Request",
+      "description": "A request from an investor to withdraw funds from their account.",
+      "type": "object",
+      "properties": {
+        "investorId": {
+          "type": "string",
+          "description": "The ID of the investor making the request."
+        },
+        "investorName": {
+            "type": "string",
+            "description": "The name of the investor (denormalized for display)."
+        },
+        "amount": {
+          "type": "number",
+          "description": "The amount requested for withdrawal."
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the withdrawal request.",
+          "enum": ["Pending", "Approved", "Rejected"]
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the investor made the request."
+        },
+        "processedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when an admin processed the request."
+        }
+      },
+      "required": ["investorId", "investorName", "amount", "status", "requestedAt"]
     }
   },
   "auth": {
@@ -256,6 +291,12 @@
         "$ref": "#/entities/repayment"
       },
       "description": "Tracks client repayments that are pending or completed."
+    },
+    "/withdrawalRequests/{withdrawalRequestId}": {
+      "schema": {
+        "$ref": "#/entities/withdrawalRequest"
+      },
+      "description": "Tracks investor requests to withdraw funds."
     }
   }
 }
