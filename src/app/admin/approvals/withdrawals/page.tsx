@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle, Loader2, XCircle, Hourglass, History } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, writeBatch, doc } from 'firebase/firestore';
@@ -183,9 +183,9 @@ export default function WithdrawalsPage() {
                 icon={CheckCircle}
             />
             <Tabs defaultValue="pending" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="pending">Pending</TabsTrigger>
-                    <TabsTrigger value="processed">Processed</TabsTrigger>
+                <TabsList>
+                    <TabsTrigger value="pending"><Hourglass className="mr-2 h-4 w-4" />Pending</TabsTrigger>
+                    <TabsTrigger value="processed"><History className="mr-2 h-4 w-4" />Processed</TabsTrigger>
                 </TabsList>
                 <TabsContent value="pending" className="mt-4">
                     <WithdrawalsTable

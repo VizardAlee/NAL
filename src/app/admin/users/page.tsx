@@ -152,7 +152,7 @@ export default function UsersPage() {
       </PageHeader>
       
       <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+        <TabsList>
           <TabsTrigger value="all">All Users</TabsTrigger>
           <TabsTrigger value="admin">Admins</TabsTrigger>
           <TabsTrigger value="investor">Investors</TabsTrigger>
