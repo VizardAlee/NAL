@@ -6,7 +6,7 @@ import { notFound, useParams } from 'next/navigation';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { doc, collection, query, where, DocumentData, Timestamp, orderBy, limit } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
 import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2 } from 'lucide-react';
@@ -138,6 +138,7 @@ const formatDate = (timestamp: Timestamp | Date | undefined) => {
 export default function UserDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const firestore = useFirestore();
+  const { user, loading: userLoading } = useUser();
   const [isAddFundOpen, setAddFundOpen] = useState(false);
   const [isZakatPending, startZakatTransition] = useTransition();
   const { toast } = useToast();
@@ -163,17 +164,17 @@ export default function UserDetailPage() {
   }, [firestore, userId]);
 
   const zakatSettingsRef = useMemo(() => {
-      if (!firestore) return null;
+      if (!firestore || !user) return null; // Wait for user to be authenticated
       return doc(firestore, 'platformSettings', 'zakat');
-  }, [firestore]);
+  }, [firestore, user]);
 
-  const { data: user, loading: userLoading } = useDoc<UserProfile>(userRef);
+  const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userRef);
   const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
   const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(allTransactionsQuery);
   const { data: firstDeposit, loading: firstDepositLoading } = useCollection<Transaction>(firstDepositQuery);
   const { data: zakatSettings, loading: zakatLoading } = useDoc<{nisab: number}>(zakatSettingsRef);
 
-  const isLoading = userLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading;
+  const isLoading = userLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading;
 
   const financialMetrics = useMemo(() => {
       if (!transactions) return { portfolioValue: 0, investibleBalance: 0 };
@@ -187,11 +188,12 @@ export default function UserDetailPage() {
   }, [transactions, fundBatches]);
 
   const { isZakatEligible, isZakatPayable, zakatAmount } = useMemo(() => {
+    if (!userProfile) return { isZakatEligible: false, isZakatPayable: false, zakatAmount: 0 };
     const nisab = zakatSettings?.nisab || 0;
     const isEligible = financialMetrics.portfolioValue >= nisab;
     const amount = financialMetrics.portfolioValue * 0.025;
 
-    const baseDate = user?.lastZakatPaymentDate?.toDate() || firstDeposit?.[0]?.createdAt?.toDate();
+    const baseDate = userProfile.lastZakatPaymentDate?.toDate() || firstDeposit?.[0]?.createdAt?.toDate();
     if (!baseDate) return { isZakatEligible: isEligible, isZakatPayable: false, zakatAmount: amount };
     
     const oneYearLater = new Date(baseDate);
@@ -200,7 +202,7 @@ export default function UserDetailPage() {
     const isPayable = new Date() >= oneYearLater && financialMetrics.investibleBalance >= amount;
     
     return { isZakatEligible: isEligible, isZakatPayable: isPayable, zakatAmount: amount };
-  }, [financialMetrics, zakatSettings, user, firstDeposit]);
+  }, [financialMetrics, zakatSettings, userProfile, firstDeposit]);
 
 
   const processedFundBatches = useMemo(() => {
@@ -232,15 +234,15 @@ export default function UserDetailPage() {
     return <UserDetailSkeleton />;
   }
 
-  if (!user) {
+  if (!userProfile) {
     return notFound();
   }
 
   return (
     <div>
         <PageHeader
-            title={user.name}
-            description={user.email}
+            title={userProfile.name}
+            description={userProfile.email}
             icon={User}
         >
             <ViewPageNav homePath="/admin/dashboard" />
@@ -250,20 +252,20 @@ export default function UserDetailPage() {
                 <Card>
                     <CardHeader className="flex flex-row items-center gap-4 space-y-0">
                          <Avatar className="h-16 w-16">
-                            <AvatarImage src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user.id}`} />
-                            <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
+                            <AvatarImage src={`https://api.dicebear.com/7.x/bottts/svg?seed=${userProfile.id}`} />
+                            <AvatarFallback>{userProfile.name?.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <div>
-                            <CardTitle className='font-headline text-2xl'>{user.name}</CardTitle>
+                            <CardTitle className='font-headline text-2xl'>{userProfile.name}</CardTitle>
                             <div className='flex gap-2 items-center mt-1'>
-                                <Badge variant="secondary">{user.role}</Badge>
+                                <Badge variant="secondary">{userProfile.role}</Badge>
                                 {isZakatEligible && <Badge variant="default">Zakat Eligible</Badge>}
                             </div>
                         </div>
                     </CardHeader>
                 </Card>
 
-                {user.role === 'Investor' && (
+                {userProfile.role === 'Investor' && (
                      <Card>
                         <CardHeader>
                             <div className="flex justify-between items-center">
@@ -280,7 +282,7 @@ export default function UserDetailPage() {
                     </Card>
                 )}
 
-                {user.role === 'Investor' && (
+                {userProfile.role === 'Investor' && (
                      <Card>
                         <CardHeader>
                              <div className="flex justify-between items-center">
@@ -311,7 +313,7 @@ export default function UserDetailPage() {
                     </Card>
                 )}
 
-                 {user.role === 'Investor' && isZakatEligible && (
+                 {userProfile.role === 'Investor' && isZakatEligible && (
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-sm font-medium">Zakat Payment</CardTitle>
@@ -324,7 +326,7 @@ export default function UserDetailPage() {
                             {firstDeposit?.[0]?.createdAt && (
                                 <ZakatCountdown
                                     firstDepositDate={firstDeposit[0].createdAt.toDate()}
-                                    lastZakatPaymentDate={user.lastZakatPaymentDate?.toDate()}
+                                    lastZakatPaymentDate={userProfile.lastZakatPaymentDate?.toDate()}
                                 />
                             )}
                             <Button className="w-full mt-2" disabled={!isZakatPayable || isZakatPending} onClick={handlePayZakat}>
@@ -336,7 +338,7 @@ export default function UserDetailPage() {
                 )}
             </div>
 
-            {user.role === 'Investor' && (
+            {userProfile.role === 'Investor' && (
                 <div className="lg:col-span-2 space-y-6">
                     <Card>
                         <CardHeader>
