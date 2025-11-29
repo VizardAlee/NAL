@@ -16,7 +16,7 @@ import { Deal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { WithdrawForm } from "./withdraw-form";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { reinvestAction } from "./actions";
 import { useToast } from "@/hooks/use-toast";
@@ -256,7 +256,7 @@ export default function InvestorDashboard() {
                 </div>
             ) : (
              <ChartContainer config={chartConfig} className="h-[250px] w-full">
-                <AreaChart
+                <LineChart
                     accessibilityLayer
                     data={chartData}
                     margin={{
@@ -278,31 +278,28 @@ export default function InvestorDashboard() {
                         tickMargin={8}
                     />
                     <Tooltip content={<ChartTooltipContent indicator="dot" />} />
-                    <Area
+                    <Line
                         dataKey="capital"
                         type="natural"
-                        fill="var(--color-capital)"
-                        fillOpacity={0.4}
                         stroke="var(--color-capital)"
-                        stackId="a"
+                        strokeWidth={2}
+                        dot={true}
                     />
-                    <Area
+                    <Line
                         dataKey="invested"
                         type="natural"
-                        fill="var(--color-invested)"
-                        fillOpacity={0.4}
                         stroke="var(--color-invested)"
-                        stackId="a"
+                        strokeWidth={2}
+                        dot={true}
                     />
-                     <Area
+                     <Line
                         dataKey="profit"
                         type="natural"
-                        fill="var(--color-profit)"
-                        fillOpacity={0.4}
                         stroke="var(--color-profit)"
-                        stackId="a"
+                        strokeWidth={2}
+                        dot={true}
                     />
-                </AreaChart>
+                </LineChart>
             </ChartContainer>
             )}
         </CardContent>
