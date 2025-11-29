@@ -89,6 +89,7 @@ export default function ClientLayout({
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem asChild><Link href="/client/settings">Settings</Link></DropdownMenuItem>
               <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2 cursor-pointer">
                 <LogOut className="h-4 w-4" />
                 <span>Logout</span>

@@ -95,6 +95,9 @@ export default function InvestorLayout({
               <DropdownMenuItem asChild>
                 <Link href="/investor/transactions">Transactions</Link>
               </DropdownMenuItem>
+               <DropdownMenuItem asChild>
+                <Link href="/investor/settings">Settings</Link>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2 cursor-pointer">
                 <LogOut className="h-4 w-4" />

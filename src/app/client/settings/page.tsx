@@ -9,7 +9,7 @@ export default function SettingsPage() {
     <div>
         <PageHeader
             title="Settings"
-            description="Manage your account and platform settings."
+            description="Manage your account settings."
             icon={Settings}
         />
         <Card>
