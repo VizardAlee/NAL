@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition, useEffect } from 'react';
 import { notFound, useParams } from 'next/navigation';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { useCollection } from '@/firebase/firestore/use-collection';
@@ -423,5 +423,3 @@ export default function UserDetailPage() {
     </div>
   );
 }
-
-    

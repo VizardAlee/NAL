@@ -133,7 +133,13 @@ service cloud.firestore {
         // In a production app, this would be locked down to a backend service/function.
         allow create: if request.auth != null;
     }
+
+    // Rules for 'platformSettings'
+    match /platformSettings/{settingId} {
+        // Any authenticated user can read settings.
+        allow read: if request.auth != null;
+        // Only admins can change settings.
+        allow write: if isAdmin();
+    }
   }
 }
-
-    
