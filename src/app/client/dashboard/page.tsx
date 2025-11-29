@@ -57,7 +57,12 @@ function DealCard({ deal }: { deal: Deal }) {
     const handleTerminationRequest = () => {
         if (!user || !user.displayName) return;
         startTransition(async () => {
-            const result = await requestTerminationAction(deal, user.uid, user.displayName!);
+            const result = await requestTerminationAction({
+              dealId: deal.id,
+              dealName: deal.dealName,
+              clientId: user.uid,
+              clientName: user.displayName!
+            });
             if (result.success) {
                 toast({
                     title: "Request Sent",
@@ -199,5 +204,3 @@ export default function ClientDashboard() {
         </div>
     );
 }
-
-    

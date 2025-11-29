@@ -5,7 +5,6 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { initializeFirebase } from '@/firebase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { Deal } from '@/lib/types';
 
 // --- Lodge Payment Action ---
 const lodgePaymentSchema = z.object({
@@ -105,17 +104,10 @@ type TerminationRequestState = {
 }
 
 export async function requestTerminationAction(
-    deal: Deal,
-    userId: string,
-    userName: string
+    input: z.infer<typeof terminationRequestSchema>
 ): Promise<TerminationRequestState> {
 
-    const validatedFields = terminationRequestSchema.safeParse({
-        dealId: deal.id,
-        dealName: deal.dealName,
-        clientId: userId,
-        clientName: userName,
-    });
+    const validatedFields = terminationRequestSchema.safeParse(input);
 
     if (!validatedFields.success) {
         return { success: false, message: "Invalid data for termination request." };
@@ -156,5 +148,3 @@ export async function requestTerminationAction(
         return { success: false, message: `Failed to submit request: ${message}` };
     }
 }
-
-    
