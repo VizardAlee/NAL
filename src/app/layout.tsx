@@ -6,19 +6,10 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { ThemeProvider } from '@/components/theme-provider';
-import { useCompanyLogo } from '@/hooks/use-company-logo';
 import React from 'react';
-
-// This component ensures the logo and favicon are loaded on initial render
-function CompanyLogoProvider({ children }: { children: React.ReactNode }) {
-  useCompanyLogo(); // This hook will handle setting the favicon
-  return <>{children}</>;
-}
-
 
 // Metadata cannot be exported from a client component,
 // so we define it here statically.
-// The favicon will be dynamically updated by the useCompanyLogo hook.
 // export const metadata: Metadata = {
 //   title: 'NAL',
 //   description: 'The future of financial management.',
@@ -47,9 +38,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <FirebaseClientProvider>
-            <CompanyLogoProvider>
-              {children}
-            </CompanyLogoProvider>
+            {children}
           </FirebaseClientProvider>
           <Toaster />
         </ThemeProvider>
@@ -57,4 +46,3 @@ export default function RootLayout({
     </html>
   );
 }
-

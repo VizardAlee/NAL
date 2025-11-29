@@ -20,7 +20,6 @@ import { useAuth } from "@/firebase/provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import React, { useEffect } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useCompanyLogo } from "@/hooks/use-company-logo";
 
 function ClientSkeleton() {
     return (
@@ -48,7 +47,6 @@ export default function ClientLayout({
   const { user, loading } = useUser();
   const auth = useAuth();
   const router = useRouter();
-  const { logoUrl } = useCompanyLogo();
 
   const handleLogout = async () => {
     if (auth) {
@@ -74,7 +72,7 @@ export default function ClientLayout({
     <div className="flex min-h-screen w-full flex-col">
         <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
             <Link href="/client/dashboard" className="flex items-center gap-2 font-bold font-headline text-primary">
-              <Logo imageUrl={logoUrl} className="h-7 w-7" />
+              <Logo imageUrl='/logo.png' className="h-7 w-7" />
               <span>NAL</span>
             </Link>
             <div className="flex-1" />
