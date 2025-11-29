@@ -40,6 +40,8 @@ type FundBatch = DocumentData & {
   amount: number;
   remainingAmount: number;
   createdAt: Timestamp;
+  tenureValue: number;
+  tenureUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
 };
 
 type Transaction = DocumentData & {
@@ -48,6 +50,21 @@ type Transaction = DocumentData & {
   amount: number;
   createdAt: Timestamp;
 };
+
+const DURATION_IN_DAYS = {
+    Days: 1,
+    Weeks: 7,
+    Fortnights: 14,
+    Months: 30.4375, // Average days in month
+    Years: 365.25,
+};
+
+function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): number {
+    return value * (DURATION_IN_DAYS[unit] || 0);
+}
+
+const EIGHTEEN_MONTHS_IN_DAYS = 18 * DURATION_IN_DAYS.Months;
+
 
 function UserDetailSkeleton() {
     return (
@@ -115,6 +132,18 @@ export default function UserDetailPage() {
       if (!fundBatches) return 0;
       return fundBatches.reduce((sum, batch) => sum + batch.remainingAmount, 0);
   }, [fundBatches]);
+
+  const processedFundBatches = useMemo(() => {
+    if (!fundBatches) return [];
+    return fundBatches.map(batch => {
+        const batchTenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
+        const type = batchTenureInDays < EIGHTEEN_MONTHS_IN_DAYS ? 'Short-Term' : 'Long-Term';
+        return {
+            ...batch,
+            type,
+        }
+    });
+  }, [fundBatches])
 
   if (isLoading) {
     return <UserDetailSkeleton />;
@@ -198,21 +227,25 @@ export default function UserDetailPage() {
                                 <TableHeader>
                                 <TableRow>
                                     <TableHead>Date</TableHead>
+                                    <TableHead>Type</TableHead>
                                     <TableHead>Total Amount</TableHead>
                                     <TableHead className="text-right">Investible Balance</TableHead>
                                 </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                {fundBatches?.map(batch => (
+                                {processedFundBatches?.map(batch => (
                                     <TableRow key={batch.id}>
                                         <TableCell>{formatDate(batch.createdAt)}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
+                                        </TableCell>
                                         <TableCell className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</TableCell>
                                         <TableCell className="text-right text-green-500 font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
                                     </TableRow>
                                 ))}
-                                {!fundBatches?.length && (
+                                {!processedFundBatches?.length && (
                                      <TableRow>
-                                        <TableCell colSpan={3} className="h-24 text-center">
+                                        <TableCell colSpan={4} className="h-24 text-center">
                                             No fund batches found.
                                         </TableCell>
                                     </TableRow>
