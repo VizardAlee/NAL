@@ -82,20 +82,20 @@ export default function TransactionsPage() {
             <TableBody>
               {isLoading && Array.from({ length: ITEMS_PER_PAGE }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
+                  <TableCell data-label="Date"><Skeleton className="h-5 w-32" /></TableCell>
+                  <TableCell data-label="Type"><Skeleton className="h-5 w-24" /></TableCell>
+                  <TableCell data-label="Details"><Skeleton className="h-5 w-40" /></TableCell>
+                  <TableCell data-label="Amount" className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
                 </TableRow>
               ))}
               {!isLoading && paginatedTransactions.map((tx) => (
                 <TableRow key={tx.id}>
-                  <TableCell>{formatDate(tx.createdAt)}</TableCell>
-                  <TableCell>
+                  <TableCell data-label="Date">{formatDate(tx.createdAt)}</TableCell>
+                  <TableCell data-label="Type">
                     <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
                   </TableCell>
-                  <TableCell>{tx.dealName || 'N/A'}</TableCell>
-                  <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
+                  <TableCell data-label="Details">{tx.dealName || 'N/A'}</TableCell>
+                  <TableCell data-label="Amount" className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
                     {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
                   </TableCell>
                 </TableRow>

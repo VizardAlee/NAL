@@ -254,12 +254,12 @@ export default function DealDetailPage() {
                                 <TableBody>
                                     {eligibleFundBatches.map(batch => (
                                         <TableRow key={batch.id}>
-                                            <TableCell>{batch.sourceName}</TableCell>
-                                            <TableCell>
+                                            <TableCell data-label="Source">{batch.sourceName}</TableCell>
+                                            <TableCell data-label="Type">
                                                 <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
                                             </TableCell>
-                                            <TableCell>{format(batch.createdAt.toDate(), 'PPP')}</TableCell>
-                                            <TableCell className="text-right font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
+                                            <TableCell data-label="Date Added">{format(batch.createdAt.toDate(), 'PPP')}</TableCell>
+                                            <TableCell data-label="Available Capital" className="text-right font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
                                         </TableRow>
                                     ))}
                                     {eligibleFundBatches.length === 0 && <TableRow><TableCell colSpan={4} className="h-24 text-center">No eligible fund batches found.</TableCell></TableRow>}
@@ -282,8 +282,8 @@ export default function DealDetailPage() {
                             <TableBody>
                                 {investorsInDeal.map(inv => (
                                     <TableRow key={inv.id}>
-                                        <TableCell>{inv.investorName}</TableCell>
-                                        <TableCell className="text-right font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(inv.amount)}</TableCell>
+                                        <TableCell data-label="Name">{inv.investorName}</TableCell>
+                                        <TableCell data-label="Amount Invested" className="text-right font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(inv.amount)}</TableCell>
                                     </TableRow>
                                 ))}
                                 {investorsInDeal.length === 0 && <TableRow><TableCell colSpan={2} className="h-24 text-center">No investors yet.</TableCell></TableRow>}

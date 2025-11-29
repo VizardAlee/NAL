@@ -341,18 +341,18 @@ export default function InvestorDashboard() {
                 <TableBody>
                 {isLoading && Array.from({length: 1}).map((_, i) => (
                     <TableRow key={i}>
-                        <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                        <TableCell data-label="Deal Name"><Skeleton className="h-5 w-32" /></TableCell>
+                        <TableCell data-label="Principal"><Skeleton className="h-5 w-24" /></TableCell>
+                        <TableCell data-label="Interest Rate"><Skeleton className="h-5 w-20" /></TableCell>
+                        <TableCell data-label="Status"><Skeleton className="h-5 w-20" /></TableCell>
                     </TableRow>
                 ))}
                 {!isLoading && deals?.map((deal) => (
                     <TableRow key={deal.id}>
-                        <TableCell className="font-medium">{deal.dealName}</TableCell>
-                        <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
-                        <TableCell>{deal.interestRate}%</TableCell>
-                        <TableCell><Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>{deal.status}</Badge></TableCell>
+                        <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
+                        <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
+                        <TableCell data-label="Interest Rate">{deal.interestRate}%</TableCell>
+                        <TableCell data-label="Status"><Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>{deal.status}</Badge></TableCell>
                     </TableRow>
                 ))}
                 {!isLoading && deals?.length === 0 && (
@@ -390,20 +390,20 @@ export default function InvestorDashboard() {
                 <TableBody>
                 {isLoading && Array.from({length: 3}).map((_, i) => (
                     <TableRow key={i}>
-                        <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
+                        <TableCell data-label="Date"><Skeleton className="h-5 w-24" /></TableCell>
+                        <TableCell data-label="Type"><Skeleton className="h-5 w-32" /></TableCell>
+                        <TableCell data-label="Details"><Skeleton className="h-5 w-28" /></TableCell>
+                        <TableCell data-label="Amount" className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
                     </TableRow>
                 ))}
                 {!isLoading && recentTransactions?.map((tx) => (
                     <TableRow key={tx.id}>
-                    <TableCell>{formatDate(tx.createdAt)}</TableCell>
-                    <TableCell>
+                    <TableCell data-label="Date">{formatDate(tx.createdAt)}</TableCell>
+                    <TableCell data-label="Type">
                         <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
                     </TableCell>
-                    <TableCell>{tx.dealName || 'N/A'}</TableCell>
-                    <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
+                    <TableCell data-label="Details">{tx.dealName || 'N/A'}</TableCell>
+                    <TableCell data-label="Amount" className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
                         {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
                     </TableCell>
                     </TableRow>

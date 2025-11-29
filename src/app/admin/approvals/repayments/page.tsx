@@ -91,25 +91,25 @@ function RepaymentsTable({
                         {isLoading &&
                             Array.from({ length: 3 }).map((_, i) => (
                                 <TableRow key={i}>
-                                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                                    <TableCell className="text-right">
+                                    <TableCell data-label="Client"><Skeleton className="h-5 w-24" /></TableCell>
+                                    <TableCell data-label="Deal"><Skeleton className="h-5 w-32" /></TableCell>
+                                    <TableCell data-label="Amount"><Skeleton className="h-5 w-20" /></TableCell>
+                                    <TableCell data-label="Due Date"><Skeleton className="h-5 w-28" /></TableCell>
+                                    <TableCell data-label="Date Lodged"><Skeleton className="h-5 w-28" /></TableCell>
+                                    <TableCell data-label="Action" className="text-right">
                                         {showApproveButton ? <Skeleton className="h-8 w-24 ml-auto" /> : <Skeleton className="h-5 w-20" />}
                                     </TableCell>
                                 </TableRow>
                             ))}
                         {!isLoading && repayments.map((repayment) => (
                             <TableRow key={repayment.id}>
-                                <TableCell className="font-medium">{repayment.clientName}</TableCell>
-                                <TableCell>{repayment.dealName}</TableCell>
-                                <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(repayment.amount)}</TableCell>
-                                <TableCell>{format(repayment.dueDate.toDate(), 'PPP')}</TableCell>
-                                <TableCell>{format(repayment.lodgedAt.toDate(), 'PPP')}</TableCell>
+                                <TableCell data-label="Client" className="font-medium">{repayment.clientName}</TableCell>
+                                <TableCell data-label="Deal">{repayment.dealName}</TableCell>
+                                <TableCell data-label="Amount">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(repayment.amount)}</TableCell>
+                                <TableCell data-label="Due Date">{format(repayment.dueDate.toDate(), 'PPP')}</TableCell>
+                                <TableCell data-label="Date Lodged">{format(repayment.lodgedAt.toDate(), 'PPP')}</TableCell>
                                 {showApproveButton ? (
-                                    <TableCell className="text-right">
+                                    <TableCell data-label="Action" className="text-right">
                                         <Button
                                             size="sm"
                                             onClick={() => handleApproveClick(repayment)}
@@ -124,7 +124,7 @@ function RepaymentsTable({
                                         </Button>
                                     </TableCell>
                                 ) : (
-                                    <TableCell>
+                                    <TableCell data-label="Status">
                                         <Badge variant={repayment.status === 'Approved' ? 'default' : 'destructive'}>{repayment.status}</Badge>
                                     </TableCell>
                                 )}

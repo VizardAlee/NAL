@@ -213,12 +213,12 @@ export default function ClientDashboard() {
                                     <TableBody>
                                         {olderDeals.map(deal => (
                                             <TableRow key={deal.id}>
-                                                <TableCell className="font-medium">{deal.dealName}</TableCell>
-                                                <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
-                                                <TableCell>
+                                                <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
+                                                <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
+                                                <TableCell data-label="Status">
                                                     <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
                                                 </TableCell>
-                                                <TableCell className="text-right">
+                                                <TableCell data-label="Action" className="text-right">
                                                     <Button asChild variant="outline" size="sm">
                                                         <Link href={`/client/deals/${deal.id}`}>
                                                             View Details <ArrowRight className="ml-2 h-4 w-4" />

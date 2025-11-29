@@ -383,16 +383,16 @@ export default function PlatformFundsPage() {
                         <TableBody>
                         {isLoading && Array.from({length: 3}).map((_, i) => (
                            <TableRow key={i}>
-                                <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                                <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                                <TableCell><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
+                                <TableCell data-label="Date Created"><Skeleton className="h-5 w-32" /></TableCell>
+                                <TableCell data-label="Original Amount"><Skeleton className="h-5 w-28" /></TableCell>
+                                <TableCell data-label="Investible Balance"><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
                             </TableRow>
                         ))}
                         {!isLoading && fundBatches?.map(batch => (
                             <TableRow key={batch.id}>
-                                <TableCell>{formatDate(batch.createdAt)}</TableCell>
-                                <TableCell className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</TableCell>
-                                <TableCell className="text-right text-primary font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
+                                <TableCell data-label="Date Created">{formatDate(batch.createdAt)}</TableCell>
+                                <TableCell data-label="Original Amount" className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</TableCell>
+                                <TableCell data-label="Investible Balance" className="text-right text-primary font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
                             </TableRow>
                         ))}
                         {!isLoading && !fundBatches?.length && (
@@ -458,18 +458,18 @@ export default function PlatformFundsPage() {
                         <TableBody>
                         {isLoading && Array.from({length: 4}).map((_, i) => (
                            <TableRow key={i}>
-                                <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                                <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                                <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-                                <TableCell><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
+                                <TableCell data-label="Date"><Skeleton className="h-5 w-32" /></TableCell>
+                                <TableCell data-label="Type"><Skeleton className="h-5 w-28" /></TableCell>
+                                <TableCell data-label="Description"><Skeleton className="h-5 w-40" /></TableCell>
+                                <TableCell data-label="Amount"><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
                             </TableRow>
                         ))}
                         {!isLoading && adminTransactions?.map(tx => (
                             <TableRow key={tx.id}>
-                                <TableCell>{formatDate(tx.createdAt)}</TableCell>
-                                <TableCell><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell>
-                                <TableCell>{tx.description}</TableCell>
-                                <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell>
+                                <TableCell data-label="Date">{formatDate(tx.createdAt)}</TableCell>
+                                <TableCell data-label="Type"><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell>
+                                <TableCell data-label="Description">{tx.description}</TableCell>
+                                <TableCell data-label="Amount" className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell>
                             </TableRow>
                         ))}
                         {!isLoading && !adminTransactions?.length && (
@@ -487,5 +487,3 @@ export default function PlatformFundsPage() {
         </div>
     );
 }
-
-    

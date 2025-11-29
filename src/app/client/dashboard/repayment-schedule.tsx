@@ -230,10 +230,10 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                 <TableBody>
                 {paginatedSchedule.map(item => (
                     <TableRow key={`${item.installment}-${item.status}`} className={item.isActionable ? 'bg-muted/50' : ''}>
-                        <TableCell>{format(item.dueDate, 'PPP')}</TableCell>
-                        <TableCell className="font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.payment)}</TableCell>
-                        <TableCell><StatusBadge status={item.status} /></TableCell>
-                        <TableCell className="text-right">
+                        <TableCell data-label="Due">{format(item.dueDate, 'PPP')}</TableCell>
+                        <TableCell data-label="Total" className="font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.payment)}</TableCell>
+                        <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
+                        <TableCell data-label="Action" className="text-right">
                         {(item.isActionable && user) && (
                             <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
                         )}
@@ -265,5 +265,3 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
     </div>
   );
 }
-
-    

@@ -67,19 +67,19 @@ function ReinvestmentsTable({
                         {isLoading &&
                             Array.from({ length: 3 }).map((_, i) => (
                                 <TableRow key={i}>
-                                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                                    <TableCell className="text-right"><Skeleton className="h-8 w-40 ml-auto" /></TableCell>
+                                    <TableCell data-label="Investor"><Skeleton className="h-5 w-24" /></TableCell>
+                                    <TableCell data-label="Amount"><Skeleton className="h-5 w-20" /></TableCell>
+                                    <TableCell data-label="Date Requested"><Skeleton className="h-5 w-28" /></TableCell>
+                                    <TableCell data-label="Actions" className="text-right"><Skeleton className="h-8 w-40 ml-auto" /></TableCell>
                                 </TableRow>
                             ))}
                         {!isLoading && requests.map((request) => (
                             <TableRow key={request.id}>
-                                <TableCell className="font-medium">{request.investorName}</TableCell>
-                                <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.amount)}</TableCell>
-                                <TableCell>{format(request.requestedAt.toDate(), 'PPP')}</TableCell>
+                                <TableCell data-label="Investor" className="font-medium">{request.investorName}</TableCell>
+                                <TableCell data-label="Amount">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.amount)}</TableCell>
+                                <TableCell data-label="Date Requested">{format(request.requestedAt.toDate(), 'PPP')}</TableCell>
                                 {showActionButtons ? (
-                                    <TableCell className="text-right space-x-2">
+                                    <TableCell data-label="Actions" className="text-right space-x-2">
                                         <Button
                                             size="sm"
                                             variant="outline"
@@ -99,7 +99,7 @@ function ReinvestmentsTable({
                                         </Button>
                                     </TableCell>
                                 ) : (
-                                    <TableCell>
+                                    <TableCell data-label="Status">
                                         <Badge variant={request.status === 'Approved' ? 'default' : 'destructive'}>{request.status}</Badge>
                                     </TableCell>
                                 )}

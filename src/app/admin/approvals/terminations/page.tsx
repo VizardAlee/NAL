@@ -72,19 +72,19 @@ function TerminationsTable({
                         {isLoading &&
                             Array.from({ length: 3 }).map((_, i) => (
                                 <TableRow key={i}>
-                                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                                    <TableCell className="text-right"><Skeleton className="h-8 w-40 ml-auto" /></TableCell>
+                                    <TableCell data-label="Client"><Skeleton className="h-5 w-24" /></TableCell>
+                                    <TableCell data-label="Deal"><Skeleton className="h-5 w-32" /></TableCell>
+                                    <TableCell data-label="Date Requested"><Skeleton className="h-5 w-28" /></TableCell>
+                                    <TableCell data-label="Actions" className="text-right"><Skeleton className="h-8 w-40 ml-auto" /></TableCell>
                                 </TableRow>
                             ))}
                         {!isLoading && requests.map((request) => (
                             <TableRow key={request.id}>
-                                <TableCell className="font-medium">{request.clientName}</TableCell>
-                                <TableCell>{request.dealName}</TableCell>
-                                <TableCell>{format(request.requestedAt.toDate(), 'PPP')}</TableCell>
+                                <TableCell data-label="Client" className="font-medium">{request.clientName}</TableCell>
+                                <TableCell data-label="Deal">{request.dealName}</TableCell>
+                                <TableCell data-label="Date Requested">{format(request.requestedAt.toDate(), 'PPP')}</TableCell>
                                 {showActionButtons ? (
-                                    <TableCell className="text-right space-x-2">
+                                    <TableCell data-label="Actions" className="text-right space-x-2">
                                         <Button
                                             size="sm"
                                             variant="outline"
@@ -104,7 +104,7 @@ function TerminationsTable({
                                         </Button>
                                     </TableCell>
                                 ) : (
-                                    <TableCell>
+                                    <TableCell data-label="Status">
                                         <Badge variant={request.status === 'Approved' ? 'default' : 'destructive'}>{request.status}</Badge>
                                     </TableCell>
                                 )}

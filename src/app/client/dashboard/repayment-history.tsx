@@ -65,14 +65,14 @@ export function RepaymentHistory({ repayments, loading }: RepaymentHistoryProps)
                 <TableBody>
                 {sortedRepayments.map((repayment) => (
                     <TableRow key={repayment.id}>
-                    <TableCell>{format(repayment.lodgedAt.toDate(), 'PPP')}</TableCell>
-                    <TableCell className="font-medium">
+                    <TableCell data-label="Date Lodged">{format(repayment.lodgedAt.toDate(), 'PPP')}</TableCell>
+                    <TableCell data-label="Amount" className="font-medium">
                         {new Intl.NumberFormat('en-NG', {
                         style: 'currency',
                         currency: 'NGN',
                         }).format(repayment.amount)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Status">
                         <StatusBadge status={repayment.status as any} />
                     </TableCell>
                     </TableRow>
