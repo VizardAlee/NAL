@@ -5,12 +5,14 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { initializeFirebase } from '@/firebase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { Deal } from '@/lib/types';
 
+// --- Lodge Payment Action ---
 const lodgePaymentSchema = z.object({
   dealId: z.string().min(1, "Deal ID is required."),
   amount: z.coerce.number().positive("Amount must be a positive number."),
   userId: z.string().min(1, "User ID is required."),
-  dueDate: z.string().min(1, "Due date is required."), // Add dueDate to schema
+  dueDate: z.string().min(1, "Due date is required."),
 });
 
 type RepaymentData = {
@@ -19,26 +21,20 @@ type RepaymentData = {
     clientId: string;
     amount: number;
     status: 'Pending';
-    lodgedAt: {
-        _seconds: number;
-        _nanoseconds: number;
-    };
-    dueDate: {
-        _seconds: number;
-        _nanoseconds: number;
-    };
+    lodgedAt: { _seconds: number; _nanoseconds: number; };
+    dueDate: { _seconds: number; _nanoseconds: number; };
 }
 
-type State = {
+type LodgePaymentState = {
   success: boolean;
   message: string;
   repayment?: RepaymentData | null;
 };
 
 export async function lodgePaymentAction(
-  prevState: State,
+  prevState: LodgePaymentState,
   formData: FormData
-): Promise<State> {
+): Promise<LodgePaymentState> {
 
   const validatedFields = lodgePaymentSchema.safeParse({
     dealId: formData.get('dealId'),
@@ -68,7 +64,7 @@ export async function lodgePaymentAction(
       amount,
       status: 'Pending',
       lodgedAt: lodgedAt,
-      dueDate: dueDateTimestamp, // Save the due date
+      dueDate: dueDateTimestamp,
     });
 
     revalidatePath('/client/dashboard');
@@ -79,14 +75,8 @@ export async function lodgePaymentAction(
         clientId: userId,
         amount,
         status: 'Pending' as const,
-        lodgedAt: {
-            _seconds: lodgedAt.seconds,
-            _nanoseconds: lodgedAt.nanoseconds,
-        },
-        dueDate: {
-             _seconds: dueDateTimestamp.seconds,
-            _nanoseconds: dueDateTimestamp.nanoseconds,
-        }
+        lodgedAt: { _seconds: lodgedAt.seconds, _nanoseconds: lodgedAt.nanoseconds },
+        dueDate: { _seconds: dueDateTimestamp.seconds, _nanoseconds: dueDateTimestamp.nanoseconds }
     };
 
     return {
@@ -97,10 +87,74 @@ export async function lodgePaymentAction(
   } catch (error) {
     console.error('LODGE PAYMENT ERROR:', error);
     const message = error instanceof Error ? error.message : 'An unknown error occurred.';
-    return {
-      success: false,
-      message: `Failed to lodge payment: ${message}`,
-      repayment: null,
-    };
+    return { success: false, message: `Failed to lodge payment: ${message}`, repayment: null };
   }
 }
+
+// --- Termination Request Action ---
+const terminationRequestSchema = z.object({
+  dealId: z.string().min(1),
+  dealName: z.string().min(1),
+  clientId: z.string().min(1),
+  clientName: z.string().min(1),
+});
+
+type TerminationRequestState = {
+  success: boolean;
+  message: string;
+}
+
+export async function requestTerminationAction(
+    deal: Deal,
+    userId: string,
+    userName: string
+): Promise<TerminationRequestState> {
+
+    const validatedFields = terminationRequestSchema.safeParse({
+        dealId: deal.id,
+        dealName: deal.dealName,
+        clientId: userId,
+        clientName: userName,
+    });
+
+    if (!validatedFields.success) {
+        return { success: false, message: "Invalid data for termination request." };
+    }
+
+    const { dealId, dealName, clientId, clientName } = validatedFields.data;
+    
+    try {
+        const { firestore } = initializeFirebase();
+
+        // Check if a request already exists
+        const existingReqQuery = await firestore.collection('terminationRequests')
+            .where('dealId', '==', dealId)
+            .where('status', '==', 'Pending')
+            .limit(1)
+            .get();
+        
+        if (!existingReqQuery.empty) {
+            return { success: false, message: "A termination request for this deal is already pending." };
+        }
+
+        await firestore.collection('terminationRequests').add({
+            dealId,
+            dealName,
+            clientId,
+            clientName,
+            status: 'Pending',
+            requestedAt: Timestamp.now(),
+        });
+
+        revalidatePath('/client/dashboard');
+
+        return { success: true, message: "Your request to terminate the deal has been sent to an administrator for review." };
+
+    } catch (error) {
+        console.error("TERMINATION REQUEST ERROR:", error);
+        const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+        return { success: false, message: `Failed to submit request: ${message}` };
+    }
+}
+
+    

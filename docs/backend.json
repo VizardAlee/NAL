@@ -159,7 +159,7 @@
         "type": {
           "type": "string",
           "description": "The type of transaction.",
-          "enum": ["Deposit", "Withdrawal", "Investment", "Repayment", "ProfitDistribution"]
+          "enum": ["Deposit", "Withdrawal", "Investment", "Repayment", "ProfitDistribution", "PlatformEarning"]
         },
         "amount": {
           "type": "number",
@@ -201,7 +201,7 @@
         "status": {
           "type": "string",
           "description": "The status of the repayment.",
-          "enum": ["Pending", "Approved", "Rejected"]
+          "enum": ["Pending", "Approved", "Rejected", "Cancelled"]
         },
         "lodgedAt": {
           "type": "string",
@@ -285,6 +285,45 @@
         }
       },
       "required": ["investorId", "investorName", "amount", "status", "requestedAt"]
+    },
+    "terminationRequest": {
+      "title": "Termination Request",
+      "description": "A request from a client to terminate a deal early.",
+      "type": "object",
+      "properties": {
+        "dealId": {
+          "type": "string",
+          "description": "The ID of the deal being requested for termination."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "The ID of the client making the request."
+        },
+        "clientName": {
+          "type": "string",
+          "description": "The name of the client (denormalized)."
+        },
+        "dealName": {
+          "type": "string",
+          "description": "The name of the deal (denormalized)."
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the termination request.",
+          "enum": ["Pending", "Approved", "Rejected"]
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the client made the request."
+        },
+        "processedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when an admin processed the request."
+        }
+      },
+      "required": ["dealId", "clientId", "clientName", "dealName", "status", "requestedAt"]
     }
   },
   "auth": {
@@ -338,6 +377,14 @@
         "$ref": "#/entities/reinvestmentRequest"
       },
       "description": "Tracks investor requests to reinvest their profits."
+    },
+    "/terminationRequests/{terminationRequestId}": {
+      "schema": {
+        "$ref": "#/entities/terminationRequest"
+      },
+      "description": "Tracks client requests to terminate a deal."
     }
   }
 }
+
+    

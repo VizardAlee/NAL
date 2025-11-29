@@ -4,24 +4,26 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Naira } from "lucide-react";
-import { useMemo } from 'react';
+import { FileText, ShieldAlert, Loader2 } from "lucide-react";
+import { useMemo, useTransition } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Deal } from '@/lib/types';
-import Link from "next/link";
 import { RepaymentSchedule } from "./repayment-schedule";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RepaymentHistory } from "./repayment-history";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { requestTerminationAction } from "./actions";
 
 
 export type Repayment = DocumentData & {
   id: string;
   dealId: string;
   amount: number;
-  status: 'Pending' | 'Approved' | 'Rejected';
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
   lodgedAt: Timestamp;
   dueDate: Timestamp;
 };
@@ -30,8 +32,9 @@ export type Repayment = DocumentData & {
 function DealCard({ deal }: { deal: Deal }) {
     const firestore = useFirestore();
     const { user } = useUser();
+    const { toast } = useToast();
+    const [isPendingTermination, startTransition] = useTransition();
 
-    // Fetch repayments specifically for this deal
     const repaymentsQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
         return query(collection(firestore, 'repayments'), where('clientId', '==', user.uid), where('dealId', '==', deal.id));
@@ -50,6 +53,25 @@ function DealCard({ deal }: { deal: Deal }) {
         if (!repayments) return [];
         return repayments.filter(r => r.status === 'Pending' || r.status === 'Approved');
     }, [repayments]);
+
+    const handleTerminationRequest = () => {
+        if (!user || !user.displayName) return;
+        startTransition(async () => {
+            const result = await requestTerminationAction(deal, user.uid, user.displayName!);
+            if (result.success) {
+                toast({
+                    title: "Request Sent",
+                    description: result.message
+                });
+            } else {
+                toast({
+                    variant: "destructive",
+                    title: "Request Failed",
+                    description: result.message
+                });
+            }
+        });
+    }
 
     return (
         <Card className="flex flex-col">
@@ -85,6 +107,12 @@ function DealCard({ deal }: { deal: Deal }) {
                         <p className="font-medium">{deal.repaymentFrequency}</p>
                     </div>
                 </div>
+                {deal.status === 'Active' && (
+                    <Button variant="destructive" size="sm" onClick={handleTerminationRequest} disabled={isPendingTermination}>
+                        {isPendingTermination ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldAlert className="mr-2 h-4 w-4" />}
+                        Request Termination
+                    </Button>
+                )}
             </CardContent>
             <div className="mt-auto flex-grow">
                  <Tabs defaultValue="schedule" className="w-full">
@@ -171,3 +199,5 @@ export default function ClientDashboard() {
         </div>
     );
 }
+
+    

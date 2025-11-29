@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { HandCoins, CheckCircle, Hourglass, Loader2 } from 'lucide-react';
+import { HandCoins, CheckCircle, Hourglass, Loader2, Ban } from 'lucide-react';
 import { generateAmortizationSchedule, ScheduleInstallment } from '@/lib/amortization';
 import { Deal } from '@/lib/types';
 import { Repayment } from './page';
@@ -34,7 +34,7 @@ import { Timestamp } from 'firebase/firestore';
 
 const ITEMS_PER_PAGE = 5;
 
-type RepaymentStatus = 'Paid' | 'Pending' | 'Due' | 'Upcoming';
+type RepaymentStatus = 'Paid' | 'Pending' | 'Due' | 'Upcoming' | 'Cancelled';
 
 interface ScheduledPayment extends ScheduleInstallment {
   status: RepaymentStatus;
@@ -96,7 +96,6 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
     setAllRepayments(prev => {
         if (!prev) return [newRepayment];
 
-        // Find and replace by dealId + dueDate (most reliable)
         const index = prev.findIndex(r =>
             r.dealId === newRepayment.dealId &&
             r.dueDate && newRepayment.dueDate &&
@@ -109,7 +108,6 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
             return updated;
         }
 
-        // If not found, add it. This handles the initial load case.
         return [...prev, newRepayment];
     });
   }, []);
@@ -128,7 +126,9 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
 
       let status: RepaymentStatus = 'Upcoming';
       if (matchingRepayment) {
-        status = matchingRepayment.status === 'Approved' ? 'Paid' : 'Pending';
+        status = matchingRepayment.status === 'Approved' ? 'Paid' 
+                : matchingRepayment.status === 'Cancelled' ? 'Cancelled'
+                : 'Pending';
       } else if (installment.dueDate < today) {
         status = 'Due';
       }
@@ -141,7 +141,6 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
       return enhancedSchedule.filter(p => p.status === 'Due' || p.status === 'Upcoming');
   }, [enhancedSchedule]);
 
-  // Find the next payable installment and create the final list
   const finalSchedule = useMemo(() => {
     const nextPayableInstallmentIndex = upcomingSchedule.findIndex(
       p => p.status === 'Due' || p.status === 'Upcoming'
@@ -149,13 +148,10 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
     
     return upcomingSchedule.map((installment, index) => ({
       ...installment,
-      // Only the very next non-paid/non-pending installment is actionable.
       isActionable: index === nextPayableInstallmentIndex,
     })).sort((a, b) => {
-        // Custom sort: bring the single actionable item to the top
         if (a.isActionable && !b.isActionable) return -1;
         if (!a.isActionable && b.isActionable) return 1;
-        // Then sort by installment number for all other items
         return a.installment - b.installment;
     });
   }, [upcomingSchedule]);
@@ -173,12 +169,14 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
       Pending: 'outline',
       Upcoming: 'secondary',
       Due: 'destructive',
+      Cancelled: 'secondary'
     };
     const IconMap: { [key in RepaymentStatus]: React.ElementType } = {
         Paid: CheckCircle,
         Pending: Hourglass,
         Upcoming: Hourglass,
         Due: HandCoins,
+        Cancelled: Ban
     }
     const Icon = IconMap[status];
 
@@ -195,8 +193,8 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
 
   if (deal.status !== 'Active') {
       return (
-          <div className="p-6 text-sm text-muted-foreground">
-              Repayment schedule will be available once the deal is active.
+          <div className="p-6 text-sm text-muted-foreground text-center">
+              {deal.status === 'Terminated' ? 'This deal has been terminated.' : 'Repayment schedule will be available once the deal is active.'}
           </div>
       )
   }
@@ -267,3 +265,5 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
     </div>
   );
 }
+
+    

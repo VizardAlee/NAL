@@ -14,19 +14,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
-import { Deal } from '@/lib/types';
+import { Deal, Investment } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { ViewPageNav } from '@/components/view-page-nav';
-
-type Investment = DocumentData & {
-  id: string;
-  investorId: string;
-  dealId: string;
-  amount: number;
-  createdAt: Timestamp;
-};
 
 type User = {
     id: string;
@@ -301,3 +293,5 @@ export default function DealDetailPage() {
     </div>
   );
 }
+
+    

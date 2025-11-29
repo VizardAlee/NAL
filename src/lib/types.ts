@@ -15,3 +15,13 @@ export type Deal = DocumentData & {
   status: 'Pending' | 'Active' | 'Completed' | 'Terminated';
   createdAt: Timestamp; // Firestore Timestamp object
 };
+
+export type Investment = DocumentData & {
+  id: string;
+  investorId: string;
+  dealId: string;
+  amount: number;
+  createdAt: Timestamp;
+};
+
+    

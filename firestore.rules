@@ -106,5 +106,17 @@ service cloud.firestore {
       // Investors can read their own requests
       allow read: if isInvestor() && resource.data.investorId == request.auth.uid;
     }
+    
+    // Rules for 'terminationRequests'
+    match /terminationRequests/{requestId} {
+      // Admins can read and update any request
+      allow get, update, list: if isAdmin();
+      
+      // Clients can create their own requests and read them
+      allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
+      allow read: if isClient() && resource.data.clientId == request.auth.uid;
+    }
   }
 }
+
+    
