@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2 } from "lucide-react";
+import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote } from "lucide-react";
 import { useMemo, useState, useTransition } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
@@ -37,6 +37,14 @@ type Investment = DocumentData & {
   dealId: string;
   amount: number;
 };
+
+type FundBatch = DocumentData & {
+    sourceId: string;
+    amount: number;
+    remainingAmount: number;
+    createdAt: Timestamp;
+};
+
 
 const chartConfig = {
   capital: { label: "Capital", color: "hsl(var(--chart-1))" },
@@ -95,7 +103,13 @@ export default function InvestorDashboard() {
       return query(collection(firestore, 'investments'), where('investorId', '==', user.uid));
   }, [firestore, user]);
 
+  const fundBatchesQuery = useMemo(() => {
+    if (!firestore || !user?.uid) return null;
+    return query(collection(firestore, 'fundBatches'), where('sourceId', '==', user.uid));
+  }, [firestore, user]);
+
   const { data: investments, loading: investmentsLoading } = useCollection<Investment>(investmentsQuery);
+  const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
 
   const investedDealIds = useMemo(() => {
       return investments?.map(inv => inv.dealId) || [];
@@ -109,11 +123,11 @@ export default function InvestorDashboard() {
   const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
   const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
 
-  const isLoading = userLoading || transactionsLoading || investmentsLoading || dealsLoading;
+  const isLoading = userLoading || transactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading;
 
   const financialMetrics = useMemo(() => {
     if (!transactions) {
-      return { totalCapital: 0, totalProfit: 0, totalWithdrawn: 0, portfolioValue: 0, withdrawableBalance: 0, simpleROI: 0 };
+      return { totalCapital: 0, totalProfit: 0, totalWithdrawn: 0, portfolioValue: 0, withdrawableBalance: 0, investableBalance: 0, simpleROI: 0 };
     }
     const totalCapital = transactions
       .filter(tx => tx.type === 'Deposit')
@@ -123,6 +137,7 @@ export default function InvestorDashboard() {
       .filter(tx => tx.type === 'ProfitDistribution')
       .reduce((sum, tx) => sum + tx.amount, 0);
 
+    // This now correctly includes withdrawals from reinvestment requests
     const totalWithdrawn = transactions
       .filter(tx => tx.type === 'Withdrawal')
       .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
@@ -130,9 +145,11 @@ export default function InvestorDashboard() {
     const portfolioValue = (totalCapital + totalProfit) - totalWithdrawn;
     const withdrawableBalance = totalProfit - totalWithdrawn;
     const simpleROI = totalCapital > 0 ? (totalProfit / totalCapital) * 100 : 0;
+    
+    const investableBalance = fundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
 
-    return { totalCapital, totalProfit, totalWithdrawn, portfolioValue, withdrawableBalance, simpleROI };
-  }, [transactions]);
+    return { totalCapital, totalProfit, totalWithdrawn, portfolioValue, withdrawableBalance, investableBalance, simpleROI };
+  }, [transactions, fundBatches]);
   
   const chartData = useMemo(() => {
     if (!transactions || transactions.length === 0) return [];
@@ -198,14 +215,14 @@ export default function InvestorDashboard() {
             <p className="text-xs text-muted-foreground">Total value of your investments</p>
           </CardContent>
         </Card>
-         <Card>
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Capital Deposited</CardTitle>
-            <span className="text-muted-foreground font-bold text-lg">₦</span>
+            <CardTitle className="text-sm font-medium">Investable Balance</CardTitle>
+            <Banknote className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.totalCapital)}</div>}
-            <p className="text-xs text-muted-foreground">Your total lifetime deposits.</p>
+            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.investableBalance)}</div>}
+            <p className="text-xs text-muted-foreground">Capital ready for new deals</p>
           </CardContent>
         </Card>
         <Card>
@@ -400,3 +417,5 @@ export default function InvestorDashboard() {
     </div>
   );
 }
+
+    
