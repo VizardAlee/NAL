@@ -290,7 +290,7 @@ export default function InvestorDashboard() {
                         axisLine={false}
                         tickMargin={8}
                     />
-                    <Tooltip content={<ChartTooltipContent indicator="dot" />} />
+                    <Tooltip content={<ChartTooltipContent indicator="dot" formatter={(value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(value))}/>} />
                     <defs>
                         <linearGradient id="fillPortfolioValue" x1="0" y1="0" x2="0" y2="1">
                         <stop
@@ -403,7 +403,7 @@ export default function InvestorDashboard() {
                         <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
                     </TableCell>
                     <TableCell>{tx.dealName || 'N/A'}</TableCell>
-                    <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-green-500' : 'text-foreground'}`}>
+                    <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
                         {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
                     </TableCell>
                     </TableRow>
@@ -423,5 +423,3 @@ export default function InvestorDashboard() {
     </div>
   );
 }
-
-    

@@ -25,20 +25,11 @@ export function Logo({ imageUrl, className, ...props }: LogoProps) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
+      viewBox="0 0 256 256"
+      className={cn("text-accent", className)}
       {...props}
     >
-        <path d="M12 2L2 7v10l10 5 10-5V7L12 2z"></path>
-        <path d="M2 7l10 5 10-5"></path>
-        <path d="M12 22V12"></path>
-        <path d="M7 4.5l5 2.5 5-2.5"></path>
-        <path d="M17 19.5l-5-2.5-5 2.5"></path>
+        <path fill="currentColor" d="M104 152H56a8 8 0 0 1 0-16h40v-40H72a8 8 0 0 1 0-16h24V56a8 8 0 0 1 16 0v24h40a8 8 0 0 1 0 16h-40v40h64a8 8 0 0 1 0 16h-64v24a8 8 0 0 1-16 0v-24Zm96-16h-32a8 8 0 0 0 0 16h32a8 8 0 0 0 0-16Z"/>
     </svg>
   );
 }
@@ -65,4 +56,3 @@ export function Naira(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
-
