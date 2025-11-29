@@ -3,18 +3,17 @@
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LayoutDashboard, Users, AlertTriangle, Activity } from "lucide-react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { LayoutDashboard, Users, AlertTriangle, Activity, Briefcase, DollarSign, Zap, TrendingUp, HandCoins } from "lucide-react";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, Timestamp, DocumentData, where, orderBy, limit } from "firebase/firestore";
 import { useFirestore } from "@/firebase";
 import { useMemo } from "react";
-import { format, subDays, startOfMonth, subMonths } from "date-fns";
+import { format, subDays, startOfMonth, subMonths, formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Deal } from "@/lib/types";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const chartConfig = {
     tvl: {
@@ -42,12 +41,23 @@ type Transaction = DocumentData & {
     dealName?: string;
 };
 
+const activityIcons: { [key: string]: React.ElementType } = {
+    'Deposit': DollarSign,
+    'Investment': Briefcase,
+    'ProfitDistribution': TrendingUp,
+    'Repayment': HandCoins,
+    'PlatformEarning': Zap,
+    'Withdrawal': DollarSign,
+    'default': Activity
+}
+
 export default function AdminDashboardPage() {
     const firestore = useFirestore();
 
     const fundBatchesQuery = useMemo(() => {
         if (!firestore) return null;
-        return query(collection(firestore, 'fundBatches'));
+        const threeMonthsAgo = startOfMonth(subMonths(new Date(), 2));
+        return query(collection(firestore, 'fundBatches'), where('createdAt', '>=', Timestamp.fromDate(threeMonthsAgo)));
     }, [firestore]);
     
     const usersQuery = useMemo(() => {
@@ -95,7 +105,6 @@ export default function AdminDashboardPage() {
 
     const chartData = useMemo(() => {
         const today = new Date();
-        const threeMonthsAgo = startOfMonth(subMonths(today, 2));
         const monthlyData: { [key: string]: number } = {};
 
         // Initialize the last 3 months with 0 TVL
@@ -106,9 +115,7 @@ export default function AdminDashboardPage() {
         }
 
         if (fundBatches) {
-            const recentBatches = fundBatches.filter(batch => batch.createdAt.toDate() >= threeMonthsAgo);
-            
-            recentBatches.forEach(batch => {
+            fundBatches.forEach(batch => {
                 const month = format(batch.createdAt.toDate(), 'yyyy-MM');
                 if (monthlyData.hasOwnProperty(month)) {
                     monthlyData[month] += batch.amount;
@@ -121,8 +128,8 @@ export default function AdminDashboardPage() {
                 month: format(new Date(month + '-02'), 'MMM'), // Add day to avoid TZ issues
                 tvl: monthlyData[month]
             }))
-            .sort((a, b) => a.month.localeCompare(b.month)) // Sort to ensure chronological order if needed, but keys are already sorted
-            .reverse(); // To show current month first
+            .sort((a, b) => new Date(a.month).getMonth() - new Date(b.month).getMonth())
+            .reverse();
     }, [fundBatches]);
 
     const platformEarnings = useMemo(() => {
@@ -138,12 +145,25 @@ export default function AdminDashboardPage() {
         if (!recentTransactions || !allUsersResult.data) return [];
         return recentTransactions.map(tx => {
             const user = allUsersResult.data?.find(u => u.id === tx.userId);
-            const actionText = `${tx.type} of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Math.abs(tx.amount))}${tx.dealName ? ` in ${tx.dealName}`: ''}`;
+            const amountFormatted = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Math.abs(tx.amount));
+            
+            let actionText = '';
+            switch (tx.type) {
+                case 'Deposit': actionText = `deposited ${amountFormatted}.`; break;
+                case 'Withdrawal': actionText = `withdrew ${amountFormatted}.`; break;
+                case 'Investment': actionText = `invested ${amountFormatted} in "${tx.dealName}".`; break;
+                case 'ProfitDistribution': actionText = `earned ${amountFormatted} from "${tx.dealName}".`; break;
+                case 'Repayment': actionText = `repaid ${amountFormatted} for "${tx.dealName}".`; break;
+                case 'PlatformEarning': actionText = `earned ${amountFormatted} from "${tx.dealName}".`; break;
+                default: actionText = `${tx.type} of ${amountFormatted}`;
+            }
+
             return {
                 id: tx.id,
                 user: user?.name || (tx.userId === 'platform' ? 'Platform' : 'Unknown User'),
+                userId: tx.userId,
                 action: actionText,
-                timestamp: format(tx.createdAt.toDate(), 'PPp'),
+                timestamp: formatDistanceToNow(tx.createdAt.toDate(), { addSuffix: true }),
                 type: tx.type,
             };
         });
@@ -225,45 +245,48 @@ export default function AdminDashboardPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Timestamp</TableHead>
-                <TableHead>Type</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && Array.from({length: 5}).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-48" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                </TableRow>
+          <div className="space-y-4">
+             {isLoading && Array.from({length: 5}).map((_, i) => (
+                <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <div className="space-y-2 flex-1">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/4" />
+                    </div>
+                </div>
               ))}
-              {!isLoading && recentActivities.map((activity) => (
-                <TableRow key={activity.id}>
-                  <TableCell className="font-medium">{activity.user}</TableCell>
-                  <TableCell>{activity.action}</TableCell>
-                  <TableCell className="text-muted-foreground">{activity.timestamp}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{activity.type}</Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {!isLoading && recentActivities.map((activity) => {
+                const Icon = activityIcons[activity.type] || activityIcons['default'];
+                return (
+                    <div key={activity.id} className="flex items-start gap-4">
+                      <Avatar className="h-9 w-9 border">
+                        <AvatarImage src={`https://api.dicebear.com/7.x/bottts/svg?seed=${activity.userId}`} />
+                        <AvatarFallback>{activity.user.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm">
+                          <span className="font-medium">{activity.user}</span>
+                          <span className="text-muted-foreground"> {activity.action}</span>
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {activity.timestamp}
+                        </p>
+                      </div>
+                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                            <Icon className="h-5 w-5 text-muted-foreground" />
+                       </div>
+                    </div>
+                )
+              })}
               {!isLoading && recentActivities.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center">
+                <div className="h-24 text-center text-sm text-muted-foreground flex items-center justify-center">
                     No recent activity found.
-                  </TableCell>
-                </TableRow>
+                </div>
               )}
-            </TableBody>
-          </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
   );
-}
+
+    
