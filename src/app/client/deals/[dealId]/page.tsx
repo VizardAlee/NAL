@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { FileText, ShieldAlert, Loader2 } from "lucide-react";
 import { useMemo, useTransition } from 'react';
-import { useCollection, useDoc } from '@/firebase/firestore/use-collection';
+import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, doc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';

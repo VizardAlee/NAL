@@ -248,7 +248,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                 <Pagination>
                     <PaginationContent>
                         <PaginationItem>
-                            <PaginationPrevious href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1))}} disabled={currentPage === 1}/>
+                            <PaginationPrevious href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1))}} aria-disabled={currentPage === 1}/>
                         </PaginationItem>
                         {[...Array(totalPages)].map((_, i) => (
                              <PaginationItem key={i}>
@@ -256,7 +256,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                              </PaginationItem>
                         ))}
                         <PaginationItem>
-                            <PaginationNext href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1))}} disabled={currentPage === totalPages} />
+                            <PaginationNext href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1))}} aria-disabled={currentPage === totalPages} />
                         </PaginationItem>
                     </PaginationContent>
                 </Pagination>
