@@ -4,7 +4,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle } from "lucide-react";
 import { useCollection } from "@/firebase/firestore/use-collection";
-import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy } from "firebase/firestore";
+import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy } from 'firebase/firestore';
 import { useFirestore } from "@/firebase";
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -235,7 +235,7 @@ const formatDate = (timestamp: Timestamp | Date | undefined) => {
       <>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <FormDescription>{description}</FormDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
