@@ -132,26 +132,30 @@ export default function DealDetailPage() {
     const isShortTermDeal = dealDurationInDays < EIGHTEEN_MONTHS_IN_DAYS;
 
     return fundBatches
-        .filter(batch => {
+        .map(batch => {
             const batchTenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
             const isShortTermBatch = batchTenureInDays < EIGHTEEN_MONTHS_IN_DAYS;
+            let isEligible = false;
 
             // Tier 1 Rule: Short-term capital can fund short-term deals.
             if (isShortTermBatch) {
-                return isShortTermDeal;
-            }
-
+                isEligible = isShortTermDeal;
+            } else {
             // Tier 2 Rule: Long-term capital matches deal duration.
             // The batch tenure must be greater than or equal to the deal duration (minus a 5-day grace period).
-            return batchTenureInDays >= (dealDurationInDays - 5);
-        })
-        .map(batch => {
+                isEligible = batchTenureInDays >= (dealDurationInDays - 5);
+            }
+            
             const source = users.find(u => u.id === batch.sourceId);
+
             return {
                 ...batch,
-                sourceName: batch.sourceId === 'platform' ? 'Platform' : (source?.name || 'Unknown Investor')
+                isEligible,
+                sourceName: batch.sourceId === 'platform' ? 'Platform' : (source?.name || 'Unknown Investor'),
+                type: isShortTermBatch ? 'Short-Term' : 'Long-Term',
             }
-        });
+        })
+        .filter(batch => batch.isEligible);
   }, [deal, fundBatches, users]);
 
   const handleFundDeal = () => {
@@ -237,6 +241,7 @@ export default function DealDetailPage() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Source</TableHead>
+                                        <TableHead>Type</TableHead>
                                         <TableHead>Date Added</TableHead>
                                         <TableHead className="text-right">Available Capital</TableHead>
                                     </TableRow>
@@ -245,11 +250,14 @@ export default function DealDetailPage() {
                                     {eligibleFundBatches.map(batch => (
                                         <TableRow key={batch.id}>
                                             <TableCell>{batch.sourceName}</TableCell>
+                                            <TableCell>
+                                                <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
+                                            </TableCell>
                                             <TableCell>{format(batch.createdAt.toDate(), 'PPP')}</TableCell>
                                             <TableCell className="text-right font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
                                         </TableRow>
                                     ))}
-                                    {eligibleFundBatches.length === 0 && <TableRow><TableCell colSpan={3} className="h-24 text-center">No eligible fund batches found.</TableCell></TableRow>}
+                                    {eligibleFundBatches.length === 0 && <TableRow><TableCell colSpan={4} className="h-24 text-center">No eligible fund batches found.</TableCell></TableRow>}
                                 </TableBody>
                             </Table>
                         </CardContent>
