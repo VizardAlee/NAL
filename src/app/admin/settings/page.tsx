@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -17,32 +16,32 @@ import { doc } from 'firebase/firestore';
 import { useFirestore, useUser } from "@/firebase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { setNisabAction } from "./actions";
+import { setLogoAction } from "./logo-actions";
+import { useCompanyLogo } from "@/components/company-logo-provider";
+
 
 function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoading: boolean }) {
     const { toast } = useToast();
-    const initialState = { success: false, message: '' };
-    const [state, formAction] = useActionState(setNisabAction, initialState);
+    const [toastShown, setToastShown] = useState(false);
+    const [state, formAction, isPending] = useActionState(setNisabAction, { success: false, message: '' });
 
     useEffect(() => {
-        if (state.message) {
+        if (state.message && !toastShown) {
             toast({
                 title: state.success ? "Success" : "Error",
                 description: state.message,
                 variant: state.success ? "default" : "destructive",
             });
+            setToastShown(true);
         }
-    }, [state, toast]);
+    }, [state, toast, toastShown]);
 
-
-    function SubmitButton() {
-      const { pending } = useFormStatus();
-        return (
-            <Button type="submit" disabled={pending}>
-                {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
-                Set Nisab
-            </Button>
-        );
-    }
+    // Reset toastShown when the form is not pending anymore
+    useEffect(() => {
+        if (!isPending) {
+            setToastShown(false);
+        }
+    }, [isPending]);
     
     return (
          <Card>
@@ -67,7 +66,10 @@ function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoadin
                             required
                         />
                     </div>
-                    <SubmitButton />
+                    <Button type="submit" disabled={isPending}>
+                        {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
+                        Set Nisab
+                    </Button>
                 </form>
                 )}
             </CardContent>
@@ -75,6 +77,87 @@ function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoadin
     );
 }
 
+function CompanyLogoForm() {
+    const { logoUrl, loading } = useCompanyLogo();
+    const [preview, setPreview] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const { toast } = useToast();
+    const [state, formAction, isPending] = useActionState(setLogoAction, { success: false, message: '' });
+    const [toastShown, setToastShown] = useState(false);
+
+    useEffect(() => {
+        if (state.message && !toastShown) {
+            toast({
+                title: state.success ? "Success" : "Error",
+                description: state.message,
+                variant: state.success ? "default" : "destructive",
+            });
+            setToastShown(true);
+            if (state.success) {
+                setPreview(null);
+            }
+        }
+    }, [state, toast, toastShown]);
+
+     useEffect(() => {
+        if (!isPending) {
+            setToastShown(false);
+        }
+    }, [isPending]);
+
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setPreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Company Logo</CardTitle>
+                <CardDescription>Upload a logo for platform-wide branding. Recommended size: 256x256px.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {loading ? <Skeleton className="h-32 w-32 rounded-lg" /> : (
+                <form action={formAction} className="space-y-4">
+                    <div className="flex items-center gap-6">
+                        <Image
+                            src={preview || logoUrl || '/placeholder.svg'}
+                            alt="Company Logo Preview"
+                            width={128}
+                            height={128}
+                            className="h-32 w-32 rounded-lg object-contain border bg-muted"
+                        />
+                        <input type="hidden" name="logoUrl" value={preview || ''} />
+                        <Input
+                            ref={fileInputRef}
+                            type="file"
+                            className="hidden"
+                            accept="image/png, image/jpeg, image/svg+xml"
+                            onChange={handleFileChange}
+                        />
+                        <div className="flex flex-col gap-2">
+                             <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                                <ImageIcon className="mr-2 h-4 w-4" />
+                                Choose File
+                            </Button>
+                            <Button type="submit" disabled={isPending || !preview}>
+                                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Save Logo
+                            </Button>
+                        </div>
+                    </div>
+                </form>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
 
 export default function SettingsPage() {
   const firestore = useFirestore();
@@ -95,6 +178,7 @@ export default function SettingsPage() {
             icon={Settings}
         />
         <div className="space-y-6">
+            <CompanyLogoForm />
             <NisabForm currentNisab={zakatSettings?.nisab || 0} isLoading={zakatLoading} />
             <Card>
                 <CardHeader>

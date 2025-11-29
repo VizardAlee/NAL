@@ -7,6 +7,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import React from 'react';
+import { CompanyLogoProvider } from '@/components/company-logo-provider';
+
 
 // Metadata cannot be exported from a client component,
 // so we define it here statically.
@@ -38,7 +40,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <FirebaseClientProvider>
-            {children}
+            <CompanyLogoProvider>
+              {children}
+            </CompanyLogoProvider>
           </FirebaseClientProvider>
           <Toaster />
         </ThemeProvider>

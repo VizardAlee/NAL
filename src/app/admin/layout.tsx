@@ -32,6 +32,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { collection, query, orderBy, limit, doc, updateDoc, Timestamp } from "firebase/firestore";
 import { formatDistanceToNow } from 'date-fns';
+import { useCompanyLogo } from "@/components/company-logo-provider";
 
 type Notification = {
     id: string;
@@ -136,6 +137,7 @@ export default function AdminLayout({
   const { user, loading } = useUser();
   const auth = useAuth();
   const router = useRouter();
+  const { logoUrl, loading: logoLoading } = useCompanyLogo();
 
   const handleLogout = async () => {
     if (auth) {
@@ -151,7 +153,7 @@ export default function AdminLayout({
   }, [user, loading, router]);
   
 
-  if (loading || !user) {
+  if (loading || !user || logoLoading) {
     return <AdminSkeleton />;
   }
 
@@ -161,7 +163,7 @@ export default function AdminLayout({
         <SidebarHeader>
           <div className="flex items-center gap-2 p-2">
              <Link href="/admin/dashboard" className="flex items-center gap-2">
-              <Logo imageUrl='/LOGO.jpg' className="h-7 w-7 text-primary" />
+              <Logo imageUrl={logoUrl} className="h-7 w-7 text-primary" />
               <span className="text-lg font-bold font-headline text-primary group-data-[collapsible=icon]:hidden">
                 NAL
               </span>
