@@ -75,7 +75,7 @@ export default function ClientLayout({
         <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
             <Link href="/client/dashboard" className="flex items-center gap-2 font-bold font-headline text-primary">
               <Logo imageUrl={logoUrl} className="h-7 w-7" />
-              <span>FinHub Central</span>
+              <span>NAL General Marchant</span>
             </Link>
             <div className="flex-1" />
             <ThemeToggle />

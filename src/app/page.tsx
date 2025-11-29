@@ -25,7 +25,7 @@ export default function Home() {
           <Link href="/" className="mr-6 flex items-center space-x-2">
             <Logo imageUrl={logoUrl} className="h-6 w-6 text-primary" />
             <span className="font-bold font-headline sm:inline-block">
-              FinHub Central
+              NAL General Marchant
             </span>
           </Link>
           <nav className="flex flex-1 items-center space-x-4">
@@ -50,7 +50,7 @@ export default function Home() {
                 The Central Hub for Your Financing Ecosystem
               </h1>
               <p className="max-w-[600px] text-muted-foreground md:text-xl">
-                FinHub Central connects investors, clients, and administrators on a single platform to manage financing deals with unparalleled efficiency and insight.
+                NAL General Marchant connects investors, clients, and administrators on a single platform to manage financing deals with unparalleled efficiency and insight.
               </p>
               <div className="flex flex-col gap-4 sm:flex-row">
                 <Button size="lg" asChild>
@@ -148,7 +148,7 @@ export default function Home() {
           <div className="flex flex-col items-center gap-4 px-8 md:flex-row md:gap-2 md:px-0">
             <Logo imageUrl={logoUrl} className="h-6 w-6 text-primary" />
             <p className="text-center text-sm leading-loose md:text-left">
-              Built by FinHub Central. &copy; {new Date().getFullYear()} All rights reserved.
+              Built by NAL General Marchant. &copy; {new Date().getFullYear()} All rights reserved.
             </p>
           </div>
         </div>
