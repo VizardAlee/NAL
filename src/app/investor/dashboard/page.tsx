@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2 } from "lucide-react";
 import { useMemo, useState, useTransition } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData, Timestamp } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
@@ -16,7 +16,7 @@ import { Deal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { WithdrawForm } from "./withdraw-form";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { reinvestAction } from "./actions";
 import { useToast } from "@/hooks/use-toast";
@@ -38,9 +38,7 @@ type Investment = DocumentData & {
 };
 
 const chartConfig = {
-  capital: { label: "Capital Deposited", color: "hsl(var(--chart-1))" },
-  investments: { label: "Investments", color: "hsl(var(--chart-2))" },
-  profits: { label: "Profits", color: "hsl(var(--chart-3))" },
+  portfolioValue: { label: "Portfolio Value", color: "hsl(var(--chart-1))" },
 };
 
 function ReinvestButton({ balance, userId }: { balance: number, userId: string }) {
@@ -86,7 +84,8 @@ export default function InvestorDashboard() {
 
   const transactionsQuery = useMemo(() => {
     if (!firestore || !user?.uid) return null;
-    return query(collection(firestore, 'transactions'), where('userId', '==', user.uid));
+    // Order by creation date to correctly calculate cumulative values
+    return query(collection(firestore, 'transactions'), where('userId', '==', user.uid), orderBy('createdAt', 'asc'));
   }, [firestore, user]);
   
   const investmentsQuery = useMemo(() => {
@@ -126,7 +125,8 @@ export default function InvestorDashboard() {
       .filter(tx => tx.type === 'Withdrawal')
       .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
     
-    const portfolioValue = totalCapital + totalProfit - totalWithdrawn;
+    // Portfolio value is what's left after withdrawals from the sum of capital and profit
+    const portfolioValue = (totalCapital + totalProfit) - totalWithdrawn;
     const withdrawableBalance = totalProfit - totalWithdrawn;
     const simpleROI = totalCapital > 0 ? (totalProfit / totalCapital) * 100 : 0;
 
@@ -134,26 +134,27 @@ export default function InvestorDashboard() {
   }, [transactions]);
   
   const chartData = useMemo(() => {
-      if (!transactions) return [];
+    if (!transactions || transactions.length === 0) return [];
+    
+    let cumulativeValue = 0;
+    return transactions.map(tx => {
+        // Deposits and Profits add to the value
+        if (tx.type === 'Deposit' || tx.type === 'ProfitDistribution') {
+            cumulativeValue += tx.amount;
+        } 
+        // Withdrawals and Investments (from capital) subtract from the value shown
+        else if (tx.type === 'Withdrawal' || tx.type === 'Investment') {
+            cumulativeValue += tx.amount; // amount is negative for these types
+        }
+        
+        return {
+            date: tx.createdAt.toDate(),
+            displayDate: format(tx.createdAt.toDate(), 'MMM d'),
+            portfolioValue: cumulativeValue,
+        };
+    });
+}, [transactions]);
 
-      const monthlyData: { [key: string]: { month: string; capital: number; investments: number; profits: number } } = {};
-
-      transactions.forEach(tx => {
-          const month = format(tx.createdAt.toDate(), 'yyyy-MM');
-          if (!monthlyData[month]) {
-              monthlyData[month] = { month: format(tx.createdAt.toDate(), 'MMM yy'), capital: 0, investments: 0, profits: 0 };
-          }
-          if (tx.type === 'Deposit') {
-              monthlyData[month].capital += tx.amount;
-          } else if (tx.type === 'Investment') {
-              monthlyData[month].investments += Math.abs(tx.amount);
-          } else if (tx.type === 'ProfitDistribution') {
-              monthlyData[month].profits += tx.amount;
-          }
-      });
-      return Object.values(monthlyData).sort((a,b) => a.month.localeCompare(b.month));
-
-  }, [transactions]);
 
   const formatDate = (timestamp: Timestamp | Date | undefined) => {
     if (!timestamp) return 'N/A';
@@ -178,17 +179,17 @@ export default function InvestorDashboard() {
           </CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.portfolioValue)}</div>}
-            <p className="text-xs text-muted-foreground">Capital + Profits - Withdrawals</p>
+            <p className="text-xs text-muted-foreground">Total value of your investments</p>
           </CardContent>
         </Card>
          <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Reinvestible Balance</CardTitle>
-            <RefreshCcw className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Capital Deposited</CardTitle>
+            <span className="text-muted-foreground font-bold text-lg">₦</span>
           </CardHeader>
           <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.withdrawableBalance)}</div>}
-            <p className="text-xs text-muted-foreground">Total profits available to reinvest.</p>
+            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.totalCapital)}</div>}
+            <p className="text-xs text-muted-foreground">Your total lifetime deposits.</p>
           </CardContent>
         </Card>
         <Card>
@@ -229,8 +230,8 @@ export default function InvestorDashboard() {
 
        <Card className="mt-8">
         <CardHeader>
-            <CardTitle>Financial Activity</CardTitle>
-            <CardDescription>Monthly breakdown of deposits, investments, and profits.</CardDescription>
+            <CardTitle>Portfolio Growth</CardTitle>
+            <CardDescription>An overview of your portfolio's value over time.</CardDescription>
         </CardHeader>
         <CardContent className="pl-2">
             {isLoading ? (
@@ -239,15 +240,39 @@ export default function InvestorDashboard() {
                 </div>
             ) : (
              <ChartContainer config={chartConfig} className="h-[250px] w-full">
-                <BarChart accessibilityLayer data={chartData}>
+                 <LineChart accessibilityLayer data={chartData} margin={{ top: 20, right: 20, left: 20, bottom: 0 }}>
                     <CartesianGrid vertical={false} />
-                    <XAxis dataKey="month" tickLine={false} tickMargin={10} axisLine={false} />
-                    <YAxis tickFormatter={(value) => `₦${Number(value) / 1000}k`} />
-                    <Tooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="capital" fill="var(--color-capital)" radius={4} />
-                    <Bar dataKey="investments" fill="var(--color-investments)" radius={4} />
-                    <Bar dataKey="profits" fill="var(--color-profits)" radius={4} />
-                </BarChart>
+                    <XAxis
+                        dataKey="displayDate"
+                        tickLine={false}
+                        axisLine={false}
+                        tickMargin={8}
+                        tickFormatter={(value) => value.slice(0, 3)}
+                    />
+                    <YAxis
+                        tickFormatter={(value) => `₦${Number(value) / 1000}k`}
+                        tickLine={false}
+                        axisLine={false}
+                        tickMargin={8}
+                        domain={['dataMin', 'dataMax']}
+                    />
+                    <Tooltip
+                        cursor={false}
+                        content={<ChartTooltipContent indicator="dot" formatter={(value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(value))} />}
+                    />
+                    <Line
+                        dataKey="portfolioValue"
+                        type="natural"
+                        stroke="var(--color-portfolioValue)"
+                        strokeWidth={2}
+                        dot={{
+                            fill: "var(--color-portfolioValue)",
+                        }}
+                        activeDot={{
+                            r: 6,
+                        }}
+                    />
+                </LineChart>
             </ChartContainer>
             )}
         </CardContent>
@@ -347,6 +372,5 @@ export default function InvestorDashboard() {
       </Card>
     </div>
   );
-}
 
     
