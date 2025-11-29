@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useMemo, useState, useEffect, useCallback } from 'react';
-import { useFormStatus, useActionState } from 'react';
+import { useMemo, useState, useEffect, useCallback, useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import {
   Table,
   TableBody,
@@ -60,7 +60,7 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
                 dueDate: new Timestamp(state.repayment.dueDate._seconds, state.repayment.dueDate._nanoseconds)
             };
             onPaymentLodged(newRepayment);
-        } else if (state.message) {
+        } else if (!state.success && state.message) {
             toast({
                 title: 'Error',
                 description: state.message,
@@ -116,11 +116,11 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
   
   const schedule = useMemo(() => generateAmortizationSchedule(deal), [deal]);
   
-  const upcomingSchedule = useMemo((): ScheduledPayment[] => {
+  const enhancedSchedule = useMemo((): ScheduledPayment[] => {
     if (!schedule) return [];
     const today = startOfToday();
 
-    const enhanced = schedule.map(installment => {
+    return schedule.map(installment => {
       const matchingRepayment = allRepayments?.find(r => {
           if (!r.dueDate) return false;
           return isSameDay(r.dueDate.toDate(), installment.dueDate);
@@ -135,11 +135,11 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
 
       return { ...installment, status, repaymentDoc: matchingRepayment };
     });
-
-    // Filter out paid and pending installments for this view
-    return enhanced.filter(p => p.status === 'Due' || p.status === 'Upcoming');
-
   }, [schedule, allRepayments]);
+  
+  const upcomingSchedule = useMemo(() => {
+      return enhancedSchedule.filter(p => p.status === 'Due' || p.status === 'Upcoming');
+  }, [enhancedSchedule]);
 
   // Find the next payable installment and create the final list
   const finalSchedule = useMemo(() => {
@@ -151,7 +151,6 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
       ...installment,
       // Only the very next non-paid/non-pending installment is actionable.
       isActionable: index === nextPayableInstallmentIndex,
-      isButtonDisabled: installment.status === 'Paid' || installment.status === 'Pending'
     })).sort((a, b) => {
         // Custom sort: bring the single actionable item to the top
         if (a.isActionable && !b.isActionable) return -1;
@@ -237,7 +236,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                         <TableCell className="font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.payment)}</TableCell>
                         <TableCell><StatusBadge status={item.status} /></TableCell>
                         <TableCell className="text-right">
-                        {(item.isActionable && !item.isButtonDisabled && user) && (
+                        {(item.isActionable && user) && (
                             <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
                         )}
                         </TableCell>
