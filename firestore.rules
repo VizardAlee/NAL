@@ -122,5 +122,18 @@ service cloud.firestore {
         // Only admins can read or write administrative transactions.
         allow read, write: if isAdmin();
     }
+
+    // Rules for 'notifications'
+    match /notifications/{notificationId} {
+        // Only admins can read/list their notifications.
+        allow get, list: if isAdmin();
+        // Admins can update notifications (e.g., to mark as read).
+        allow update: if isAdmin();
+        // Any authenticated user can create a notification.
+        // In a production app, this would be locked down to a backend service/function.
+        allow create: if request.auth != null;
+    }
   }
 }
+
+    

@@ -6,6 +6,16 @@ import { initializeFirebase } from '@/firebase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
+async function createNotification(firestore: FirebaseFirestore.Firestore, title: string, message: string, link: string) {
+    await firestore.collection('notifications').add({
+        title,
+        message,
+        link,
+        read: false,
+        createdAt: Timestamp.now(),
+    });
+}
+
 // --- Lodge Payment Action ---
 const lodgePaymentSchema = z.object({
   dealId: z.string().min(1, "Deal ID is required."),
@@ -66,6 +76,14 @@ export async function lodgePaymentAction(
       dueDate: dueDateTimestamp,
     });
 
+    const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+    await createNotification(
+        firestore,
+        'New Repayment Lodged',
+        `A payment of ${formattedAmount} is awaiting approval.`,
+        '/admin/approvals/repayments'
+    );
+
     revalidatePath('/client/dashboard');
 
     const repaymentData: RepaymentData = {
@@ -80,7 +98,7 @@ export async function lodgePaymentAction(
 
     return {
       success: true,
-      message: `Payment of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount)} has been submitted.`,
+      message: `Payment of ${formattedAmount} has been submitted.`,
       repayment: repaymentData,
     };
   } catch (error) {
@@ -118,7 +136,6 @@ export async function requestTerminationAction(
     try {
         const { firestore } = initializeFirebase();
 
-        // Check if a request already exists
         const existingReqQuery = await firestore.collection('terminationRequests')
             .where('dealId', '==', dealId)
             .where('status', '==', 'Pending')
@@ -138,6 +155,13 @@ export async function requestTerminationAction(
             requestedAt: Timestamp.now(),
         });
 
+        await createNotification(
+            firestore,
+            'Termination Request',
+            `${clientName} requested to terminate the deal "${dealName}".`,
+            '/admin/approvals/terminations'
+        );
+
         revalidatePath('/client/dashboard');
 
         return { success: true, message: "Your request to terminate the deal has been sent to an administrator for review." };
@@ -148,3 +172,5 @@ export async function requestTerminationAction(
         return { success: false, message: `Failed to submit request: ${message}` };
     }
 }
+
+    

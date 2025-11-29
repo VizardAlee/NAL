@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { FirebaseError } from 'firebase/app';
 
@@ -56,8 +56,11 @@ export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: Withdraw
     }
 
     try {
+      const batch = writeBatch(firestore);
+
       const withdrawalRequestsCollection = collection(firestore, 'withdrawalRequests');
-      await addDoc(withdrawalRequestsCollection, {
+      const withdrawalRef = doc(withdrawalRequestsCollection);
+      batch.set(withdrawalRef, {
         investorId: user.uid,
         investorName: user.displayName || 'Unknown Investor',
         amount: values.amount,
@@ -65,9 +68,22 @@ export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: Withdraw
         requestedAt: serverTimestamp(),
       });
 
+      const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(values.amount);
+      const notificationRef = doc(collection(firestore, 'notifications'));
+      batch.set(notificationRef, {
+          title: "Withdrawal Request",
+          message: `${user.displayName || 'An investor'} requested a withdrawal of ${formattedAmount}.`,
+          link: "/admin/approvals/withdrawals",
+          read: false,
+          createdAt: serverTimestamp()
+      });
+
+      await batch.commit();
+
+
       toast({
         title: 'Withdrawal Request Submitted',
-        description: `Your request to withdraw ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(values.amount)} has been submitted for approval.`,
+        description: `Your request to withdraw ${formattedAmount} has been submitted for approval.`,
       });
       onWithdrawalRequested();
     } catch (error) {

@@ -354,6 +354,35 @@
         }
       },
       "required": ["type", "amount", "description", "createdAt"]
+    },
+    "notification": {
+      "title": "Notification",
+      "description": "Represents a notification for an admin.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The title of the notification."
+        },
+        "message": {
+          "type": "string",
+          "description": "The main content of the notification."
+        },
+        "link": {
+          "type": "string",
+          "description": "A URL to the relevant page (e.g., an approval page)."
+        },
+        "read": {
+          "type": "boolean",
+          "description": "Whether the notification has been read."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the notification was created."
+        }
+      },
+      "required": ["title", "message", "link", "read", "createdAt"]
     }
   },
   "auth": {
@@ -419,6 +448,14 @@
             "$ref": "#/entities/administrativeTransaction"
         },
         "description": "Stores all administrative financial transactions."
+    },
+    "/notifications/{notificationId}": {
+        "schema": {
+            "$ref": "#/entities/notification"
+        },
+        "description": "Stores admin notifications for pending actions."
     }
   }
 }
+
+    

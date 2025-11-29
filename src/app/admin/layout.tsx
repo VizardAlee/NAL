@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, LogOut } from "lucide-react";
+import { Bell, LogOut, Circle } from "lucide-react";
 import {
   SidebarProvider,
   Sidebar,
@@ -24,12 +24,23 @@ import {
 import { AdminNav } from "@/components/admin-nav";
 import { Logo } from "@/components/icons";
 import Link from "next/link";
-import { useUser } from "@/firebase";
+import { useUser, useCollection } from "@/firebase";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/firebase/provider";
+import { useAuth, useFirestore } from "@/firebase/provider";
 import { Skeleton } from "@/components/ui/skeleton";
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { collection, query, orderBy, limit, doc, updateDoc, Timestamp } from "firebase/firestore";
+import { formatDistanceToNow } from 'date-fns';
+
+type Notification = {
+    id: string;
+    title: string;
+    message: string;
+    link: string;
+    read: boolean;
+    createdAt: Timestamp;
+};
 
 function AdminSkeleton() {
     return (
@@ -56,6 +67,66 @@ function AdminSkeleton() {
     );
 }
 
+function NotificationBell() {
+    const firestore = useFirestore();
+    const router = useRouter();
+
+    const notificationsQuery = useMemo(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'notifications'), orderBy('createdAt', 'desc'), limit(10));
+    }, [firestore]);
+
+    const { data: notifications } = useCollection<Notification>(notificationsQuery);
+
+    const unreadCount = useMemo(() => {
+        return notifications?.filter(n => !n.read).length || 0;
+    }, [notifications]);
+
+    const handleNotificationClick = async (notification: Notification) => {
+        if (!firestore) return;
+        if (!notification.read) {
+            const notifRef = doc(firestore, 'notifications', notification.id);
+            await updateDoc(notifRef, { read: true });
+        }
+        router.push(notification.link);
+    };
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full relative">
+                    <Bell className="h-5 w-5" />
+                    {unreadCount > 0 && (
+                        <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                        </span>
+                    )}
+                    <span className="sr-only">Toggle notifications</span>
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80">
+                <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {notifications && notifications.length > 0 ? (
+                    notifications.map(n => (
+                        <DropdownMenuItem key={n.id} onClick={() => handleNotificationClick(n)} className="flex items-start gap-3 cursor-pointer">
+                           {!n.read && <Circle className="h-2 w-2 mt-1.5 fill-primary text-primary" />}
+                           {n.read && <div className="w-2 h-2" />}
+                            <div className="grid gap-1">
+                                <p className="font-medium">{n.title}</p>
+                                <p className="text-xs text-muted-foreground">{n.message}</p>
+                                <p className="text-xs text-muted-foreground">{formatDistanceToNow(n.createdAt.toDate(), { addSuffix: true })}</p>
+                            </div>
+                        </DropdownMenuItem>
+                    ))
+                ) : (
+                    <DropdownMenuItem disabled>No new notifications</DropdownMenuItem>
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
 
 export default function AdminLayout({
   children,
@@ -73,7 +144,6 @@ export default function AdminLayout({
     router.push('/login');
   };
 
-  // On initial load, user is null and loading is true. Wait until loading is false.
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
@@ -81,13 +151,10 @@ export default function AdminLayout({
   }, [user, loading, router]);
   
 
-  // While loading, or if there's no user, show a skeleton screen.
-  // This is the critical fix: we do not render `children` until we're sure we have a user.
   if (loading || !user) {
     return <AdminSkeleton />;
   }
 
-  // Once loading is false and we have a user, render the full layout.
   return (
     <SidebarProvider>
       <Sidebar>
@@ -116,10 +183,7 @@ export default function AdminLayout({
             <SidebarTrigger className="md:hidden" />
           </div>
           <ThemeToggle />
-          <Button variant="ghost" size="icon" className="rounded-full">
-            <Bell className="h-5 w-5" />
-            <span className="sr-only">Toggle notifications</span>
-          </Button>
+          <NotificationBell />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
@@ -147,3 +211,5 @@ export default function AdminLayout({
     </SidebarProvider>
   );
 }
+
+    
