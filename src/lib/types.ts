@@ -24,4 +24,9 @@ export type Investment = DocumentData & {
   createdAt: Timestamp;
 };
 
-    
+export type User = DocumentData & {
+    id: string;
+    name: string;
+    email: string;
+    role: 'Admin' | 'Investor' | 'Client';
+};
