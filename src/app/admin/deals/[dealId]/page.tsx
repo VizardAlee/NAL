@@ -5,7 +5,7 @@ import { useMemo, useState, useTransition } from 'react';
 import { notFound, useParams } from 'next/navigation';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { doc, collection, query, where, DocumentData, Timestamp } from 'firebase/firestore';
+import { doc, collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
@@ -25,10 +25,11 @@ type User = {
     name: string;
 }
 
-type FundBatch = {
+type FundBatch = DocumentData & {
     id: string;
     sourceId: string;
     remainingAmount: number;
+    createdAt: Timestamp;
     tenureValue: number;
     tenureUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
 };
@@ -85,7 +86,7 @@ export default function DealDetailPage() {
   }, [firestore, dealId]);
   
   const usersQuery = useMemo(() => (firestore ? collection(firestore, 'users') : null), [firestore]);
-  const fundBatchesQuery = useMemo(() => (firestore ? query(collection(firestore, 'fundBatches'), where('remainingAmount', '>', 0)) : null), [firestore]);
+  const fundBatchesQuery = useMemo(() => (firestore ? query(collection(firestore, 'fundBatches'), where('remainingAmount', '>', 0), orderBy('createdAt', 'asc')) : null), [firestore]);
 
   const { data: deal, loading: dealLoading } = useDoc<Deal>(dealRef);
   const { data: investments, loading: investmentsLoading } = useCollection<Investment>(investmentsQuery);
@@ -122,27 +123,23 @@ export default function DealDetailPage() {
     }));
   }, [investments, users]);
 
-  const eligibleInvestors = useMemo(() => {
+  const eligibleFundBatches = useMemo(() => {
     if (!deal || !fundBatches || !users) return [];
     
     const dealDurationInDays = convertToDays(deal.durationValue, deal.durationUnit);
 
-    const eligibleBatches = fundBatches.filter(batch => {
-        const batchTenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
-        return batchTenureInDays >= (dealDurationInDays - 5);
-    });
-
-    const investorMap = new Map<string, { name: string; totalAvailable: number }>();
-    eligibleBatches.forEach(batch => {
-        const user = users.find(u => u.id === batch.sourceId);
-        if (user) {
-            const current = investorMap.get(user.id) || { name: user.name, totalAvailable: 0 };
-            current.totalAvailable += batch.remainingAmount;
-            investorMap.set(user.id, current);
-        }
-    });
-
-    return Array.from(investorMap.values());
+    return fundBatches
+        .filter(batch => {
+            const batchTenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
+            return batchTenureInDays >= (dealDurationInDays - 5);
+        })
+        .map(batch => {
+            const source = users.find(u => u.id === batch.sourceId);
+            return {
+                ...batch,
+                sourceName: batch.sourceId === 'platform' ? 'Platform' : (source?.name || 'Unknown Investor')
+            }
+        });
   }, [deal, fundBatches, users]);
 
   const handleFundDeal = () => {
@@ -219,21 +216,28 @@ export default function DealDetailPage() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <UserCheck className="h-5 w-5" />
-                                <span>Eligible Investors</span>
+                                <span>Eligible Fund Batches (FIFO Order)</span>
                             </CardTitle>
-                            <CardDescription>Investors with available fund batches whose tenure meets or exceeds the deal's duration (with a 5-day grace period).</CardDescription>
+                            <CardDescription>Chronological list of all available capital that can fund this deal. Funding is strictly First-In, First-Out.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader><TableRow><TableHead>Name</TableHead><TableHead className="text-right">Available Capital</TableHead></TableRow></TableHeader>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Source</TableHead>
+                                        <TableHead>Date Added</TableHead>
+                                        <TableHead className="text-right">Available Capital</TableHead>
+                                    </TableRow>
+                                </TableHeader>
                                 <TableBody>
-                                    {eligibleInvestors.map(inv => (
-                                        <TableRow key={inv.name}>
-                                            <TableCell>{inv.name}</TableCell>
-                                            <TableCell className="text-right font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(inv.totalAvailable)}</TableCell>
+                                    {eligibleFundBatches.map(batch => (
+                                        <TableRow key={batch.id}>
+                                            <TableCell>{batch.sourceName}</TableCell>
+                                            <TableCell>{format(batch.createdAt.toDate(), 'PPP')}</TableCell>
+                                            <TableCell className="text-right font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
                                         </TableRow>
                                     ))}
-                                    {eligibleInvestors.length === 0 && <TableRow><TableCell colSpan={2} className="h-24 text-center">No eligible investors found.</TableCell></TableRow>}
+                                    {eligibleFundBatches.length === 0 && <TableRow><TableCell colSpan={3} className="h-24 text-center">No eligible fund batches found.</TableCell></TableRow>}
                                 </TableBody>
                             </Table>
                         </CardContent>
@@ -293,5 +297,3 @@ export default function DealDetailPage() {
     </div>
   );
 }
-
-    
