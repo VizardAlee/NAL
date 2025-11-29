@@ -12,7 +12,7 @@ import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, Timestamp, DocumentData, where, orderBy, limit } from "firebase/firestore";
 import { useFirestore } from "@/firebase";
 import { useMemo } from "react";
-import { format, subDays } from "date-fns";
+import { format, subDays, startOfMonth, subMonths } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Deal } from "@/lib/types";
 
@@ -94,27 +94,35 @@ export default function AdminDashboardPage() {
     const isLoading = fundBatchesLoading || usersLoading || transactionsLoading || activeDealsLoading || overdueDealsLoading || allUsersResult.loading;
 
     const chartData = useMemo(() => {
-        if (!fundBatches) return [];
-        const sortedBatches = [...fundBatches].sort((a, b) => a.createdAt.toMillis() - b.createdAt.toMillis());
+        const today = new Date();
+        const threeMonthsAgo = startOfMonth(subMonths(today, 2));
         const monthlyData: { [key: string]: number } = {};
-        
-        sortedBatches.forEach(batch => {
-            const month = format(batch.createdAt.toDate(), 'yyyy-MM');
-            if (!monthlyData[month]) {
-                monthlyData[month] = 0;
-            }
-            monthlyData[month] += batch.amount;
-        });
 
-        const chartEntries = Object.keys(monthlyData).map(month => ({
-            month: format(new Date(month + '-02'), 'MMM'),
-            yearMonth: month,
-            tvl: monthlyData[month]
-        }));
+        // Initialize the last 3 months with 0 TVL
+        for (let i = 0; i < 3; i++) {
+            const monthDate = subMonths(today, i);
+            const monthKey = format(monthDate, 'yyyy-MM');
+            monthlyData[monthKey] = 0;
+        }
 
-        chartEntries.sort((a, b) => a.yearMonth.localeCompare(b.yearMonth));
-        
-        return chartEntries;
+        if (fundBatches) {
+            const recentBatches = fundBatches.filter(batch => batch.createdAt.toDate() >= threeMonthsAgo);
+            
+            recentBatches.forEach(batch => {
+                const month = format(batch.createdAt.toDate(), 'yyyy-MM');
+                if (monthlyData.hasOwnProperty(month)) {
+                    monthlyData[month] += batch.amount;
+                }
+            });
+        }
+
+        return Object.keys(monthlyData)
+            .map(month => ({
+                month: format(new Date(month + '-02'), 'MMM'), // Add day to avoid TZ issues
+                tvl: monthlyData[month]
+            }))
+            .sort((a, b) => a.month.localeCompare(b.month)) // Sort to ensure chronological order if needed, but keys are already sorted
+            .reverse(); // To show current month first
     }, [fundBatches]);
 
     const platformEarnings = useMemo(() => {
