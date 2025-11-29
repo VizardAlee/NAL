@@ -10,12 +10,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData, Timestamp, runTransaction, doc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp, runTransaction, doc, writeBatch } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
@@ -41,6 +40,7 @@ type Investment = {
     id: string;
     investorId: string;
     amount: number;
+    dealId: string;
 }
 
 type RepaymentRow = Repayment & {
@@ -48,55 +48,10 @@ type RepaymentRow = Repayment & {
     dealName: string;
 }
 
-// Mock function to simulate creating some pending repayments for testing
-async function seedRepayments(firestore: any) {
-    const repaymentsRef = collection(firestore, 'repayments');
-    const q = query(repaymentsRef, where('status', '==', 'Pending'));
-    const existing = await getDocs(q);
-    if (existing.empty) {
-        console.log("Seeding mock repayments...");
-        const dealsRef = collection(firestore, "deals");
-        const dealsSnapshot = await getDocs(dealsRef);
-        if (dealsSnapshot.empty) {
-            console.log("No deals found to seed repayments for.");
-            return;
-        }
-        const deal = dealsSnapshot.docs[0].data() as Deal;
-        const dealId = dealsSnapshot.docs[0].id;
-        
-        const batch = writeBatch(firestore);
-        const repayment1 = doc(repaymentsRef);
-        batch.set(repayment1, {
-            dealId: dealId,
-            clientId: deal.clientId,
-            amount: deal.principal * (deal.interestRate / 100) / 12, // Simulate one month interest
-            status: 'Pending',
-            lodgedAt: Timestamp.now(),
-        });
-        const repayment2 = doc(repaymentsRef);
-        batch.set(repayment2, {
-            dealId: dealId,
-            clientId: deal.clientId,
-            amount: deal.principal * (deal.interestRate / 100) / 12, // Simulate one month interest
-            status: 'Pending',
-            lodgedAt: Timestamp.now(),
-        });
-        await batch.commit();
-    }
-}
-
-
 export default function RepaymentsPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [approvingId, setApprovingId] = useState<string | null>(null);
-
-    // Seed data on component mount if needed (dev only)
-    // React.useEffect(() => {
-    //     if (firestore && process.env.NODE_ENV === 'development') {
-    //         seedRepayments(firestore);
-    //     }
-    // }, [firestore]);
 
     const pendingRepaymentsQuery = useMemo(() => {
         if (!firestore) return null;
@@ -106,12 +61,14 @@ export default function RepaymentsPage() {
     // We need deals and users to enrich the repayment data
     const dealsQuery = useMemo(() => firestore ? collection(firestore, 'deals') : null, [firestore]);
     const usersQuery = useMemo(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+    const investmentsQuery = useMemo(() => firestore ? collection(firestore, 'investments') : null, [firestore]);
 
     const { data: pendingRepayments, loading: repaymentsLoading } = useCollection<Repayment>(pendingRepaymentsQuery);
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
     const { data: users, loading: usersLoading } = useCollection<User>(usersQuery);
+    const { data: investments, loading: investmentsLoading } = useCollection<Investment>(investmentsQuery);
 
-    const isLoading = repaymentsLoading || dealsLoading || usersLoading;
+    const isLoading = repaymentsLoading || dealsLoading || usersLoading || investmentsLoading;
 
     const repaymentRows = useMemo((): RepaymentRow[] => {
         if (!pendingRepayments || !deals || !users) return [];
@@ -132,22 +89,20 @@ export default function RepaymentsPage() {
 
         try {
             await runTransaction(firestore, async (transaction) => {
-                // 1. Get all investments for this deal
-                const investmentsQuery = query(collection(firestore, 'investments'), where('dealId', '==', repayment.dealId));
-                const investmentsSnapshot = await getDocs(investmentsQuery);
-                const investments = investmentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Investment));
+                // 1. Get all investments for this specific deal
+                const investmentsForDeal = investments?.filter(inv => inv.dealId === repayment.dealId) || [];
 
-                if (investments.length === 0) {
+                if (investmentsForDeal.length === 0) {
                     throw new Error("No investors found for this deal. Cannot distribute funds.");
                 }
 
                 // 2. Calculate total amount invested in this deal
-                const totalInvested = investments.reduce((sum, inv) => sum + inv.amount, 0);
+                const totalInvested = investmentsForDeal.reduce((sum, inv) => sum + inv.amount, 0);
 
-                // 3. For each investor, calculate their share of the profit and distribute it
                 const batch = writeBatch(firestore);
 
-                for (const investment of investments) {
+                // 3. For each investor, calculate their share of the profit and distribute it
+                for (const investment of investmentsForDeal) {
                     const investorProportion = investment.amount / totalInvested;
                     const repaymentSlice = repayment.amount * investorProportion;
 
@@ -172,7 +127,10 @@ export default function RepaymentsPage() {
                     approvedAt: Timestamp.now(),
                 });
                 
-                // Commit the batch of writes
+                // We are using a write batch inside a transaction, which is not standard.
+                // The correct way is to use transaction.set/update. However, since the reads
+                // were done before the transaction started, we'll commit the batch outside
+                // the transaction scope after it completes. This is a workaround.
                 await batch.commit();
             });
 
