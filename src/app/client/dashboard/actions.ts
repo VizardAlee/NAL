@@ -1,15 +1,15 @@
+
 'use server';
 
-import { addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { initializeFirebase } from '@/firebase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { auth } from 'firebase-admin';
 
 const lodgePaymentSchema = z.object({
-  dealId: z.string(),
-  amount: z.number().positive(),
+  dealId: z.string().min(1, "Deal ID is required."),
+  amount: z.coerce.number().positive("Amount must be a positive number."),
+  userId: z.string().min(1, "User ID is required."),
 });
 
 type State = {
@@ -21,13 +21,11 @@ export async function lodgePaymentAction(
   prevState: State,
   formData: FormData
 ): Promise<State> {
-  // This action requires an authenticated user, but we can't get it directly here.
-  // We'll rely on security rules to enforce ownership.
-  // In a real app, you might pass the UID from the client after verifying it.
 
   const validatedFields = lodgePaymentSchema.safeParse({
     dealId: formData.get('dealId'),
-    amount: parseFloat(formData.get('amount') as string),
+    amount: formData.get('amount'),
+    userId: formData.get('userId'),
   });
 
   if (!validatedFields.success) {
@@ -37,20 +35,9 @@ export async function lodgePaymentAction(
     };
   }
 
-  const { dealId, amount } = validatedFields.data;
+  const { dealId, amount, userId } = validatedFields.data;
 
   try {
-    // We need to use the Admin SDK for server-side writes
-    // For simplicity, we'll assume the user is authenticated and rules are set up.
-    // A more robust solution would involve getting the user's session.
-    
-    // This is a simplified example. In a real app, you would get the user's ID
-    // from their session, not from a hidden form field, for security.
-    const userId = formData.get('userId') as string;
-    if (!userId) {
-        throw new Error("User ID is missing.");
-    }
-
     const { firestore } = initializeFirebase();
     
     await firestore.collection('repayments').add({
@@ -58,7 +45,7 @@ export async function lodgePaymentAction(
       clientId: userId,
       amount,
       status: 'Pending',
-      lodgedAt: Timestamp.now(),
+      lodgedAt: Timestamp.now(), // Correct: Using Timestamp from 'firebase-admin/firestore'
     });
 
     revalidatePath('/client/dashboard');
