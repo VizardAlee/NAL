@@ -37,7 +37,7 @@ export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: Withdraw
     amount: z.coerce
       .number()
       .positive({ message: 'Amount must be a positive number.' })
-      .max(portfolioValue, { message: 'Withdrawal amount cannot exceed your portfolio value.' }),
+      .max(portfolioValue, { message: 'Withdrawal amount cannot exceed your withdrawable balance.' }),
   });
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -114,3 +114,5 @@ export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: Withdraw
     </Form>
   );
 }
+
+    

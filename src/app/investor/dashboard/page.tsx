@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Landmark, History, FileText, Download } from "lucide-react";
+import { TrendingUp, Landmark, History, FileText, Download, Wallet } from "lucide-react";
 import { useMemo, useState } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp } from 'firebase/firestore';
@@ -16,12 +16,7 @@ import { Deal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { WithdrawForm } from "./withdraw-form";
-
-type FundBatch = DocumentData & {
-  id: string;
-  sourceId: string;
-  amount: number;
-};
+import { Naira } from "@/components/icons";
 
 type Transaction = DocumentData & {
   id: string;
@@ -42,11 +37,6 @@ export default function InvestorDashboard() {
   const firestore = useFirestore();
   const { user, loading: userLoading } = useUser();
   const [isWithdrawOpen, setWithdrawOpen] = useState(false);
-
-  const fundBatchesQuery = useMemo(() => {
-    if (!firestore || !user?.uid) return null;
-    return query(collection(firestore, 'fundBatches'), where('sourceId', '==', user.uid));
-  }, [firestore, user]);
 
   const transactionsQuery = useMemo(() => {
     if (!firestore || !user?.uid) return null;
@@ -73,27 +63,37 @@ export default function InvestorDashboard() {
   }, [firestore, investedDealIds]);
   
   const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
-
-  const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
   const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
 
-  const isLoading = userLoading || fundBatchesLoading || transactionsLoading || investmentsLoading || dealsLoading;
+  const isLoading = userLoading || transactionsLoading || investmentsLoading || dealsLoading;
 
-  const totalCapital = useMemo(() => {
-    return fundBatches?.reduce((sum, batch) => sum + batch.amount, 0) ?? 0;
-  }, [fundBatches]);
-
-  const portfolioValue = useMemo(() => {
-    return transactions?.reduce((sum, tx) => sum + tx.amount, 0) ?? 0;
-  }, [transactions]);
-
-  const simpleROI = useMemo(() => {
-    if (totalCapital === 0) {
-      return 0;
+  // Calculate financial metrics based on transaction types
+  const financialMetrics = useMemo(() => {
+    if (!transactions) {
+      return { totalCapital: 0, totalProfit: 0, totalWithdrawn: 0, portfolioValue: 0, withdrawableBalance: 0, simpleROI: 0 };
     }
-    const returns = portfolioValue - totalCapital;
-    return (returns / totalCapital) * 100;
-  }, [totalCapital, portfolioValue]);
+    const totalCapital = transactions
+      .filter(tx => tx.type === 'Deposit')
+      .reduce((sum, tx) => sum + tx.amount, 0);
+
+    const totalProfit = transactions
+      .filter(tx => tx.type === 'ProfitDistribution')
+      .reduce((sum, tx) => sum + tx.amount, 0);
+
+    const totalWithdrawn = transactions
+      .filter(tx => tx.type === 'Withdrawal')
+      .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    
+    // Portfolio value = (Initial Deposits) + (Profits) - (Withdrawals)
+    const portfolioValue = totalCapital + totalProfit - totalWithdrawn;
+    
+    // Withdrawable Balance is only the profit minus what has already been withdrawn.
+    const withdrawableBalance = totalProfit - totalWithdrawn;
+
+    const simpleROI = totalCapital > 0 ? (totalProfit / totalCapital) * 100 : 0;
+
+    return { totalCapital, totalProfit, totalWithdrawn, portfolioValue, withdrawableBalance, simpleROI };
+  }, [transactions]);
   
   const formatDate = (timestamp: Timestamp | Date | undefined) => {
     if (!timestamp) return 'N/A';
@@ -114,27 +114,27 @@ export default function InvestorDashboard() {
         icon={Landmark}
       />
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Capital</CardTitle>
-            <span className="h-4 w-4 text-muted-foreground">₦</span>
+            <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
+            <Naira className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(totalCapital)}</div>}
-            <p className="text-xs text-muted-foreground">Total funds deposited</p>
+            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.portfolioValue)}</div>}
+            <p className="text-xs text-muted-foreground">Total value of your assets</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
-            <span className="h-4 w-4 text-muted-foreground">₦</span>
+            <CardTitle className="text-sm font-medium">Withdrawable Balance</CardTitle>
+            <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(portfolioValue)}</div>}
-            <Dialog open={isWithdrawOpen} onOpenChange={setWithdrawOpen}>
+            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.withdrawableBalance)}</div>}
+             <Dialog open={isWithdrawOpen} onOpenChange={setWithdrawOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="w-full mt-2">
+                <Button variant="outline" size="sm" className="w-full mt-2" disabled={financialMetrics.withdrawableBalance <= 0}>
                   <Download className="mr-2 h-4 w-4"/>
                   Withdraw Funds
                 </Button>
@@ -143,9 +143,19 @@ export default function InvestorDashboard() {
                 <DialogHeader>
                   <DialogTitle>Request Fund Withdrawal</DialogTitle>
                 </DialogHeader>
-                <WithdrawForm portfolioValue={portfolioValue} onWithdrawalRequested={() => setWithdrawOpen(false)} />
+                <WithdrawForm portfolioValue={financialMetrics.withdrawableBalance} onWithdrawalRequested={() => setWithdrawOpen(false)} />
               </DialogContent>
             </Dialog>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Capital Deposited</CardTitle>
+            <Naira className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.totalCapital)}</div>}
+            <p className="text-xs text-muted-foreground">Total funds you have deposited</p>
           </CardContent>
         </Card>
         <Card>
@@ -154,8 +164,8 @@ export default function InvestorDashboard() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-             {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{simpleROI.toFixed(2)}%</div>}
-            <p className="text-xs text-muted-foreground">Based on capital vs portfolio value</p>
+             {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{financialMetrics.simpleROI.toFixed(2)}%</div>}
+            <p className="text-xs text-muted-foreground">Based on total profit vs. total capital</p>
           </CardContent>
         </Card>
       </div>
@@ -254,3 +264,5 @@ export default function InvestorDashboard() {
     </div>
   );
 }
+
+    
