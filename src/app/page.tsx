@@ -148,7 +148,7 @@ export default function Home() {
           <div className="flex flex-col items-center gap-4 px-8 md:flex-row md:gap-2 md:px-0">
             <Logo imageUrl={logoUrl} className="h-6 w-6 text-primary" />
             <p className="text-center text-sm leading-loose md:text-left">
-              Built by NAL General Marchant. &copy; {new Date().getFullYear()} All rights reserved.
+              Built by Service Guru. &copy; {new Date().getFullYear()} All rights reserved.
             </p>
           </div>
         </div>
