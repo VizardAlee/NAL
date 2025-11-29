@@ -148,17 +148,17 @@ export default function ReinvestmentsPage() {
             if (newStatus === 'Approved') {
                 const timestamp = Timestamp.now();
                 
-                // 1. Create a "Withdrawal" transaction to zero out the profit
+                // 1. Create a "Withdrawal" transaction to zero out the profit from the withdrawable balance
                 const withdrawalTxRef = doc(collection(firestore, 'transactions'));
                 batch.set(withdrawalTxRef, {
                     userId: request.investorId,
                     type: 'Withdrawal',
-                    amount: -request.amount,
+                    amount: -request.amount, // Negative to subtract from balance
                     createdAt: timestamp,
                     details: 'Profit Reinvestment',
                 });
 
-                // 2. Create a new "Deposit" transaction for the reinvested amount
+                // 2. Create a new "Deposit" transaction for the reinvested amount as new capital
                 const depositTxRef = doc(collection(firestore, 'transactions'));
                 batch.set(depositTxRef, {
                     userId: request.investorId,
@@ -175,7 +175,8 @@ export default function ReinvestmentsPage() {
                     amount: request.amount,
                     remainingAmount: request.amount,
                     createdAt: timestamp,
-                    tenureValue: 10, // Default tenure, can be adjusted
+                    // A default tenure is set here. In a more complex app, this could be configurable.
+                    tenureValue: 10, 
                     tenureUnit: 'Years',
                 });
             }
