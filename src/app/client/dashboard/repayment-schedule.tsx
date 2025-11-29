@@ -88,33 +88,22 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
   
   const enhancedSchedule = useMemo((): ScheduledPayment[] => {
     if (!schedule) return [];
-
     const today = startOfToday();
-    
-    // Create a map for quick lookup of approved repayments by due date string
-    const approvedRepayments = new Map<string, Repayment>();
-    allRepayments?.forEach(repayment => {
-        if (repayment.status === 'Approved') {
-            const dueDateStr = format(repayment.lodgedAt.toDate(), 'yyyy-MM-dd');
-            approvedRepayments.set(dueDateStr, repayment);
-        }
-    });
 
     return schedule.map(installment => {
-        const installmentDueDateStr = format(installment.dueDate, 'yyyy-MM-dd');
-        
-        const matchingRepayment = allRepayments?.find(r => 
-            isSameDay(r.lodgedAt.toDate(), installment.dueDate)
-        );
+      // Find any repayment (pending or approved) for the same day.
+      const matchingRepayment = allRepayments?.find(r => 
+        isSameDay(r.lodgedAt.toDate(), installment.dueDate)
+      );
 
-        let status: RepaymentStatus = 'Upcoming';
-        if (matchingRepayment) {
-            status = matchingRepayment.status === 'Approved' ? 'Paid' : 'Pending';
-        } else if (installment.dueDate < today) {
-            status = 'Due';
-        }
+      let status: RepaymentStatus = 'Upcoming';
+      if (matchingRepayment) {
+        status = matchingRepayment.status === 'Approved' ? 'Paid' : 'Pending';
+      } else if (installment.dueDate < today) {
+        status = 'Due';
+      }
 
-        return { ...installment, status };
+      return { ...installment, status, repaymentDoc: matchingRepayment };
     });
   }, [schedule, allRepayments]);
 
@@ -126,12 +115,15 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
     
     return enhancedSchedule.map((installment, index) => ({
       ...installment,
-      isActionable: index === nextPayableInstallmentIndex
+      // Only the very next non-paid/non-pending installment is actionable.
+      isActionable: index === nextPayableInstallmentIndex,
+      // The Lodge button should be disabled if the payment is already made or pending.
+      isButtonDisabled: installment.status === 'Paid' || installment.status === 'Pending'
     })).sort((a, b) => {
         // Custom sort: bring the single actionable item to the top
         if (a.isActionable && !b.isActionable) return -1;
         if (!a.isActionable && b.isActionable) return 1;
-        // Then sort by installment number
+        // Then sort by installment number for all other items
         return a.installment - b.installment;
     });
   }, [enhancedSchedule]);
@@ -209,7 +201,7 @@ export function RepaymentSchedule({ deal, allRepayments, repaymentsLoading }: { 
                         <TableCell className="font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.payment)}</TableCell>
                         <TableCell><StatusBadge status={item.status} /></TableCell>
                         <TableCell className="text-right">
-                        {(item.isActionable && user) && (
+                        {(item.isActionable && !item.isButtonDisabled && user) && (
                             <LodgePaymentFormWrapper installment={item} dealId={deal.id} userId={user.uid} />
                         )}
                         </TableCell>
