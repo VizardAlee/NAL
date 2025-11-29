@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useMemo, useState, useEffect, useCallback } from 'react';
-import { useFormStatus, useFormState } from 'react-dom';
+import { useMemo, useState, useEffect, useCallback, useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import {
   Table,
   TableBody,
@@ -44,7 +44,7 @@ interface ScheduledPayment extends ScheduleInstallment {
 
 function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { installment: ScheduledPayment, dealId: string, userId: string, onPaymentLodged: (repayment: any) => void }) {
     const initialState = { success: false, message: '', repayment: null };
-    const [state, formAction] = useFormState(lodgePaymentAction, initialState);
+    const [state, formAction] = useActionState(lodgePaymentAction, initialState);
     const { pending } = useFormStatus();
     const { toast } = useToast();
 
