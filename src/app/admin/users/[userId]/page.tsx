@@ -245,7 +245,7 @@ export default function UserDetailPage() {
             description={userProfile.email}
             icon={User}
         >
-            <ViewPageNav homePath="/admin/dashboard" />
+            <ViewPageNav homePath="/admin/users" />
         </PageHeader>
         <div className="grid gap-6 lg:grid-cols-3">
             <div className="lg:col-span-1 space-y-6">
@@ -426,4 +426,3 @@ export default function UserDetailPage() {
   );
 }
 
-    
