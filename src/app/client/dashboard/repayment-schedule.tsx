@@ -51,23 +51,25 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
     const { toast } = useToast();
 
     useEffect(() => {
-        if (state.success && state.repayment) {
-            toast({
-                title: 'Success',
-                description: state.message,
-            });
-            const newRepayment = {
-                ...state.repayment,
-                lodgedAt: new Timestamp(state.repayment.lodgedAt._seconds, state.repayment.lodgedAt._nanoseconds),
-                dueDate: new Timestamp(state.repayment.dueDate._seconds, state.repayment.dueDate._nanoseconds)
-            };
-            onPaymentLodged(newRepayment);
-        } else if (!state.success && state.message) {
-            toast({
-                title: 'Error',
-                description: state.message,
-                variant: 'destructive',
-            });
+        if (state.message) {
+            if (state.success && state.repayment) {
+                toast({
+                    title: 'Success',
+                    description: state.message,
+                });
+                const newRepayment = {
+                    ...state.repayment,
+                    lodgedAt: new Timestamp(state.repayment.lodgedAt._seconds, state.repayment.lodgedAt._nanoseconds),
+                    dueDate: new Timestamp(state.repayment.dueDate._seconds, state.repayment.dueDate._nanoseconds)
+                };
+                onPaymentLodged(newRepayment);
+            } else if (!state.success) {
+                toast({
+                    title: 'Error',
+                    description: state.message,
+                    variant: 'destructive',
+                });
+            }
         }
     }, [state, toast, onPaymentLodged]);
     
