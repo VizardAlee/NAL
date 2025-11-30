@@ -22,6 +22,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 
 type PlatformFundBatch = DocumentData & {
@@ -264,6 +265,7 @@ const formatDate = (timestamp: Timestamp | Date | undefined) => {
 
 export default function PlatformFundsPage() {
     const firestore = useFirestore();
+    const isMobile = useIsMobile();
     const [isDepositOpen, setDepositOpen] = useState(false);
     const [isExpenseOpen, setExpenseOpen] = useState(false);
     const [isTransferToInvestibleOpen, setTransferToInvestibleOpen] = useState(false);
@@ -372,38 +374,67 @@ export default function PlatformFundsPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                     <Table>
-                        <TableHeader>
-                        <TableRow>
-                            <TableHead>Date Created</TableHead>
-                            <TableHead>Original Amount</TableHead>
-                            <TableHead className="text-right">Investible Balance</TableHead>
-                        </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                        {isLoading && Array.from({length: 3}).map((_, i) => (
-                           <TableRow key={i}>
-                                <TableCell data-label="Date Created"><Skeleton className="h-5 w-32" /></TableCell>
-                                <TableCell data-label="Original Amount"><Skeleton className="h-5 w-28" /></TableCell>
-                                <TableCell data-label="Investible Balance"><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
-                            </TableRow>
-                        ))}
-                        {!isLoading && fundBatches?.map(batch => (
-                            <TableRow key={batch.id}>
-                                <TableCell data-label="Date Created">{formatDate(batch.createdAt)}</TableCell>
-                                <TableCell data-label="Original Amount" className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</TableCell>
-                                <TableCell data-label="Investible Balance" className="text-right text-primary font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
-                            </TableRow>
-                        ))}
-                        {!isLoading && !fundBatches?.length && (
-                             <TableRow>
-                                <TableCell colSpan={3} className="h-24 text-center">
-                                    No fund batches found for the platform.
-                                </TableCell>
-                            </TableRow>
-                        )}
-                        </TableBody>
-                    </Table>
+                    {isLoading && (
+                        isMobile ? (
+                            <div className="space-y-3">
+                                {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-lg" />)}
+                            </div>
+                        ) : (
+                            <Table>
+                                <TableHeader><TableRow><TableHead>Date Created</TableHead><TableHead>Original Amount</TableHead><TableHead className="text-right">Investible Balance</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                    {Array.from({length: 3}).map((_, i) => (
+                                       <TableRow key={i}>
+                                            <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                                            <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+                                            <TableCell><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        )
+                    )}
+                    {!isLoading && fundBatches && fundBatches.length > 0 ? (
+                         isMobile ? (
+                            <div className="space-y-3">
+                                {fundBatches.map(batch => (
+                                    <Card key={batch.id} className="p-4">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</p>
+                                                <p className="text-xs text-muted-foreground">{formatDate(batch.createdAt)}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xs text-muted-foreground">Available</p>
+                                                <p className="font-medium text-primary">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</p>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                ))}
+                            </div>
+                        ) : (
+                            <Table>
+                                <TableHeader>
+                                <TableRow>
+                                    <TableHead>Date Created</TableHead>
+                                    <TableHead>Original Amount</TableHead>
+                                    <TableHead className="text-right">Investible Balance</TableHead>
+                                </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                {fundBatches?.map(batch => (
+                                    <TableRow key={batch.id}>
+                                        <TableCell>{formatDate(batch.createdAt)}</TableCell>
+                                        <TableCell className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</TableCell>
+                                        <TableCell className="text-right text-primary font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
+                                    </TableRow>
+                                ))}
+                                </TableBody>
+                            </Table>
+                        )
+                    ) : (
+                        !isLoading && <div className="p-4 py-12 text-center text-sm text-muted-foreground border rounded-lg">No fund batches found for the platform.</div>
+                    )}
                 </CardContent>
             </Card>
 
@@ -416,7 +447,7 @@ export default function PlatformFundsPage() {
                     <CardDescription>
                        Manage operational funds: deposits, expenses, and transfers.
                     </CardDescription>
-                    <div className="flex gap-2 pt-2">
+                    <div className="flex flex-wrap gap-2 pt-2">
                         <Dialog open={isDepositOpen} onOpenChange={setDepositOpen}>
                             <DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2 h-4 w-4" />Add Funds</Button></DialogTrigger>
                             <DialogContent>
@@ -446,44 +477,73 @@ export default function PlatformFundsPage() {
                     </div>
                 </CardHeader>
                 <CardContent>
-                     <Table>
-                        <TableHeader>
-                        <TableRow>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Description</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
-                        </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                        {isLoading && Array.from({length: 4}).map((_, i) => (
-                           <TableRow key={i}>
-                                <TableCell data-label="Date"><Skeleton className="h-5 w-32" /></TableCell>
-                                <TableCell data-label="Type"><Skeleton className="h-5 w-28" /></TableCell>
-                                <TableCell data-label="Description"><Skeleton className="h-5 w-40" /></TableCell>
-                                <TableCell data-label="Amount"><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
-                            </TableRow>
-                        ))}
-                        {!isLoading && adminTransactions?.map(tx => (
-                            <TableRow key={tx.id}>
-                                <TableCell data-label="Date">{formatDate(tx.createdAt)}</TableCell>
-                                <TableCell data-label="Type"><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell>
-                                <TableCell data-label="Description">{tx.description}</TableCell>
-                                <TableCell data-label="Amount" className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell>
-                            </TableRow>
-                        ))}
-                        {!isLoading && !adminTransactions?.length && (
-                             <TableRow>
-                                <TableCell colSpan={4} className="h-24 text-center">
-                                    No administrative activities found.
-                                </TableCell>
-                            </TableRow>
-                        )}
-                        </TableBody>
-                    </Table>
+                     {isLoading && (
+                        isMobile ? (
+                            <div className="space-y-3">
+                                {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-lg" />)}
+                            </div>
+                        ) : (
+                            <Table>
+                                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                    {Array.from({length: 4}).map((_, i) => (
+                                       <TableRow key={i}>
+                                            <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                                            <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+                                            <TableCell><Skeleton className="h-5 w-40" /></TableCell>
+                                            <TableCell><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        )
+                    )}
+                    {!isLoading && adminTransactions && adminTransactions.length > 0 ? (
+                        isMobile ? (
+                            <div className="space-y-3">
+                                {adminTransactions.map(tx => (
+                                    <Card key={tx.id} className="p-4">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-medium">{tx.description}</p>
+                                                <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'} className="mt-1">{tx.type}</Badge>
+                                                <p className="text-xs text-muted-foreground mt-1">{formatDate(tx.createdAt)}</p>
+                                            </div>
+                                            <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</p>
+                                        </div>
+                                    </Card>
+                                ))}
+                            </div>
+                        ) : (
+                            <Table>
+                                <TableHeader>
+                                <TableRow>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Type</TableHead>
+                                    <TableHead>Description</TableHead>
+                                    <TableHead className="text-right">Amount</TableHead>
+                                </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                {adminTransactions?.map(tx => (
+                                    <TableRow key={tx.id}>
+                                        <TableCell>{formatDate(tx.createdAt)}</TableCell>
+                                        <TableCell><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell>
+                                        <TableCell>{tx.description}</TableCell>
+                                        <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell>
+                                    </TableRow>
+                                ))}
+                                </TableBody>
+                            </Table>
+                        )
+                    ) : (
+                        !isLoading && <div className="p-4 py-12 text-center text-sm text-muted-foreground border rounded-lg">No administrative activities found.</div>
+                    )}
                 </CardContent>
             </Card>
 
         </div>
     );
 }
+
+    
