@@ -237,7 +237,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                                 </div>
                                 <div className="text-xs space-y-1 pt-2 border-t">
                                     <div className="flex justify-between"><span className="text-muted-foreground">Principal:</span> <span>{formatCurrency(item.principal)}</span></div>
-                                    <div className="flex justify-between"><span className="text-muted-foreground">Interest:</span> <span>{formatCurrency(item.interest)}</span></div>
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Markup:</span> <span>{formatCurrency(item.interest)}</span></div>
                                     <div className="flex justify-between"><span className="text-muted-foreground">Balance:</span> <span>{formatCurrency(item.balance)}</span></div>
                                 </div>
                                 {(item.isActionable && user) && (
@@ -255,7 +255,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                     <TableRow>
                         <TableHead>Due</TableHead>
                         <TableHead>Principal</TableHead>
-                        <TableHead>Interest</TableHead>
+                        <TableHead>Markup</TableHead>
                         <TableHead>Total Payment</TableHead>
                         <TableHead>Balance</TableHead>
                         <TableHead>Status</TableHead>
@@ -267,7 +267,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                         <TableRow key={`${item.installment}-${item.status}`} className={item.isActionable ? 'bg-muted/50' : ''}>
                             <TableCell data-label="Due">{format(item.dueDate, 'PPP')}</TableCell>
                             <TableCell data-label="Principal">{formatCurrency(item.principal)}</TableCell>
-                            <TableCell data-label="Interest">{formatCurrency(item.interest)}</TableCell>
+                            <TableCell data-label="Markup">{formatCurrency(item.interest)}</TableCell>
                             <TableCell data-label="Total Payment" className="font-bold">{formatCurrency(item.payment)}</TableCell>
                             <TableCell data-label="Balance">{formatCurrency(item.balance)}</TableCell>
                             <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
