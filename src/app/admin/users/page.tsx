@@ -20,7 +20,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Users } from 'lucide-react';
+import { PlusCircle, Users, ChevronRight } from 'lucide-react';
 import { CreateUserForm } from './create-user-form';
 import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
@@ -29,6 +29,9 @@ import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Card, CardContent } from '@/components/ui/card';
+import { useIsMobile } from '@/hooks/use-mobile';
+
 
 type User = DocumentData & {
     id: string;
@@ -39,10 +42,52 @@ type User = DocumentData & {
 
 function UsersTable({ users, loading }: { users: User[] | null, loading: boolean }) {
   const router = useRouter();
+  const isMobile = useIsMobile();
 
   const handleRowClick = (userId: string) => {
     router.push(`/admin/users/${userId}`);
   };
+
+  if (loading) {
+      return (
+          <div className="space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-20 w-full" />
+              ))}
+          </div>
+      );
+  }
+  
+  if (!users || users.length === 0) {
+      return (
+          <div className="p-4 py-12 text-center text-sm text-muted-foreground border rounded-lg">
+              No users found in this category.
+          </div>
+      );
+  }
+
+  if (isMobile) {
+      return (
+          <div className="space-y-3">
+              {users.map(user => (
+                  <Card key={user.id} onClick={() => handleRowClick(user.id)} className="cursor-pointer hover:bg-muted/50">
+                      <CardContent className="flex items-center gap-4 p-4">
+                          <Avatar className="h-12 w-12">
+                              <AvatarImage src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user.id}`} alt={user.name} />
+                              <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 space-y-1">
+                              <p className="font-medium">{user.name}</p>
+                              <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+                              <Badge variant={user.role === 'Admin' ? 'default' : 'secondary'}>{user.role}</Badge>
+                          </div>
+                          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      </CardContent>
+                  </Card>
+              ))}
+          </div>
+      )
+  }
   
   return (
     <div className="rounded-lg border shadow-sm">
@@ -55,24 +100,7 @@ function UsersTable({ users, loading }: { users: User[] | null, loading: boolean
           </TableRow>
         </TableHeader>
         <TableBody>
-          {loading &&
-            Array.from({ length: 5 }).map((_, i) => (
-              <TableRow key={i}>
-                <TableCell data-label="Name">
-                  <div className="flex items-center gap-3">
-                    <Skeleton className="h-10 w-10 rounded-full" />
-                    <Skeleton className="h-5 w-32" />
-                  </div>
-                </TableCell>
-                <TableCell data-label="Email">
-                  <Skeleton className="h-5 w-40" />
-                </TableCell>
-                <TableCell data-label="Role">
-                  <Skeleton className="h-5 w-20" />
-                </TableCell>
-              </TableRow>
-            ))}
-          {!loading && users?.map((user) => (
+          {users?.map((user) => (
             <TableRow key={user.id} onClick={() => handleRowClick(user.id)} className="cursor-pointer">
               <TableCell data-label="Name" className="font-medium">
                 <div className="flex items-center gap-3">
@@ -93,11 +121,6 @@ function UsersTable({ users, loading }: { users: User[] | null, loading: boolean
           ))}
         </TableBody>
       </Table>
-       {!loading && users?.length === 0 && (
-        <div className="p-4 text-center text-sm text-muted-foreground">
-            No users found.
-        </div>
-       )}
     </div>
   );
 }

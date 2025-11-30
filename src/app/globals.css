@@ -100,7 +100,7 @@ body {
       @apply block w-full;
     }
     .responsive-table tr {
-      @apply mb-4 block rounded-lg border;
+      @apply mb-4 block rounded-lg border bg-card p-4;
     }
     .responsive-table td {
       @apply flex items-center justify-between text-right;
