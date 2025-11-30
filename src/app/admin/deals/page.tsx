@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FileText, PlusCircle } from 'lucide-react';
+import { FileText, PlusCircle, ChevronRight } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, DocumentData, Timestamp } from 'firebase/firestore';
@@ -30,9 +30,19 @@ import { Deal } from '@/lib/types';
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useRouter } from 'next/navigation';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Card, CardContent } from '@/components/ui/card';
+
+const statusVariant = {
+  Pending: 'secondary',
+  Active: 'default',
+  Completed: 'outline',
+  Terminated: 'destructive',
+} as const;
 
 function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean }) {
   const router = useRouter();
+  const isMobile = useIsMobile();
 
   const handleRowClick = (dealId: string) => {
     router.push(`/admin/deals/${dealId}`);
@@ -43,14 +53,81 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
     if (timestamp instanceof Timestamp) {
       return format(timestamp.toDate(), 'PPP');
     }
-    // Handle cases where it might already be a Date object or a string
     try {
       return format(new Date(timestamp as any), 'PPP');
     } catch (e) {
       return 'Invalid Date';
     }
   };
+
+  if (loading) {
+    if (isMobile) {
+      return (
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full" />
+          ))}
+        </div>
+      );
+    }
+    return (
+      <div className="rounded-lg border shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Deal Name</TableHead>
+              <TableHead>Client</TableHead>
+              <TableHead>Principal</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Created At</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <TableRow key={i}>
+                <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  }
   
+  if (!deals || deals.length === 0) {
+    return (
+       <div className="p-4 py-12 text-center text-sm text-muted-foreground border rounded-lg">
+          No deals found. Create one to get started.
+      </div>
+    );
+  }
+
+  if (isMobile) {
+    return (
+      <div className="space-y-3">
+        {deals.map((deal) => (
+          <Card key={deal.id} onClick={() => handleRowClick(deal.id)} className="cursor-pointer hover:bg-muted/50">
+            <CardContent className="flex items-center gap-4 p-4">
+              <div className="flex-1 space-y-1">
+                <p className="font-medium">{deal.dealName}</p>
+                <p className="text-sm text-muted-foreground truncate">{deal.clientName}</p>
+                <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</span>
+                    <Badge variant={statusVariant[deal.status]}>{deal.status}</Badge>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border shadow-sm">
       <Table>
@@ -59,31 +136,18 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
             <TableHead>Deal Name</TableHead>
             <TableHead>Client</TableHead>
             <TableHead>Principal</TableHead>
-            <TableHead>Duration</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Created At</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {loading &&
-            Array.from({ length: 3 }).map((_, i) => (
-              <TableRow key={i}>
-                <TableCell data-label="Deal Name"><Skeleton className="h-5 w-32" /></TableCell>
-                <TableCell data-label="Client"><Skeleton className="h-5 w-24" /></TableCell>
-                <TableCell data-label="Principal"><Skeleton className="h-5 w-20" /></TableCell>
-                <TableCell data-label="Duration"><Skeleton className="h-5 w-24" /></TableCell>
-                <TableCell data-label="Status"><Skeleton className="h-5 w-20" /></TableCell>
-                <TableCell data-label="Created At"><Skeleton className="h-5 w-24" /></TableCell>
-              </TableRow>
-            ))}
-          {!loading && deals?.map((deal) => (
+          {deals.map((deal) => (
             <TableRow key={deal.id} onClick={() => handleRowClick(deal.id)} className="cursor-pointer">
               <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
               <TableCell data-label="Client">{deal.clientName}</TableCell>
               <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
-              <TableCell data-label="Duration">{deal.durationValue} {deal.durationUnit}</TableCell>
               <TableCell data-label="Status">
-                <Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>
+                <Badge variant={statusVariant[deal.status]}>
                   {deal.status}
                 </Badge>
               </TableCell>
@@ -94,11 +158,6 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
           ))}
         </TableBody>
       </Table>
-       {!loading && deals?.length === 0 && (
-        <div className="p-4 text-center text-sm text-muted-foreground">
-            No deals found. Create one to get started.
-        </div>
-       )}
     </div>
   );
 }
