@@ -29,6 +29,7 @@ import { ViewPageNav } from '@/components/view-page-nav';
 import { payZakatAction } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 
 
 type UserProfile = DocumentData & {
@@ -63,6 +64,8 @@ const DURATION_IN_DAYS = {
     Months: 30.4375,
     Years: 365.25,
 };
+
+const ITEMS_PER_PAGE = 10;
 
 function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): number {
     return value * (DURATION_IN_DAYS[unit] || 0);
@@ -144,6 +147,7 @@ export default function UserDetailPage() {
   const [isZakatPending, startZakatTransition] = useTransition();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const [currentPage, setCurrentPage] = useState(1);
 
   const userRef = useMemo(() => {
     if (!firestore || !userId) return null;
@@ -220,6 +224,17 @@ export default function UserDetailPage() {
         return { ...batch, type };
     });
   }, [fundBatches]);
+
+  const paginatedTransactions = useMemo(() => {
+    if (!transactions) return [];
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return transactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [transactions, currentPage]);
+
+  const totalPages = useMemo(() => {
+    if (!transactions) return 0;
+    return Math.ceil(transactions.length / ITEMS_PER_PAGE);
+  }, [transactions]);
   
   const handlePayZakat = () => {
     startZakatTransition(async () => {
@@ -420,7 +435,7 @@ export default function UserDetailPage() {
                         <CardContent>
                            {isMobile ? (
                                 <div className="space-y-3">
-                                    {transactions?.length > 0 ? transactions.map(tx => (
+                                    {paginatedTransactions?.length > 0 ? paginatedTransactions.map(tx => (
                                         <Card key={tx.id} className="p-4">
                                             <div className="flex justify-between items-start">
                                                 <div>
@@ -446,7 +461,7 @@ export default function UserDetailPage() {
                                     </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                    {transactions?.map(tx => (
+                                    {paginatedTransactions?.map(tx => (
                                         <TableRow key={tx.id}>
                                             <TableCell data-label="Date">{formatDate(tx.createdAt)}</TableCell>
                                             <TableCell data-label="Type"><Badge variant={tx.amount > 0 ? 'default' : 'secondary'}>{tx.type}</Badge></TableCell>
@@ -455,7 +470,7 @@ export default function UserDetailPage() {
                                             </TableCell>
                                         </TableRow>
                                     ))}
-                                    {!transactions?.length && (
+                                    {!paginatedTransactions?.length && (
                                         <TableRow>
                                             <TableCell colSpan={3} className="h-24 text-center">
                                                 No transactions found.
@@ -466,6 +481,27 @@ export default function UserDetailPage() {
                                 </Table>
                             )}
                         </CardContent>
+                        {totalPages > 1 && (
+                            <div className="p-4 border-t">
+                                <Pagination>
+                                    <PaginationContent>
+                                        <PaginationItem>
+                                            <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} />
+                                        </PaginationItem>
+                                        {[...Array(totalPages)].map((_, i) => (
+                                            <PaginationItem key={i}>
+                                                <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>
+                                                    {i + 1}
+                                                </PaginationLink>
+                                            </PaginationItem>
+                                        ))}
+                                        <PaginationItem>
+                                            <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} />
+                                        </PaginationItem>
+                                    </PaginationContent>
+                                </Pagination>
+                            </div>
+                        )}
                     </Card>
                 </div>
             )}
@@ -473,5 +509,7 @@ export default function UserDetailPage() {
     </div>
   );
 }
+
+    
 
     
