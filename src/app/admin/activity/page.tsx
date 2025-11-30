@@ -126,11 +126,13 @@ export default function ActivityPage() {
         if (isLoading) {
             if (isMobile) {
                 return (
-                    <div className="space-y-4">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                            <Skeleton key={i} className="h-28 w-full rounded-lg" />
-                        ))}
-                    </div>
+                    <Card>
+                        <CardContent className="space-y-4 p-4">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                                <Skeleton key={i} className="h-28 w-full rounded-lg" />
+                            ))}
+                        </CardContent>
+                    </Card>
                 );
             }
             return (
@@ -169,30 +171,32 @@ export default function ActivityPage() {
 
         if (isMobile) {
             return (
-                <div className="space-y-3">
-                    {paginatedTransactions.map((tx) => (
-                        <Card key={tx.id}>
-                            <CardContent className="p-4 space-y-3">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="font-medium">{getUserName(tx.userId)}</p>
-                                        <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'} className="mt-1">{tx.type}</Badge>
-                                        <p className="text-xs text-muted-foreground mt-1">{formatDate(tx.createdAt)}</p>
+                <Card>
+                    <CardContent className="p-4 space-y-3">
+                        {paginatedTransactions.map((tx) => (
+                            <Card key={tx.id} className="bg-background">
+                                <CardContent className="p-4 space-y-3">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="font-medium">{getUserName(tx.userId)}</p>
+                                            <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'} className="mt-1">{tx.type}</Badge>
+                                            <p className="text-xs text-muted-foreground mt-1">{formatDate(tx.createdAt)}</p>
+                                        </div>
+                                        <p className={`font-bold text-lg ${tx.amount > 0 && tx.type !== 'Withdrawal' ? 'text-primary' : 'text-foreground'}`}>
+                                            {tx.amount > 0 && tx.type !== 'Withdrawal' ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                        </p>
                                     </div>
-                                    <p className={`font-bold text-lg ${tx.amount > 0 && tx.type !== 'Withdrawal' ? 'text-primary' : 'text-foreground'}`}>
-                                        {tx.amount > 0 && tx.type !== 'Withdrawal' ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
-                                    </p>
-                                </div>
-                                {tx.dealName && (
-                                    <div className="text-sm pt-2 border-t">
-                                        <span className="text-muted-foreground">Deal: </span>
-                                        <span className="font-medium">{tx.dealName}</span>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
+                                    {tx.dealName && (
+                                        <div className="text-sm pt-2 border-t">
+                                            <span className="text-muted-foreground">Deal: </span>
+                                            <span className="font-medium">{tx.dealName}</span>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </CardContent>
+                </Card>
             )
         }
 
@@ -257,11 +261,16 @@ export default function ActivityPage() {
                 </DropdownMenu>
             </PageHeader>
             
-            <Card>
-                <CardContent className={isMobile ? 'p-0 bg-transparent border-0' : 'p-0'}>
-                    {renderContent()}
-                </CardContent>
-            </Card>
+            {isMobile ? (
+                renderContent()
+            ) : (
+                <Card>
+                    <CardContent className="p-0">
+                        {renderContent()}
+                    </CardContent>
+                </Card>
+            )}
+
 
             {totalPages > 1 && (
                 <div className="mt-6">
