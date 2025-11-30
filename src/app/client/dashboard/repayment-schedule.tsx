@@ -186,6 +186,8 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
     return <Badge variant={variantMap[status]} className="flex items-center gap-1.5"><Icon className="h-3 w-3" /> {status}</Badge>;
   };
 
+  const formatCurrency = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+
   if (repaymentsLoading) {
       return (
           <div className="p-4">
@@ -228,10 +230,15 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                             <CardContent className="p-4 space-y-3">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <p className="font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.payment)}</p>
+                                        <p className="font-bold">{formatCurrency(item.payment)}</p>
                                         <p className="text-xs text-muted-foreground">Due: {format(item.dueDate, 'PPP')}</p>
                                     </div>
                                     <StatusBadge status={item.status} />
+                                </div>
+                                <div className="text-xs space-y-1 pt-2 border-t">
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Principal:</span> <span>{formatCurrency(item.principal)}</span></div>
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Interest:</span> <span>{formatCurrency(item.interest)}</span></div>
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Balance:</span> <span>{formatCurrency(item.balance)}</span></div>
                                 </div>
                                 {(item.isActionable && user) && (
                                     <div className="pt-3 border-t">
@@ -247,7 +254,10 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                     <TableHeader>
                     <TableRow>
                         <TableHead>Due</TableHead>
-                        <TableHead>Total</TableHead>
+                        <TableHead>Principal</TableHead>
+                        <TableHead>Interest</TableHead>
+                        <TableHead>Total Payment</TableHead>
+                        <TableHead>Balance</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Action</TableHead>
                     </TableRow>
@@ -256,7 +266,10 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                     {paginatedSchedule.map(item => (
                         <TableRow key={`${item.installment}-${item.status}`} className={item.isActionable ? 'bg-muted/50' : ''}>
                             <TableCell data-label="Due">{format(item.dueDate, 'PPP')}</TableCell>
-                            <TableCell data-label="Total" className="font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.payment)}</TableCell>
+                            <TableCell data-label="Principal">{formatCurrency(item.principal)}</TableCell>
+                            <TableCell data-label="Interest">{formatCurrency(item.interest)}</TableCell>
+                            <TableCell data-label="Total Payment" className="font-bold">{formatCurrency(item.payment)}</TableCell>
+                            <TableCell data-label="Balance">{formatCurrency(item.balance)}</TableCell>
                             <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
                             <TableCell data-label="Action" className="text-right">
                             {(item.isActionable && user) && (
