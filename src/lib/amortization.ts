@@ -12,6 +12,9 @@ export interface ScheduleInstallment {
 }
 
 function getPeriods(deal: Deal): { totalPeriods: number; addPeriod: (date: Date, count: number) => Date } {
+  if (!deal.createdAt) {
+      return { totalPeriods: 0, addPeriod: (date, count) => add(date, { days: count }) };
+  }
   const startDate = deal.createdAt.toDate();
   let totalPeriods = 0;
   let addPeriod: (date: Date, count: number) => Date;
@@ -44,6 +47,9 @@ function getPeriods(deal: Deal): { totalPeriods: number; addPeriod: (date: Date,
       break;
     case 'Monthly':
       totalPeriods = differenceInCalendarMonths(endDate, startDate);
+       if (totalPeriods === 0) { // Handle cases where duration is less than a month
+          totalPeriods = Math.floor(differenceInDays(endDate, startDate) / 30);
+      }
       addPeriod = (date, count) => add(date, { months: count });
       break;
     default:
@@ -51,7 +57,7 @@ function getPeriods(deal: Deal): { totalPeriods: number; addPeriod: (date: Date,
       addPeriod = (date, count) => add(date, { months: count });
       break;
   }
-  return { totalPeriods, addPeriod };
+  return { totalPeriods: Math.max(1, totalPeriods), addPeriod };
 }
 
 
@@ -122,7 +128,7 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
         const principalPayment = emi - interestPayment;
         remainingBalance -= principalPayment;
 
-        if (i === totalPeriods && remainingBalance < 1 && remainingBalance > -1) {
+        if (i === totalPeriods && Math.abs(remainingBalance) < 1) {
             remainingBalance = 0;
         }
 

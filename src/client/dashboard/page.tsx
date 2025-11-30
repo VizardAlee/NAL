@@ -100,8 +100,8 @@ function DealCard({ deal }: { deal: Deal }) {
                </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                        <p className="text-muted-foreground">Interest Rate</p>
-                        <p className="font-medium">{deal.interestRate}%</p>
+                        <p className="text-muted-foreground">Profit Rate</p>
+                        <p className="font-medium">{deal.profitRate}%</p>
                     </div>
                     <div>
                         <p className="text-muted-foreground">Duration</p>
@@ -125,9 +125,9 @@ function DealCard({ deal }: { deal: Deal }) {
             </CardContent>
             <div className="mt-auto flex-grow">
                  <Tabs defaultValue="schedule" className="w-full">
-                    <TabsList>
-                        <TabsTrigger value="schedule">Schedule</TabsTrigger>
-                        <TabsTrigger value="history">History</TabsTrigger>
+                    <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="schedule">Upcoming Schedule</TabsTrigger>
+                        <TabsTrigger value="history">Repayment History</TabsTrigger>
                     </TabsList>
                     <TabsContent value="schedule">
                         <RepaymentSchedule deal={deal} initialRepayments={repayments} repaymentsLoading={repaymentsLoading} />
