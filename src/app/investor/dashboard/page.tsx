@@ -21,6 +21,7 @@ import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { reinvestAction } from "./actions";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 
 type Transaction = DocumentData & {
@@ -91,6 +92,7 @@ export default function InvestorDashboard() {
   const firestore = useFirestore();
   const { user, loading: userLoading } = useUser();
   const [isWithdrawOpen, setWithdrawOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   // Query for all transactions for chart and metrics
   const allTransactionsQuery = useMemo(() => {
@@ -131,7 +133,7 @@ export default function InvestorDashboard() {
   
   const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
 
-  const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading;
+  const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined;
 
   const financialMetrics = useMemo(() => {
     if (!allTransactions) {
@@ -328,39 +330,58 @@ export default function InvestorDashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-           <div className="relative w-full overflow-auto">
-                <Table>
-                <TableHeader>
-                <TableRow>
-                    <TableHead>Deal Name</TableHead>
-                    <TableHead>Principal</TableHead>
-                    <TableHead>Profit Rate</TableHead>
-                    <TableHead>Status</TableHead>
-                </TableRow>
-                </TableHeader>
-                <TableBody>
-                {isLoading && Array.from({length: 1}).map((_, i) => (
-                    <TableRow key={i}>
-                        <TableCell data-label="Deal Name"><Skeleton className="h-5 w-32" /></TableCell>
-                        <TableCell data-label="Principal"><Skeleton className="h-5 w-24" /></TableCell>
-                        <TableCell data-label="Profit Rate"><Skeleton className="h-5 w-20" /></TableCell>
-                        <TableCell data-label="Status"><Skeleton className="h-5 w-20" /></TableCell>
-                    </TableRow>
-                ))}
-                {!isLoading && deals?.map((deal) => (
-                    <TableRow key={deal.id}>
-                        <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
-                        <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
-                        <TableCell data-label="Profit Rate">{deal.profitRate}%</TableCell>
-                        <TableCell data-label="Status"><Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>{deal.status}</Badge></TableCell>
-                    </TableRow>
-                ))}
-                {!isLoading && deals?.length === 0 && (
-                    <TableRow><TableCell colSpan={4} className="h-24 text-center">You have not invested in any deals yet.</TableCell></TableRow>
-                )}
-                </TableBody>
-            </Table>
-           </div>
+            {isLoading ? (
+                <div className="space-y-3">
+                    {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-lg" />)}
+                </div>
+            ) : isMobile ? (
+                <div className="space-y-3">
+                    {deals && deals.length > 0 ? deals.map((deal) => (
+                        <Card key={deal.id}>
+                            <CardContent className="p-4 space-y-2">
+                                <div className="flex justify-between items-start">
+                                    <p className="font-medium">{deal.dealName}</p>
+                                    <Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>{deal.status}</Badge>
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                    Principal: {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                    Profit Rate: {deal.profitRate}%
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )) : (
+                        <div className="text-center text-sm text-muted-foreground py-10">You have not invested in any deals yet.</div>
+                    )}
+                </div>
+            ) : (
+                <div className="relative w-full overflow-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Deal Name</TableHead>
+                                <TableHead>Principal</TableHead>
+                                <TableHead>Profit Rate</TableHead>
+                                <TableHead>Status</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {!isLoading && deals?.map((deal) => (
+                                <TableRow key={deal.id}>
+                                    <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
+                                    <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
+                                    <TableCell data-label="Profit Rate">{deal.profitRate}%</TableCell>
+                                    <TableCell data-label="Status"><Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>{deal.status}</Badge></TableCell>
+                                </TableRow>
+                            ))}
+                            {!isLoading && deals?.length === 0 && (
+                                <TableRow><TableCell colSpan={4} className="h-24 text-center">You have not invested in any deals yet.</TableCell></TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
         </CardContent>
       </Card>
 
@@ -377,47 +398,64 @@ export default function InvestorDashboard() {
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="relative w-full overflow-auto">
-            <Table>
-                <TableHeader>
-                <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Details</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-                </TableHeader>
-                <TableBody>
-                {isLoading && Array.from({length: 3}).map((_, i) => (
-                    <TableRow key={i}>
-                        <TableCell data-label="Date"><Skeleton className="h-5 w-24" /></TableCell>
-                        <TableCell data-label="Type"><Skeleton className="h-5 w-32" /></TableCell>
-                        <TableCell data-label="Details"><Skeleton className="h-5 w-28" /></TableCell>
-                        <TableCell data-label="Amount" className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
-                    </TableRow>
-                ))}
-                {!isLoading && recentTransactions?.map((tx) => (
-                    <TableRow key={tx.id}>
-                    <TableCell data-label="Date">{formatDate(tx.createdAt)}</TableCell>
-                    <TableCell data-label="Type">
-                        <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
-                    </TableCell>
-                    <TableCell data-label="Details">{tx.dealName || 'N/A'}</TableCell>
-                    <TableCell data-label="Amount" className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
-                        {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
-                    </TableCell>
-                    </TableRow>
-                ))}
-                {!isLoading && recentTransactions?.length === 0 && (
-                    <TableRow>
-                        <TableCell colSpan={4} className="h-24 text-center">
-                            No transactions yet.
-                        </TableCell>
-                    </TableRow>
-                )}
-                </TableBody>
-            </Table>
-          </div>
+            {isLoading ? (
+                <div className="space-y-3">
+                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}
+                </div>
+            ) : isMobile ? (
+                <div className="space-y-3">
+                    {recentTransactions && recentTransactions.length > 0 ? recentTransactions.map((tx) => (
+                        <Card key={tx.id}>
+                            <CardContent className="p-4 space-y-2">
+                                <div className="flex justify-between items-start">
+                                    <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
+                                    <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
+                                        {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                    </p>
+                                </div>
+                                <p className="text-sm text-muted-foreground">{tx.dealName || 'N/A'}</p>
+                                <p className="text-xs text-muted-foreground">{formatDate(tx.createdAt)}</p>
+                            </CardContent>
+                        </Card>
+                    )) : (
+                        <div className="text-center text-sm text-muted-foreground py-10">No transactions yet.</div>
+                    )}
+                </div>
+            ) : (
+                <div className="relative w-full overflow-auto">
+                    <Table>
+                        <TableHeader>
+                        <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Details</TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
+                        </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                        {!isLoading && recentTransactions?.map((tx) => (
+                            <TableRow key={tx.id}>
+                            <TableCell data-label="Date">{formatDate(tx.createdAt)}</TableCell>
+                            <TableCell data-label="Type">
+                                <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
+                            </TableCell>
+                            <TableCell data-label="Details">{tx.dealName || 'N/A'}</TableCell>
+                            <TableCell data-label="Amount" className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
+                                {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                            </TableCell>
+                            </TableRow>
+                        ))}
+                        {!isLoading && recentTransactions?.length === 0 && (
+                            <TableRow>
+                                <TableCell colSpan={4} className="h-24 text-center">
+                                    No transactions yet.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
         </CardContent>
       </Card>
     </div>
