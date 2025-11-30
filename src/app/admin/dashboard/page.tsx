@@ -4,7 +4,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LayoutDashboard, Users, AlertTriangle, Activity, Briefcase, DollarSign, Zap, TrendingUp, HandCoins } from "lucide-react";
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import { Area, AreaChart, Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, Timestamp, DocumentData, where, orderBy, limit } from "firebase/firestore";
@@ -174,29 +174,79 @@ export default function AdminDashboardPage() {
       />
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="lg:col-span-3">
-            <CardHeader>
-                <CardTitle>
-                    <span className="md:hidden">Total Value Locked</span>
-                    <span className="hidden md:inline">Total Value Locked (TVL) by Month</span>
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="pl-2">
-                {isLoading ? (
-                    <div className="h-[250px] w-full flex items-center justify-center">
-                        <Skeleton className="h-full w-full" />
-                    </div>
-                ) : (
-                 <ChartContainer config={chartConfig} className="h-[250px] w-full">
-                    <BarChart accessibilityLayer data={chartData} margin={{ top: 20, right: 0, bottom: 20, left: 0 }}>
-                        <CartesianGrid vertical={false} />
-                        <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
-                        <YAxis tickFormatter={(value) => `₦${Number(value) / 1000000}M`} tickLine={false} axisLine={false} tickMargin={8} />
-                        <Tooltip cursor={false} content={<ChartTooltipContent indicator="dot" formatter={(value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(value))} />} />
-                        <Bar dataKey="tvl" fill="var(--color-tvl)" radius={4} />
-                    </BarChart>
-                </ChartContainer>
-                )}
-            </CardContent>
+          <CardHeader>
+            <CardTitle>Total Value Locked (TVL)</CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pt-4 pb-6">
+            {isLoading ? (
+              <Skeleton className="h-[280px] w-full rounded-xl" />
+            ) : (
+              <div className="w-full overflow-x-hidden">
+                {/* This is the magic container */}
+                <div className="mx-auto w-full max-w-2xl -ml-4 -mr-4 md:ml-0 md:mr-0">
+                  <ChartContainer config={chartConfig} className="h-[280px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={chartData}
+                        margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                      >
+                        <defs>
+                          <linearGradient id="fillTvl" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="var(--color-tvl)" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="var(--color-tvl)" stopOpacity={0.05}/>
+                          </linearGradient>
+                        </defs>
+
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                        
+                        {/* X Axis - always fits */}
+                        
+                        <XAxis 
+                          dataKey="month"
+                          tick={{ fontSize: 12 }}
+                          tickLine={false}
+                          axisLine={false}
+                          interval="preserveStartEnd"   
+                        />
+
+                        {/* Y Axis - never cropped */}
+                        <YAxis 
+                          tick={{ fontSize: 11 }}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(value) => 
+                            value >= 1_000_000 
+                              ? `₦${(value / 1_000_000).toFixed(1)}M`
+                              : `₦${(value / 1_000).toFixed(0)}K`
+                          }
+                        />
+
+                        <Tooltip
+                          content={<ChartTooltipContent
+                            formatter={(value) => 
+                              new Intl.NumberFormat('en-NG', { 
+                                style: 'currency', 
+                                currency: 'NGN' 
+                              }).format(Number(value))
+                            }
+                          />}
+                        />
+
+                        <Area
+                          type="monotone"
+                          dataKey="tvl"
+                          stroke="var(--color-tvl)"
+                          strokeWidth={3}
+                          fillOpacity={1}
+                          fill="url(#fillTvl)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </ChartContainer>
+                </div>
+              </div>
+            )}
+          </CardContent>
         </Card>
         <div className="grid gap-6 sm:grid-cols-2 lg:col-span-3 lg:grid-cols-3">
             <Card>
@@ -288,5 +338,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-
-    
