@@ -22,6 +22,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { useIsMobile } from '@/hooks/use-mobile';
+
 
 type WithdrawalRequest = DocumentData & {
   id: string;
@@ -45,11 +47,78 @@ function WithdrawalsTable({
     onProcessRequest?: (request: WithdrawalRequest, newStatus: 'Approved' | 'Rejected') => void
 }) {
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const isMobile = useIsMobile();
 
     const handleProcessClick = (request: WithdrawalRequest, newStatus: 'Approved' | 'Rejected') => {
         setProcessingId(request.id);
         onProcessRequest?.(request, newStatus);
     };
+
+    if (isLoading) {
+        return (
+            <div className="space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                    isMobile ? <Skeleton key={i} className="h-28 w-full" /> : 
+                    <TableRow key={i}>
+                        <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+                        <TableCell className="text-right"><Skeleton className="h-8 w-40 ml-auto" /></TableCell>
+                    </TableRow>
+                ))}
+            </div>
+        );
+    }
+    
+    if (requests.length === 0) {
+        return (
+             <div className="p-4 py-12 text-center text-sm text-muted-foreground border rounded-lg">
+                No withdrawal requests found in this category.
+            </div>
+        );
+    }
+
+    if (isMobile) {
+        return (
+            <div className="space-y-3">
+                {requests.map((request) => (
+                    <Card key={request.id}>
+                        <CardContent className="p-4 space-y-3">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="font-medium">{request.investorName}</p>
+                                    <p className="text-sm text-primary font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.amount)}</p>
+                                    <p className="text-xs text-muted-foreground">{format(request.requestedAt.toDate(), 'PPP')}</p>
+                                </div>
+                                {!showActionButtons && <Badge variant={request.status === 'Approved' ? 'default' : 'destructive'}>{request.status}</Badge>}
+                            </div>
+                            {showActionButtons && (
+                                <div className="flex justify-end gap-2 pt-2 border-t">
+                                     <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleProcessClick(request, 'Rejected')}
+                                        disabled={processingId === request.id}
+                                    >
+                                        {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
+                                        Reject
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        onClick={() => handleProcessClick(request, 'Approved')}
+                                        disabled={processingId === request.id}
+                                    >
+                                        {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+                                        Approve
+                                    </Button>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+        )
+    }
 
     return (
         <Card>
@@ -64,15 +133,6 @@ function WithdrawalsTable({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {isLoading &&
-                            Array.from({ length: 3 }).map((_, i) => (
-                                <TableRow key={i}>
-                                    <TableCell data-label="Investor"><Skeleton className="h-5 w-24" /></TableCell>
-                                    <TableCell data-label="Amount"><Skeleton className="h-5 w-20" /></TableCell>
-                                    <TableCell data-label="Date Requested"><Skeleton className="h-5 w-28" /></TableCell>
-                                    <TableCell data-label="Actions" className="text-right"><Skeleton className="h-8 w-40 ml-auto" /></TableCell>
-                                </TableRow>
-                            ))}
                         {!isLoading && requests.map((request) => (
                             <TableRow key={request.id}>
                                 <TableCell data-label="Investor" className="font-medium">{request.investorName}</TableCell>
@@ -105,13 +165,6 @@ function WithdrawalsTable({
                                 )}
                             </TableRow>
                         ))}
-                        {!isLoading && requests.length === 0 && (
-                            <TableRow>
-                                <TableCell colSpan={4} className="h-24 text-center">
-                                    No withdrawal requests found in this category.
-                                </TableCell>
-                            </TableRow>
-                        )}
                     </TableBody>
                 </Table>
             </CardContent>
