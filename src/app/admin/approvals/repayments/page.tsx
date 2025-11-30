@@ -335,7 +335,7 @@ export default function RepaymentsPage() {
                 icon={CheckCircle}
             />
             <Tabs defaultValue="pending" className="w-full">
-                <TabsList className="flex-wrap h-auto">
+                <TabsList>
                     <TooltipProvider>
                         {tabItems.map(({ value, label, icon: Icon }) => (
                             <Tooltip key={value} delayDuration={0}>
@@ -380,3 +380,4 @@ export default function RepaymentsPage() {
             </Tabs>
         </div>
     );
+}
