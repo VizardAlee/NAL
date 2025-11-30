@@ -85,7 +85,7 @@ function ImportCard({
         <div className="mb-4">
             <h4 className="text-sm font-semibold mb-1">Required CSV Columns:</h4>
             <p className="text-xs text-muted-foreground break-words">
-                <code className="bg-muted p-1 rounded-sm">{requiredFields.join(', ')}</code>
+                <code className="bg-muted p-1 rounded-sm break-words">{requiredFields.join(', ')}</code>
             </p>
         </div>
         <form action={formAction} className="space-y-4">
@@ -119,7 +119,7 @@ function InstructionContent() {
                 <h4 className="font-semibold text-foreground">1. Users File (<code>users.csv</code>)</h4>
                 <p>Contains all your clients and investors.</p>
                 <ul className="list-disc pl-5">
-                    <li><strong>Required Columns:</strong> <code>name</code>, <code>email</code>, <code>role</code></li>
+                    <li><strong>Required Columns:</strong> <code className="bg-muted p-1 rounded-sm break-words">name, email, role</code></li>
                     <li>The <code>role</code> must be either <code>Client</code> or <code>Investor</code>.</li>
                 </ul>
                 <pre className="bg-muted p-2 rounded-md mt-2 text-xs overflow-x-auto"><code>{`name,email,role
@@ -131,7 +131,7 @@ Jane Smith,jane.smith@example.com,Investor`}</code></pre>
                 <h4 className="font-semibold text-foreground">2. Deals File (<code>deals.csv</code>)</h4>
                 <p>Contains all financing deals.</p>
                 <ul className="list-disc pl-5">
-                    <li><strong>Required Columns:</strong> <code>dealName</code>, <code>clientEmail</code>, <code>principal</code>, <code>profitRate</code>, <code>durationValue</code>, <code>durationUnit</code>, <code>repaymentType</code>, <code>repaymentFrequency</code>, <code>status</code>, <code>createdAt</code></li>
+                    <li><strong>Required Columns:</strong> <code className="bg-muted p-1 rounded-sm break-words">dealName, clientEmail, principal, profitRate, durationValue, durationUnit, repaymentType, repaymentFrequency, status, createdAt</code></li>
                     <li><code>clientEmail</code> must match an email from your <code>users.csv</code> file.</li>
                     <li><code>durationUnit</code> can be: <code>Days</code>, <code>Weeks</code>, <code>Fortnights</code>, <code>Months</code>, <code>Years</code>.</li>
                     <li><code>repaymentType</code> can be: <code>Equal Installments</code> or <code>Balloon Payment</code>.</li>
@@ -146,7 +146,7 @@ Q1 Expansion,john.doe@example.com,50000,10,12,Months,Equal Installments,Monthly,
                 <h4 className="font-semibold text-foreground">3. Investments File (<code>investments.csv</code>)</h4>
                 <p>Links investors to the deals they have funded.</p>
                 <ul className="list-disc pl-5">
-                    <li><strong>Required Columns:</strong> <code>investorEmail</code>, <code>dealName</code>, <code>amount</code>, <code>createdAt</code></li>
+                    <li><strong>Required Columns:</strong> <code className="bg-muted p-1 rounded-sm break-words">investorEmail, dealName, amount, createdAt</code></li>
                     <li><code>investorEmail</code> must match an investor's email from your <code>users.csv</code>.</li>
                     <li><code>dealName</code> must match a name from your <code>deals.csv</code>.</li>
                 </ul>
