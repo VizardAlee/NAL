@@ -110,21 +110,21 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
         Monthly: 12,
       };
       const periodsPerYear = frequencyMap[deal.repaymentFrequency] || 12;
-      const interestRatePerPeriod = annualRate / periodsPerYear;
+      const profitRatePerPeriod = annualRate / periodsPerYear;
       
       let emi: number;
-      if (interestRatePerPeriod === 0) {
+      if (profitRatePerPeriod === 0) {
         emi = principal / totalPeriods;
       } else {
-        emi = principal * interestRatePerPeriod * 
-          (Math.pow(1 + interestRatePerPeriod, totalPeriods)) / 
-          (Math.pow(1 + interestRatePerPeriod, totalPeriods) - 1);
+        emi = principal * profitRatePerPeriod * 
+          (Math.pow(1 + profitRatePerPeriod, totalPeriods)) / 
+          (Math.pow(1 + profitRatePerPeriod, totalPeriods) - 1);
       }
 
       let remainingBalance = principal;
 
       for (let i = 1; i <= totalPeriods; i++) {
-        const interestPayment = remainingBalance * interestRatePerPeriod;
+        const interestPayment = remainingBalance * profitRatePerPeriod;
         const principalPayment = emi - interestPayment;
         remainingBalance -= principalPayment;
 
