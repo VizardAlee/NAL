@@ -14,6 +14,8 @@ import { Repayment } from './page';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CheckCircle, Hourglass } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Card, CardContent } from '@/components/ui/card';
 
 type RepaymentHistoryProps = {
   repayments: Repayment[] | null;
@@ -21,6 +23,7 @@ type RepaymentHistoryProps = {
 };
 
 export function RepaymentHistory({ repayments, loading }: RepaymentHistoryProps) {
+    const isMobile = useIsMobile();
     
     const sortedRepayments = repayments
         ? [...repayments].sort((a, b) => b.lodgedAt.toMillis() - a.lodgedAt.toMillis())
@@ -38,7 +41,8 @@ export function RepaymentHistory({ repayments, loading }: RepaymentHistoryProps)
 
     if (loading) {
         return (
-             <div className="p-4">
+             <div className="p-4 space-y-3">
+                <Skeleton className="h-20 w-full" />
                 <Skeleton className="h-20 w-full" />
             </div>
         );
@@ -54,31 +58,47 @@ export function RepaymentHistory({ repayments, loading }: RepaymentHistoryProps)
 
     return (
         <div className="p-4">
-            <Table>
-                <TableHeader>
-                <TableRow>
-                    <TableHead>Date Lodged</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                </TableRow>
-                </TableHeader>
-                <TableBody>
-                {sortedRepayments.map((repayment) => (
-                    <TableRow key={repayment.id}>
-                    <TableCell data-label="Date Lodged">{format(repayment.lodgedAt.toDate(), 'PPP')}</TableCell>
-                    <TableCell data-label="Amount" className="font-medium">
-                        {new Intl.NumberFormat('en-NG', {
-                        style: 'currency',
-                        currency: 'NGN',
-                        }).format(repayment.amount)}
-                    </TableCell>
-                    <TableCell data-label="Status">
-                        <StatusBadge status={repayment.status as any} />
-                    </TableCell>
+            {isMobile ? (
+                <div className="space-y-3">
+                    {sortedRepayments.map((repayment) => (
+                        <Card key={repayment.id}>
+                            <CardContent className="p-4 flex justify-between items-start">
+                                <div>
+                                    <p className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(repayment.amount)}</p>
+                                    <p className="text-xs text-muted-foreground">Lodged: {format(repayment.lodgedAt.toDate(), 'PPP')}</p>
+                                </div>
+                                <StatusBadge status={repayment.status as any} />
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            ) : (
+                <Table>
+                    <TableHeader>
+                    <TableRow>
+                        <TableHead>Date Lodged</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Status</TableHead>
                     </TableRow>
-                ))}
-                </TableBody>
-            </Table>
+                    </TableHeader>
+                    <TableBody>
+                    {sortedRepayments.map((repayment) => (
+                        <TableRow key={repayment.id}>
+                        <TableCell data-label="Date Lodged">{format(repayment.lodgedAt.toDate(), 'PPP')}</TableCell>
+                        <TableCell data-label="Amount" className="font-medium">
+                            {new Intl.NumberFormat('en-NG', {
+                            style: 'currency',
+                            currency: 'NGN',
+                            }).format(repayment.amount)}
+                        </TableCell>
+                        <TableCell data-label="Status">
+                            <StatusBadge status={repayment.status as any} />
+                        </TableCell>
+                        </TableRow>
+                    ))}
+                    </TableBody>
+                </Table>
+            )}
         </div>
     );
 }

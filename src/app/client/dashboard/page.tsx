@@ -18,9 +18,9 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { requestTerminationAction } from "./actions";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 
 export type Repayment = DocumentData & {
@@ -167,6 +167,7 @@ export default function ClientDashboard() {
     const firestore = useFirestore();
     const router = useRouter();
     const { user, loading: userLoading } = useUser();
+    const isMobile = useIsMobile();
 
     const dealsQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
@@ -201,34 +202,57 @@ export default function ClientDashboard() {
                                 <CardDescription>A history of your past financing deals.</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Deal Name</TableHead>
-                                            <TableHead>Principal</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead className="text-right"></TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
+                                {isMobile ? (
+                                    <div className="space-y-3">
                                         {olderDeals.map(deal => (
-                                            <TableRow key={deal.id}>
-                                                <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
-                                                <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
-                                                <TableCell data-label="Status">
+                                            <Card key={deal.id} className="p-4">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <p className="font-medium">{deal.dealName}</p>
+                                                        <p className="text-sm">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</p>
+                                                    </div>
                                                     <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
-                                                </TableCell>
-                                                <TableCell data-label="Action" className="text-right">
-                                                    <Button asChild variant="outline" size="sm">
+                                                </div>
+                                                <div className="mt-2 text-right">
+                                                     <Button asChild variant="outline" size="sm">
                                                         <Link href={`/client/deals/${deal.id}`}>
                                                             View Details <ArrowRight className="ml-2 h-4 w-4" />
                                                         </Link>
                                                     </Button>
-                                                </TableCell>
-                                            </TableRow>
+                                                </div>
+                                            </Card>
                                         ))}
-                                    </TableBody>
-                                </Table>
+                                    </div>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Deal Name</TableHead>
+                                                <TableHead>Principal</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead className="text-right"></TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {olderDeals.map(deal => (
+                                                <TableRow key={deal.id}>
+                                                    <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
+                                                    <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
+                                                    <TableCell data-label="Status">
+                                                        <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
+                                                    </TableCell>
+                                                    <TableCell data-label="Action" className="text-right">
+                                                        <Button asChild variant="outline" size="sm">
+                                                            <Link href={`/client/deals/${deal.id}`}>
+                                                                View Details <ArrowRight className="ml-2 h-4 w-4" />
+                                                            </Link>
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                )}
                             </CardContent>
                         </Card>
                     )}

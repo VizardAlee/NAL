@@ -31,6 +31,8 @@ import { useUser } from '@/firebase';
 import { lodgePaymentAction } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { Timestamp } from 'firebase/firestore';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Card, CardContent } from '@/components/ui/card';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -87,6 +89,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
   const [currentPage, setCurrentPage] = useState(1);
   const { user } = useUser();
   const [allRepayments, setAllRepayments] = useState<Repayment[] | null>(initialRepayments);
+  const isMobile = useIsMobile();
   
   useEffect(() => {
     setAllRepayments(initialRepayments);
@@ -218,30 +221,53 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
   return (
     <div className="flex flex-col h-full">
         <div className="p-4 pt-2 flex-grow">
-            <Table>
-                <TableHeader>
-                <TableRow>
-                    <TableHead>Due</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-                </TableHeader>
-                <TableBody>
-                {paginatedSchedule.map(item => (
-                    <TableRow key={`${item.installment}-${item.status}`} className={item.isActionable ? 'bg-muted/50' : ''}>
-                        <TableCell data-label="Due">{format(item.dueDate, 'PPP')}</TableCell>
-                        <TableCell data-label="Total" className="font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.payment)}</TableCell>
-                        <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
-                        <TableCell data-label="Action" className="text-right">
-                        {(item.isActionable && user) && (
-                            <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
-                        )}
-                        </TableCell>
+            {isMobile ? (
+                <div className="space-y-3">
+                    {paginatedSchedule.map(item => (
+                        <Card key={`${item.installment}-${item.status}`} className={item.isActionable ? 'border-primary' : ''}>
+                            <CardContent className="p-4 space-y-3">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <p className="font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.payment)}</p>
+                                        <p className="text-xs text-muted-foreground">Due: {format(item.dueDate, 'PPP')}</p>
+                                    </div>
+                                    <StatusBadge status={item.status} />
+                                </div>
+                                {(item.isActionable && user) && (
+                                    <div className="pt-3 border-t">
+                                        <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            ) : (
+                <Table>
+                    <TableHeader>
+                    <TableRow>
+                        <TableHead>Due</TableHead>
+                        <TableHead>Total</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Action</TableHead>
                     </TableRow>
-                ))}
-                </TableBody>
-            </Table>
+                    </TableHeader>
+                    <TableBody>
+                    {paginatedSchedule.map(item => (
+                        <TableRow key={`${item.installment}-${item.status}`} className={item.isActionable ? 'bg-muted/50' : ''}>
+                            <TableCell data-label="Due">{format(item.dueDate, 'PPP')}</TableCell>
+                            <TableCell data-label="Total" className="font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(item.payment)}</TableCell>
+                            <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
+                            <TableCell data-label="Action" className="text-right">
+                            {(item.isActionable && user) && (
+                                <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
+                            )}
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                    </TableBody>
+                </Table>
+            )}
         </div>
         {totalPages > 1 && (
             <div className="p-4 border-t">
