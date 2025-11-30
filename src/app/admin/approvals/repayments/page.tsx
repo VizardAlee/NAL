@@ -25,6 +25,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { generateAmortizationSchedule } from '@/lib/amortization';
 import { useIsMobile } from '@/hooks/use-mobile';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+
 
 type Repayment = DocumentData & {
   id: string;
@@ -188,6 +195,7 @@ export default function RepaymentsPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [approvingId, setApprovingId] = useState<string | null>(null);
+    const isMobile = useIsMobile();
 
     // Queries for each tab
     const pendingRepaymentsQuery = useMemo(() => firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Pending'), orderBy('lodgedAt', 'asc')) : null, [firestore]);
@@ -313,6 +321,12 @@ export default function RepaymentsPage() {
         }
     };
   
+    const tabItems = [
+        { value: "pending", label: "Pending", icon: Clock },
+        { value: "confirmed", label: "Confirmed", icon: CalendarCheck },
+        { value: "overdue", label: "Overdue", icon: AlertTriangle },
+    ];
+  
     return (
         <div>
             <PageHeader
@@ -321,19 +335,24 @@ export default function RepaymentsPage() {
                 icon={CheckCircle}
             />
             <Tabs defaultValue="pending" className="w-full">
-                <TabsList>
-                    <TabsTrigger value="pending">
-                        <Clock className="mr-2 h-4 w-4" />
-                        Pending
-                    </TabsTrigger>
-                    <TabsTrigger value="confirmed">
-                        <CalendarCheck className="mr-2 h-4 w-4" />
-                        Confirmed
-                    </TabsTrigger>
-                    <TabsTrigger value="overdue">
-                        <AlertTriangle className="mr-2 h-4 w-4" />
-                        Overdue
-                    </TabsTrigger>
+                <TabsList className="flex-wrap h-auto">
+                    <TooltipProvider>
+                        {tabItems.map(({ value, label, icon: Icon }) => (
+                            <Tooltip key={value} delayDuration={0}>
+                                <TooltipTrigger asChild>
+                                    <TabsTrigger value={value}>
+                                        <Icon className={isMobile ? '' : 'mr-2 h-4 w-4'} />
+                                        <span className={isMobile ? 'sr-only' : ''}>{label}</span>
+                                    </TabsTrigger>
+                                </TooltipTrigger>
+                                {isMobile && (
+                                     <TooltipContent side="bottom">
+                                        <p>{label}</p>
+                                    </TooltipContent>
+                                )}
+                            </Tooltip>
+                        ))}
+                    </TooltipProvider>
                 </TabsList>
                 <TabsContent value="pending" className="mt-4">
                     <RepaymentsTable
@@ -361,4 +380,3 @@ export default function RepaymentsPage() {
             </Tabs>
         </div>
     );
-}
