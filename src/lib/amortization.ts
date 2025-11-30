@@ -84,12 +84,12 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
         }
     })();
     const totalInterest = principal * annualRate * durationInYears;
-    const interestPerInstallment = totalInterest > 0 ? totalInterest / totalPeriods : 0;
+    const interestPerInstallment = totalPeriods > 0 ? totalInterest / totalPeriods : 0;
 
     for (let i = 1; i <= totalPeriods; i++) {
         const isLastPayment = i === totalPeriods;
-        const payment = isLastPayment ? interestPerInstallment + principal : interestPerInstallment;
         const principalPayment = isLastPayment ? principal : 0;
+        const payment = interestPerInstallment + principalPayment;
         const balance = isLastPayment ? 0 : principal;
         
         schedule.push({
