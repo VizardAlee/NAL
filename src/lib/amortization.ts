@@ -64,7 +64,7 @@ function getPeriods(deal: Deal): { totalPeriods: number; addPeriod: (date: Date,
 export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] {
   if (!deal.createdAt) return [];
   const principal = deal.principal;
-  const annualRate = deal.profitRate / 100;
+  const annualRate = (deal.profitRate || 0) / 100;
   const startDate = deal.createdAt.toDate();
   const { totalPeriods, addPeriod } = getPeriods(deal);
 
