@@ -6,8 +6,8 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { ThemeProvider } from '@/components/theme-provider';
-import React from 'react';
-import { CompanyLogoProvider } from '@/components/company-logo-provider';
+import React, { useEffect } from 'react';
+import { CompanyLogoProvider, useCompanyLogo } from '@/components/company-logo-provider';
 
 
 // Metadata cannot be exported from a client component,
@@ -16,6 +16,19 @@ import { CompanyLogoProvider } from '@/components/company-logo-provider';
 //   title: 'NAL General Marchant',
 //   description: 'The future of financial management.',
 // };
+
+function Favicon() {
+  const { logoUrl } = useCompanyLogo();
+
+  useEffect(() => {
+    const favicon = document.querySelector("link[rel='icon']");
+    if (favicon && logoUrl) {
+      favicon.setAttribute('href', logoUrl);
+    }
+  }, [logoUrl]);
+  
+  return <link rel="icon" href="/favicon.ico" sizes="any" />;
+}
 
 export default function RootLayout({
   children,
@@ -42,6 +55,7 @@ export default function RootLayout({
         >
           <FirebaseClientProvider>
             <CompanyLogoProvider>
+              <Favicon />
               {children}
             </CompanyLogoProvider>
           </FirebaseClientProvider>
