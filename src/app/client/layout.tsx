@@ -83,7 +83,7 @@ export default function ClientLayout({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user?.photoURL ?? ''} alt={user?.displayName ?? ''} />
+                  <AvatarImage src={`https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${user?.uid}`} alt={user?.displayName ?? ''} />
                   <AvatarFallback>{user?.displayName?.charAt(0) ?? user?.email?.charAt(0)}</AvatarFallback>
                 </Avatar>
               </Button>
@@ -103,3 +103,5 @@ export default function ClientLayout({
     </div>
   );
 }
+
+    

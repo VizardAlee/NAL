@@ -274,7 +274,7 @@ export default function UserDetailPage() {
                 <Card>
                     <CardHeader className="flex flex-row items-center gap-4 space-y-0">
                          <Avatar className="h-16 w-16">
-                            <AvatarImage src={`https://api.dicebear.com/7.x/bottts/svg?seed=${userProfile.id}`} />
+                            <AvatarImage src={`https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${userProfile.id}`} />
                             <AvatarFallback>{userProfile.name?.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <div>
@@ -509,7 +509,5 @@ export default function UserDetailPage() {
     </div>
   );
 }
-
-    
 
     

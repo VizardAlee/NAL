@@ -307,7 +307,7 @@ export default function AdminDashboardPage() {
                 return (
                     <div key={activity.id} className="flex items-start gap-4">
                       <Avatar className="h-9 w-9 border hidden md:flex">
-                        <AvatarImage src={`https://api.dicebear.com/7.x/bottts/svg?seed=${activity.userId}`} />
+                        <AvatarImage src={`https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${activity.userId}`} />
                         <AvatarFallback>{activity.user.charAt(0)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 space-y-1">
@@ -336,3 +336,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    
