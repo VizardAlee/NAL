@@ -84,7 +84,7 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
         }
     })();
     const totalInterest = principal * annualRate * durationInYears;
-    const interestPerInstallment = totalInterest / totalPeriods;
+    const interestPerInstallment = totalInterest > 0 ? totalInterest / totalPeriods : 0;
 
     for (let i = 1; i <= totalPeriods; i++) {
         const isLastPayment = i === totalPeriods;
