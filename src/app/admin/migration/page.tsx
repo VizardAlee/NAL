@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useActionState, useEffect, useRef, useState } from 'react';
+import { useActionState, useEffect, useRef } from 'react';
 import { useFormStatus } from 'react-dom';
 import { PageHeader } from '@/components/page-header';
 import {
@@ -12,8 +13,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Database, Upload, Loader2, Users, FileText, Landmark } from 'lucide-react';
+import { Database, Upload, Loader2, Users, FileText, Landmark, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type ActionResponse = {
   success: boolean;
@@ -103,6 +105,57 @@ function ImportCard({
   );
 }
 
+function InstructionContent() {
+    return (
+        <div className="prose prose-sm prose-invert max-w-none text-muted-foreground">
+            <p>To migrate your data, prepare your CSV files with the required columns listed below. Please import the files in order: <strong>1. Users</strong>, then <strong>2. Deals</strong>, and finally <strong>3. Investments</strong>. This ensures all relationships are correctly linked.</p>
+            <Alert variant="default" className="mt-4">
+                <AlertDescription>
+                    <p>Dates should be in <code className="bg-muted p-1 rounded-sm">YYYY-MM-DD</code> format. If an existing user email is found, their record will be updated instead of creating a new one.</p>
+                </AlertDescription>
+            </Alert>
+            
+            <div className="mt-6">
+                <h4 className="font-semibold text-foreground">1. Users File (<code>users.csv</code>)</h4>
+                <p>Contains all your clients and investors.</p>
+                <ul className="list-disc pl-5">
+                    <li><strong>Required Columns:</strong> <code>name</code>, <code>email</code>, <code>role</code></li>
+                    <li>The <code>role</code> must be either <code>Client</code> or <code>Investor</code>.</li>
+                </ul>
+                <pre className="bg-muted p-2 rounded-md mt-2 text-xs overflow-x-auto"><code>{`name,email,role
+John Doe,john.doe@example.com,Client
+Jane Smith,jane.smith@example.com,Investor`}</code></pre>
+            </div>
+
+             <div className="mt-6">
+                <h4 className="font-semibold text-foreground">2. Deals File (<code>deals.csv</code>)</h4>
+                <p>Contains all financing deals.</p>
+                <ul className="list-disc pl-5">
+                    <li><strong>Required Columns:</strong> <code>dealName</code>, <code>clientEmail</code>, <code>principal</code>, <code>interestRate</code>, <code>durationValue</code>, <code>durationUnit</code>, <code>repaymentType</code>, <code>repaymentFrequency</code>, <code>status</code>, <code>createdAt</code></li>
+                    <li><code>clientEmail</code> must match an email from your <code>users.csv</code> file.</li>
+                    <li><code>durationUnit</code> can be: <code>Days</code>, <code>Weeks</code>, <code>Fortnights</code>, <code>Months</code>, <code>Years</code>.</li>
+                    <li><code>repaymentType</code> can be: <code>Equal Installments</code> or <code>Balloon Payment</code>.</li>
+                    <li><code>repaymentFrequency</code> can be: <code>Daily</code>, <code>Weekly</code>, <code>Fortnightly</code>, <code>Monthly</code>.</li>
+                    <li><code>status</code> can be: <code>Pending</code>, <code>Active</code>, or <code>Completed</code>.</li>
+                </ul>
+                <pre className="bg-muted p-2 rounded-md mt-2 text-xs overflow-x-auto"><code>{`dealName,clientEmail,principal,interestRate,durationValue,durationUnit,repaymentType,repaymentFrequency,status,createdAt
+Q1 Expansion,john.doe@example.com,50000,10,12,Months,Equal Installments,Monthly,Active,2023-01-15`}</code></pre>
+            </div>
+
+            <div className="mt-6">
+                <h4 className="font-semibold text-foreground">3. Investments File (<code>investments.csv</code>)</h4>
+                <p>Links investors to the deals they have funded.</p>
+                <ul className="list-disc pl-5">
+                    <li><strong>Required Columns:</strong> <code>investorEmail</code>, <code>dealName</code>, <code>amount</code>, <code>createdAt</code></li>
+                    <li><code>investorEmail</code> must match an investor's email from your <code>users.csv</code>.</li>
+                    <li><code>dealName</code> must match a name from your <code>deals.csv</code>.</li>
+                </ul>
+                <pre className="bg-muted p-2 rounded-md mt-2 text-xs overflow-x-auto"><code>{`investorEmail,dealName,amount,createdAt
+jane.smith@example.com,Q1 Expansion,25000,2023-01-20`}</code></pre>
+            </div>
+        </div>
+    );
+}
 
 export default function MigrationPage() {
   return (
@@ -112,38 +165,54 @@ export default function MigrationPage() {
         description="Import existing business data from CSV files."
         icon={Database}
       />
-      <div className="space-y-4">
-        <Alert variant="default">
-          <AlertTitle>Instructions</AlertTitle>
-          <AlertDescription>
-            <p>To migrate your data, prepare your CSV files with the required columns listed below. Please import the files in order: <strong>1. Users</strong>, then <strong>2. Deals</strong>, and finally <strong>3. Investments</strong>. This ensures all relationships are correctly linked.</p>
-            <p className="mt-2 text-xs text-muted-foreground">Dates should be in <code className="bg-muted p-1 rounded-sm">YYYY-MM-DD</code> format. If an existing user email is found, their record will be updated instead of creating a new one.</p>
-          </AlertDescription>
-        </Alert>
-        <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
-            <ImportCard
-                title="Users"
-                description="Import clients and investors. This step must be completed first."
-                action={importUsersAction}
-                icon={Users}
-                requiredFields={['name', 'email', 'role']}
-            />
-            <ImportCard
-                title="Deals"
-                description="Import financing deals. Requires users to be imported first."
-                action={importDealsAction}
-                icon={FileText}
-                requiredFields={['dealName', 'clientEmail', 'principal', 'interestRate', 'durationValue', 'durationUnit', 'repaymentType', 'repaymentFrequency', 'status', 'createdAt']}
-            />
-            <ImportCard
-                title="Investments"
-                description="Link investors to deals. Requires users and deals to be imported."
-                action={importInvestmentsAction}
-                icon={Landmark}
-                requiredFields={['investorEmail', 'dealName', 'amount', 'createdAt']}
-            />
-        </div>
-      </div>
+      <Tabs defaultValue="import">
+        <TabsList>
+          <TabsTrigger value="import"><Upload className="mr-2 h-4 w-4" />Import Data</TabsTrigger>
+          <TabsTrigger value="instructions"><Info className="mr-2 h-4 w-4" />Instructions</TabsTrigger>
+        </TabsList>
+        <TabsContent value="import" className="mt-4">
+            <Alert>
+                <AlertTitle>Important</AlertTitle>
+                <AlertDescription>
+                    Please import files in the correct order: 1. Users, 2. Deals, 3. Investments. For detailed instructions, see the "Instructions" tab.
+                </AlertDescription>
+            </Alert>
+            <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3 mt-4">
+                <ImportCard
+                    title="1. Users"
+                    description="Import clients and investors. This step must be completed first."
+                    action={importUsersAction}
+                    icon={Users}
+                    requiredFields={['name', 'email', 'role']}
+                />
+                <ImportCard
+                    title="2. Deals"
+                    description="Import financing deals. Requires users to be imported first."
+                    action={importDealsAction}
+                    icon={FileText}
+                    requiredFields={['dealName', 'clientEmail', 'principal', 'interestRate', 'durationValue', 'durationUnit', 'repaymentType', 'repaymentFrequency', 'status', 'createdAt']}
+                />
+                <ImportCard
+                    title="3. Investments"
+                    description="Link investors to deals. Requires users and deals to be imported."
+                    action={importInvestmentsAction}
+                    icon={Landmark}
+                    requiredFields={['investorEmail', 'dealName', 'amount', 'createdAt']}
+                />
+            </div>
+        </TabsContent>
+        <TabsContent value="instructions" className="mt-4">
+             <Card>
+                <CardHeader>
+                    <CardTitle>How to Prepare Your Data</CardTitle>
+                    <CardDescription>Follow these instructions to ensure a smooth data migration.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <InstructionContent />
+                </CardContent>
+             </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
