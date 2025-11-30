@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { generateAmortizationSchedule } from '@/lib/amortization';
 import { Deal } from '@/lib/types';
 import { Investment } from '@/lib/types';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 type TerminationRequest = DocumentData & {
   id: string;
@@ -50,11 +51,96 @@ function TerminationsTable({
     onProcessRequest?: (request: TerminationRequest, newStatus: 'Approved' | 'Rejected') => void
 }) {
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const isMobile = useIsMobile();
 
     const handleProcessClick = (request: TerminationRequest, newStatus: 'Approved' | 'Rejected') => {
         setProcessingId(request.id);
         onProcessRequest?.(request, newStatus);
     };
+
+    if (isLoading) {
+        if (isMobile) {
+            return (
+                <div className="space-y-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} className="h-36 w-full" />
+                    ))}
+                </div>
+            );
+        }
+        return (
+             <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Client</TableHead>
+                        <TableHead>Deal</TableHead>
+                        <TableHead>Date Requested</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {Array.from({ length: 3 }).map((_, i) => (
+                        <TableRow key={i}>
+                            <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+                            <TableCell className="text-right"><Skeleton className="h-8 w-40 ml-auto" /></TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        )
+    }
+
+    if (requests.length === 0) {
+        return (
+             <div className="p-4 py-12 text-center text-sm text-muted-foreground border rounded-lg">
+                No termination requests found in this category.
+            </div>
+        );
+    }
+    
+    if (isMobile) {
+        return (
+            <div className="space-y-3">
+                {requests.map((request) => (
+                    <Card key={request.id}>
+                        <CardContent className="p-4 space-y-3">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="font-medium">{request.clientName}</p>
+                                    <p className="text-sm text-primary font-bold">{request.dealName}</p>
+                                    <p className="text-xs text-muted-foreground">{format(request.requestedAt.toDate(), 'PPP')}</p>
+                                </div>
+                                {!showActionButtons && <Badge variant={request.status === 'Approved' ? 'default' : 'destructive'}>{request.status}</Badge>}
+                            </div>
+                            {showActionButtons && (
+                                <div className="flex justify-end gap-2 pt-2 border-t">
+                                     <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleProcessClick(request, 'Rejected')}
+                                        disabled={processingId === request.id}
+                                    >
+                                        {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
+                                        Reject
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        onClick={() => handleProcessClick(request, 'Approved')}
+                                        disabled={processingId === request.id}
+                                    >
+                                        {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+                                        Approve
+                                    </Button>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+        );
+    }
 
     return (
         <Card>
@@ -69,16 +155,7 @@ function TerminationsTable({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {isLoading &&
-                            Array.from({ length: 3 }).map((_, i) => (
-                                <TableRow key={i}>
-                                    <TableCell data-label="Client"><Skeleton className="h-5 w-24" /></TableCell>
-                                    <TableCell data-label="Deal"><Skeleton className="h-5 w-32" /></TableCell>
-                                    <TableCell data-label="Date Requested"><Skeleton className="h-5 w-28" /></TableCell>
-                                    <TableCell data-label="Actions" className="text-right"><Skeleton className="h-8 w-40 ml-auto" /></TableCell>
-                                </TableRow>
-                            ))}
-                        {!isLoading && requests.map((request) => (
+                        {requests.map((request) => (
                             <TableRow key={request.id}>
                                 <TableCell data-label="Client" className="font-medium">{request.clientName}</TableCell>
                                 <TableCell data-label="Deal">{request.dealName}</TableCell>
@@ -110,13 +187,6 @@ function TerminationsTable({
                                 )}
                             </TableRow>
                         ))}
-                        {!isLoading && requests.length === 0 && (
-                            <TableRow>
-                                <TableCell colSpan={4} className="h-24 text-center">
-                                    No termination requests found in this category.
-                                </TableCell>
-                            </TableRow>
-                        )}
                     </TableBody>
                 </Table>
             </CardContent>
