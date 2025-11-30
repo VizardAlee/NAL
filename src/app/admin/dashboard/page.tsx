@@ -74,11 +74,11 @@ export default function AdminDashboardPage() {
       );
     }, [firestore]);
     
-    const activeDealsQuery = useMemo(() => {
+    const earningsQuery = useMemo(() => {
       if (!firestore) return null;
       return query(
-        collection(firestore, 'deals'),
-        where('status', '==', 'Active')
+        collection(firestore, 'transactions'),
+        where('type', '==', 'PlatformEarning')
       );
     }, [firestore]);
 
@@ -96,12 +96,12 @@ export default function AdminDashboardPage() {
     const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
     const { data: users, loading: usersLoading } = useCollection<User>(usersQuery);
     const { data: recentTransactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
-    const { data: activeDeals, loading: activeDealsLoading } = useCollection<Deal>(activeDealsQuery);
+    const { data: earningsTransactions, loading: earningsLoading } = useCollection<Transaction>(earningsQuery);
     const { data: overdueDeals, loading: overdueDealsLoading } = useCollection<Deal>(overdueDealsQuery);
     
     const allUsersResult = useCollection<User>(usersQuery); 
 
-    const isLoading = fundBatchesLoading || usersLoading || transactionsLoading || activeDealsLoading || overdueDealsLoading || allUsersResult.loading;
+    const isLoading = fundBatchesLoading || usersLoading || transactionsLoading || earningsLoading || overdueDealsLoading || allUsersResult.loading;
 
     const chartData = useMemo(() => {
         const today = new Date();
@@ -133,13 +133,9 @@ export default function AdminDashboardPage() {
     }, [fundBatches]);
 
     const platformEarnings = useMemo(() => {
-        if (!activeDeals) return 0;
-        const totalProjectedInterest = activeDeals.reduce((sum, deal) => {
-            const interest = deal.principal * (deal.profitRate / 100);
-            return sum + interest;
-        }, 0);
-        return totalProjectedInterest * 0.60; // Platform takes 60% of profit
-    }, [activeDeals]);
+        if (!earningsTransactions) return 0;
+        return earningsTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+    }, [earningsTransactions]);
 
     const recentActivities = useMemo(() => {
         if (!recentTransactions || !allUsersResult.data) return [];
@@ -210,7 +206,7 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent>
                 {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(platformEarnings)}</div>}
-                <div className="text-xs text-muted-foreground">Projected 60% of profit from active deals</div>
+                <div className="text-xs text-muted-foreground">Total accumulated earnings</div>
             </CardContent>
             </Card>
             <Card>
@@ -292,3 +288,5 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    
