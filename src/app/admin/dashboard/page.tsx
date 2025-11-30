@@ -184,62 +184,64 @@ export default function AdminDashboardPage() {
               </div>
             ) : (
               <div className="h-80 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={chartData}
-                    margin={{ top: 20, right: 20, left: 10, bottom: 10 }}
-                  >
-                    <defs>
-                      <linearGradient id="fillTvl" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--color-tvl)" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="var(--color-tvl)" stopOpacity={0.05}/>
-                      </linearGradient>
-                    </defs>
-        
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    
-                    <XAxis 
-                      dataKey="month"
-                      tick={{ fontSize: 13 }}
-                      tickLine={false}
-                      axisLine={false}
-                      interval="preserveStartEnd"
-                    />
-                    
-                    <YAxis 
-                      tick={{ fontSize: 12 }}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(v) => 
-                        v >= 1_000_000 
-                          ? `₦${(v / 1_000_000).toFixed(1)}M`
-                          : `₦${(v / 1_000).toFixed(0)}K`
-                      }
-                    />
-        
-                    <Tooltip
-                      content={<ChartTooltipContent
-                        labelFormatter={() => ''}
-                        formatter={(value) => 
-                          new Intl.NumberFormat('en-NG', { 
-                            style: 'currency', 
-                            currency: 'NGN' 
-                          }).format(Number(value))
+                <ChartContainer config={chartConfig}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={chartData}
+                      margin={{ top: 20, right: 20, left: 10, bottom: 10 }}
+                    >
+                      <defs>
+                        <linearGradient id="fillTvl" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--color-tvl)" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="var(--color-tvl)" stopOpacity={0.05}/>
+                        </linearGradient>
+                      </defs>
+          
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                      
+                      <XAxis 
+                        dataKey="month"
+                        tick={{ fontSize: 13 }}
+                        tickLine={false}
+                        axisLine={false}
+                        interval="preserveStartEnd"
+                      />
+                      
+                      <YAxis 
+                        tick={{ fontSize: 12 }}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(v) => 
+                          v >= 1_000_000 
+                            ? `₦${(v / 1_000_000).toFixed(1)}M`
+                            : `₦${(v / 1_000).toFixed(0)}K`
                         }
-                      />}
-                    />
-        
-                    <Area
-                      type="monotone"
-                      dataKey="tvl"
-                      stroke="var(--color-tvl)"
-                      strokeWidth={3}
-                      fill="url(#fillTvl)"
-                      dot={{ fill: 'var(--color-tvl)', r: 5 }}
-                      activeDot={{ r: 7 }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                      />
+          
+                      <Tooltip
+                        content={<ChartTooltipContent
+                          labelFormatter={() => ''}
+                          formatter={(value) => 
+                            new Intl.NumberFormat('en-NG', { 
+                              style: 'currency', 
+                              currency: 'NGN' 
+                            }).format(Number(value))
+                          }
+                        />}
+                      />
+          
+                      <Area
+                        type="monotone"
+                        dataKey="tvl"
+                        stroke="var(--color-tvl)"
+                        strokeWidth={3}
+                        fill="url(#fillTvl)"
+                        dot={{ fill: 'var(--color-tvl)', r: 5 }}
+                        activeDot={{ r: 7 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
               </div>
             )}
           </CardContent>
