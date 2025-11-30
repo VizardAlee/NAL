@@ -224,7 +224,7 @@ export default function DealDetailPage() {
                     <CardContent className="grid md:grid-cols-2 gap-4 text-sm">
                         <div className="font-medium">Client</div><div>{deal.clientName}</div>
                         <div className="font-medium">Principal Amount</div><div>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</div>
-                        <div className="font-medium">Interest Rate</div><div>{deal.interestRate}%</div>
+                        <div className="font-medium">Profit Rate</div><div>{deal.profitRate}%</div>
                         <div className="font-medium">Duration</div><div>{deal.durationValue} {deal.durationUnit}</div>
                         <div className="font-medium">Repayment Type</div><div>{deal.repaymentType}</div>
                         <div className="font-medium">Repayment Frequency</div><div>{deal.repaymentFrequency}</div>

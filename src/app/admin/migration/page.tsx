@@ -131,14 +131,14 @@ Jane Smith,jane.smith@example.com,Investor`}</code></pre>
                 <h4 className="font-semibold text-foreground">2. Deals File (<code>deals.csv</code>)</h4>
                 <p>Contains all financing deals.</p>
                 <ul className="list-disc pl-5">
-                    <li><strong>Required Columns:</strong> <code>dealName</code>, <code>clientEmail</code>, <code>principal</code>, <code>interestRate</code>, <code>durationValue</code>, <code>durationUnit</code>, <code>repaymentType</code>, <code>repaymentFrequency</code>, <code>status</code>, <code>createdAt</code></li>
+                    <li><strong>Required Columns:</strong> <code>dealName</code>, <code>clientEmail</code>, <code>principal</code>, <code>profitRate</code>, <code>durationValue</code>, <code>durationUnit</code>, <code>repaymentType</code>, <code>repaymentFrequency</code>, <code>status</code>, <code>createdAt</code></li>
                     <li><code>clientEmail</code> must match an email from your <code>users.csv</code> file.</li>
                     <li><code>durationUnit</code> can be: <code>Days</code>, <code>Weeks</code>, <code>Fortnights</code>, <code>Months</code>, <code>Years</code>.</li>
                     <li><code>repaymentType</code> can be: <code>Equal Installments</code> or <code>Balloon Payment</code>.</li>
                     <li><code>repaymentFrequency</code> can be: <code>Daily</code>, <code>Weekly</code>, <code>Fortnightly</code>, <code>Monthly</code>.</li>
                     <li><code>status</code> can be: <code>Pending</code>, <code>Active</code>, or <code>Completed</code>.</li>
                 </ul>
-                <pre className="bg-muted p-2 rounded-md mt-2 text-xs overflow-x-auto"><code>{`dealName,clientEmail,principal,interestRate,durationValue,durationUnit,repaymentType,repaymentFrequency,status,createdAt
+                <pre className="bg-muted p-2 rounded-md mt-2 text-xs overflow-x-auto"><code>{`dealName,clientEmail,principal,profitRate,durationValue,durationUnit,repaymentType,repaymentFrequency,status,createdAt
 Q1 Expansion,john.doe@example.com,50000,10,12,Months,Equal Installments,Monthly,Active,2023-01-15`}</code></pre>
             </div>
 
@@ -190,7 +190,7 @@ export default function MigrationPage() {
                     description="Import financing deals. Requires users to be imported first."
                     action={importDealsAction}
                     icon={FileText}
-                    requiredFields={['dealName', 'clientEmail', 'principal', 'interestRate', 'durationValue', 'durationUnit', 'repaymentType', 'repaymentFrequency', 'status', 'createdAt']}
+                    requiredFields={['dealName', 'clientEmail', 'principal', 'profitRate', 'durationValue', 'durationUnit', 'repaymentType', 'repaymentFrequency', 'status', 'createdAt']}
                 />
                 <ImportCard
                     title="3. Investments"

@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminDb } from '@/firebase/admin-app';
@@ -136,7 +137,7 @@ export async function importDealsAction(
             clientId: client.uid,
             clientName: client.displayName || record.clientEmail,
             principal: parseFloat(record.principal),
-            interestRate: parseFloat(record.interestRate),
+            profitRate: parseFloat(record.profitRate),
             durationValue: parseInt(record.durationValue, 10),
             durationUnit: record.durationUnit,
             repaymentType: record.repaymentType,

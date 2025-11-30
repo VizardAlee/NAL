@@ -139,8 +139,8 @@ export default function ClientDealDetailPage() {
                 </div>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
-                            <p className="text-muted-foreground">Interest Rate</p>
-                            <p className="font-medium">{deal.interestRate}%</p>
+                            <p className="text-muted-foreground">Profit Rate</p>
+                            <p className="font-medium">{deal.profitRate}%</p>
                         </div>
                         <div>
                             <p className="text-muted-foreground">Duration</p>

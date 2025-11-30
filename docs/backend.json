@@ -49,9 +49,9 @@
           "type": "number",
           "description": "The principal amount of the loan."
         },
-        "interestRate": {
+        "profitRate": {
           "type": "number",
-          "description": "The annual interest rate for the deal."
+          "description": "The annual profit rate for the deal."
         },
         "durationValue": {
           "type": "number",
@@ -88,7 +88,7 @@
         "clientId",
         "clientName",
         "principal",
-        "interestRate",
+        "profitRate",
         "durationValue",
         "durationUnit",
         "repaymentType",

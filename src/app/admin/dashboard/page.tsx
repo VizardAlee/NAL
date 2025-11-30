@@ -135,10 +135,10 @@ export default function AdminDashboardPage() {
     const platformEarnings = useMemo(() => {
         if (!activeDeals) return 0;
         const totalProjectedInterest = activeDeals.reduce((sum, deal) => {
-            const interest = deal.principal * (deal.interestRate / 100);
+            const interest = deal.principal * (deal.profitRate / 100);
             return sum + interest;
         }, 0);
-        return totalProjectedInterest * 0.60; // Platform takes 60% of interest
+        return totalProjectedInterest * 0.60; // Platform takes 60% of profit
     }, [activeDeals]);
 
     const recentActivities = useMemo(() => {
@@ -207,7 +207,7 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent>
                 {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(platformEarnings)}</div>}
-                <div className="text-xs text-muted-foreground">Projected 60% of interest from active deals</div>
+                <div className="text-xs text-muted-foreground">Projected 60% of profit from active deals</div>
             </CardContent>
             </Card>
             <Card>

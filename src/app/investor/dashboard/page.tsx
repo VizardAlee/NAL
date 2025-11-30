@@ -334,7 +334,7 @@ export default function InvestorDashboard() {
                 <TableRow>
                     <TableHead>Deal Name</TableHead>
                     <TableHead>Principal</TableHead>
-                    <TableHead>Interest Rate</TableHead>
+                    <TableHead>Profit Rate</TableHead>
                     <TableHead>Status</TableHead>
                 </TableRow>
                 </TableHeader>
@@ -343,7 +343,7 @@ export default function InvestorDashboard() {
                     <TableRow key={i}>
                         <TableCell data-label="Deal Name"><Skeleton className="h-5 w-32" /></TableCell>
                         <TableCell data-label="Principal"><Skeleton className="h-5 w-24" /></TableCell>
-                        <TableCell data-label="Interest Rate"><Skeleton className="h-5 w-20" /></TableCell>
+                        <TableCell data-label="Profit Rate"><Skeleton className="h-5 w-20" /></TableCell>
                         <TableCell data-label="Status"><Skeleton className="h-5 w-20" /></TableCell>
                     </TableRow>
                 ))}
@@ -351,7 +351,7 @@ export default function InvestorDashboard() {
                     <TableRow key={deal.id}>
                         <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
                         <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
-                        <TableCell data-label="Interest Rate">{deal.interestRate}%</TableCell>
+                        <TableCell data-label="Profit Rate">{deal.profitRate}%</TableCell>
                         <TableCell data-label="Status"><Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>{deal.status}</Badge></TableCell>
                     </TableRow>
                 ))}
@@ -423,5 +423,3 @@ export default function InvestorDashboard() {
     </div>
   );
 }
-
-    

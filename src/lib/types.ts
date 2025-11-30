@@ -7,7 +7,7 @@ export type Deal = DocumentData & {
   clientId: string;
   clientName: string;
   principal: number;
-  interestRate: number;
+  profitRate: number;
   durationValue: number;
   durationUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
   repaymentType: 'Equal Installments' | 'Balloon Payment';

@@ -33,7 +33,7 @@ const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
   clientId: z.string({ required_error: 'Please select a client.' }),
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
-  interestRate: z.coerce.number().min(0, { message: 'Interest rate cannot be negative.' }),
+  profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
@@ -68,7 +68,7 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
     defaultValues: {
       dealName: '',
       principal: 10000,
-      interestRate: 5,
+      profitRate: 5,
       durationValue: 12,
       durationUnit: 'Months',
       repaymentType: 'Equal Installments',
@@ -170,10 +170,10 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
             />
             <FormField
               control={form.control}
-              name="interestRate"
+              name="profitRate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Interest Rate (%)</FormLabel>
+                  <FormLabel>Profit Rate (%)</FormLabel>
                   <FormControl><Input type="number" placeholder="5" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -263,5 +263,3 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
     </Form>
   );
 }
-
-    
