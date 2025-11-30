@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { ViewPageNav } from '@/components/view-page-nav';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 type User = {
     id: string;
@@ -76,6 +77,7 @@ export default function DealDetailPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const isMobile = useIsMobile();
 
   const dealRef = useMemo(() => {
     if (!firestore || !dealId) return null;
@@ -95,7 +97,7 @@ export default function DealDetailPage() {
   const { data: users, loading: usersLoading } = useCollection<User>(usersQuery);
   const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
 
-  const isLoading = dealLoading || investmentsLoading || usersLoading || fundBatchesLoading;
+  const isLoading = dealLoading || investmentsLoading || usersLoading || fundBatchesLoading || isMobile === undefined;
 
   const totalFunded = useMemo(() => {
     if (!investments) return 0;
@@ -242,29 +244,50 @@ export default function DealDetailPage() {
                             <CardDescription>Chronological list of all available capital that can fund this deal. Funding is strictly First-In, First-Out.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Source</TableHead>
-                                        <TableHead>Type</TableHead>
-                                        <TableHead>Date Added</TableHead>
-                                        <TableHead className="text-right">Available Capital</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {eligibleFundBatches.map(batch => (
-                                        <TableRow key={batch.id}>
-                                            <TableCell data-label="Source">{batch.sourceName}</TableCell>
-                                            <TableCell data-label="Type">
-                                                <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
-                                            </TableCell>
-                                            <TableCell data-label="Date Added">{format(batch.createdAt.toDate(), 'PPP')}</TableCell>
-                                            <TableCell data-label="Available Capital" className="text-right font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
+                             {isMobile ? (
+                                <div className="space-y-3">
+                                    {eligibleFundBatches.length > 0 ? eligibleFundBatches.map(batch => (
+                                        <Card key={batch.id} className="p-4">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="font-medium">{batch.sourceName}</p>
+                                                    <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
+                                                    <p className="text-xs text-muted-foreground mt-1">{format(batch.createdAt.toDate(), 'PPP')}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-sm font-bold text-primary">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</p>
+                                                </div>
+                                            </div>
+                                        </Card>
+                                    )) : (
+                                        <div className="h-24 text-center flex items-center justify-center text-muted-foreground">No eligible fund batches found.</div>
+                                    )}
+                                </div>
+                            ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Source</TableHead>
+                                            <TableHead>Type</TableHead>
+                                            <TableHead>Date Added</TableHead>
+                                            <TableHead className="text-right">Available Capital</TableHead>
                                         </TableRow>
-                                    ))}
-                                    {eligibleFundBatches.length === 0 && <TableRow><TableCell colSpan={4} className="h-24 text-center">No eligible fund batches found.</TableCell></TableRow>}
-                                </TableBody>
-                            </Table>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {eligibleFundBatches.map(batch => (
+                                            <TableRow key={batch.id}>
+                                                <TableCell data-label="Source">{batch.sourceName}</TableCell>
+                                                <TableCell data-label="Type">
+                                                    <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
+                                                </TableCell>
+                                                <TableCell data-label="Date Added">{format(batch.createdAt.toDate(), 'PPP')}</TableCell>
+                                                <TableCell data-label="Available Capital" className="text-right font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {eligibleFundBatches.length === 0 && <TableRow><TableCell colSpan={4} className="h-24 text-center">No eligible fund batches found.</TableCell></TableRow>}
+                                    </TableBody>
+                                </Table>
+                            )}
                         </CardContent>
                     </Card>
                 )}
@@ -277,18 +300,31 @@ export default function DealDetailPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <Table>
-                            <TableHeader><TableRow><TableHead>Name</TableHead><TableHead className="text-right">Amount Invested</TableHead></TableRow></TableHeader>
-                            <TableBody>
-                                {investorsInDeal.map(inv => (
-                                    <TableRow key={inv.id}>
-                                        <TableCell data-label="Name">{inv.investorName}</TableCell>
-                                        <TableCell data-label="Amount Invested" className="text-right font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(inv.amount)}</TableCell>
-                                    </TableRow>
-                                ))}
-                                {investorsInDeal.length === 0 && <TableRow><TableCell colSpan={2} className="h-24 text-center">No investors yet.</TableCell></TableRow>}
-                            </TableBody>
-                        </Table>
+                        {isMobile ? (
+                            <div className="space-y-3">
+                                {investorsInDeal.length > 0 ? investorsInDeal.map(inv => (
+                                    <Card key={inv.id} className="p-4 flex justify-between items-center">
+                                        <p className="font-medium">{inv.investorName}</p>
+                                        <p className="font-bold text-primary">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(inv.amount)}</p>
+                                    </Card>
+                                )) : (
+                                    <div className="h-24 text-center flex items-center justify-center text-muted-foreground">No investors yet.</div>
+                                )}
+                            </div>
+                        ) : (
+                            <Table>
+                                <TableHeader><TableRow><TableHead>Name</TableHead><TableHead className="text-right">Amount Invested</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                    {investorsInDeal.map(inv => (
+                                        <TableRow key={inv.id}>
+                                            <TableCell data-label="Name">{inv.investorName}</TableCell>
+                                            <TableCell data-label="Amount Invested" className="text-right font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(inv.amount)}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {investorsInDeal.length === 0 && <TableRow><TableCell colSpan={2} className="h-24 text-center">No investors yet.</TableCell></TableRow>}
+                                </TableBody>
+                            </Table>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -322,3 +358,5 @@ export default function DealDetailPage() {
     </div>
   );
 }
+
+    
