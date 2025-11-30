@@ -179,7 +179,10 @@ export default function AdminDashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="lg:col-span-3">
             <CardHeader>
-                <CardTitle>Total Value Locked (TVL) by Month</CardTitle>
+                <CardTitle>
+                    <span className="md:hidden">Total Value Locked</span>
+                    <span className="hidden md:inline">Total Value Locked (TVL) by Month</span>
+                </CardTitle>
             </CardHeader>
             <CardContent className="pl-2">
                 {isLoading ? (
