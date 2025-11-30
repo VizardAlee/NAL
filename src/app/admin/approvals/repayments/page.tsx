@@ -24,6 +24,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { generateAmortizationSchedule } from '@/lib/amortization';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 type Repayment = DocumentData & {
   id: string;
@@ -65,12 +66,70 @@ function RepaymentsTable({
     onApprove?: (repayment: RepaymentRow) => void
 }) {
     const [approvingId, setApprovingId] = useState<string | null>(null);
+    const isMobile = useIsMobile();
 
     const handleApproveClick = (repayment: RepaymentRow) => {
         setApprovingId(repayment.id);
         onApprove?.(repayment);
-        // Note: approvingId will be reset by the parent component's logic
     };
+    
+    const formatDate = (date: Date) => format(date, 'PPP');
+
+    if (isLoading) {
+        return (
+            <div className="space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-28 w-full rounded-lg" />
+                ))}
+            </div>
+        );
+    }
+    
+    if (repayments.length === 0) {
+        return (
+             <div className="p-4 py-12 text-center text-sm text-muted-foreground border rounded-lg">
+                No repayments found in this category.
+            </div>
+        );
+    }
+
+    if (isMobile) {
+        return (
+            <div className="space-y-3">
+                {repayments.map((repayment) => (
+                    <Card key={repayment.id}>
+                        <CardContent className="p-4 space-y-3">
+                             <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="font-medium">{repayment.clientName}</p>
+                                    <p className="text-sm text-primary font-bold">{repayment.dealName}</p>
+                                    <p className="text-sm text-muted-foreground font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(repayment.amount)}</p>
+                                </div>
+                                {!showApproveButton && <Badge variant={repayment.status === 'Approved' ? 'default' : 'destructive'}>{repayment.status}</Badge>}
+                            </div>
+                            <div className="text-xs text-muted-foreground space-y-1">
+                                <p><strong>Due Date:</strong> {formatDate(repayment.dueDate.toDate())}</p>
+                                <p><strong>Date Lodged:</strong> {formatDate(repayment.lodgedAt.toDate())}</p>
+                            </div>
+
+                            {showApproveButton && (
+                                <div className="flex justify-end pt-2 border-t">
+                                     <Button
+                                        size="sm"
+                                        onClick={() => handleApproveClick(repayment)}
+                                        disabled={approvingId === repayment.id}
+                                    >
+                                        {approvingId === repayment.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+                                        Approve
+                                    </Button>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+        );
+    }
 
     return (
         <Card>
@@ -88,26 +147,13 @@ function RepaymentsTable({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {isLoading &&
-                            Array.from({ length: 3 }).map((_, i) => (
-                                <TableRow key={i}>
-                                    <TableCell data-label="Client"><Skeleton className="h-5 w-24" /></TableCell>
-                                    <TableCell data-label="Deal"><Skeleton className="h-5 w-32" /></TableCell>
-                                    <TableCell data-label="Amount"><Skeleton className="h-5 w-20" /></TableCell>
-                                    <TableCell data-label="Due Date"><Skeleton className="h-5 w-28" /></TableCell>
-                                    <TableCell data-label="Date Lodged"><Skeleton className="h-5 w-28" /></TableCell>
-                                    <TableCell data-label="Action" className="text-right">
-                                        {showApproveButton ? <Skeleton className="h-8 w-24 ml-auto" /> : <Skeleton className="h-5 w-20" />}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        {!isLoading && repayments.map((repayment) => (
+                        {repayments.map((repayment) => (
                             <TableRow key={repayment.id}>
                                 <TableCell data-label="Client" className="font-medium">{repayment.clientName}</TableCell>
                                 <TableCell data-label="Deal">{repayment.dealName}</TableCell>
                                 <TableCell data-label="Amount">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(repayment.amount)}</TableCell>
-                                <TableCell data-label="Due Date">{format(repayment.dueDate.toDate(), 'PPP')}</TableCell>
-                                <TableCell data-label="Date Lodged">{format(repayment.lodgedAt.toDate(), 'PPP')}</TableCell>
+                                <TableCell data-label="Due Date">{formatDate(repayment.dueDate.toDate())}</TableCell>
+                                <TableCell data-label="Date Lodged">{formatDate(repayment.lodgedAt.toDate())}</TableCell>
                                 {showApproveButton ? (
                                     <TableCell data-label="Action" className="text-right">
                                         <Button
@@ -130,13 +176,6 @@ function RepaymentsTable({
                                 )}
                             </TableRow>
                         ))}
-                        {!isLoading && repayments.length === 0 && (
-                            <TableRow>
-                                <TableCell colSpan={6} className="h-24 text-center">
-                                    No repayments found in this category.
-                                </TableCell>
-                            </TableRow>
-                        )}
                     </TableBody>
                 </Table>
             </CardContent>
@@ -282,7 +321,7 @@ export default function RepaymentsPage() {
                 icon={CheckCircle}
             />
             <Tabs defaultValue="pending" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList>
                     <TabsTrigger value="pending">
                         <Clock className="mr-2 h-4 w-4" />
                         Pending
