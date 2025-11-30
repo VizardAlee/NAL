@@ -55,19 +55,37 @@ function WithdrawalsTable({
     };
 
     if (isLoading) {
+        if (isMobile) {
+            return (
+                <div className="space-y-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} className="h-28 w-full" />
+                    ))}
+                </div>
+            );
+        }
         return (
-            <div className="space-y-4">
-                {Array.from({ length: 3 }).map((_, i) => (
-                    isMobile ? <Skeleton key={i} className="h-28 w-full" /> : 
-                    <TableRow key={i}>
-                        <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                        <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                        <TableCell className="text-right"><Skeleton className="h-8 w-40 ml-auto" /></TableCell>
+             <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Investor</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Date Requested</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                ))}
-            </div>
-        );
+                </TableHeader>
+                <TableBody>
+                    {Array.from({ length: 3 }).map((_, i) => (
+                        <TableRow key={i}>
+                            <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+                            <TableCell className="text-right"><Skeleton className="h-8 w-40 ml-auto" /></TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        )
     }
     
     if (requests.length === 0) {
