@@ -259,7 +259,7 @@ export default function AdminDashboardPage() {
                 const Icon = activityIcons[activity.type] || activityIcons['default'];
                 return (
                     <div key={activity.id} className="flex items-start gap-4">
-                      <Avatar className="h-9 w-9 border">
+                      <Avatar className="h-9 w-9 border hidden md:flex">
                         <AvatarImage src={`https://api.dicebear.com/7.x/bottts/svg?seed=${activity.userId}`} />
                         <AvatarFallback>{activity.user.charAt(0)}</AvatarFallback>
                       </Avatar>
@@ -272,7 +272,7 @@ export default function AdminDashboardPage() {
                           {activity.timestamp}
                         </p>
                       </div>
-                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
+                       <div className="hidden md:flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
                             <Icon className="h-5 w-5 text-muted-foreground" />
                        </div>
                     </div>
@@ -288,4 +288,5 @@ export default function AdminDashboardPage() {
       </Card>
     </div>
   );
-}
+
+    
