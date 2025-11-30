@@ -122,7 +122,7 @@ function InstructionContent() {
                     <li><strong>Required Columns:</strong> <code className="bg-muted p-1 rounded-sm break-words">name, email, role</code></li>
                     <li>The <code>role</code> must be either <code>Client</code> or <code>Investor</code>.</li>
                 </ul>
-                <pre className="bg-muted p-2 rounded-md mt-2 text-xs overflow-x-auto whitespace-pre-wrap"><code>{`name,email,role
+                <pre className="bg-muted p-2 rounded-md mt-2 text-xs whitespace-pre-wrap break-all"><code>{`name,email,role
 John Doe,john.doe@example.com,Client
 Jane Smith,jane.smith@example.com,Investor`}</code></pre>
             </div>
@@ -138,7 +138,7 @@ Jane Smith,jane.smith@example.com,Investor`}</code></pre>
                     <li><code>repaymentFrequency</code> can be: <code>Daily</code>, <code>Weekly</code>, <code>Fortnightly</code>, <code>Monthly</code>.</li>
                     <li><code>status</code> can be: <code>Pending</code>, <code>Active</code>, or <code>Completed</code>.</li>
                 </ul>
-                <pre className="bg-muted p-2 rounded-md mt-2 text-xs overflow-x-auto whitespace-pre-wrap"><code>{`dealName,clientEmail,principal,profitRate,durationValue,durationUnit,repaymentType,repaymentFrequency,status,createdAt
+                <pre className="bg-muted p-2 rounded-md mt-2 text-xs whitespace-pre-wrap break-all"><code>{`dealName,clientEmail,principal,profitRate,durationValue,durationUnit,repaymentType,repaymentFrequency,status,createdAt
 Q1 Expansion,john.doe@example.com,50000,10,12,Months,Equal Installments,Monthly,Active,2023-01-15`}</code></pre>
             </div>
 
@@ -150,7 +150,7 @@ Q1 Expansion,john.doe@example.com,50000,10,12,Months,Equal Installments,Monthly,
                     <li><code>investorEmail</code> must match an investor's email from your <code>users.csv</code>.</li>
                     <li><code>dealName</code> must match a name from your <code>deals.csv</code>.</li>
                 </ul>
-                <pre className="bg-muted p-2 rounded-md mt-2 text-xs overflow-x-auto whitespace-pre-wrap"><code>{`investorEmail,dealName,amount,createdAt
+                <pre className="bg-muted p-2 rounded-md mt-2 text-xs whitespace-pre-wrap break-all"><code>{`investorEmail,dealName,amount,createdAt
 jane.smith@example.com,Q1 Expansion,25000,2023-01-20`}</code></pre>
             </div>
         </div>
