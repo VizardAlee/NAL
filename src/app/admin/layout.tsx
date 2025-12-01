@@ -112,22 +112,26 @@ function NotificationBell() {
 
     const notificationsQuery = useMemo(() => {
         if (!firestore) return null;
-        // Fetch all notifications, read or unread, to show them until cleared
-        return query(collection(firestore, 'notifications'), orderBy('createdAt', 'desc'), limit(20));
+        // Fetch only unread notifications
+        return query(
+            collection(firestore, 'notifications'), 
+            where('read', '==', false), 
+            orderBy('createdAt', 'desc'), 
+            limit(20)
+        );
     }, [firestore]);
 
     const { data: notifications } = useCollection<Notification>(notificationsQuery);
 
-    const unreadNotifications = useMemo(() => {
-        return notifications?.filter(n => !n.read) || [];
-    }, [notifications]);
-
     const handleNotificationClick = async (notification: Notification) => {
         if (!firestore) return;
-        // Mark as read optimistic update
+        
+        // Optimistically navigate first
+        router.push(notification.link);
+        
+        // Then mark as read in the background
         const notifRef = doc(firestore, 'notifications', notification.id);
         await updateDoc(notifRef, { read: true });
-        router.push(notification.link);
     };
 
     return (
@@ -135,7 +139,7 @@ function NotificationBell() {
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full relative">
                     <Bell className="h-5 w-5" />
-                    {unreadNotifications.length > 0 && (
+                    {notifications && notifications.length > 0 && (
                         <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
