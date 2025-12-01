@@ -3,7 +3,7 @@
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LayoutDashboard, Users, AlertTriangle, Activity, Briefcase, DollarSign, Zap, TrendingUp, HandCoins } from "lucide-react";
+import { LayoutDashboard, Users, AlertTriangle, Activity, Briefcase, DollarSign, Zap, TrendingUp, HandCoins, ShieldOff, PiggyBank } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { useCollection } from "@/firebase/firestore/use-collection";
@@ -23,8 +23,11 @@ const chartConfig = {
 };
 
 type FundBatch = DocumentData & {
+  id: string;
+  sourceId: string;
   amount: number;
   createdAt: Timestamp;
+  details?: string;
 };
 
 type User = DocumentData & {
@@ -41,6 +44,24 @@ type Transaction = DocumentData & {
     dealName?: string;
 };
 
+type TerminationRequest = DocumentData & {
+    id: string;
+    dealName: string;
+    clientName: string;
+    processedAt: Timestamp;
+    status: 'Approved';
+};
+
+type MergedActivity = {
+    id: string;
+    user: string;
+    userId: string;
+    action: string;
+    timestamp: string;
+    type: string;
+    createdAt: Date;
+};
+
 const activityIcons: { [key: string]: React.ElementType } = {
     'Deposit': DollarSign,
     'Investment': Briefcase,
@@ -48,6 +69,8 @@ const activityIcons: { [key: string]: React.ElementType } = {
     'Repayment': HandCoins,
     'PlatformEarning': Zap,
     'Withdrawal': DollarSign,
+    'Termination': ShieldOff,
+    'FundBatchCreation': PiggyBank,
     'default': Activity
 }
 
@@ -70,10 +93,29 @@ export default function AdminDashboardPage() {
       return query(
         collection(firestore, 'transactions'),
         orderBy('createdAt', 'desc'),
-        limit(5)
+        limit(10)
       );
     }, [firestore]);
     
+    const terminationsQuery = useMemo(() => {
+        if (!firestore) return null;
+        return query(
+          collection(firestore, 'terminationRequests'),
+          where('status', '==', 'Approved'),
+          orderBy('processedAt', 'desc'),
+          limit(5)
+        );
+      }, [firestore]);
+
+    const recentFundBatchesQuery = useMemo(() => {
+        if (!firestore) return null;
+        return query(
+            collection(firestore, 'fundBatches'),
+            orderBy('createdAt', 'desc'),
+            limit(10)
+        );
+    }, [firestore]);
+
     const earningsQuery = useMemo(() => {
       if (!firestore) return null;
       return query(
@@ -96,12 +138,14 @@ export default function AdminDashboardPage() {
     const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
     const { data: users, loading: usersLoading } = useCollection<User>(usersQuery);
     const { data: recentTransactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
+    const { data: recentTerminations, loading: terminationsLoading } = useCollection<TerminationRequest>(terminationsQuery);
+    const { data: allRecentFundBatches, loading: recentBatchesLoading } = useCollection<FundBatch>(recentFundBatchesQuery);
     const { data: earningsTransactions, loading: earningsLoading } = useCollection<Transaction>(earningsQuery);
     const { data: overdueDeals, loading: overdueDealsLoading } = useCollection<Deal>(overdueDealsQuery);
     
     const allUsersResult = useCollection<User>(usersQuery); 
 
-    const isLoading = fundBatchesLoading || usersLoading || transactionsLoading || earningsLoading || overdueDealsLoading || allUsersResult.loading;
+    const isLoading = fundBatchesLoading || usersLoading || transactionsLoading || earningsLoading || overdueDealsLoading || allUsersResult.loading || terminationsLoading || recentBatchesLoading;
 
     const chartData = useMemo(() => {
         const today = new Date();
@@ -138,11 +182,13 @@ export default function AdminDashboardPage() {
     }, [earningsTransactions]);
 
     const recentActivities = useMemo(() => {
-        if (!recentTransactions || !allUsersResult.data) return [];
-        return recentTransactions.map(tx => {
-            const user = allUsersResult.data?.find(u => u.id === tx.userId);
+        if (!allUsersResult.data) return [];
+        const userMap = new Map(allUsersResult.data.map(u => [u.id, u.name]));
+        
+        const activities: MergedActivity[] = [];
+
+        recentTransactions?.forEach(tx => {
             const amountFormatted = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Math.abs(tx.amount));
-            
             let actionText = '';
             switch (tx.type) {
                 case 'Deposit': actionText = `deposited ${amountFormatted}.`; break;
@@ -153,17 +199,47 @@ export default function AdminDashboardPage() {
                 case 'PlatformEarning': actionText = `earned ${amountFormatted} from "${tx.dealName}".`; break;
                 default: actionText = `${tx.type} of ${amountFormatted}`;
             }
-
-            return {
+            activities.push({
                 id: tx.id,
-                user: user?.name || (tx.userId === 'platform' ? 'Platform' : 'Unknown User'),
+                user: userMap.get(tx.userId) || (tx.userId === 'platform' ? 'Platform' : 'Unknown User'),
                 userId: tx.userId,
                 action: actionText,
+                createdAt: tx.createdAt.toDate(),
                 timestamp: formatDistanceToNow(tx.createdAt.toDate(), { addSuffix: true }),
                 type: tx.type,
-            };
+            });
         });
-    }, [recentTransactions, allUsersResult.data]);
+
+        recentTerminations?.forEach(term => {
+             activities.push({
+                id: term.id,
+                user: term.clientName,
+                userId: term.clientId,
+                action: `terminated the deal "${term.dealName}".`,
+                createdAt: term.processedAt.toDate(),
+                timestamp: formatDistanceToNow(term.processedAt.toDate(), { addSuffix: true }),
+                type: 'Termination',
+            });
+        });
+
+        allRecentFundBatches?.forEach(batch => {
+            if (batch.details?.startsWith('Returned principal')) {
+                const amountFormatted = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount);
+                activities.push({
+                    id: batch.id,
+                    user: userMap.get(batch.sourceId) || (batch.sourceId === 'platform' ? 'Platform' : 'Unknown User'),
+                    userId: batch.sourceId,
+                    action: `had ${amountFormatted} of principal returned to their investible balance.`,
+                    createdAt: batch.createdAt.toDate(),
+                    timestamp: formatDistanceToNow(batch.createdAt.toDate(), { addSuffix: true }),
+                    type: 'FundBatchCreation',
+                });
+            }
+        });
+
+        return activities.sort((a,b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 7);
+
+    }, [recentTransactions, allUsersResult.data, recentTerminations, allRecentFundBatches]);
 
   return (
     <div>
@@ -307,7 +383,7 @@ export default function AdminDashboardPage() {
                 return (
                     <div key={activity.id} className="flex items-start gap-4">
                       <Avatar className="h-9 w-9 border hidden md:flex">
-                        <AvatarImage src={`https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${activity.userId}`} />
+                        <AvatarImage src={`https://picsum.photos/seed/${activity.userId}/128/128`} />
                         <AvatarFallback>{activity.user.charAt(0)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 space-y-1">
@@ -336,5 +412,7 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
+    
 
     

@@ -122,7 +122,7 @@ const formatDate = (timestamp: Timestamp | Date | undefined) => {
         const updateCountdown = () => {
             const now = new Date();
             if (now >= targetDate) {
-                setTimeLeft('Due');
+                setTimeLeft('Due for automatic payment');
             } else {
                 setTimeLeft(formatDistanceStrict(targetDate, now, { unit: 'day' }) + ' remaining');
             }
@@ -192,7 +192,7 @@ export default function UserDetailPage() {
       return { portfolioValue, investibleBalance };
   }, [transactions, fundBatches]);
 
-  const { isZakatEligible, isZakatPayable, zakatAmount } = useMemo(() => {
+  const { isZakatEligible, zakatAmount } = useMemo(() => {
     if (!userProfile) return { isZakatEligible: false, isZakatPayable: false, zakatAmount: 0 };
     
     if (userProfile.role !== 'Investor') {
@@ -202,17 +202,9 @@ export default function UserDetailPage() {
     const nisab = zakatSettings?.nisab || 0;
     const isEligible = financialMetrics.portfolioValue >= nisab;
     const amount = financialMetrics.portfolioValue * 0.025;
-
-    const baseDate = userProfile.lastZakatPaymentDate?.toDate() || firstDeposit?.[0]?.createdAt?.toDate();
-    if (!baseDate) return { isZakatEligible: isEligible, isZakatPayable: false, zakatAmount: amount };
     
-    const oneYearLater = new Date(baseDate);
-    oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
-
-    const isPayable = new Date() >= oneYearLater && financialMetrics.investibleBalance >= amount;
-    
-    return { isZakatEligible: isEligible, isZakatPayable: isPayable, zakatAmount: amount };
-  }, [financialMetrics, zakatSettings, userProfile, firstDeposit]);
+    return { isZakatEligible: isEligible, zakatAmount: amount };
+  }, [financialMetrics, zakatSettings, userProfile]);
 
 
   const processedFundBatches = useMemo(() => {
@@ -489,3 +481,6 @@ export default function UserDetailPage() {
     </div>
   );
 }
+
+
+    

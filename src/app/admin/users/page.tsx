@@ -73,7 +73,7 @@ function UsersTable({ users, loading }: { users: User[] | null, loading: boolean
                   <Card key={user.id} onClick={() => handleRowClick(user.id)} className="cursor-pointer hover:bg-muted/50">
                       <CardContent className="flex items-center gap-4 p-4">
                           <Avatar className="h-12 w-12">
-                              <AvatarImage src={`https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${user.id}`} alt={user.name} />
+                              <AvatarImage src={`https://picsum.photos/seed/${user.id}/128/128`} alt={user.name} />
                               <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                           </Avatar>
                           <div className="flex-1 space-y-1">
@@ -105,7 +105,7 @@ function UsersTable({ users, loading }: { users: User[] | null, loading: boolean
               <TableCell data-label="Name" className="font-medium">
                 <div className="flex items-center gap-3">
                     <Avatar>
-                        <AvatarImage src={`https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${user.id}`} alt={user.name} />
+                        <AvatarImage src={`https://picsum.photos/seed/${user.id}/128/128`} alt={user.name} />
                         <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                     </Avatar>
                     <span>{user.name}</span>
@@ -197,5 +197,7 @@ export default function UsersPage() {
     </div>
   );
 }
+
+    
 
     
