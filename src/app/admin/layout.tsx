@@ -30,7 +30,7 @@ import { useAuth, useFirestore } from "@/firebase/provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import React, { useEffect, useMemo, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { collection, query, orderBy, limit, doc, updateDoc, Timestamp, where, writeBatch } from "firebase/firestore";
+import { collection, query, orderBy, limit, doc, updateDoc, Timestamp, where, writeBatch, getDocs } from "firebase/firestore";
 import { formatDistanceToNow } from 'date-fns';
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { usePathname } from 'next/navigation';

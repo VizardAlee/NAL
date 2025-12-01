@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, XCircle, Hourglass, History } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
