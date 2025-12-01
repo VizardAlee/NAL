@@ -11,6 +11,7 @@ interface Deal {
     dealName: string;
     durationValue: number;
     durationUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
+    createdAt: admin.firestore.Timestamp;
 }
 
 // Defines the shape of the data for a FundBatch document
@@ -134,13 +135,18 @@ export async function POST(request: NextRequest) {
                 const batchData = batchDoc.data() as FundBatch;
                 const amountToDeduct = Math.min(amountToFund, batchData.remainingAmount);
 
+                // Determine the correct historical timestamp for the transaction
+                const dealTimestamp = dealData.createdAt;
+                const batchTimestamp = batchData.createdAt;
+                const transactionTimestamp = dealTimestamp.toMillis() > batchTimestamp.toMillis() ? dealTimestamp : batchTimestamp;
+
                 // Create an Investment document
                 const investmentRef = firestore.collection('investments').doc();
                 transaction.set(investmentRef, {
                     investorId: batchData.sourceId,
                     dealId: dealId,
                     amount: amountToDeduct,
-                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    createdAt: transactionTimestamp,
                 });
 
                 // Create a corresponding 'Investment' transaction
@@ -150,7 +156,7 @@ export async function POST(request: NextRequest) {
                     dealId: dealId,
                     type: 'Investment',
                     amount: -amountToDeduct,
-                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    createdAt: transactionTimestamp,
                     dealName: dealData.dealName,
                 });
                 
