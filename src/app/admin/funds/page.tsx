@@ -24,6 +24,14 @@ import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Investment } from "@/lib/types";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 
 type PlatformFundBatch = DocumentData & {
@@ -54,6 +62,8 @@ type AdministrativeTransaction = DocumentData & {
 type FundBatch = DocumentData & {
   remainingAmount: number;
 }
+
+const ITEMS_PER_PAGE = 10;
 
 const formatDate = (timestamp: Timestamp | Date | undefined) => {
     if (!timestamp) return 'N/A';
@@ -275,6 +285,7 @@ export default function PlatformFundsPage() {
     const [isExpenseOpen, setExpenseOpen] = useState(false);
     const [isTransferToInvestibleOpen, setTransferToInvestibleOpen] = useState(false);
     const [isTransferFromInvestibleOpen, setTransferFromInvestibleOpen] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
 
     const platformFundBatchesQuery = useMemo(() => {
         if (!firestore) return null;
@@ -329,6 +340,17 @@ export default function PlatformFundsPage() {
 
         return { investibleCapital, administrativeBalance, zakatPool, totalInvested, totalInvestiblePool };
     }, [platformFundBatches, adminTransactions, zakatTransactions, allInvestments, allFundBatches]);
+
+    const paginatedAdminTransactions = useMemo(() => {
+        if (!adminTransactions) return [];
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+        return adminTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    }, [adminTransactions, currentPage]);
+
+    const totalPages = useMemo(() => {
+        if (!adminTransactions) return 0;
+        return Math.ceil(adminTransactions.length / ITEMS_PER_PAGE);
+    }, [adminTransactions]);
 
 
     return (
@@ -430,10 +452,10 @@ export default function PlatformFundsPage() {
                         </Dialog>
                     </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-0">
                      {isLoading && (
                         isMobile ? (
-                            <div className="space-y-3">
+                            <div className="space-y-3 p-4">
                                 {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-lg" />)}
                             </div>
                         ) : (
@@ -452,10 +474,10 @@ export default function PlatformFundsPage() {
                             </Table>
                         )
                     )}
-                    {!isLoading && adminTransactions && adminTransactions.length > 0 ? (
+                    {!isLoading && paginatedAdminTransactions && paginatedAdminTransactions.length > 0 ? (
                         isMobile ? (
-                            <div className="space-y-3">
-                                {adminTransactions.map(tx => (
+                            <div className="space-y-3 p-4">
+                                {paginatedAdminTransactions.map(tx => (
                                     <Card key={tx.id} className="p-4">
                                         <div className="flex justify-between items-start">
                                             <div>
@@ -479,7 +501,7 @@ export default function PlatformFundsPage() {
                                 </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                {adminTransactions?.map(tx => (
+                                {paginatedAdminTransactions?.map(tx => (
                                     <TableRow key={tx.id}>
                                         <TableCell>{formatDate(tx.createdAt)}</TableCell>
                                         <TableCell><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell>
@@ -491,9 +513,30 @@ export default function PlatformFundsPage() {
                             </Table>
                         )
                     ) : (
-                        !isLoading && <div className="p-4 py-12 text-center text-sm text-muted-foreground border rounded-lg">No administrative activities found.</div>
+                        !isLoading && <div className="p-4 py-12 text-center text-sm text-muted-foreground border-t">No administrative activities found.</div>
                     )}
                 </CardContent>
+                 {totalPages > 1 && (
+                    <div className="p-4 border-t">
+                        <Pagination>
+                            <PaginationContent>
+                                <PaginationItem>
+                                    <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} />
+                                </PaginationItem>
+                                {[...Array(totalPages)].map((_, i) => (
+                                    <PaginationItem key={i}>
+                                        <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>
+                                            {i + 1}
+                                        </PaginationLink>
+                                    </PaginationItem>
+                                ))}
+                                <PaginationItem>
+                                    <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} />
+                                </PaginationItem>
+                            </PaginationContent>
+                        </Pagination>
+                    </div>
+                )}
             </Card>
 
         </div>
