@@ -30,9 +30,11 @@ import { useAuth, useFirestore } from "@/firebase/provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import React, { useEffect, useMemo, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { collection, query, orderBy, limit, doc, updateDoc, Timestamp } from "firebase/firestore";
+import { collection, query, orderBy, limit, doc, updateDoc, Timestamp, where, writeBatch } from "firebase/firestore";
 import { formatDistanceToNow } from 'date-fns';
 import { useCompanyLogo } from "@/components/company-logo-provider";
+import { usePathname } from 'next/navigation';
+
 
 type Notification = {
     id: string;
@@ -42,6 +44,41 @@ type Notification = {
     read: boolean;
     createdAt: Timestamp;
 };
+
+// New hook to clear notifications when a page is visited
+function useClearNotificationsByPath() {
+    const firestore = useFirestore();
+    const pathname = usePathname();
+
+    useEffect(() => {
+        if (!firestore || !pathname) return;
+
+        const clearNotifications = async () => {
+            const notificationsToClearQuery = query(
+                collection(firestore, 'notifications'),
+                where('link', '==', pathname),
+                where('read', '==', false)
+            );
+            
+            const snapshot = await getDocs(notificationsToClearQuery);
+            if (snapshot.empty) return;
+
+            const batch = writeBatch(firestore);
+            snapshot.docs.forEach(doc => {
+                batch.update(doc.ref, { read: true });
+            });
+            
+            await batch.commit();
+        };
+
+        // Debounce or delay slightly to avoid race conditions on rapid navigation
+        const timer = setTimeout(clearNotifications, 500);
+
+        return () => clearTimeout(timer);
+
+    }, [firestore, pathname]);
+}
+
 
 function AdminSkeleton() {
     return (
@@ -74,21 +111,17 @@ function NotificationBell() {
 
     const notificationsQuery = useMemo(() => {
         if (!firestore) return null;
-        return query(collection(firestore, 'notifications'), orderBy('createdAt', 'desc'), limit(10));
+        // Only fetch unread notifications to keep the list clean
+        return query(collection(firestore, 'notifications'), where('read', '==', false), orderBy('createdAt', 'desc'), limit(10));
     }, [firestore]);
 
     const { data: notifications } = useCollection<Notification>(notificationsQuery);
 
-    const unreadCount = useMemo(() => {
-        return notifications?.filter(n => !n.read).length || 0;
-    }, [notifications]);
-
     const handleNotificationClick = async (notification: Notification) => {
         if (!firestore) return;
-        if (!notification.read) {
-            const notifRef = doc(firestore, 'notifications', notification.id);
-            await updateDoc(notifRef, { read: true });
-        }
+        // Mark as read optimistic update
+        const notifRef = doc(firestore, 'notifications', notification.id);
+        await updateDoc(notifRef, { read: true });
         router.push(notification.link);
     };
 
@@ -97,7 +130,7 @@ function NotificationBell() {
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full relative">
                     <Bell className="h-5 w-5" />
-                    {unreadCount > 0 && (
+                    {notifications && notifications.length > 0 && (
                         <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
@@ -138,6 +171,9 @@ export default function AdminLayout({
   const auth = useAuth();
   const router = useRouter();
   const { logoUrl, loading: logoLoading } = useCompanyLogo();
+
+  // Initialize the hook here
+  useClearNotificationsByPath();
 
   const handleLogout = async () => {
     if (auth) {
@@ -190,7 +226,7 @@ export default function AdminLayout({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={`https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${user?.uid}`} alt={user?.displayName ?? ''} />
+                  <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/128/128`} alt={user?.displayName ?? ''} />
                   <AvatarFallback>{user?.displayName?.charAt(0) ?? user?.email?.charAt(0)}</AvatarFallback>
                 </Avatar>
               </Button>
@@ -215,5 +251,3 @@ export default function AdminLayout({
     </SidebarProvider>
   );
 }
-
-    

@@ -12,9 +12,9 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, XCircle, Hourglass, History } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData, Timestamp, writeBatch, doc } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
@@ -23,6 +23,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { usePathname } from 'next/navigation';
 
 
 type WithdrawalRequest = DocumentData & {
@@ -34,6 +35,38 @@ type WithdrawalRequest = DocumentData & {
   requestedAt: Timestamp;
   processedAt?: Timestamp;
 };
+
+// New hook to clear notifications when a page is visited
+function useClearNotificationsByPath() {
+    const firestore = useFirestore();
+    const pathname = usePathname();
+
+    useEffect(() => {
+        if (!firestore || !pathname) return;
+
+        const clearNotifications = async () => {
+            const notificationsToClearQuery = query(
+                collection(firestore, 'notifications'),
+                where('link', '==', pathname),
+                where('read', '==', false)
+            );
+            
+            const snapshot = await getDocs(notificationsToClearQuery);
+            if (snapshot.empty) return;
+
+            const batch = writeBatch(firestore);
+            snapshot.docs.forEach(doc => {
+                batch.update(doc.ref, { read: true });
+            });
+            
+            await batch.commit();
+        };
+
+        const timer = setTimeout(clearNotifications, 500);
+        return () => clearTimeout(timer);
+
+    }, [firestore, pathname]);
+}
 
 function WithdrawalsTable({
     requests,
@@ -194,6 +227,8 @@ export default function WithdrawalsPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [processingId, setProcessingId] = useState<string | null>(null);
+
+    useClearNotificationsByPath();
 
     const pendingQuery = useMemo(() => firestore ? query(collection(firestore, 'withdrawalRequests'), where('status', '==', 'Pending')) : null, [firestore]);
     const processedQuery = useMemo(() => firestore ? query(collection(firestore, 'withdrawalRequests'), where('status', 'in', ['Approved', 'Rejected'])) : null, [firestore]);

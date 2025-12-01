@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, XCircle, ShieldAlert, Hourglass, History } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, runTransaction, doc, writeBatch, getDocs } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -26,6 +26,7 @@ import { generateAmortizationSchedule } from '@/lib/amortization';
 import { Deal } from '@/lib/types';
 import { Investment } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { usePathname } from 'next/navigation';
 
 type TerminationRequest = DocumentData & {
   id: string;
@@ -38,6 +39,38 @@ type TerminationRequest = DocumentData & {
   processedAt?: Timestamp;
   platformEarning?: number;
 };
+
+// New hook to clear notifications when a page is visited
+function useClearNotificationsByPath() {
+    const firestore = useFirestore();
+    const pathname = usePathname();
+
+    useEffect(() => {
+        if (!firestore || !pathname) return;
+
+        const clearNotifications = async () => {
+            const notificationsToClearQuery = query(
+                collection(firestore, 'notifications'),
+                where('link', '==', pathname),
+                where('read', '==', false)
+            );
+            
+            const snapshot = await getDocs(notificationsToClearQuery);
+            if (snapshot.empty) return;
+
+            const batch = writeBatch(firestore);
+            snapshot.docs.forEach(doc => {
+                batch.update(doc.ref, { read: true });
+            });
+            
+            await batch.commit();
+        };
+
+        const timer = setTimeout(clearNotifications, 500);
+        return () => clearTimeout(timer);
+
+    }, [firestore, pathname]);
+}
 
 function TerminationsTable({
     requests,
@@ -198,6 +231,8 @@ export default function TerminationsPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [processingId, setProcessingId] = useState<string | null>(null);
+
+    useClearNotificationsByPath();
 
     const pendingQuery = useMemo(() => firestore ? query(collection(firestore, 'terminationRequests'), where('status', '==', 'Pending')) : null, [firestore]);
     const processedQuery = useMemo(() => firestore ? query(collection(firestore, 'terminationRequests'), where('status', 'in', ['Approved', 'Rejected'])) : null, [firestore]);
