@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight } from "lucide-react";
 import { useMemo, useState, useTransition, useEffect } from 'react';
-import { useCollection, useDoc } from '@/firebase/firestore/use-collection';
+import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc, updateDoc } from 'firebase/firestore';
 import { useFirestore, useUser, type User } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -170,18 +170,18 @@ export default function InvestorDashboard() {
 
   const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || firstDepositLoading;
 
-  const { longTermProfits, shortTermProfits, withdrawableBalance } = useMemo(() => {
+  const { longTermProfits, withdrawableBalance } = useMemo(() => {
       if (!allTransactions || !fundBatches) {
-          return { longTermProfits: 0, shortTermProfits: 0, withdrawableBalance: 0 };
+          return { longTermProfits: 0, withdrawableBalance: 0 };
       }
       
       const profitTransactions = allTransactions.filter(tx => tx.type === 'ProfitDistribution');
-      const totalWithdrawn = allTransactions
-        .filter(tx => tx.type === 'Withdrawal' || tx.type === 'Zakat')
+      const totalWithdrawnFromProfits = allTransactions
+        .filter(tx => tx.type === 'Withdrawal') // Zakat is not from profits
         .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
       
-      let ltProfits = 0;
-      let stProfits = 0;
+      let totalLongTermProfit = 0;
+      let totalShortTermProfit = 0;
 
       // This is a simplified attribution. A more robust system might tag profits at creation.
       const hasLongTermCapital = fundBatches.some(batch => {
@@ -191,15 +191,14 @@ export default function InvestorDashboard() {
 
       if (hasLongTermCapital) {
           // Simplification: Assume all profits are long-term if any long-term capital exists.
-          ltProfits = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+          totalLongTermProfit = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
       } else {
-          stProfits = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+          totalShortTermProfit = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
       }
 
       return {
-          longTermProfits: ltProfits,
-          shortTermProfits: stProfits,
-          withdrawableBalance: stProfits - totalWithdrawn, // Only short-term profits are withdrawable now
+          longTermProfits: totalLongTermProfit,
+          withdrawableBalance: totalShortTermProfit - totalWithdrawnFromProfits, // Only short-term profits are withdrawable now
       };
   }, [allTransactions, fundBatches]);
 
@@ -233,14 +232,14 @@ export default function InvestorDashboard() {
     const lastWithdrawal = userProfile?.lastWithdrawalDate?.toDate();
     const cooldownActive = lastWithdrawal ? differenceInDays(new Date(), lastWithdrawal) < 90 : false;
     
-    const availableForWithdrawal = Math.min(longTermProfits * 0.2, financialMetrics.investibleBalance);
+    const availableForWithdrawal = Math.min(longTermProfits * 0.2, financialMetrics.investableBalance);
 
     return {
         isLocked,
         cooldownActive,
         maxWithdrawal: availableForWithdrawal,
     };
-  }, [longTermProfits, firstDeposit, userProfile, financialMetrics.investibleBalance]);
+  }, [longTermProfits, firstDeposit, userProfile, financialMetrics.investableBalance]);
   
   const chartData = useMemo(() => {
     if (!allTransactions || allTransactions.length === 0) return [];
