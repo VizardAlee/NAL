@@ -230,6 +230,7 @@ export default function DealDetailPage() {
                         <div className="font-medium">Duration</div><div>{deal.durationValue} {deal.durationUnit}</div>
                         <div className="font-medium">Repayment Type</div><div>{deal.repaymentType}</div>
                         <div className="font-medium">Repayment Frequency</div><div>{deal.repaymentFrequency}</div>
+                        <div className="font-medium">Term Start Date</div><div>{formatDate(deal.startDate)}</div>
                         <div className="font-medium">Date Created</div><div>{formatDate(deal.createdAt)}</div>
                     </CardContent>
                 </Card>
@@ -358,5 +359,3 @@ export default function DealDetailPage() {
     </div>
   );
 }
-
-    

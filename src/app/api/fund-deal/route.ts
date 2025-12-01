@@ -12,6 +12,7 @@ interface Deal {
     durationValue: number;
     durationUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
     createdAt: admin.firestore.Timestamp;
+    startDate?: admin.firestore.Timestamp;
 }
 
 // Defines the shape of the data for a FundBatch document
@@ -135,10 +136,13 @@ export async function POST(request: NextRequest) {
                 const batchData = batchDoc.data() as FundBatch;
                 const amountToDeduct = Math.min(amountToFund, batchData.remainingAmount);
 
-                // Determine the correct historical timestamp for the transaction
-                const dealTimestamp = dealData.createdAt;
+                // Determine the correct historical timestamp for the transaction.
+                // Use the deal's start date, or createdAt date if start date doesn't exist.
+                // This ensures backdating works correctly for amortization.
+                const dealStartDate = dealData.startDate || dealData.createdAt;
                 const batchTimestamp = batchData.createdAt;
-                const transactionTimestamp = dealTimestamp.toMillis() > batchTimestamp.toMillis() ? dealTimestamp : batchTimestamp;
+                // The investment happens at the later of the two dates.
+                const transactionTimestamp = dealStartDate.toMillis() > batchTimestamp.toMillis() ? dealStartDate : batchTimestamp;
 
                 // Create an Investment document
                 const investmentRef = firestore.collection('investments').doc();

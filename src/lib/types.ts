@@ -14,6 +14,7 @@ export type Deal = DocumentData & {
   repaymentFrequency: 'Daily' | 'Weekly' | 'Fortnightly' | 'Monthly';
   status: 'Pending' | 'Active' | 'Completed' | 'Terminated';
   createdAt: Timestamp; // Firestore Timestamp object
+  startDate?: Timestamp; // The official start date of the financing term
 };
 
 export type Investment = DocumentData & {

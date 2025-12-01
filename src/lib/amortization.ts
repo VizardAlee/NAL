@@ -12,10 +12,11 @@ export interface ScheduleInstallment {
 }
 
 function getPeriods(deal: Deal): { totalPeriods: number; addPeriod: (date: Date, count: number) => Date } {
-  if (!deal.createdAt) {
+  const termStartDate = deal.startDate?.toDate() || deal.createdAt?.toDate();
+  if (!termStartDate) {
       return { totalPeriods: 0, addPeriod: (date, count) => add(date, { days: count }) };
   }
-  const startDate = deal.createdAt.toDate();
+
   let totalPeriods = 0;
   let addPeriod: (date: Date, count: number) => Date;
 
@@ -30,30 +31,30 @@ function getPeriods(deal: Deal): { totalPeriods: number; addPeriod: (date: Date,
     }
   })();
 
-  const endDate = add(startDate, { days: Math.round(durationInDays) });
+  const endDate = add(termStartDate, { days: Math.round(durationInDays) });
 
   switch (deal.repaymentFrequency) {
     case 'Daily':
-      totalPeriods = differenceInDays(endDate, startDate);
+      totalPeriods = differenceInDays(endDate, termStartDate);
       addPeriod = (date, count) => add(date, { days: count });
       break;
     case 'Weekly':
-      totalPeriods = differenceInWeeks(endDate, startDate);
+      totalPeriods = differenceInWeeks(endDate, termStartDate);
       addPeriod = (date, count) => add(date, { weeks: count });
       break;
     case 'Fortnightly':
-      totalPeriods = Math.floor(differenceInWeeks(endDate, startDate) / 2);
+      totalPeriods = Math.floor(differenceInWeeks(endDate, termStartDate) / 2);
       addPeriod = (date, count) => add(date, { weeks: count * 2 });
       break;
     case 'Monthly':
-      totalPeriods = differenceInCalendarMonths(endDate, startDate);
+      totalPeriods = differenceInCalendarMonths(endDate, termStartDate);
        if (totalPeriods === 0) { // Handle cases where duration is less than a month
-          totalPeriods = Math.floor(differenceInDays(endDate, startDate) / 30);
+          totalPeriods = Math.floor(differenceInDays(endDate, termStartDate) / 30);
       }
       addPeriod = (date, count) => add(date, { months: count });
       break;
     default:
-      totalPeriods = differenceInCalendarMonths(endDate, startDate);
+      totalPeriods = differenceInCalendarMonths(endDate, termStartDate);
       addPeriod = (date, count) => add(date, { months: count });
       break;
   }
@@ -62,10 +63,11 @@ function getPeriods(deal: Deal): { totalPeriods: number; addPeriod: (date: Date,
 
 
 export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] {
-  if (!deal.createdAt) return [];
+  const termStartDate = deal.startDate?.toDate() || deal.createdAt?.toDate();
+  if (!termStartDate) return [];
+
   const principal = deal.principal;
   const annualRate = (deal.profitRate || 0) / 100;
-  const startDate = deal.createdAt.toDate();
   const { totalPeriods, addPeriod } = getPeriods(deal);
 
   if (totalPeriods === 0) return [];
@@ -94,7 +96,7 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
         
         schedule.push({
             installment: i,
-            dueDate: addPeriod(startDate, i),
+            dueDate: addPeriod(termStartDate, i),
             payment: payment,
             principal: principalPayment,
             interest: interestPerInstallment,
@@ -134,7 +136,7 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
 
         schedule.push({
           installment: i,
-          dueDate: addPeriod(startDate, i),
+          dueDate: addPeriod(termStartDate, i),
           payment: emi,
           principal: principalPayment,
           interest: interestPayment,

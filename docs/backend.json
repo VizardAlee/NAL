@@ -80,7 +80,12 @@
         "createdAt": {
           "type": "string",
           "format": "date-time",
-          "description": "The timestamp when the deal was created."
+          "description": "The timestamp when the deal record was created in the system."
+        },
+        "startDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The official start date of the financing term, used for amortization calculations. Defaults to createdAt if not provided."
         }
       },
       "required": [
