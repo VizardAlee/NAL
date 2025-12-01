@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -23,11 +24,16 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useMemo } from 'react';
-import { Loader2 } from 'lucide-react';
-import { addDoc, collection, query, where, serverTimestamp } from 'firebase/firestore';
+import { CalendarIcon, Loader2 } from 'lucide-react';
+import { addDoc, collection, query, where, Timestamp } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { FirebaseError } from 'firebase/app';
 import { useCollection } from '@/firebase/firestore/use-collection';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+
 
 const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
@@ -38,6 +44,7 @@ const formSchema = z.object({
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
+  createdAt: z.date().optional(),
 });
 
 type CreateDealFormProps = {
@@ -95,10 +102,9 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
       const dealsCollection = collection(firestore, 'deals');
       await addDoc(dealsCollection, {
         ...values,
-        duration: `${values.durationValue} ${values.durationUnit}`, // Combine for backward compatibility if needed
+        createdAt: values.createdAt ? Timestamp.fromDate(values.createdAt) : Timestamp.now(),
         clientName: selectedClient.name, // Denormalize client name
         status: 'Pending',
-        createdAt: serverTimestamp(),
       });
 
       toast({
@@ -251,6 +257,50 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
                   <SelectItem value="Monthly">Monthly</SelectItem>
                 </SelectContent>
               </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="createdAt"
+          render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Creation Date (Optional)</FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full pl-3 text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                    >
+                      {field.value ? (
+                        format(field.value, "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={field.onChange}
+                    disabled={(date) =>
+                      date > new Date() || date < new Date("1900-01-01")
+                    }
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <FormDescription>
+                Leave blank to use the current date.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}

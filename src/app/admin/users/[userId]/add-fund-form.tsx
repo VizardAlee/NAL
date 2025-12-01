@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -16,16 +17,21 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import { doc, collection, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { CalendarIcon, Loader2 } from 'lucide-react';
+import { doc, collection, writeBatch, Timestamp } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { FirebaseError } from 'firebase/app';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 
 const formSchema = z.object({
   amount: z.coerce.number().positive({ message: 'Amount must be a positive number.' }),
   tenureValue: z.coerce.number().positive().int({ message: 'Tenure must be a positive number.' }),
   tenureUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
+  createdAt: z.date().optional(),
 });
 
 type AddFundFormProps = {
@@ -56,7 +62,7 @@ export function AddFundForm({ userId }: AddFundFormProps) {
 
     try {
       const batch = writeBatch(firestore);
-      const timestamp = serverTimestamp();
+      const timestamp = values.createdAt ? Timestamp.fromDate(values.createdAt) : Timestamp.now();
 
       const fundBatchRef = doc(collection(firestore, 'fundBatches'));
       batch.set(fundBatchRef, {
@@ -152,6 +158,50 @@ export function AddFundForm({ userId }: AddFundFormProps) {
             )}
           />
         </div>
+         <FormField
+          control={form.control}
+          name="createdAt"
+          render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Deposit Date (Optional)</FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full pl-3 text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                    >
+                      {field.value ? (
+                        format(field.value, "PPP")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={field.onChange}
+                    disabled={(date) =>
+                      date > new Date() || date < new Date("1900-01-01")
+                    }
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <FormDescription>
+                Leave blank to use the current date.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Deposit Funds
