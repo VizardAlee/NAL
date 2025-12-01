@@ -28,12 +28,13 @@ import { useUser, useCollection } from "@/firebase";
 import { useRouter } from "next/navigation";
 import { useAuth, useFirestore } from "@/firebase/provider";
 import { Skeleton } from "@/components/ui/skeleton";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { collection, query, orderBy, limit, doc, updateDoc, Timestamp, where, writeBatch, getDocs } from "firebase/firestore";
 import { formatDistanceToNow } from 'date-fns';
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { usePathname } from 'next/navigation';
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 
 type Notification = {
@@ -111,11 +112,15 @@ function NotificationBell() {
 
     const notificationsQuery = useMemo(() => {
         if (!firestore) return null;
-        // Only fetch unread notifications to keep the list clean
-        return query(collection(firestore, 'notifications'), where('read', '==', false), orderBy('createdAt', 'desc'), limit(10));
+        // Fetch all notifications, read or unread, to show them until cleared
+        return query(collection(firestore, 'notifications'), orderBy('createdAt', 'desc'), limit(20));
     }, [firestore]);
 
     const { data: notifications } = useCollection<Notification>(notificationsQuery);
+
+    const unreadNotifications = useMemo(() => {
+        return notifications?.filter(n => !n.read) || [];
+    }, [notifications]);
 
     const handleNotificationClick = async (notification: Notification) => {
         if (!firestore) return;
@@ -130,7 +135,7 @@ function NotificationBell() {
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full relative">
                     <Bell className="h-5 w-5" />
-                    {notifications && notifications.length > 0 && (
+                    {unreadNotifications.length > 0 && (
                         <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
@@ -139,24 +144,28 @@ function NotificationBell() {
                     <span className="sr-only">Toggle notifications</span>
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-                <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+            <DropdownMenuContent align="end" className="w-80 p-0">
+                <DropdownMenuLabel className="px-2 py-1.5">Notifications</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {notifications && notifications.length > 0 ? (
-                    notifications.map(n => (
-                        <DropdownMenuItem key={n.id} onClick={() => handleNotificationClick(n)} className="flex items-start gap-3 cursor-pointer">
-                           {!n.read && <Circle className="h-2 w-2 mt-1.5 fill-primary text-primary" />}
-                           {n.read && <div className="w-2 h-2" />}
-                            <div className="grid gap-1">
-                                <p className="font-medium">{n.title}</p>
-                                <p className="text-xs text-muted-foreground">{n.message}</p>
-                                <p className="text-xs text-muted-foreground">{formatDistanceToNow(n.createdAt.toDate(), { addSuffix: true })}</p>
-                            </div>
-                        </DropdownMenuItem>
-                    ))
-                ) : (
-                    <DropdownMenuItem disabled>No new notifications</DropdownMenuItem>
-                )}
+                <ScrollArea className="max-h-96">
+                    <div className="p-1">
+                        {notifications && notifications.length > 0 ? (
+                            notifications.map(n => (
+                                <DropdownMenuItem key={n.id} onClick={() => handleNotificationClick(n)} className="flex items-start gap-3 cursor-pointer">
+                                {!n.read && <Circle className="h-2 w-2 mt-1.5 fill-primary text-primary" />}
+                                {n.read && <div className="w-2 h-2" />}
+                                    <div className="grid gap-1">
+                                        <p className="font-medium">{n.title}</p>
+                                        <p className="text-xs text-muted-foreground">{n.message}</p>
+                                        <p className="text-xs text-muted-foreground">{formatDistanceToNow(n.createdAt.toDate(), { addSuffix: true })}</p>
+                                    </div>
+                                </DropdownMenuItem>
+                            ))
+                        ) : (
+                            <DropdownMenuItem disabled>No new notifications</DropdownMenuItem>
+                        )}
+                    </div>
+                </ScrollArea>
             </DropdownMenuContent>
         </DropdownMenu>
     )
