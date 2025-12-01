@@ -122,7 +122,7 @@ const formatDate = (timestamp: Timestamp | Date | undefined) => {
         const updateCountdown = () => {
             const now = new Date();
             if (now >= targetDate) {
-                setTimeLeft('Ready');
+                setTimeLeft('Due');
             } else {
                 setTimeLeft(formatDistanceStrict(targetDate, now, { unit: 'day' }) + ' remaining');
             }
@@ -144,7 +144,6 @@ export default function UserDetailPage() {
   const firestore = useFirestore();
   const { user, loading: userLoading } = useUser();
   const [isAddFundOpen, setAddFundOpen] = useState(false);
-  const [isZakatPending, startZakatTransition] = useTransition();
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [currentPage, setCurrentPage] = useState(1);
@@ -236,21 +235,6 @@ export default function UserDetailPage() {
     return Math.ceil(transactions.length / ITEMS_PER_PAGE);
   }, [transactions]);
   
-  const handlePayZakat = () => {
-    startZakatTransition(async () => {
-        const result = await payZakatAction({
-            userId: userId,
-            zakatAmount: zakatAmount,
-            investibleBalance: financialMetrics.investibleBalance,
-        });
-
-        if (result.success) {
-            toast({ title: "Success", description: result.message });
-        } else {
-            toast({ variant: 'destructive', title: "Error", description: result.message });
-        }
-    });
-  };
 
   if (isLoading || isMobile === undefined) {
     return <UserDetailSkeleton />;
@@ -274,7 +258,7 @@ export default function UserDetailPage() {
                 <Card>
                     <CardHeader className="flex flex-row items-center gap-4 space-y-0">
                          <Avatar className="h-16 w-16">
-                            <AvatarImage src={`https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${userProfile.id}`} />
+                            <AvatarImage src={`https://picsum.photos/seed/${userProfile.id}/128/128`} />
                             <AvatarFallback>{userProfile.name?.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <div>
@@ -339,7 +323,7 @@ export default function UserDetailPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-sm font-medium">Zakat Payment</CardTitle>
-                            <CardDescription>Annual Zakat payment is 2.5% of the total portfolio value.</CardDescription>
+                            <CardDescription>Annual Zakat is 2.5% of the portfolio value and is processed automatically when due.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="text-lg font-bold font-headline mb-2">
@@ -351,10 +335,6 @@ export default function UserDetailPage() {
                                     lastZakatPaymentDate={userProfile.lastZakatPaymentDate?.toDate()}
                                 />
                             )}
-                            <Button className="w-full mt-2" disabled={!isZakatPayable || isZakatPending} onClick={handlePayZakat}>
-                               {isZakatPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                               Pay Zakat
-                            </Button>
                         </CardContent>
                     </Card>
                 )}
@@ -509,5 +489,3 @@ export default function UserDetailPage() {
     </div>
   );
 }
-
-    

@@ -50,7 +50,11 @@ async function processZakat() {
 
             // Calculate portfolio value
             const transactionsSnapshot = await adminDb.collection('transactions').where('userId', '==', userId).get();
-            const portfolioValue = transactionsSnapshot.docs.reduce((sum, doc) => sum + doc.data().amount, 0);
+            const portfolioValue = transactionsSnapshot.docs.reduce((sum, doc) => {
+                const tx = doc.data();
+                // We only sum positive values (deposits, profits) and subtract negative ones (withdrawals, investments, previous zakat)
+                return sum + tx.amount;
+            }, 0);
 
             if (portfolioValue < nisab) {
                 continue; // Below Nisab threshold
@@ -96,16 +100,6 @@ async function processZakat() {
                     details: 'Annual Zakat Payment (Automatic)'
                 });
 
-                // Also add to the general Zakat pool for tracking on the funds page
-                const zakatPoolTxRef = adminDb.collection('transactions').doc();
-                 transaction.set(zakatPoolTxRef, {
-                    userId: 'zakat_pool',
-                    type: 'Zakat',
-                    amount: zakatAmount, // Positive amount for the pool
-                    createdAt: FieldValue.serverTimestamp(),
-                    details: `From ${user.name}`
-                });
-
                 transaction.update(userDoc.ref, { lastZakatPaymentDate: FieldValue.serverTimestamp() });
             });
 
@@ -126,10 +120,13 @@ async function processZakat() {
 async function processLatePenalties() {
     let processedCount = 0, errorCount = 0;
     const details = [];
+
     const thirtyDaysAgo = add(new Date(), { days: -30 });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     const overdueRepaymentsQuery = adminDb.collection('repayments')
-        .where('status', '==', 'Pending') // We only care about pending payments
+        .where('status', '==', 'Pending')
         .where('dueDate', '<', thirtyDaysAgo);
         
     const overdueSnapshot = await overdueRepaymentsQuery.get();
@@ -138,42 +135,37 @@ async function processLatePenalties() {
         const repayment = repaymentDoc.data();
         try {
             // Check if a penalty for this installment for today has already been applied.
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+            const penaltyIdentifier = `Late fee for repayment ${repayment.installmentNumber} on deal ${repayment.dealId}`;
+            
             const penaltyCheckQuery = adminDb.collection('transactions')
                 .where('type', '==', 'Penalty')
-                .where('details', '==', `Late fee for repayment ${repaymentDoc.id}`)
+                .where('details', '==', penaltyIdentifier)
                 .where('createdAt', '>=', today);
             
             const penaltyTodaySnapshot = await penaltyCheckQuery.get();
 
             if (!penaltyTodaySnapshot.empty) {
-                details.push(`Skipped penalty for repayment ${repaymentDoc.id}: Already applied today.`);
+                details.push(`Skipped penalty for repayment installment ${repayment.installmentNumber}: Already applied today.`);
                 continue;
             }
 
             const penaltyAmount = repayment.amount * 0.01;
 
-            // Create a "Penalty" transaction and deposit it into the Zakat pool
             const penaltyTxRef = adminDb.collection('transactions').doc();
             await penaltyTxRef.set({
-                userId: 'zakat_pool',
+                userId: repayment.clientId, // Associate penalty with the client
                 dealId: repayment.dealId,
                 type: 'Penalty',
-                amount: penaltyAmount, // Positive amount for the pool
+                amount: penaltyAmount, // Positive amount to be tracked, client owes this
                 createdAt: FieldValue.serverTimestamp(),
-                details: `Late fee for repayment ${repaymentDoc.id}`
+                details: penaltyIdentifier,
             });
-            
-            // We are not adding the penalty to the user's debt directly,
-            // but logging it as a separate transaction type into the Zakat Pool.
-            // This simplifies accounting.
 
-            details.push(`Applied 1% penalty of ${penaltyAmount} for overdue repayment ${repaymentDoc.id}.`);
+            details.push(`Applied 1% penalty of ${penaltyAmount} for overdue installment ${repayment.installmentNumber} on deal ${repayment.dealId}.`);
             processedCount++;
 
         } catch (error) {
-             console.error(`Failed to apply penalty for repayment ${repaymentDoc.id}:`, error);
+            console.error(`Failed to apply penalty for repayment ${repaymentDoc.id}:`, error);
             errorCount++;
             details.push(`Error applying penalty for repayment ${repaymentDoc.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
