@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins } from "lucide-react";
+import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank } from "lucide-react";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy } from 'firebase/firestore';
 import { useFirestore } from "@/firebase";
@@ -23,6 +23,7 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Investment } from "@/lib/types";
 
 
 type PlatformFundBatch = DocumentData & {
@@ -43,12 +44,16 @@ type GenericTransaction = DocumentData & {
 };
 
 type AdministrativeTransaction = DocumentData & {
-  id: string;
+  id:string;
   type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible';
   amount: number;
   description: string;
   createdAt: Timestamp;
 };
+
+type FundBatch = DocumentData & {
+  remainingAmount: number;
+}
 
 const formatDate = (timestamp: Timestamp | Date | undefined) => {
     if (!timestamp) return 'N/A';
@@ -275,11 +280,6 @@ export default function PlatformFundsPage() {
         if (!firestore) return null;
         return query(collection(firestore, 'fundBatches'), where('sourceId', '==', 'platform'));
     }, [firestore]);
-
-    const platformTransactionsQuery = useMemo(() => {
-        if (!firestore) return null;
-        return query(collection(firestore, 'transactions'), where('userId', '==', 'platform'));
-    }, [firestore]);
     
     const adminTransactionsQuery = useMemo(() => {
         if (!firestore) return null;
@@ -291,24 +291,27 @@ export default function PlatformFundsPage() {
       return query(collection(firestore, 'transactions'), where('type', 'in', ['Zakat', 'Penalty']));
     }, [firestore]);
 
-    const { data: fundBatches, loading: batchesLoading } = useCollection<PlatformFundBatch>(platformFundBatchesQuery);
-    const { data: platformTransactions, loading: platformTransactionsLoading } = useCollection<GenericTransaction>(platformTransactionsQuery);
+    const allInvestmentsQuery = useMemo(() => {
+        if (!firestore) return null;
+        return collection(firestore, 'investments');
+    }, [firestore]);
+
+    const allFundBatchesQuery = useMemo(() => {
+        if (!firestore) return null;
+        return collection(firestore, 'fundBatches');
+    }, [firestore]);
+
+    const { data: platformFundBatches, loading: platformBatchesLoading } = useCollection<PlatformFundBatch>(platformFundBatchesQuery);
     const { data: adminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
     const { data: zakatTransactions, loading: zakatLoading } = useCollection<GenericTransaction>(zakatTransactionsQuery);
+    const { data: allInvestments, loading: allInvestmentsLoading } = useCollection<Investment>(allInvestmentsQuery);
+    const { data: allFundBatches, loading: allFundBatchesLoading } = useCollection<FundBatch>(allFundBatchesQuery);
 
 
-    const isLoading = batchesLoading || platformTransactionsLoading || adminTransactionsLoading || zakatLoading;
+    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allInvestmentsLoading || allFundBatchesLoading;
 
     const metrics = useMemo(() => {
-        const totalEarnings = platformTransactions
-            ?.filter(tx => tx.type === 'PlatformEarning')
-            .reduce((sum, tx) => sum + tx.amount, 0) || 0;
-            
-        const totalInvestedByPlatform = platformTransactions
-            ?.filter(tx => tx.type === 'Investment')
-            .reduce((sum, tx) => sum + Math.abs(tx.amount), 0) || 0;
-
-        const investibleCapital = fundBatches
+        const investibleCapital = platformFundBatches
             ?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
         
         const administrativeBalance = adminTransactions
@@ -316,25 +319,51 @@ export default function PlatformFundsPage() {
         
         const zakatPool = zakatTransactions
             ?.reduce((sum, tx) => sum + Math.abs(tx.amount), 0) || 0;
+        
+        const totalInvested = allInvestments
+            ?.reduce((sum, inv) => sum + inv.amount, 0) || 0;
+            
+        const totalInvestiblePool = allFundBatches
+            ?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
 
 
-        return { totalEarnings, totalInvestedByPlatform, investibleCapital, administrativeBalance, zakatPool };
-    }, [platformTransactions, fundBatches, adminTransactions, zakatTransactions]);
+        return { investibleCapital, administrativeBalance, zakatPool, totalInvested, totalInvestiblePool };
+    }, [platformFundBatches, adminTransactions, zakatTransactions, allInvestments, allFundBatches]);
 
 
     return (
         <div>
             <PageHeader
-                title="Platform Account"
+                title="Platform Funds"
                 description="An overview of the platform's internal funds, earnings, and investments."
                 icon={Banknote}
             />
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                  <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Investible Capital</CardTitle>
-                        <Wallet className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium">Total Investible Pool</CardTitle>
+                        <Library className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalInvestiblePool)}</div>}
+                        <p className="text-xs text-muted-foreground">Total capital from all sources available for deals.</p>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Capital Invested</CardTitle>
+                        <Landmark className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalInvested)}</div>}
+                        <p className="text-xs text-muted-foreground">Total amount from all sources invested in deals.</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Platform Investible Capital</CardTitle>
+                        <PiggyBank className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                         {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.investibleCapital)}</div>}
@@ -359,16 +388,6 @@ export default function PlatformFundsPage() {
                     <CardContent>
                         {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.zakatPool)}</div>}
                         <p className="text-xs text-muted-foreground">Collected Zakat and penalty fees.</p>
-                    </CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Capital Invested</CardTitle>
-                        <Landmark className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalInvestedByPlatform)}</div>}
-                        <p className="text-xs text-muted-foreground">Total amount the platform has invested in deals.</p>
                     </CardContent>
                 </Card>
             </div>
