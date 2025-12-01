@@ -164,7 +164,7 @@
         "type": {
           "type": "string",
           "description": "The type of transaction.",
-          "enum": ["Deposit", "Withdrawal", "Investment", "Repayment", "ProfitDistribution", "PlatformEarning", "Zakat"]
+          "enum": ["Deposit", "Withdrawal", "Investment", "Repayment", "ProfitDistribution", "PlatformEarning", "Zakat", "Penalty"]
         },
         "amount": {
           "type": "number",
