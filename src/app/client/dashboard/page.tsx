@@ -178,8 +178,24 @@ export default function ClientDashboard() {
     
     const isLoading = userLoading || dealsLoading;
 
-    const mostRecentDeal = useMemo(() => deals?.[0], [deals]);
-    const olderDeals = useMemo(() => deals?.slice(1) || [], [deals]);
+    const { mainDeal, olderDeals } = useMemo(() => {
+        if (!deals || deals.length === 0) {
+            return { mainDeal: null, olderDeals: [] };
+        }
+
+        const activeDeal = deals.find(d => d.status === 'Active');
+        if (activeDeal) {
+            return {
+                mainDeal: activeDeal,
+                olderDeals: deals.filter(d => d.id !== activeDeal.id),
+            };
+        }
+
+        // If no active deal, fall back to the most recent one
+        const mainDeal = deals[0];
+        const olderDeals = deals.slice(1);
+        return { mainDeal, olderDeals };
+    }, [deals]);
 
     return (
         <div>
@@ -191,9 +207,9 @@ export default function ClientDashboard() {
             
             {isLoading ? (
                 <DealsSkeleton />
-            ) : mostRecentDeal ? (
+            ) : mainDeal ? (
                 <div className="grid gap-8">
-                    <DealCard deal={mostRecentDeal} />
+                    <DealCard deal={mainDeal} />
 
                     {olderDeals.length > 0 && (
                         <Card>
