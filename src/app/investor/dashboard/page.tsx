@@ -6,12 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight } from "lucide-react";
-import { useMemo, useState, useTransition } from 'react';
-import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData, Timestamp, orderBy, limit } from 'firebase/firestore';
+import { useMemo, useState, useTransition, useEffect } from 'react';
+import { useCollection, useDoc } from '@/firebase/firestore/use-collection';
+import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc, updateDoc } from 'firebase/firestore';
 import { useFirestore, useUser, type User } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format } from 'date-fns';
+import { format, differenceInDays, addDays } from 'date-fns';
 import { Deal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -45,7 +45,29 @@ type FundBatch = DocumentData & {
     amount: number;
     remainingAmount: number;
     createdAt: Timestamp;
+    tenureValue: number;
+    tenureUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
 };
+
+type UserProfile = DocumentData & {
+    id: string;
+    lastWithdrawalDate?: Timestamp;
+};
+
+
+const DURATION_IN_DAYS = {
+    Days: 1,
+    Weeks: 7,
+    Fortnights: 14,
+    Months: 30.4375,
+    Years: 365.25,
+};
+
+function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): number {
+    return value * (DURATION_IN_DAYS[unit] || 0);
+}
+
+const EIGHTEEN_MONTHS_IN_DAYS = 18 * DURATION_IN_DAYS.Months;
 
 
 const chartConfig = {
@@ -94,6 +116,11 @@ export default function InvestorDashboard() {
   const [isWithdrawOpen, setWithdrawOpen] = useState(false);
   const isMobile = useIsMobile();
 
+  const userProfileRef = useMemo(() => {
+    if (!firestore || !user?.uid) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [firestore, user]);
+
   // Query for all transactions for chart and metrics
   const allTransactionsQuery = useMemo(() => {
     if (!firestore || !user?.uid) return null;
@@ -115,11 +142,19 @@ export default function InvestorDashboard() {
     if (!firestore || !user?.uid) return null;
     return query(collection(firestore, 'fundBatches'), where('sourceId', '==', user.uid));
   }, [firestore, user]);
+  
+  const firstDepositQuery = useMemo(() => {
+      if (!firestore || !user?.uid) return null;
+      return query(collection(firestore, 'transactions'), where('userId', '==', user.uid), where('type', '==', 'Deposit'), orderBy('createdAt', 'asc'), limit(1));
+  }, [firestore, user]);
 
+
+  const { data: userProfile, loading: userProfileLoading } = useDoc<UserProfile>(userProfileRef as any);
   const { data: investments, loading: investmentsLoading } = useCollection<Investment>(investmentsQuery);
   const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
   const { data: allTransactions, loading: allTransactionsLoading } = useCollection<Transaction>(allTransactionsQuery);
   const { data: recentTransactions, loading: recentTransactionsLoading } = useCollection<Transaction>(recentTransactionsQuery);
+  const { data: firstDeposit, loading: firstDepositLoading } = useCollection<Transaction>(firstDepositQuery);
 
 
   const investedDealIds = useMemo(() => {
@@ -133,11 +168,45 @@ export default function InvestorDashboard() {
   
   const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
 
-  const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined;
+  const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || firstDepositLoading;
+
+  const { longTermProfits, shortTermProfits, withdrawableBalance } = useMemo(() => {
+      if (!allTransactions || !fundBatches) {
+          return { longTermProfits: 0, shortTermProfits: 0, withdrawableBalance: 0 };
+      }
+      
+      const profitTransactions = allTransactions.filter(tx => tx.type === 'ProfitDistribution');
+      const totalWithdrawn = allTransactions
+        .filter(tx => tx.type === 'Withdrawal' || tx.type === 'Zakat')
+        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+      
+      let ltProfits = 0;
+      let stProfits = 0;
+
+      // This is a simplified attribution. A more robust system might tag profits at creation.
+      const hasLongTermCapital = fundBatches.some(batch => {
+          const tenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
+          return tenureInDays >= EIGHTEEN_MONTHS_IN_DAYS;
+      });
+
+      if (hasLongTermCapital) {
+          // Simplification: Assume all profits are long-term if any long-term capital exists.
+          ltProfits = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+      } else {
+          stProfits = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+      }
+
+      return {
+          longTermProfits: ltProfits,
+          shortTermProfits: stProfits,
+          withdrawableBalance: stProfits - totalWithdrawn, // Only short-term profits are withdrawable now
+      };
+  }, [allTransactions, fundBatches]);
+
 
   const financialMetrics = useMemo(() => {
     if (!allTransactions) {
-      return { totalCapital: 0, totalProfit: 0, totalWithdrawn: 0, portfolioValue: 0, withdrawableBalance: 0, investableBalance: 0, simpleROI: 0 };
+      return { totalCapital: 0, portfolioValue: 0, investableBalance: 0, simpleROI: 0 };
     }
     const totalCapital = allTransactions
       .filter(tx => tx.type === 'Deposit')
@@ -152,13 +221,26 @@ export default function InvestorDashboard() {
       .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
     
     const portfolioValue = (totalCapital + totalProfit) - totalWithdrawn;
-    const withdrawableBalance = totalProfit - totalWithdrawn;
     const simpleROI = totalCapital > 0 ? (totalProfit / totalCapital) * 100 : 0;
     
     const investableBalance = fundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
 
-    return { totalCapital, totalProfit, totalWithdrawn, portfolioValue, withdrawableBalance, investableBalance, simpleROI };
+    return { totalCapital, portfolioValue, investableBalance, simpleROI };
   }, [allTransactions, fundBatches]);
+
+  const withdrawalRules = useMemo(() => {
+    const isLocked = longTermProfits > 0 && (!firstDeposit?.[0] || differenceInDays(new Date(), firstDeposit[0].createdAt.toDate()) < 365);
+    const lastWithdrawal = userProfile?.lastWithdrawalDate?.toDate();
+    const cooldownActive = lastWithdrawal ? differenceInDays(new Date(), lastWithdrawal) < 90 : false;
+    
+    const availableForWithdrawal = Math.min(longTermProfits * 0.2, financialMetrics.investibleBalance);
+
+    return {
+        isLocked,
+        cooldownActive,
+        maxWithdrawal: availableForWithdrawal,
+    };
+  }, [longTermProfits, firstDeposit, userProfile, financialMetrics.investibleBalance]);
   
   const chartData = useMemo(() => {
     if (!allTransactions || allTransactions.length === 0) return [];
@@ -182,14 +264,22 @@ export default function InvestorDashboard() {
     return Object.keys(dataByMonth).map(month => ({
         month: format(new Date(month + '-02'), 'MMM yy'), // Add day to avoid timezone issues
         portfolioValue: dataByMonth[month]
-    })).sort((a,b) => a.month.localeCompare(b.month));
+    })).sort((a,b) => new Date(a.month).getTime() - new Date(b.month).getTime());
 
   }, [allTransactions]);
+
+  const handleWithdrawalSuccess = async () => {
+    setWithdrawOpen(false);
+    if(firestore && user) {
+        const userRef = doc(firestore, 'users', user.uid);
+        await updateDoc(userRef, { lastWithdrawalDate: Timestamp.now() });
+    }
+  };
 
 
   const formatDate = (timestamp: Timestamp | Date | undefined) => {
     if (!timestamp) return 'N/A';
-    const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
+    const date = timestamp instanceof Timestamp ? timestamp.toDate() : date;
     try { return format(date, 'PPP'); } catch { return 'Invalid Date'; }
   };
 
@@ -229,22 +319,29 @@ export default function InvestorDashboard() {
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.withdrawableBalance)}</div>}
+            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(withdrawableBalance)}</div>}
              <Dialog open={isWithdrawOpen} onOpenChange={setWithdrawOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="w-full mt-1" disabled={financialMetrics.withdrawableBalance <= 0}>
+                <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full mt-1" 
+                    disabled={withdrawalRules.isLocked || withdrawalRules.cooldownActive || withdrawalRules.maxWithdrawal <= 0}
+                >
                   <Download className="mr-2 h-4 w-4"/>
-                  Withdraw Funds
+                  Withdraw Profits
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Request Fund Withdrawal</DialogTitle>
                 </DialogHeader>
-                <WithdrawForm portfolioValue={financialMetrics.withdrawableBalance} onWithdrawalRequested={() => setWithdrawOpen(false)} />
+                <WithdrawForm portfolioValue={withdrawalRules.maxWithdrawal} onWithdrawalRequested={handleWithdrawalSuccess} />
               </DialogContent>
             </Dialog>
-            {user && <ReinvestButton balance={financialMetrics.withdrawableBalance} user={user} />}
+            {user && longTermProfits <= 0 && <ReinvestButton balance={withdrawableBalance} user={user} />}
+             {withdrawalRules.isLocked && <p className="text-xs text-destructive mt-1">Long-term profits are locked for 1 year.</p>}
+             {withdrawalRules.cooldownActive && <p className="text-xs text-destructive mt-1">Next withdrawal available in {90 - differenceInDays(new Date(), userProfile!.lastWithdrawalDate!.toDate())} days.</p>}
           </CardContent>
         </Card>
         <Card>

@@ -116,7 +116,7 @@ export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: Withdraw
                 </div>
               </FormControl>
               <FormDescription>
-                Available for withdrawal: {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(portfolioValue)}
+                Max available for withdrawal: {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(portfolioValue)}
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -130,5 +130,3 @@ export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: Withdraw
     </Form>
   );
 }
-
-    
