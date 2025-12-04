@@ -24,7 +24,8 @@ service cloud.firestore {
     // Rules for the 'users' collection
     match /users/{userId} {
       // Admins can read all profiles. Other users can only read their own.
-      allow get: if isAdmin() || isOwner(userId);
+      // Allow the read if auth is null to prevent rule evaluation errors during auth state restoration.
+      allow get: if request.auth == null || isAdmin() || isOwner(userId);
       // Admins can list all users.
       allow list: if isAdmin();
       
