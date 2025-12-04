@@ -18,7 +18,7 @@
         "role": {
           "type": "string",
           "description": "The role of the user.",
-          "enum": ["Admin", "Investor", "Client"]
+          "enum": ["Admin", "Investor", "Client", null]
         },
         "lastZakatPaymentDate": {
           "type": "string",
@@ -557,5 +557,3 @@
     }
   }
 }
-
-    

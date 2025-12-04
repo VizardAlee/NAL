@@ -10,6 +10,7 @@ const signUpSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
   email: z.string().email("Please enter a valid email address."),
   password: z.string().min(8, "Password must be at least 8 characters."),
+  role: z.enum(['Investor', 'Client'], { required_error: 'Role is required.' }),
 });
 
 type ActionResponse = {
@@ -26,13 +27,14 @@ export async function signUpWithEmailAction(
         name: formData.get('name'),
         email: formData.get('email'),
         password: formData.get('password'),
+        role: formData.get('role'),
     });
 
     if (!validated.success) {
         return { success: false, message: 'Invalid form data provided.' };
     }
 
-    const { name, email, password } = validated.data;
+    const { name, email, password, role } = validated.data;
     const auth = getAuth(adminDb.app);
 
     try {
@@ -49,19 +51,29 @@ export async function signUpWithEmailAction(
             emailVerified: true,
         });
 
-        // 2. Create user document in Firestore (without a role)
+        // 2. Set Custom Claim for Security Rules
+        await auth.setCustomUserClaims(userRecord.uid, { role });
+
+        // 3. Create user document in Firestore with the selected role
         await adminDb.collection('users').doc(userRecord.uid).set({
             name,
             email,
-            role: null, // Role will be set in the next step
+            role: role,
         });
 
         revalidatePath('/admin/users');
+        
+        let redirectUrl = '/';
+        if (role === 'Investor') {
+            redirectUrl = '/investor/dashboard';
+        } else if (role === 'Client') {
+            redirectUrl = '/client/dashboard';
+        }
 
         return {
             success: true,
-            message: "Account created successfully! Let's set up your profile.",
-            redirectUrl: '/signup/role'
+            message: `Account created successfully! You are now registered as a ${role}.`,
+            redirectUrl: redirectUrl
         };
 
     } catch (error: any) {
