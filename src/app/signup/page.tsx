@@ -30,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useCompanyLogo } from '@/components/company-logo-provider';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -51,6 +52,7 @@ function SubmitButton() {
 export default function SignupPage() {
   const { toast } = useToast();
   const router = useRouter();
+  const { logoUrl } = useCompanyLogo();
   
   const [state, formAction] = useActionState(signUpWithEmailAction, { success: false, message: '' });
 
@@ -63,11 +65,9 @@ export default function SignupPage() {
     if (state.message) {
         if(state.success) {
             toast({ title: "Success", description: state.message });
-            if (state.redirectUrl) {
-                // We also need to log the user in on the client side after successful server-side creation
-                // This is a simplified approach for now. A more robust solution might involve custom tokens.
-                router.push('/login');
-            }
+            // The sign-up action creates the user on the server, but they still need to log in on the client.
+            // Redirecting to login is the most straightforward flow.
+            router.push('/login');
         } else {
             toast({ variant: 'destructive', title: 'Sign-up Failed', description: state.message });
         }
@@ -80,7 +80,7 @@ export default function SignupPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 flex justify-center">
           <Link href="/" className="flex items-center space-x-2 text-primary">
-            <Logo className="h-8 w-8" />
+            <Logo imageUrl={logoUrl} className="h-8 w-8" />
             <span className="text-2xl font-bold font-headline">
               NAL General Marchant
             </span>
