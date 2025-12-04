@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Loader2, XCircle, FilePlus, Hourglass, History } from 'lucide-react';
+import { CheckCircle, Loader2, XCircle, FilePlus, Hourglass, History, FileText } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs, addDoc } from 'firebase/firestore';
@@ -24,6 +24,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { usePathname } from 'next/navigation';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 type DealRequest = DocumentData & {
   id: string;
@@ -36,6 +45,7 @@ type DealRequest = DocumentData & {
   durationUnit: string;
   repaymentType: string;
   repaymentFrequency: string;
+  proposalDetails?: string;
   status: 'Pending' | 'Approved' | 'Rejected';
   requestedAt: Timestamp;
   processedAt?: Timestamp;
@@ -152,27 +162,45 @@ function DealRequestsTable({
                                 </div>
                                 {!showActionButtons && <Badge variant={request.status === 'Approved' ? 'default' : 'destructive'}>{request.status}</Badge>}
                             </div>
-                            {showActionButtons && (
-                                <div className="flex justify-end gap-2 pt-2 border-t">
-                                     <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => handleProcessClick(request, 'Rejected')}
-                                        disabled={processingId === request.id}
-                                    >
-                                        {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
-                                        Reject
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        onClick={() => handleProcessClick(request, 'Approved')}
-                                        disabled={processingId === request.id}
-                                    >
-                                        {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
-                                        Approve
-                                    </Button>
-                                </div>
-                            )}
+                            <div className="flex justify-between items-center pt-2 border-t">
+                                {request.proposalDetails && (
+                                    <Dialog>
+                                        <DialogTrigger asChild>
+                                            <Button variant="outline" size="sm"><FileText className="mr-2 h-4 w-4" />View Proposal</Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="max-w-2xl">
+                                            <DialogHeader>
+                                                <DialogTitle>{request.dealName} - Proposal</DialogTitle>
+                                                <DialogDescription>Submitted by {request.clientName}</DialogDescription>
+                                            </DialogHeader>
+                                            <ScrollArea className="h-96">
+                                                <p className="whitespace-pre-wrap p-4">{request.proposalDetails}</p>
+                                            </ScrollArea>
+                                        </DialogContent>
+                                    </Dialog>
+                                )}
+                                {showActionButtons && (
+                                    <div className="flex justify-end gap-2 flex-1">
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleProcessClick(request, 'Rejected')}
+                                            disabled={processingId === request.id}
+                                        >
+                                            {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
+                                            Reject
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            onClick={() => handleProcessClick(request, 'Approved')}
+                                            disabled={processingId === request.id}
+                                        >
+                                            {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+                                            Approve
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
                         </CardContent>
                     </Card>
                 ))}
@@ -190,6 +218,7 @@ function DealRequestsTable({
                             <TableHead>Deal Name</TableHead>
                             <TableHead>Principal</TableHead>
                             <TableHead>Date Requested</TableHead>
+                            <TableHead>Proposal</TableHead>
                             {showActionButtons ? <TableHead className="text-right">Actions</TableHead> : <TableHead>Status</TableHead>}
                         </TableRow>
                     </TableHeader>
@@ -200,6 +229,26 @@ function DealRequestsTable({
                                 <TableCell data-label="Deal Name">{request.dealName}</TableCell>
                                 <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.principal)}</TableCell>
                                 <TableCell data-label="Date Requested">{format(request.requestedAt.toDate(), 'PPP')}</TableCell>
+                                <TableCell>
+                                    {request.proposalDetails ? (
+                                        <Dialog>
+                                            <DialogTrigger asChild>
+                                                <Button variant="outline" size="sm"><FileText className="mr-2 h-4 w-4" />View</Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="max-w-2xl">
+                                                <DialogHeader>
+                                                    <DialogTitle>{request.dealName} - Proposal</DialogTitle>
+                                                    <DialogDescription>Submitted by {request.clientName}</DialogDescription>
+                                                </DialogHeader>
+                                                <ScrollArea className="h-96">
+                                                    <p className="whitespace-pre-wrap p-4">{request.proposalDetails}</p>
+                                                </ScrollArea>
+                                            </DialogContent>
+                                        </Dialog>
+                                    ) : (
+                                        <span className="text-muted-foreground text-xs">N/A</span>
+                                    )}
+                                </TableCell>
                                 {showActionButtons ? (
                                     <TableCell data-label="Actions" className="text-right space-x-2">
                                         <Button

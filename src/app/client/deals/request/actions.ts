@@ -16,6 +16,7 @@ const requestDealSchema = z.object({
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
+  proposalDetails: z.string().optional(),
 });
 
 export async function requestDealAction(input: z.infer<typeof requestDealSchema>) {

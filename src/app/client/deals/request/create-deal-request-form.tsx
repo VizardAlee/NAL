@@ -28,6 +28,7 @@ import { Loader2 } from 'lucide-react';
 import { useUser } from '@/firebase';
 import { requestDealAction } from './actions';
 import { useRouter } from 'next/navigation';
+import { Textarea } from '@/components/ui/textarea';
 
 const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
@@ -37,6 +38,7 @@ const formSchema = z.object({
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
+  proposalDetails: z.string().optional(),
 });
 
 export function CreateDealRequestForm() {
@@ -55,6 +57,7 @@ export function CreateDealRequestForm() {
       durationUnit: 'Months',
       repaymentType: 'Equal Installments',
       repaymentFrequency: 'Monthly',
+      proposalDetails: '',
     },
   });
 
@@ -196,6 +199,26 @@ export function CreateDealRequestForm() {
                   <SelectItem value="Monthly">Monthly</SelectItem>
                 </SelectContent>
               </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="proposalDetails"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Business Proposal</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Describe your business, the purpose of the financing, and how you plan to use the funds..."
+                  rows={8}
+                  {...field}
+                />
+              </FormControl>
+              <FormDescription>
+                Provide as much detail as possible for the admin to review.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
