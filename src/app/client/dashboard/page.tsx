@@ -53,7 +53,7 @@ function DealCard({ deal }: { deal: Deal }) {
         return query(collection(firestore, 'repayments'), where('clientId', '==', user.uid), where('dealId', '==', deal.id));
     }, [firestore, user, deal]);
 
-    const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery as any);
+    const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery);
 
     const lodgedRepayments = useMemo(() => {
         if (!repayments) return [];
@@ -174,14 +174,18 @@ export default function ClientDashboard() {
     const router = useRouter();
     const { user, loading: userLoading } = useUser();
     const isMobile = useIsMobile();
-    const userProfileQuery = useMemo(() => (firestore && user ? query(collection(firestore, 'users'), where('__name__', '==', user.uid)) : null), [firestore, user]);
+    
+    const userProfileQuery = useMemo(() => {
+        if (!firestore || !user?.uid) return null;
+        return query(collection(firestore, 'users'), where('__name__', '==', user.uid));
+    }, [firestore, user?.uid]);
     
     const { data: userProfile, loading: profileLoading } = useCollection(userProfileQuery);
 
     const dealsQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
         return query(collection(firestore, 'deals'), where('clientId', '==', user.uid), orderBy('createdAt', 'desc'));
-    }, [firestore, user]);
+    }, [firestore, user?.uid]);
 
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
     
