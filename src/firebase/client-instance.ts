@@ -20,11 +20,6 @@ if (firebaseConfig && firebaseConfig.projectId) {
     auth = getAuth(app);
     firestore = getFirestore(app);
 
-    // Dynamically set the auth domain for development environments
-    if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-        auth.tenantId = firebaseConfig.authDomain || null;
-    }
-
 } else {
     console.warn("Firebase config not found, using mock instances.");
     // Provide mock instances if config is not available
@@ -35,3 +30,4 @@ if (firebaseConfig && firebaseConfig.projectId) {
 
 
 export { app, auth, firestore };
+
