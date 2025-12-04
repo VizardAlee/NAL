@@ -68,6 +68,7 @@ export default function RoleSelectionPage() {
                 </CardHeader>
                 <CardContent>
                     <form action={formAction} className="space-y-4">
+                        <input type="hidden" name="userId" value={user.uid} />
                         <RoleButton role="Investor">
                             <Briefcase className="mr-3 h-6 w-6" />
                             I am an Investor
