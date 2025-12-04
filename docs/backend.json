@@ -102,6 +102,40 @@
         "createdAt"
       ]
     },
+    "dealRequest": {
+      "title": "Deal Request",
+      "description": "Represents a deal requested by a client, pending admin approval.",
+      "type": "object",
+      "properties": {
+        "dealName": { "type": "string", "description": "A descriptive name for the deal." },
+        "clientId": { "type": "string", "description": "The ID of the client requesting the deal." },
+        "clientName": { "type": "string", "description": "The name of the client (denormalized)." },
+        "principal": { "type": "number", "description": "The principal amount requested." },
+        "profitRate": { "type": "number", "description": "The proposed annual profit rate." },
+        "durationValue": { "type": "number", "description": "The proposed numeric value for the deal duration." },
+        "durationUnit": { "type": "string", "description": "The unit for the deal's duration.", "enum": ["Days", "Weeks", "Fortnights", "Months", "Years"] },
+        "repaymentType": { "type": "string", "description": "The proposed repayment plan.", "enum": ["Equal Installments", "Balloon Payment"] },
+        "repaymentFrequency": { "type": "string", "description": "The proposed frequency of repayments.", "enum": ["Daily", "Weekly", "Fortnightly", "Monthly"] },
+        "status": { "type": "string", "description": "The status of the request.", "enum": ["Pending", "Approved", "Rejected"] },
+        "requestedAt": { "type": "string", "format": "date-time", "description": "Timestamp of the request." },
+        "processedAt": { "type": "string", "format": "date-time", "description": "Timestamp when an admin processed the request." }
+      },
+      "required": ["dealName", "clientId", "clientName", "principal", "profitRate", "durationValue", "durationUnit", "repaymentType", "repaymentFrequency", "status", "requestedAt"]
+    },
+    "depositRequest": {
+      "title": "Deposit Request",
+      "description": "A request from an investor to deposit funds into their investible account.",
+      "type": "object",
+      "properties": {
+        "investorId": { "type": "string", "description": "The ID of the investor making the request." },
+        "investorName": { "type": "string", "description": "The name of the investor (denormalized)." },
+        "amount": { "type": "number", "description": "The amount requested for deposit." },
+        "status": { "type": "string", "description": "The status of the deposit request.", "enum": ["Pending", "Approved", "Rejected"] },
+        "requestedAt": { "type": "string", "format": "date-time", "description": "Timestamp of the request." },
+        "processedAt": { "type": "string", "format": "date-time", "description": "Timestamp when an admin processed the request." }
+      },
+      "required": ["investorId", "investorName", "amount", "status", "requestedAt"]
+    },
     "fundBatch": {
       "title": "Fund Batch",
       "description": "A specific batch of capital from an investor or the platform, available for investment.",
@@ -435,6 +469,18 @@
       },
       "description": "Stores all financing deals."
     },
+    "/dealRequests/{dealRequestId}": {
+        "schema": {
+            "$ref": "#/entities/dealRequest"
+        },
+        "description": "Stores client requests for new deals, pending admin approval."
+    },
+    "/depositRequests/{depositRequestId}": {
+        "schema": {
+            "$ref": "#/entities/depositRequest"
+        },
+        "description": "Stores investor requests to deposit funds."
+    },
     "/fundBatches/{fundBatchId}": {
       "schema": {
         "$ref": "#/entities/fundBatch"
@@ -511,3 +557,5 @@
     }
   }
 }
+
+    
