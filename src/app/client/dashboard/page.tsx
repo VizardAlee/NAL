@@ -4,7 +4,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2, ArrowRight } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle } from "lucide-react";
 import { useMemo, useTransition } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
@@ -21,6 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 
 export type Repayment = DocumentData & {
@@ -168,6 +169,9 @@ export default function ClientDashboard() {
     const router = useRouter();
     const { user, loading: userLoading } = useUser();
     const isMobile = useIsMobile();
+    const { data: userProfile, loading: profileLoading } = useCollection(
+        useMemo(() => (firestore && user ? query(collection(firestore, 'users'), where('__name__', '==', user.uid)) : null), [firestore, user])
+    );
 
     const dealsQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
@@ -176,7 +180,7 @@ export default function ClientDashboard() {
 
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
     
-    const isLoading = userLoading || dealsLoading;
+    const isLoading = userLoading || dealsLoading || profileLoading;
 
     const { mainDeal, olderDeals } = useMemo(() => {
         if (!deals || deals.length === 0) {
@@ -200,75 +204,110 @@ export default function ClientDashboard() {
     return (
         <div>
             <PageHeader
-                title="My Deals"
+                title="Client Dashboard"
                 description="Here is an overview of your current and past financing deals."
                 icon={FileText}
-            />
+            >
+                 <Button asChild>
+                    <Link href="/client/deals/request">
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Request a Deal
+                    </Link>
+                </Button>
+            </PageHeader>
             
             {isLoading ? (
                 <DealsSkeleton />
-            ) : mainDeal ? (
+            ) : userProfile && userProfile.length > 0 ? (
                 <div className="grid gap-8">
-                    <DealCard deal={mainDeal} />
+                     <Card>
+                        <CardHeader className="flex flex-row items-center gap-4 space-y-0">
+                            <Avatar className="h-16 w-16">
+                                <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/128/128`} />
+                                <AvatarFallback>{userProfile[0].name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                                <CardTitle className="font-headline text-2xl">{userProfile[0].name}</CardTitle>
+                                <p className="text-muted-foreground">{userProfile[0].email}</p>
+                                <Badge variant="secondary" className="mt-1">{userProfile[0].role}</Badge>
+                            </div>
+                        </CardHeader>
+                    </Card>
 
-                    {olderDeals.length > 0 && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Previous Deals</CardTitle>
-                                <CardDescription>A history of your past financing deals.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                {isMobile ? (
-                                    <div className="space-y-3">
-                                        {olderDeals.map(deal => (
-                                            <Card key={deal.id} className="p-4">
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <p className="font-medium">{deal.dealName}</p>
-                                                        <p className="text-sm">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</p>
-                                                    </div>
-                                                    <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
-                                                </div>
-                                                <div className="mt-2 text-right">
-                                                     <Button asChild variant="outline" size="sm">
-                                                        <Link href={`/client/deals/${deal.id}`}>
-                                                            View Details <ArrowRight className="ml-2 h-4 w-4" />
-                                                        </Link>
-                                                    </Button>
-                                                </div>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Deal Name</TableHead>
-                                                <TableHead>Principal</TableHead>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead className="text-right"></TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {olderDeals.map(deal => (
-                                                <TableRow key={deal.id}>
-                                                    <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
-                                                    <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
-                                                    <TableCell data-label="Status">
-                                                        <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
-                                                    </TableCell>
-                                                    <TableCell data-label="Action" className="text-right">
-                                                        <Button asChild variant="outline" size="sm">
-                                                            <Link href={`/client/deals/${deal.id}`}>
-                                                                View Details <ArrowRight className="ml-2 h-4 w-4" />
-                                                            </Link>
-                                                        </Button>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                )}
+                    {mainDeal ? (
+                        <>
+                            <DealCard deal={mainDeal} />
+
+                            {olderDeals.length > 0 && (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Previous Deals</CardTitle>
+                                        <CardDescription>A history of your past financing deals.</CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {isMobile ? (
+                                            <div className="space-y-3">
+                                                {olderDeals.map(deal => (
+                                                    <Card key={deal.id} className="p-4">
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <p className="font-medium">{deal.dealName}</p>
+                                                                <p className="text-sm">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</p>
+                                                            </div>
+                                                            <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
+                                                        </div>
+                                                        <div className="mt-2 text-right">
+                                                            <Button asChild variant="outline" size="sm">
+                                                                <Link href={`/client/deals/${deal.id}`}>
+                                                                    View Details <ArrowRight className="ml-2 h-4 w-4" />
+                                                                </Link>
+                                                            </Button>
+                                                        </div>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Deal Name</TableHead>
+                                                        <TableHead>Principal</TableHead>
+                                                        <TableHead>Status</TableHead>
+                                                        <TableHead className="text-right"></TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {olderDeals.map(deal => (
+                                                        <TableRow key={deal.id}>
+                                                            <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
+                                                            <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
+                                                            <TableCell data-label="Status">
+                                                                <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
+                                                            </TableCell>
+                                                            <TableCell data-label="Action" className="text-right">
+                                                                <Button asChild variant="outline" size="sm">
+                                                                    <Link href={`/client/deals/${deal.id}`}>
+                                                                        View Details <ArrowRight className="ml-2 h-4 w-4" />
+                                                                    </Link>
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </>
+                    ) : (
+                         <Card className="mt-6 border-dashed">
+                            <CardContent className="p-12 text-center">
+                                <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
+                                <h3 className="mt-4 text-lg font-medium">No Deals Found</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    You do not have any financing deals yet. You can request one now.
+                                </p>
                             </CardContent>
                         </Card>
                     )}
@@ -279,7 +318,7 @@ export default function ClientDashboard() {
                         <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
                         <h3 className="mt-4 text-lg font-medium">No Deals Found</h3>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            You do not have any financing deals yet. An admin will create one for you.
+                            You do not have any financing deals yet. You can request one using the button above.
                         </p>
                     </CardContent>
                 </Card>
