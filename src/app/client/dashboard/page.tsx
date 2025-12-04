@@ -51,9 +51,9 @@ function DealCard({ deal }: { deal: Deal }) {
     const repaymentsQuery = useMemo(() => {
         if (!firestore || !user?.uid || !deal?.id) return null;
         return query(collection(firestore, 'repayments'), where('clientId', '==', user.uid), where('dealId', '==', deal.id));
-    }, [firestore, user, deal]);
+    }, [firestore, user?.uid, deal?.id]);
 
-    const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(user?.uid && deal?.id ? repaymentsQuery : null);
+    const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery);
 
     const lodgedRepayments = useMemo(() => {
         if (!repayments) return [];
@@ -180,14 +180,14 @@ export default function ClientDashboard() {
         return query(collection(firestore, 'users'), where('__name__', '==', user.uid));
     }, [firestore, user?.uid]);
     
-    const { data: userProfile, loading: profileLoading } = useCollection(user?.uid ? userProfileQuery : null);
+    const { data: userProfile, loading: profileLoading } = useCollection(userProfileQuery);
 
     const dealsQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
         return query(collection(firestore, 'deals'), where('clientId', '==', user.uid), orderBy('createdAt', 'desc'));
     }, [firestore, user?.uid]);
 
-    const { data: deals, loading: dealsLoading } = useCollection<Deal>(user?.uid ? dealsQuery : null);
+    const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
     
     const isLoading = userLoading || dealsLoading || profileLoading;
 
