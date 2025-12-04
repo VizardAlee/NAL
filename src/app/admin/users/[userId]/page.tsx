@@ -2,14 +2,14 @@
 'use client';
 
 import { useMemo, useState, useTransition, useEffect } from 'react';
-import { notFound, useParams } from 'next/navigation';
+import { notFound, useParams, useRouter } from 'next/navigation';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { doc, collection, query, where, DocumentData, Timestamp, orderBy, limit } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2 } from 'lucide-react';
+import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +30,7 @@ import { payZakatAction } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Deal } from '@/lib/types';
 
 
 type UserProfile = DocumentData & {
@@ -142,6 +143,7 @@ const formatDate = (timestamp: Timestamp | Date | undefined) => {
 export default function UserDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const firestore = useFirestore();
+  const router = useRouter();
   const { user, loading: userLoading } = useUser();
   const [isAddFundOpen, setAddFundOpen] = useState(false);
   const { toast } = useToast();
@@ -156,6 +158,11 @@ export default function UserDetailPage() {
   const fundBatchesQuery = useMemo(() => {
     if (!firestore || !userId) return null;
     return query(collection(firestore, 'fundBatches'), where('sourceId', '==', userId));
+  }, [firestore, userId]);
+  
+  const clientDealsQuery = useMemo(() => {
+    if (!firestore || !userId) return null;
+    return query(collection(firestore, 'deals'), where('clientId', '==', userId), orderBy('createdAt', 'desc'));
   }, [firestore, userId]);
 
   const allTransactionsQuery = useMemo(() => {
@@ -175,11 +182,12 @@ export default function UserDetailPage() {
 
   const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userRef);
   const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
+  const { data: clientDeals, loading: clientDealsLoading } = useCollection<Deal>(clientDealsQuery);
   const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(allTransactionsQuery);
   const { data: firstDeposit, loading: firstDepositLoading } = useCollection<Transaction>(firstDepositQuery);
   const { data: zakatSettings, loading: zakatLoading } = useDoc<{nisab: number}>(zakatSettingsRef);
 
-  const isLoading = userLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading;
+  const isLoading = userLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading || clientDealsLoading;
 
   const financialMetrics = useMemo(() => {
       if (!transactions) return { portfolioValue: 0, investibleBalance: 0 };
@@ -235,6 +243,13 @@ export default function UserDetailPage() {
   if (!userProfile) {
     return notFound();
   }
+  
+  const statusVariant = {
+    Pending: 'secondary',
+    Active: 'default',
+    Completed: 'outline',
+    Terminated: 'destructive',
+  } as const;
 
   return (
     <div>
@@ -332,155 +347,223 @@ export default function UserDetailPage() {
                 )}
             </div>
 
-            {userProfile.role === 'Investor' && (
-                <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-6">
+                {userProfile.role === 'Investor' && (
+                    <>
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Landmark className="h-5 w-5" />
+                                    <span>Fund Batches</span>
+                                </CardTitle>
+                                <CardDescription>
+                                    Capital deposited by this investor, available for deals.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {isMobile ? (
+                                    <div className="space-y-3">
+                                        {processedFundBatches.length > 0 ? processedFundBatches.map(batch => (
+                                            <Card key={batch.id} className="p-4">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <p className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</p>
+                                                        <p className="text-xs text-muted-foreground">{formatDate(batch.createdAt)}</p>
+                                                    </div>
+                                                    <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
+                                                </div>
+                                                <div className="mt-2 text-primary font-medium text-right">
+                                                    <span className="text-xs text-muted-foreground">Available: </span>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}
+                                                </div>
+                                            </Card>
+                                        )) : (
+                                            <p className="text-sm text-muted-foreground text-center py-4">No fund batches found.</p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Date</TableHead>
+                                            <TableHead>Type</TableHead>
+                                            <TableHead>Total Amount</TableHead>
+                                            <TableHead className="text-right">Investible Balance</TableHead>
+                                        </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                        {processedFundBatches?.map(batch => (
+                                            <TableRow key={batch.id}>
+                                                <TableCell data-label="Date">{formatDate(batch.createdAt)}</TableCell>
+                                                <TableCell data-label="Type">
+                                                    <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
+                                                </TableCell>
+                                                <TableCell data-label="Total Amount" className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</TableCell>
+                                                <TableCell data-label="Investible Balance" className="text-right text-primary font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {!processedFundBatches?.length && (
+                                            <TableRow>
+                                                <TableCell colSpan={4} className="h-24 text-center">
+                                                    No fund batches found.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </CardContent>
+                        </Card>
+                         <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <History className="h-5 w-5" />
+                                    <span>Transaction History</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                            {isMobile ? (
+                                    <div className="space-y-3">
+                                        {paginatedTransactions?.length > 0 ? paginatedTransactions.map(tx => (
+                                            <Card key={tx.id} className="p-4">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
+                                                        <p className="text-xs text-muted-foreground mt-1">{formatDate(tx.createdAt)}</p>
+                                                    </div>
+                                                    <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>
+                                                        {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                                    </p>
+                                                </div>
+                                            </Card>
+                                        )) : (
+                                            <p className="text-sm text-muted-foreground text-center py-4">No transactions found.</p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Date</TableHead>
+                                            <TableHead>Type</TableHead>
+                                            <TableHead className="text-right">Amount</TableHead>
+                                        </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                        {paginatedTransactions?.map(tx => (
+                                            <TableRow key={tx.id}>
+                                                <TableCell data-label="Date">{formatDate(tx.createdAt)}</TableCell>
+                                                <TableCell data-label="Type"><Badge variant={tx.amount > 0 ? 'default' : 'secondary'}>{tx.type}</Badge></TableCell>
+                                                <TableCell data-label="Amount" className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>
+                                                    {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {!paginatedTransactions?.length && (
+                                            <TableRow>
+                                                <TableCell colSpan={3} className="h-24 text-center">
+                                                    No transactions found.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </CardContent>
+                            {totalPages > 1 && (
+                                <div className="p-4 border-t">
+                                    <Pagination>
+                                        <PaginationContent>
+                                            <PaginationItem>
+                                                <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} />
+                                            </PaginationItem>
+                                            {[...Array(totalPages)].map((_, i) => (
+                                                <PaginationItem key={i}>
+                                                    <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>
+                                                        {i + 1}
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            ))}
+                                            <PaginationItem>
+                                                <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} />
+                                            </PaginationItem>
+                                        </PaginationContent>
+                                    </Pagination>
+                                </div>
+                            )}
+                        </Card>
+                    </>
+                )}
+                 {userProfile.role === 'Client' && (
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
-                                <Landmark className="h-5 w-5" />
-                                <span>Fund Batches</span>
+                                <FileText className="h-5 w-5" />
+                                <span>Client Deals</span>
                             </CardTitle>
-                             <CardDescription>
-                                Capital deposited by this investor, available for deals.
+                            <CardDescription>
+                                A list of all financing deals associated with this client.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
                             {isMobile ? (
                                 <div className="space-y-3">
-                                    {processedFundBatches.length > 0 ? processedFundBatches.map(batch => (
-                                        <Card key={batch.id} className="p-4">
+                                    {clientDeals && clientDeals.length > 0 ? clientDeals.map(deal => (
+                                        <Card key={deal.id} className="p-4" onClick={() => router.push(`/admin/deals/${deal.id}`)}>
                                             <div className="flex justify-between items-start">
                                                 <div>
-                                                    <p className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</p>
-                                                    <p className="text-xs text-muted-foreground">{formatDate(batch.createdAt)}</p>
+                                                    <p className="font-medium">{deal.dealName}</p>
+                                                     <p className="text-sm font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</p>
                                                 </div>
-                                                <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
-                                            </div>
-                                            <div className="mt-2 text-primary font-medium text-right">
-                                                <span className="text-xs text-muted-foreground">Available: </span>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}
+                                                <Badge variant={statusVariant[deal.status as keyof typeof statusVariant] || 'secondary'}>
+                                                    {deal.status}
+                                                </Badge>
                                             </div>
                                         </Card>
                                     )) : (
-                                        <p className="text-sm text-muted-foreground text-center py-4">No fund batches found.</p>
+                                        <div className="text-center text-sm text-muted-foreground py-10">This client has no deals.</div>
                                     )}
                                 </div>
                             ) : (
                                 <Table>
                                     <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Date</TableHead>
-                                        <TableHead>Type</TableHead>
-                                        <TableHead>Total Amount</TableHead>
-                                        <TableHead className="text-right">Investible Balance</TableHead>
-                                    </TableRow>
+                                        <TableRow>
+                                            <TableHead>Deal Name</TableHead>
+                                            <TableHead>Principal</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead className="text-right">Action</TableHead>
+                                        </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                    {processedFundBatches?.map(batch => (
-                                        <TableRow key={batch.id}>
-                                            <TableCell data-label="Date">{formatDate(batch.createdAt)}</TableCell>
-                                            <TableCell data-label="Type">
-                                                <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
-                                            </TableCell>
-                                            <TableCell data-label="Total Amount" className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</TableCell>
-                                            <TableCell data-label="Investible Balance" className="text-right text-primary font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {!processedFundBatches?.length && (
-                                        <TableRow>
-                                            <TableCell colSpan={4} className="h-24 text-center">
-                                                No fund batches found.
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
+                                        {clientDeals && clientDeals.length > 0 ? clientDeals.map(deal => (
+                                            <TableRow key={deal.id} className="cursor-pointer" onClick={() => router.push(`/admin/deals/${deal.id}`)}>
+                                                <TableCell className="font-medium">{deal.dealName}</TableCell>
+                                                <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant={statusVariant[deal.status as keyof typeof statusVariant] || 'secondary'}>
+                                                        {deal.status}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button variant="outline" size="sm">
+                                                        View Deal <ArrowRight className="ml-2 h-4 w-4" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        )) : (
+                                            <TableRow>
+                                                <TableCell colSpan={4} className="h-24 text-center">
+                                                    This client has no deals.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
                                     </TableBody>
                                 </Table>
                             )}
                         </CardContent>
                     </Card>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <History className="h-5 w-5" />
-                                <span>Transaction History</span>
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                           {isMobile ? (
-                                <div className="space-y-3">
-                                    {paginatedTransactions?.length > 0 ? paginatedTransactions.map(tx => (
-                                        <Card key={tx.id} className="p-4">
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
-                                                    <p className="text-xs text-muted-foreground mt-1">{formatDate(tx.createdAt)}</p>
-                                                </div>
-                                                <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>
-                                                    {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
-                                                </p>
-                                            </div>
-                                        </Card>
-                                    )) : (
-                                        <p className="text-sm text-muted-foreground text-center py-4">No transactions found.</p>
-                                    )}
-                                </div>
-                            ) : (
-                                <Table>
-                                    <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Date</TableHead>
-                                        <TableHead>Type</TableHead>
-                                        <TableHead className="text-right">Amount</TableHead>
-                                    </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                    {paginatedTransactions?.map(tx => (
-                                        <TableRow key={tx.id}>
-                                            <TableCell data-label="Date">{formatDate(tx.createdAt)}</TableCell>
-                                            <TableCell data-label="Type"><Badge variant={tx.amount > 0 ? 'default' : 'secondary'}>{tx.type}</Badge></TableCell>
-                                            <TableCell data-label="Amount" className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>
-                                                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {!paginatedTransactions?.length && (
-                                        <TableRow>
-                                            <TableCell colSpan={3} className="h-24 text-center">
-                                                No transactions found.
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                    </TableBody>
-                                </Table>
-                            )}
-                        </CardContent>
-                        {totalPages > 1 && (
-                            <div className="p-4 border-t">
-                                <Pagination>
-                                    <PaginationContent>
-                                        <PaginationItem>
-                                            <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} />
-                                        </PaginationItem>
-                                        {[...Array(totalPages)].map((_, i) => (
-                                            <PaginationItem key={i}>
-                                                <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>
-                                                    {i + 1}
-                                                </PaginationLink>
-                                            </PaginationItem>
-                                        ))}
-                                        <PaginationItem>
-                                            <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} />
-                                        </PaginationItem>
-                                    </PaginationContent>
-                                </Pagination>
-                            </div>
-                        )}
-                    </Card>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     </div>
   );
 }
-
-
-    
