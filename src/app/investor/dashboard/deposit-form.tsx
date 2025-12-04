@@ -1,4 +1,3 @@
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -78,7 +77,7 @@ export function DepositForm({ onDepositRequested }: DepositFormProps) {
             <Info className="h-4 w-4" />
             <AlertTitle>How this works</AlertTitle>
             <AlertDescription>
-                Submit a deposit request and an admin will contact you with payment details to complete the transaction. Your account will be credited upon confirmation.
+                Submit a deposit request and an admin will contact you for further engagement. Your account will be credited upon confirmation.
             </AlertDescription>
         </Alert>
         <Form {...form}>

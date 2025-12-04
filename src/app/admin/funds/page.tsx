@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, FilePlus } from "lucide-react";
+import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, FilePlus, CheckCircle, XCircle } from "lucide-react";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy } from 'firebase/firestore';
 import { useFirestore } from "@/firebase";
@@ -323,12 +323,14 @@ function useClearNotificationsByPath() {
 
 export default function PlatformFundsPage() {
     const firestore = useFirestore();
+    const { toast } = useToast();
     const isMobile = useIsMobile();
     const [isDepositOpen, setDepositOpen] = useState(false);
     const [isExpenseOpen, setExpenseOpen] = useState(false);
     const [isTransferToInvestibleOpen, setTransferToInvestibleOpen] = useState(false);
     const [isTransferFromInvestibleOpen, setTransferFromInvestibleOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
+    const [processingId, setProcessingId] = useState<string | null>(null);
 
     useClearNotificationsByPath();
 
@@ -402,6 +404,62 @@ export default function PlatformFundsPage() {
         if (!adminTransactions) return 0;
         return Math.ceil(adminTransactions.length / ITEMS_PER_PAGE);
     }, [adminTransactions]);
+
+    const handleProcessRequest = async (request: DepositRequest, newStatus: 'Approved' | 'Rejected') => {
+        if (!firestore) return;
+        setProcessingId(request.id);
+
+        try {
+            const batch = writeBatch(firestore);
+            const requestRef = doc(firestore, 'depositRequests', request.id);
+
+            batch.update(requestRef, {
+                status: newStatus,
+                processedAt: Timestamp.now()
+            });
+
+            if (newStatus === 'Approved') {
+                const now = Timestamp.now();
+                // Create a fund batch for the investor
+                const fundBatchRef = doc(collection(firestore, 'fundBatches'));
+                batch.set(fundBatchRef, {
+                    sourceId: request.investorId,
+                    amount: request.amount,
+                    remainingAmount: request.amount,
+                    createdAt: now,
+                    // Default tenure for new deposits, could be made configurable later
+                    tenureValue: 10,
+                    tenureUnit: 'Years'
+                });
+
+                // Create a 'Deposit' transaction
+                const transactionRef = doc(collection(firestore, 'transactions'));
+                batch.set(transactionRef, {
+                    userId: request.investorId,
+                    type: 'Deposit',
+                    amount: request.amount,
+                    createdAt: now,
+                    details: 'Investor Deposit'
+                });
+            }
+
+            await batch.commit();
+            toast({
+                title: `Request ${newStatus}`,
+                description: `${request.investorName}'s deposit request has been ${newStatus.toLowerCase()}.`
+            });
+
+        } catch (error) {
+            console.error("Error processing deposit request: ", error);
+            toast({
+                variant: 'destructive',
+                title: "Processing Failed",
+                description: "An unexpected error occurred."
+            })
+        } finally {
+            setProcessingId(null);
+        }
+    };
 
 
     return (
@@ -479,7 +537,7 @@ export default function PlatformFundsPage() {
                         <Card>
                             <CardHeader>
                                 <CardTitle>Pending Deposit Requests</CardTitle>
-                                <CardDescription>Investors waiting for payment details to complete their deposit.</CardDescription>
+                                <CardDescription>Investors waiting for payment confirmation.</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 {isMobile ? (
@@ -493,6 +551,14 @@ export default function PlatformFundsPage() {
                                                         <p className="font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(req.amount)}</p>
                                                     </div>
                                                     <p className="text-xs text-muted-foreground">{formatDate(req.requestedAt)}</p>
+                                                    <div className="flex justify-end gap-2 pt-2 border-t">
+                                                        <Button size="sm" variant="outline" onClick={() => handleProcessRequest(req, 'Rejected')} disabled={processingId === req.id}>
+                                                            {processingId === req.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <XCircle className="h-4 w-4" />}
+                                                        </Button>
+                                                        <Button size="sm" onClick={() => handleProcessRequest(req, 'Approved')} disabled={processingId === req.id}>
+                                                            {processingId === req.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <CheckCircle className="h-4 w-4" />}
+                                                        </Button>
+                                                    </div>
                                                 </CardContent>
                                             </Card>
                                         )) : !isLoading && <p className="text-center text-sm text-muted-foreground py-10">No pending deposit requests.</p>}
@@ -504,6 +570,7 @@ export default function PlatformFundsPage() {
                                                 <TableHead>Investor</TableHead>
                                                 <TableHead>Amount</TableHead>
                                                 <TableHead>Date Requested</TableHead>
+                                                <TableHead className="text-right">Actions</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -512,6 +579,7 @@ export default function PlatformFundsPage() {
                                                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                                                     <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                                                     <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                                                    <TableCell className="text-right"><Skeleton className="h-8 w-24 ml-auto" /></TableCell>
                                                 </TableRow>
                                             ))}
                                             {depositRequests && depositRequests.length > 0 ? depositRequests.map(req => (
@@ -519,10 +587,20 @@ export default function PlatformFundsPage() {
                                                     <TableCell>{req.investorName}</TableCell>
                                                     <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(req.amount)}</TableCell>
                                                     <TableCell>{formatDate(req.requestedAt)}</TableCell>
+                                                    <TableCell className="text-right space-x-2">
+                                                        <Button size="sm" variant="outline" onClick={() => handleProcessRequest(req, 'Rejected')} disabled={processingId === req.id}>
+                                                            {processingId === req.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <XCircle className="h-4 w-4 mr-2" />}
+                                                            Reject
+                                                        </Button>
+                                                        <Button size="sm" onClick={() => handleProcessRequest(req, 'Approved')} disabled={processingId === req.id}>
+                                                            {processingId === req.id ? <Loader2 className="h-4 w-4 animate-spin"/> : <CheckCircle className="h-4 w-4 mr-2" />}
+                                                            Approve
+                                                        </Button>
+                                                    </TableCell>
                                                 </TableRow>
                                             )) : !isLoading && (
                                                 <TableRow>
-                                                    <TableCell colSpan={3} className="text-center h-24">No pending deposit requests.</TableCell>
+                                                    <TableCell colSpan={4} className="text-center h-24">No pending deposit requests.</TableCell>
                                                 </TableRow>
                                             )}
                                         </TableBody>
