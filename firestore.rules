@@ -56,6 +56,25 @@ service cloud.firestore {
         allow create, update, delete: if isAdmin();
     }
 
+    // Rules for the 'dealRequests' collection
+    match /dealRequests/{dealRequestId} {
+        // Admins can read/update all requests.
+        allow get, list, update: if isAdmin();
+        // Clients can create their own requests and read them.
+        allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
+        allow read: if isClient() && resource.data.clientId == request.auth.uid;
+    }
+
+    // Rules for the 'depositRequests' collection
+    match /depositRequests/{depositRequestId} {
+        // Admins can read/update all requests.
+        allow get, list, update: if isAdmin();
+        // Investors can create their own requests and read them.
+        allow create: if isInvestor() && request.resource.data.investorId == request.auth.uid;
+        allow read: if isInvestor() && resource.data.investorId == request.auth.uid;
+    }
+
+
     // Rules for the 'investments' collection
     match /investments/{investmentId} {
       // Admins can write.
@@ -149,3 +168,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
