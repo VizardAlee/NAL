@@ -17,7 +17,7 @@ const requestDealSchema = z.object({
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   proposalDetails: z.string().optional(),
-  proposalLink: z.string().url().optional().or(z.literal('')),
+  proposalPdf: z.string().optional(),
 });
 
 export async function requestDealAction(input: z.infer<typeof requestDealSchema>) {
@@ -38,7 +38,7 @@ export async function requestDealAction(input: z.infer<typeof requestDealSchema>
         await adminDb.collection('notifications').add({
             title: 'New Deal Request',
             message: `${validated.data.clientName} has requested a new deal: "${validated.data.dealName}"`,
-            link: '/admin/approvals/deal-requests', // This page will be created next
+            link: '/admin/approvals/deal-requests',
             read: false,
             createdAt: Timestamp.now(),
         });

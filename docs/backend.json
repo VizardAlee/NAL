@@ -116,8 +116,8 @@
         "durationUnit": { "type": "string", "description": "The unit for the deal's duration.", "enum": ["Days", "Weeks", "Fortnights", "Months", "Years"] },
         "repaymentType": { "type": "string", "description": "The proposed repayment plan.", "enum": ["Equal Installments", "Balloon Payment"] },
         "repaymentFrequency": { "type": "string", "description": "The proposed frequency of repayments.", "enum": ["Daily", "Weekly", "Fortnightly", "Monthly"] },
-        "proposalDetails": { "type": "string", "description": "The text of the client's business proposal for the deal." },
-        "proposalLink": { "type": "string", "format": "uri", "description": "A URL to an external proposal document (e.g., PDF)." },
+        "proposalDetails": { "type": "string", "description": "The text summary of the client's deal proposal." },
+        "proposalPdf": { "type": "string", "description": "A Base64-encoded Data URI of the uploaded proposal PDF." },
         "status": { "type": "string", "description": "The status of the request.", "enum": ["Pending", "Approved", "Rejected"] },
         "requestedAt": { "type": "string", "format": "date-time", "description": "Timestamp of the request." },
         "processedAt": { "type": "string", "format": "date-time", "description": "Timestamp when an admin processed the request." }

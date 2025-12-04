@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Loader2, XCircle, FilePlus, Hourglass, History, FileText, Link as LinkIcon } from 'lucide-react';
+import { CheckCircle, Loader2, XCircle, FilePlus, Hourglass, History, FileText, Download } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs, addDoc } from 'firebase/firestore';
@@ -47,7 +47,7 @@ type DealRequest = DocumentData & {
   repaymentType: string;
   repaymentFrequency: string;
   proposalDetails?: string;
-  proposalLink?: string;
+  proposalPdf?: string;
   status: 'Pending' | 'Approved' | 'Rejected';
   requestedAt: Timestamp;
   processedAt?: Timestamp;
@@ -173,7 +173,7 @@ function DealRequestsTable({
                                             </DialogTrigger>
                                             <DialogContent className="max-w-2xl">
                                                 <DialogHeader>
-                                                    <DialogTitle>{request.dealName} - Proposal</DialogTitle>
+                                                    <DialogTitle>{request.dealName} - Proposal Summary</DialogTitle>
                                                     <DialogDescription>Submitted by {request.clientName}</DialogDescription>
                                                 </DialogHeader>
                                                 <ScrollArea className="h-96">
@@ -182,12 +182,12 @@ function DealRequestsTable({
                                             </DialogContent>
                                         </Dialog>
                                     )}
-                                     {request.proposalLink && (
+                                     {request.proposalPdf && (
                                         <Button variant="outline" size="sm" asChild>
-                                            <Link href={request.proposalLink} target="_blank" rel="noopener noreferrer">
-                                                <LinkIcon className="mr-2 h-4 w-4" />
+                                            <a href={request.proposalPdf} target="_blank" rel="noopener noreferrer" download={`${request.dealName}-proposal.pdf`}>
+                                                <Download className="mr-2 h-4 w-4" />
                                                 View PDF
-                                            </Link>
+                                            </a>
                                         </Button>
                                     )}
                                 </div>
@@ -230,7 +230,7 @@ function DealRequestsTable({
                             <TableHead>Deal Name</TableHead>
                             <TableHead>Principal</TableHead>
                             <TableHead>Date Requested</TableHead>
-                            <TableHead>Proposal</TableHead>
+                            <TableHead>Deal Proposal</TableHead>
                             {showActionButtons ? <TableHead className="text-right">Actions</TableHead> : <TableHead>Status</TableHead>}
                         </TableRow>
                     </TableHeader>
@@ -250,7 +250,7 @@ function DealRequestsTable({
                                                 </DialogTrigger>
                                                 <DialogContent className="max-w-2xl">
                                                     <DialogHeader>
-                                                        <DialogTitle>{request.dealName} - Proposal</DialogTitle>
+                                                        <DialogTitle>{request.dealName} - Proposal Summary</DialogTitle>
                                                         <DialogDescription>Submitted by {request.clientName}</DialogDescription>
                                                     </DialogHeader>
                                                     <ScrollArea className="h-96">
@@ -259,15 +259,15 @@ function DealRequestsTable({
                                                 </DialogContent>
                                             </Dialog>
                                         ) : null}
-                                        {request.proposalLink && (
+                                        {request.proposalPdf && (
                                             <Button variant="outline" size="sm" asChild>
-                                                <Link href={request.proposalLink} target="_blank" rel="noopener noreferrer">
-                                                    <LinkIcon className="mr-2 h-4 w-4" />
+                                                <a href={request.proposalPdf} target="_blank" rel="noopener noreferrer" download={`${request.dealName}-proposal.pdf`}>
+                                                    <Download className="mr-2 h-4 w-4" />
                                                     PDF
-                                                </Link>
+                                                </a>
                                             </Button>
                                         )}
-                                        {!request.proposalDetails && !request.proposalLink && (
+                                        {!request.proposalDetails && !request.proposalPdf && (
                                              <span className="text-muted-foreground text-xs">N/A</span>
                                         )}
                                     </div>

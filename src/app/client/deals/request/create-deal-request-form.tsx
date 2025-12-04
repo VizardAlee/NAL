@@ -24,11 +24,14 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useTransition } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Paperclip } from 'lucide-react';
 import { useUser } from '@/firebase';
 import { requestDealAction } from './actions';
 import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+const ACCEPTED_FILE_TYPES = ["application/pdf"];
 
 const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
@@ -39,8 +42,22 @@ const formSchema = z.object({
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   proposalDetails: z.string().optional(),
-  proposalLink: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
+  proposalPdf: z.any()
+    .refine((file) => !file || file.size <= MAX_FILE_SIZE, `Max file size is 5MB.`)
+    .refine(
+      (file) => !file || ACCEPTED_FILE_TYPES.includes(file.type),
+      "Only .pdf files are accepted."
+    ).optional(),
 });
+
+// Helper to convert file to Base64
+const fileToDataUri = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+});
+
 
 export function CreateDealRequestForm() {
   const { toast } = useToast();
@@ -59,18 +76,32 @@ export function CreateDealRequestForm() {
       repaymentType: 'Equal Installments',
       repaymentFrequency: 'Monthly',
       proposalDetails: '',
-      proposalLink: '',
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user || !user.displayName) {
         toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to make a request.' });
         return;
     }
     startTransition(async () => {
+        let pdfDataUri: string | undefined = undefined;
+        if (values.proposalPdf) {
+            try {
+                pdfDataUri = await fileToDataUri(values.proposalPdf);
+            } catch (error) {
+                 toast({
+                    variant: 'destructive',
+                    title: 'File Read Error',
+                    description: 'Could not read the selected PDF file. Please try again.',
+                });
+                return;
+            }
+        }
+
         const result = await requestDealAction({
             ...values,
+            proposalPdf: pdfDataUri,
             clientId: user.uid,
             clientName: user.displayName || user.email || 'Unknown Client',
         });
@@ -210,32 +241,33 @@ export function CreateDealRequestForm() {
           name="proposalDetails"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Business Proposal Summary</FormLabel>
+              <FormLabel>Deal Proposal Summary</FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="Describe your business, the purpose of the financing, and how you plan to use the funds..."
-                  rows={8}
+                  rows={6}
                   {...field}
                 />
               </FormControl>
-              <FormDescription>
-                Provide a summary here. You can also add a link to a full PDF proposal below.
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
-         <FormField
+        <FormField
           control={form.control}
-          name="proposalLink"
+          name="proposalPdf"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Proposal Link (Optional)</FormLabel>
+              <FormLabel>Deal Proposal PDF</FormLabel>
               <FormControl>
-                <Input placeholder="https://example.com/your-proposal.pdf" {...field} />
+                 <Input 
+                    type="file" 
+                    accept=".pdf"
+                    onChange={(e) => field.onChange(e.target.files ? e.target.files[0] : null)}
+                 />
               </FormControl>
-               <FormDescription>
-                Link to an external document (e.g., Google Drive, Dropbox).
+              <FormDescription>
+                Optionally upload a formal deal proposal as a PDF (Max 5MB).
               </FormDescription>
               <FormMessage />
             </FormItem>
