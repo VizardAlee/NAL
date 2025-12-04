@@ -2,11 +2,11 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank } from "lucide-react";
+import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, FilePlus } from "lucide-react";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy } from 'firebase/firestore';
 import { useFirestore } from "@/firebase";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -32,6 +32,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { usePathname } from 'next/navigation';
 
 
 type PlatformFundBatch = DocumentData & {
@@ -41,6 +43,15 @@ type PlatformFundBatch = DocumentData & {
   remainingAmount: number;
   createdAt: Timestamp;
   details?: string;
+};
+
+type DepositRequest = DocumentData & {
+    id: string;
+    investorId: string;
+    investorName: string;
+    amount: number;
+    status: 'Pending' | 'Approved' | 'Rejected';
+    requestedAt: Timestamp;
 };
 
 type GenericTransaction = DocumentData & {
@@ -277,6 +288,38 @@ const formatDate = (timestamp: Timestamp | Date | undefined) => {
     );
   }
 
+// New hook to clear notifications when a page is visited
+function useClearNotificationsByPath() {
+    const firestore = useFirestore();
+    const pathname = usePathname();
+
+    useEffect(() => {
+        if (!firestore || !pathname) return;
+
+        const clearNotifications = async () => {
+            const notificationsToClearQuery = query(
+                collection(firestore, 'notifications'),
+                where('link', '==', pathname),
+                where('read', '==', false)
+            );
+            
+            const snapshot = await getDocs(notificationsToClearQuery);
+            if (snapshot.empty) return;
+
+            const batch = writeBatch(firestore);
+            snapshot.docs.forEach(doc => {
+                batch.update(doc.ref, { read: true });
+            });
+            
+            await batch.commit();
+        };
+
+        const timer = setTimeout(clearNotifications, 500);
+        return () => clearTimeout(timer);
+
+    }, [firestore, pathname]);
+}
+
 
 export default function PlatformFundsPage() {
     const firestore = useFirestore();
@@ -286,6 +329,8 @@ export default function PlatformFundsPage() {
     const [isTransferToInvestibleOpen, setTransferToInvestibleOpen] = useState(false);
     const [isTransferFromInvestibleOpen, setTransferFromInvestibleOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
+
+    useClearNotificationsByPath();
 
     const platformFundBatchesQuery = useMemo(() => {
         if (!firestore) return null;
@@ -311,15 +356,21 @@ export default function PlatformFundsPage() {
         if (!firestore) return null;
         return collection(firestore, 'fundBatches');
     }, [firestore]);
+    
+    const depositRequestsQuery = useMemo(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'depositRequests'), where('status', '==', 'Pending'));
+    }, [firestore]);
 
     const { data: platformFundBatches, loading: platformBatchesLoading } = useCollection<PlatformFundBatch>(platformFundBatchesQuery);
     const { data: adminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
     const { data: zakatTransactions, loading: zakatLoading } = useCollection<GenericTransaction>(zakatTransactionsQuery);
     const { data: allInvestments, loading: allInvestmentsLoading } = useCollection<Investment>(allInvestmentsQuery);
     const { data: allFundBatches, loading: allFundBatchesLoading } = useCollection<FundBatch>(allFundBatchesQuery);
+    const { data: depositRequests, loading: depositRequestsLoading } = useCollection<DepositRequest>(depositRequestsQuery);
 
 
-    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allInvestmentsLoading || allFundBatchesLoading;
+    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allInvestmentsLoading || allFundBatchesLoading || depositRequestsLoading;
 
     const metrics = useMemo(() => {
         const investibleCapital = platformFundBatches
@@ -413,131 +464,199 @@ export default function PlatformFundsPage() {
                     </CardContent>
                 </Card>
             </div>
-
-            <Card className="mt-8">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <History className="h-5 w-5" />
-                        <span>Administrative Activity</span>
-                    </CardTitle>
-                    <CardDescription>
-                       Manage operational funds: deposits, expenses, and transfers.
-                    </CardDescription>
-                    <div className="flex flex-wrap gap-2 pt-2">
-                        <Dialog open={isDepositOpen} onOpenChange={setDepositOpen}>
-                            <DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2 h-4 w-4" />Add Funds</Button></DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader><DialogTitle>Add Funds to Admin Account</DialogTitle></DialogHeader>
-                                <AdminTransactionForm type="AdminDeposit" onTransactionComplete={() => setDepositOpen(false)} />
-                            </DialogContent>
-                        </Dialog>
-                         <Dialog open={isExpenseOpen} onOpenChange={setExpenseOpen}>
-                            <DialogTrigger asChild><Button size="sm" variant="outline"><MinusCircle className="mr-2 h-4 w-4" />Record Expense</Button></DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader><DialogTitle>Record an Expense</DialogTitle></DialogHeader>
-                                <AdminTransactionForm type="Expense" onTransactionComplete={() => setExpenseOpen(false)} />
-                            </DialogContent>
-                        </Dialog>
-                        <Dialog open={isTransferToInvestibleOpen} onOpenChange={setTransferToInvestibleOpen}>
-                            <DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Fund Investible</Button></DialogTrigger>
-                            <DialogContent>
-                                <TransferFundsForm direction="toInvestible" maxAmount={metrics.administrativeBalance} onTransferComplete={() => setTransferToInvestibleOpen(false)} />
-                            </DialogContent>
-                        </Dialog>
-                        <Dialog open={isTransferFromInvestibleOpen} onOpenChange={setTransferFromInvestibleOpen}>
-                            <DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Withdraw to Admin</Button></DialogTrigger>
-                            <DialogContent>
-                                <TransferFundsForm direction="fromInvestible" maxAmount={metrics.investibleCapital} onTransferComplete={() => setTransferFromInvestibleOpen(false)} />
-                            </DialogContent>
-                        </Dialog>
-                    </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                     {isLoading && (
-                        isMobile ? (
-                            <div className="space-y-3 p-4">
-                                {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-lg" />)}
-                            </div>
-                        ) : (
-                            <Table>
-                                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
-                                <TableBody>
-                                    {Array.from({length: 4}).map((_, i) => (
-                                       <TableRow key={i}>
-                                            <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                                            <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                                            <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-                                            <TableCell><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        )
-                    )}
-                    {!isLoading && paginatedAdminTransactions && paginatedAdminTransactions.length > 0 ? (
-                        isMobile ? (
-                            <div className="space-y-3 p-4">
-                                {paginatedAdminTransactions.map(tx => (
-                                    <Card key={tx.id} className="p-4">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <p className="font-medium">{tx.description}</p>
-                                                <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'} className="mt-1">{tx.type}</Badge>
-                                                <p className="text-xs text-muted-foreground mt-1">{formatDate(tx.createdAt)}</p>
-                                            </div>
-                                            <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</p>
+            
+            <div className="mt-8">
+                <Tabs defaultValue="requests">
+                    <TabsList>
+                        <TabsTrigger value="requests">
+                            <FilePlus className="mr-2 h-4 w-4" />
+                            Deposit Requests
+                            {depositRequests && depositRequests.length > 0 && <Badge className="ml-2">{depositRequests.length}</Badge>}
+                        </TabsTrigger>
+                        <TabsTrigger value="activity"><History className="mr-2 h-4 w-4" />Admin Activity</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="requests" className="mt-4">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Pending Deposit Requests</CardTitle>
+                                <CardDescription>Investors waiting for payment details to complete their deposit.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {isMobile ? (
+                                    <div className="space-y-3">
+                                        {isLoading ? Array.from({length: 2}).map((_, i) => <Skeleton key={i} className="h-24" />) : null}
+                                        {depositRequests && depositRequests.length > 0 ? depositRequests.map(req => (
+                                            <Card key={req.id}>
+                                                <CardContent className="p-4 space-y-2">
+                                                    <div className="flex justify-between items-start">
+                                                        <p className="font-medium">{req.investorName}</p>
+                                                        <p className="font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(req.amount)}</p>
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground">{formatDate(req.requestedAt)}</p>
+                                                </CardContent>
+                                            </Card>
+                                        )) : !isLoading && <p className="text-center text-sm text-muted-foreground py-10">No pending deposit requests.</p>}
+                                    </div>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Investor</TableHead>
+                                                <TableHead>Amount</TableHead>
+                                                <TableHead>Date Requested</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {isLoading && Array.from({length: 3}).map((_, i) => (
+                                                <TableRow key={i}>
+                                                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                                                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                                                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                                                </TableRow>
+                                            ))}
+                                            {depositRequests && depositRequests.length > 0 ? depositRequests.map(req => (
+                                                <TableRow key={req.id}>
+                                                    <TableCell>{req.investorName}</TableCell>
+                                                    <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(req.amount)}</TableCell>
+                                                    <TableCell>{formatDate(req.requestedAt)}</TableCell>
+                                                </TableRow>
+                                            )) : !isLoading && (
+                                                <TableRow>
+                                                    <TableCell colSpan={3} className="text-center h-24">No pending deposit requests.</TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                    <TabsContent value="activity" className="mt-4">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Administrative Activity</CardTitle>
+                                <CardDescription>
+                                Manage operational funds: deposits, expenses, and transfers.
+                                </CardDescription>
+                                <div className="flex flex-wrap gap-2 pt-2">
+                                    <Dialog open={isDepositOpen} onOpenChange={setDepositOpen}>
+                                        <DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2 h-4 w-4" />Add Funds</Button></DialogTrigger>
+                                        <DialogContent>
+                                            <DialogHeader><DialogTitle>Add Funds to Admin Account</DialogTitle></DialogHeader>
+                                            <AdminTransactionForm type="AdminDeposit" onTransactionComplete={() => setDepositOpen(false)} />
+                                        </DialogContent>
+                                    </Dialog>
+                                    <Dialog open={isExpenseOpen} onOpenChange={setExpenseOpen}>
+                                        <DialogTrigger asChild><Button size="sm" variant="outline"><MinusCircle className="mr-2 h-4 w-4" />Record Expense</Button></DialogTrigger>
+                                        <DialogContent>
+                                            <DialogHeader><DialogTitle>Record an Expense</DialogTitle></DialogHeader>
+                                            <AdminTransactionForm type="Expense" onTransactionComplete={() => setExpenseOpen(false)} />
+                                        </DialogContent>
+                                    </Dialog>
+                                    <Dialog open={isTransferToInvestibleOpen} onOpenChange={setTransferToInvestibleOpen}>
+                                        <DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Fund Investible</Button></DialogTrigger>
+                                        <DialogContent>
+                                            <TransferFundsForm direction="toInvestible" maxAmount={metrics.administrativeBalance} onTransferComplete={() => setTransferToInvestibleOpen(false)} />
+                                        </DialogContent>
+                                    </Dialog>
+                                    <Dialog open={isTransferFromInvestibleOpen} onOpenChange={setTransferFromInvestibleOpen}>
+                                        <DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Withdraw to Admin</Button></DialogTrigger>
+                                        <DialogContent>
+                                            <TransferFundsForm direction="fromInvestible" maxAmount={metrics.investibleCapital} onTransferComplete={() => setTransferFromInvestibleOpen(false)} />
+                                        </DialogContent>
+                                    </Dialog>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                {isLoading && (
+                                    isMobile ? (
+                                        <div className="space-y-3 p-4">
+                                            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-lg" />)}
                                         </div>
-                                    </Card>
-                                ))}
-                            </div>
-                        ) : (
-                            <Table>
-                                <TableHeader>
-                                <TableRow>
-                                    <TableHead>Date</TableHead>
-                                    <TableHead>Type</TableHead>
-                                    <TableHead>Description</TableHead>
-                                    <TableHead className="text-right">Amount</TableHead>
-                                </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                {paginatedAdminTransactions?.map(tx => (
-                                    <TableRow key={tx.id}>
-                                        <TableCell>{formatDate(tx.createdAt)}</TableCell>
-                                        <TableCell><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell>
-                                        <TableCell>{tx.description}</TableCell>
-                                        <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell>
-                                    </TableRow>
-                                ))}
-                                </TableBody>
-                            </Table>
-                        )
-                    ) : (
-                        !isLoading && <div className="p-4 py-12 text-center text-sm text-muted-foreground border-t">No administrative activities found.</div>
-                    )}
-                </CardContent>
-                 {totalPages > 1 && (
-                    <div className="p-4 border-t">
-                        <Pagination>
-                            <PaginationContent>
-                                <PaginationItem>
-                                    <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} />
-                                </PaginationItem>
-                                {[...Array(totalPages)].map((_, i) => (
-                                    <PaginationItem key={i}>
-                                        <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>
-                                            {i + 1}
-                                        </PaginationLink>
-                                    </PaginationItem>
-                                ))}
-                                <PaginationItem>
-                                    <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} />
-                                </PaginationItem>
-                            </PaginationContent>
-                        </Pagination>
-                    </div>
-                )}
-            </Card>
+                                    ) : (
+                                        <Table>
+                                            <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
+                                            <TableBody>
+                                                {Array.from({length: 4}).map((_, i) => (
+                                                <TableRow key={i}>
+                                                        <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                                                        <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+                                                        <TableCell><Skeleton className="h-5 w-40" /></TableCell>
+                                                        <TableCell><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    )
+                                )}
+                                {!isLoading && paginatedAdminTransactions && paginatedAdminTransactions.length > 0 ? (
+                                    isMobile ? (
+                                        <div className="space-y-3 p-4">
+                                            {paginatedAdminTransactions.map(tx => (
+                                                <Card key={tx.id} className="p-4">
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <p className="font-medium">{tx.description}</p>
+                                                            <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'} className="mt-1">{tx.type}</Badge>
+                                                            <p className="text-xs text-muted-foreground mt-1">{formatDate(tx.createdAt)}</p>
+                                                        </div>
+                                                        <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</p>
+                                                    </div>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <Table>
+                                            <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Date</TableHead>
+                                                <TableHead>Type</TableHead>
+                                                <TableHead>Description</TableHead>
+                                                <TableHead className="text-right">Amount</TableHead>
+                                            </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                            {paginatedAdminTransactions?.map(tx => (
+                                                <TableRow key={tx.id}>
+                                                    <TableCell>{formatDate(tx.createdAt)}</TableCell>
+                                                    <TableCell><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell>
+                                                    <TableCell>{tx.description}</TableCell>
+                                                    <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell>
+                                                </TableRow>
+                                            ))}
+                                            </TableBody>
+                                        </Table>
+                                    )
+                                ) : (
+                                    !isLoading && <div className="p-4 py-12 text-center text-sm text-muted-foreground border-t">No administrative activities found.</div>
+                                )}
+                            </CardContent>
+                            {totalPages > 1 && (
+                                <div className="p-4 border-t">
+                                    <Pagination>
+                                        <PaginationContent>
+                                            <PaginationItem>
+                                                <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} />
+                                            </PaginationItem>
+                                            {[...Array(totalPages)].map((_, i) => (
+                                                <PaginationItem key={i}>
+                                                    <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>
+                                                        {i + 1}
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            ))}
+                                            <PaginationItem>
+                                                <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} />
+                                            </PaginationItem>
+                                        </PaginationContent>
+                                    </Pagination>
+                                </div>
+                            )}
+                        </Card>
+                    </TabsContent>
+                </Tabs>
+            </div>
+
 
         </div>
     );

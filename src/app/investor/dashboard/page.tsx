@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight } from "lucide-react";
+import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle } from "lucide-react";
 import { useMemo, useState, useTransition, useEffect } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc, updateDoc } from 'firebase/firestore';
@@ -22,6 +22,7 @@ import { reinvestAction } from "./actions";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { DepositForm } from "./deposit-form";
 
 
 type Transaction = DocumentData & {
@@ -114,6 +115,7 @@ export default function InvestorDashboard() {
   const firestore = useFirestore();
   const { user, loading: userLoading } = useUser();
   const [isWithdrawOpen, setWithdrawOpen] = useState(false);
+  const [isDepositOpen, setDepositOpen] = useState(false);
   const isMobile = useIsMobile();
 
   const userProfileRef = useMemo(() => {
@@ -289,7 +291,22 @@ export default function InvestorDashboard() {
         title="Investor Dashboard"
         description="Welcome to your personal investment hub."
         icon={Landmark}
-      />
+      >
+        <Dialog open={isDepositOpen} onOpenChange={setDepositOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Request Deposit
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Request a Deposit</DialogTitle>
+            </DialogHeader>
+            <DepositForm onDepositRequested={() => setDepositOpen(false)} />
+          </DialogContent>
+        </Dialog>
+      </PageHeader>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>

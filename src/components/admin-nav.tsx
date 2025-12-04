@@ -26,6 +26,10 @@ import {
   FilePlus,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
+import { useCollection } from "@/firebase";
+import { collection, query, where } from "firebase/firestore";
+import { useFirestore } from "@/firebase";
 
 const menuItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -35,19 +39,33 @@ const menuItems = [
     label: "Approvals",
     icon: CheckCircle,
     subItems: [
-      { href: "/admin/approvals/deal-requests", label: "Deal Requests", icon: FilePlus },
-      { href: "/admin/approvals/withdrawals", label: "Withdrawals" },
-      { href: "/admin/approvals/reinvestments", label: "Reinvestments" },
-      { href: "/admin/approvals/repayments", label: "Repayments" },
-      { href: "/admin/approvals/terminations", label: "Terminations" },
+      { href: "/admin/approvals/deal-requests", label: "Deal Requests", icon: FilePlus, notificationCollection: 'dealRequests' },
+      { href: "/admin/approvals/withdrawals", label: "Withdrawals", notificationCollection: 'withdrawalRequests' },
+      { href: "/admin/approvals/reinvestments", label: "Reinvestments", notificationCollection: 'reinvestmentRequests' },
+      { href: "/admin/approvals/repayments", label: "Repayments", notificationCollection: 'repayments' },
+      { href: "/admin/approvals/terminations", label: "Terminations", notificationCollection: 'terminationRequests' },
     ],
   },
-  { href: "/admin/funds", label: "Funds", icon: Banknote },
+  { href: "/admin/funds", label: "Funds", icon: Banknote, notificationCollection: 'depositRequests' },
   { href: "/admin/analyzer", label: "Analyzer", icon: FlaskConical },
   { href: "/admin/activity", label: "Activity", icon: History },
   { href: "/admin/migration", label: "Data Migration", icon: Database },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
+
+function NotificationBadge({ collectionName }: { collectionName: string }) {
+    const firestore = useFirestore();
+    const q = React.useMemo(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, collectionName), where('status', '==', 'Pending'));
+    }, [firestore, collectionName]);
+
+    const { data } = useCollection(q);
+
+    if (!data || data.length === 0) return null;
+
+    return <Badge className="ml-auto">{data.length}</Badge>;
+}
 
 export function AdminNav() {
   const pathname = usePathname();
@@ -97,9 +115,12 @@ export function AdminNav() {
                         asChild
                         isActive={pathname === subItem.href}
                       >
-                        <Link href={subItem.href}>
-                          {subItem.icon && <subItem.icon />}
-                          <span>{subItem.label}</span>
+                        <Link href={subItem.href} className="flex justify-between items-center w-full">
+                          <div className="flex items-center gap-2">
+                            {subItem.icon && <subItem.icon />}
+                            <span>{subItem.label}</span>
+                          </div>
+                          {subItem.notificationCollection && <NotificationBadge collectionName={subItem.notificationCollection} />}
                         </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
@@ -115,10 +136,14 @@ export function AdminNav() {
               isActive={pathname === item.href}
               tooltip={item.label}
               variant="default"
+              className="w-full justify-between"
             >
               <Link href={item.href}>
-                <item.icon />
-                <span>{item.label}</span>
+                 <div className="flex items-center gap-2">
+                    <item.icon />
+                    <span>{item.label}</span>
+                  </div>
+                 {item.notificationCollection && <NotificationBadge collectionName={item.notificationCollection} />}
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
