@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Loader2, XCircle, FilePlus, Hourglass, History, FileText } from 'lucide-react';
+import { CheckCircle, Loader2, XCircle, FilePlus, Hourglass, History, FileText, Link as LinkIcon } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs, addDoc } from 'firebase/firestore';
@@ -33,6 +33,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import Link from 'next/link';
 
 type DealRequest = DocumentData & {
   id: string;
@@ -46,6 +47,7 @@ type DealRequest = DocumentData & {
   repaymentType: string;
   repaymentFrequency: string;
   proposalDetails?: string;
+  proposalLink?: string;
   status: 'Pending' | 'Approved' | 'Rejected';
   requestedAt: Timestamp;
   processedAt?: Timestamp;
@@ -162,23 +164,33 @@ function DealRequestsTable({
                                 </div>
                                 {!showActionButtons && <Badge variant={request.status === 'Approved' ? 'default' : 'destructive'}>{request.status}</Badge>}
                             </div>
-                            <div className="flex justify-between items-center pt-2 border-t">
-                                {request.proposalDetails && (
-                                    <Dialog>
-                                        <DialogTrigger asChild>
-                                            <Button variant="outline" size="sm"><FileText className="mr-2 h-4 w-4" />View Proposal</Button>
-                                        </DialogTrigger>
-                                        <DialogContent className="max-w-2xl">
-                                            <DialogHeader>
-                                                <DialogTitle>{request.dealName} - Proposal</DialogTitle>
-                                                <DialogDescription>Submitted by {request.clientName}</DialogDescription>
-                                            </DialogHeader>
-                                            <ScrollArea className="h-96">
-                                                <p className="whitespace-pre-wrap p-4">{request.proposalDetails}</p>
-                                            </ScrollArea>
-                                        </DialogContent>
-                                    </Dialog>
-                                )}
+                            <div className="flex justify-between items-center pt-2 border-t flex-wrap gap-2">
+                                <div className="flex gap-2">
+                                    {request.proposalDetails && (
+                                        <Dialog>
+                                            <DialogTrigger asChild>
+                                                <Button variant="outline" size="sm"><FileText className="mr-2 h-4 w-4" />View Summary</Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="max-w-2xl">
+                                                <DialogHeader>
+                                                    <DialogTitle>{request.dealName} - Proposal</DialogTitle>
+                                                    <DialogDescription>Submitted by {request.clientName}</DialogDescription>
+                                                </DialogHeader>
+                                                <ScrollArea className="h-96">
+                                                    <p className="whitespace-pre-wrap p-4">{request.proposalDetails}</p>
+                                                </ScrollArea>
+                                            </DialogContent>
+                                        </Dialog>
+                                    )}
+                                     {request.proposalLink && (
+                                        <Button variant="outline" size="sm" asChild>
+                                            <Link href={request.proposalLink} target="_blank" rel="noopener noreferrer">
+                                                <LinkIcon className="mr-2 h-4 w-4" />
+                                                View PDF
+                                            </Link>
+                                        </Button>
+                                    )}
+                                </div>
                                 {showActionButtons && (
                                     <div className="flex justify-end gap-2 flex-1">
                                         <Button
@@ -230,24 +242,35 @@ function DealRequestsTable({
                                 <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.principal)}</TableCell>
                                 <TableCell data-label="Date Requested">{format(request.requestedAt.toDate(), 'PPP')}</TableCell>
                                 <TableCell>
-                                    {request.proposalDetails ? (
-                                        <Dialog>
-                                            <DialogTrigger asChild>
-                                                <Button variant="outline" size="sm"><FileText className="mr-2 h-4 w-4" />View</Button>
-                                            </DialogTrigger>
-                                            <DialogContent className="max-w-2xl">
-                                                <DialogHeader>
-                                                    <DialogTitle>{request.dealName} - Proposal</DialogTitle>
-                                                    <DialogDescription>Submitted by {request.clientName}</DialogDescription>
-                                                </DialogHeader>
-                                                <ScrollArea className="h-96">
-                                                    <p className="whitespace-pre-wrap p-4">{request.proposalDetails}</p>
-                                                </ScrollArea>
-                                            </DialogContent>
-                                        </Dialog>
-                                    ) : (
-                                        <span className="text-muted-foreground text-xs">N/A</span>
-                                    )}
+                                    <div className="flex gap-2">
+                                        {request.proposalDetails ? (
+                                            <Dialog>
+                                                <DialogTrigger asChild>
+                                                    <Button variant="outline" size="sm"><FileText className="mr-2 h-4 w-4" />Summary</Button>
+                                                </DialogTrigger>
+                                                <DialogContent className="max-w-2xl">
+                                                    <DialogHeader>
+                                                        <DialogTitle>{request.dealName} - Proposal</DialogTitle>
+                                                        <DialogDescription>Submitted by {request.clientName}</DialogDescription>
+                                                    </DialogHeader>
+                                                    <ScrollArea className="h-96">
+                                                        <p className="whitespace-pre-wrap p-4">{request.proposalDetails}</p>
+                                                    </ScrollArea>
+                                                </DialogContent>
+                                            </Dialog>
+                                        ) : null}
+                                        {request.proposalLink && (
+                                            <Button variant="outline" size="sm" asChild>
+                                                <Link href={request.proposalLink} target="_blank" rel="noopener noreferrer">
+                                                    <LinkIcon className="mr-2 h-4 w-4" />
+                                                    PDF
+                                                </Link>
+                                            </Button>
+                                        )}
+                                        {!request.proposalDetails && !request.proposalLink && (
+                                             <span className="text-muted-foreground text-xs">N/A</span>
+                                        )}
+                                    </div>
                                 </TableCell>
                                 {showActionButtons ? (
                                     <TableCell data-label="Actions" className="text-right space-x-2">
@@ -380,4 +403,3 @@ export default function DealRequestsPage() {
         </div>
     );
 }
-

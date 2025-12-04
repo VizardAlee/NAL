@@ -39,6 +39,7 @@ const formSchema = z.object({
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   proposalDetails: z.string().optional(),
+  proposalLink: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
 });
 
 export function CreateDealRequestForm() {
@@ -58,6 +59,7 @@ export function CreateDealRequestForm() {
       repaymentType: 'Equal Installments',
       repaymentFrequency: 'Monthly',
       proposalDetails: '',
+      proposalLink: '',
     },
   });
 
@@ -208,7 +210,7 @@ export function CreateDealRequestForm() {
           name="proposalDetails"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Business Proposal</FormLabel>
+              <FormLabel>Business Proposal Summary</FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="Describe your business, the purpose of the financing, and how you plan to use the funds..."
@@ -217,7 +219,23 @@ export function CreateDealRequestForm() {
                 />
               </FormControl>
               <FormDescription>
-                Provide as much detail as possible for the admin to review.
+                Provide a summary here. You can also add a link to a full PDF proposal below.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+         <FormField
+          control={form.control}
+          name="proposalLink"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Proposal Link (Optional)</FormLabel>
+              <FormControl>
+                <Input placeholder="https://example.com/your-proposal.pdf" {...field} />
+              </FormControl>
+               <FormDescription>
+                Link to an external document (e.g., Google Drive, Dropbox).
               </FormDescription>
               <FormMessage />
             </FormItem>

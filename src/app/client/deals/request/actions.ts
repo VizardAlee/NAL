@@ -17,6 +17,7 @@ const requestDealSchema = z.object({
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   proposalDetails: z.string().optional(),
+  proposalLink: z.string().url().optional().or(z.literal('')),
 });
 
 export async function requestDealAction(input: z.infer<typeof requestDealSchema>) {
