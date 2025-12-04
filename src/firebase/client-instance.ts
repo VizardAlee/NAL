@@ -1,7 +1,8 @@
+
 'use client';
 
 import { getApps, initializeApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
+import { getAuth, type Auth, connectAuthEmulator, inMemoryPersistence, setPersistence } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
 
@@ -18,6 +19,12 @@ if (firebaseConfig && firebaseConfig.projectId) {
 
     auth = getAuth(app);
     firestore = getFirestore(app);
+
+    // Dynamically set the auth domain for development environments
+    if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+        auth.tenantId = firebaseConfig.authDomain || null;
+    }
+
 } else {
     console.warn("Firebase config not found, using mock instances.");
     // Provide mock instances if config is not available
