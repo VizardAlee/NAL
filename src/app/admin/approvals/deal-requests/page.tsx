@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, XCircle, FilePlus, Hourglass, History, FileText, Download } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs, addDoc } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs, addDoc, orderBy } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
@@ -173,7 +173,7 @@ function DealRequestsTable({
                                             </DialogTrigger>
                                             <DialogContent className="max-w-2xl">
                                                 <DialogHeader>
-                                                    <DialogTitle>{request.dealName} - Proposal Summary</DialogTitle>
+                                                    <DialogTitle>{request.dealName} - Deal Proposal Summary</DialogTitle>
                                                     <DialogDescription>Submitted by {request.clientName}</DialogDescription>
                                                 </DialogHeader>
                                                 <ScrollArea className="h-96">
@@ -250,7 +250,7 @@ function DealRequestsTable({
                                                 </DialogTrigger>
                                                 <DialogContent className="max-w-2xl">
                                                     <DialogHeader>
-                                                        <DialogTitle>{request.dealName} - Proposal Summary</DialogTitle>
+                                                        <DialogTitle>{request.dealName} - Deal Proposal Summary</DialogTitle>
                                                         <DialogDescription>Submitted by {request.clientName}</DialogDescription>
                                                     </DialogHeader>
                                                     <ScrollArea className="h-96">
@@ -313,8 +313,8 @@ export default function DealRequestsPage() {
 
     useClearNotificationsByPath();
 
-    const pendingQuery = useMemo(() => firestore ? query(collection(firestore, 'dealRequests'), where('status', '==', 'Pending')) : null, [firestore]);
-    const processedQuery = useMemo(() => firestore ? query(collection(firestore, 'dealRequests'), where('status', 'in', ['Approved', 'Rejected'])) : null, [firestore]);
+    const pendingQuery = useMemo(() => firestore ? query(collection(firestore, 'dealRequests'), where('status', '==', 'Pending'), orderBy('requestedAt', 'asc')) : null, [firestore]);
+    const processedQuery = useMemo(() => firestore ? query(collection(firestore, 'dealRequests'), where('status', 'in', ['Approved', 'Rejected']), orderBy('processedAt', 'desc')) : null, [firestore]);
 
     const { data: pendingRequests, loading: pendingLoading } = useCollection<DealRequest>(pendingQuery);
     const { data: processedRequests, loading: processedLoading } = useCollection<DealRequest>(processedQuery);
