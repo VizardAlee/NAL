@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -22,6 +23,7 @@ import {
   Settings,
   ChevronDown,
   Database,
+  FilePlus,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
@@ -33,6 +35,7 @@ const menuItems = [
     label: "Approvals",
     icon: CheckCircle,
     subItems: [
+      { href: "/admin/approvals/deal-requests", label: "Deal Requests", icon: FilePlus },
       { href: "/admin/approvals/withdrawals", label: "Withdrawals" },
       { href: "/admin/approvals/reinvestments", label: "Reinvestments" },
       { href: "/admin/approvals/repayments", label: "Repayments" },
@@ -95,6 +98,7 @@ export function AdminNav() {
                         isActive={pathname === subItem.href}
                       >
                         <Link href={subItem.href}>
+                          {subItem.icon && <subItem.icon />}
                           <span>{subItem.label}</span>
                         </Link>
                       </SidebarMenuSubButton>
