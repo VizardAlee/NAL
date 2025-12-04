@@ -24,6 +24,10 @@ import {
   ChevronDown,
   Database,
   FilePlus,
+  ShieldAlert,
+  Wallet,
+  RefreshCcw,
+  HandCoins,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -40,13 +44,14 @@ const menuItems = [
     icon: CheckCircle,
     subItems: [
       { href: "/admin/approvals/deal-requests", label: "Deal Requests", icon: FilePlus, notificationCollection: 'dealRequests' },
+      { href: "/admin/approvals/deposits", label: "Deposits", icon: Wallet, notificationCollection: 'depositRequests' },
       { href: "/admin/approvals/withdrawals", label: "Withdrawals", notificationCollection: 'withdrawalRequests' },
-      { href: "/admin/approvals/reinvestments", label: "Reinvestments", notificationCollection: 'reinvestmentRequests' },
-      { href: "/admin/approvals/repayments", label: "Repayments", notificationCollection: 'repayments' },
-      { href: "/admin/approvals/terminations", label: "Terminations", notificationCollection: 'terminationRequests' },
+      { href: "/admin/approvals/reinvestments", label: "Reinvestments", icon: RefreshCcw, notificationCollection: 'reinvestmentRequests' },
+      { href: "/admin/approvals/repayments", label: "Repayments", icon: HandCoins, notificationCollection: 'repayments' },
+      { href: "/admin/approvals/terminations", label: "Terminations", icon: ShieldAlert, notificationCollection: 'terminationRequests' },
     ],
   },
-  { href: "/admin/funds", label: "Funds", icon: Banknote, notificationCollection: 'depositRequests' },
+  { href: "/admin/funds", label: "Funds", icon: Banknote },
   { href: "/admin/analyzer", label: "Analyzer", icon: FlaskConical },
   { href: "/admin/activity", label: "Activity", icon: History },
   { href: "/admin/migration", label: "Data Migration", icon: Database },

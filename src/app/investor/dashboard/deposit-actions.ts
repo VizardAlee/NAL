@@ -51,7 +51,7 @@ export async function requestDepositAction(input: { amount: number; userId: stri
         firestore,
         'Deposit Request',
         `${userName} requested to deposit ${formattedAmount}.`,
-        '/admin/funds' // This will be the approvals page later
+        '/admin/approvals/deposits'
     );
 
     revalidatePath('/investor/dashboard');
