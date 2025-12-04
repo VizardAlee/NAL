@@ -9,21 +9,26 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      // Check if the user has an 'Admin' role in their user document.
-      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+      return request.auth != null 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
     }
 
     function isClient() {
-        return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Client';
+      return request.auth != null 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Client';
     }
     
     function isInvestor() {
-        return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Investor';
+      return request.auth != null 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Investor';
     }
 
     // Rules for the 'users' collection
     match /users/{userId} {
-      // Admins can read all profiles. Other users can only read their own.
+      // Allow the get() used in isClient/isAdmin even when auth is null (happens on page load)
       // Allow the read if auth is null to prevent rule evaluation errors during auth state restoration.
       allow get: if request.auth == null || isAdmin() || isOwner(userId);
       // Admins can list all users.
@@ -78,7 +83,7 @@ service cloud.firestore {
     // Rules for 'repayments'
     match /repayments/{repaymentId} {
       // Admins can read and update all repayments.
-      allow get, update, list: if isAdmin();
+      allow get, list, update: if isAdmin();
       // Clients can create their own repayments and read their own.
       allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
       allow read: if isClient() && resource.data.clientId == request.auth.uid;
