@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle } from "lucide-react";
-import { useMemo, useTransition } from 'react';
+import { useMemo, useTransition, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
@@ -44,14 +44,14 @@ const statusVariant = {
 
 function DealCard({ deal }: { deal: Deal }) {
     const firestore = useFirestore();
-    const { user } = useUser();
+    const { user, loading: userLoading } = useUser();
     const { toast } = useToast();
     const [isPendingTermination, startTransition] = useTransition();
 
     const repaymentsQuery = useMemo(() => {
-        if (!firestore || !user?.uid) return null;
+        if (!firestore || !user?.uid || !deal?.id) return null;
         return query(collection(firestore, 'repayments'), where('clientId', '==', user.uid), where('dealId', '==', deal.id));
-    }, [firestore, user, deal.id]);
+    }, [firestore, user, deal]);
 
     const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery as any);
 
@@ -82,6 +82,10 @@ function DealCard({ deal }: { deal: Deal }) {
                 });
             }
         });
+    }
+    
+    if(userLoading || repaymentsLoading) {
+        return <DealsSkeleton />;
     }
 
     return (
@@ -170,9 +174,9 @@ export default function ClientDashboard() {
     const router = useRouter();
     const { user, loading: userLoading } = useUser();
     const isMobile = useIsMobile();
-    const { data: userProfile, loading: profileLoading } = useCollection(
-        useMemo(() => (firestore && user ? query(collection(firestore, 'users'), where('__name__', '==', user.uid)) : null), [firestore, user])
-    );
+    const userProfileQuery = useMemo(() => (firestore && user ? query(collection(firestore, 'users'), where('__name__', '==', user.uid)) : null), [firestore, user]);
+    
+    const { data: userProfile, loading: profileLoading } = useCollection(userProfileQuery);
 
     const dealsQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
