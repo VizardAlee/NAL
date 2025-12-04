@@ -157,7 +157,7 @@ export default function UserDetailPage() {
 
   const fundBatchesQuery = useMemo(() => {
     if (!firestore || !userId) return null;
-    return query(collection(firestore, 'fundBatches'), where('sourceId', '==', userId));
+    return query(collection(firestore, 'fundBatches'), where('sourceId', '==', userId), orderBy('createdAt', 'asc'));
   }, [firestore, userId]);
   
   const clientDealsQuery = useMemo(() => {
