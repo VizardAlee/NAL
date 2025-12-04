@@ -24,7 +24,7 @@ import { History, ListFilter } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { Card, CardContent } from '@/components/ui/card';
@@ -65,24 +65,25 @@ const ITEMS_PER_PAGE = 20;
 
 export default function ActivityPage() {
     const firestore = useFirestore();
+    const { user: authUser, loading: authLoading } = useUser();
     const isMobile = useIsMobile();
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedTypes, setSelectedTypes] = useState<TransactionTypeFilter[]>([]);
 
     const transactionsQuery = useMemo(() => {
-        if (!firestore) return null;
+        if (!firestore || !authUser) return null;
         return query(collection(firestore, 'transactions'), orderBy('createdAt', 'desc'));
-    }, [firestore]);
+    }, [firestore, authUser]);
 
     const usersQuery = useMemo(() => {
-        if (!firestore) return null;
+        if (!firestore || !authUser) return null;
         return query(collection(firestore, 'users'));
-    }, [firestore]);
+    }, [firestore, authUser]);
 
     const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
     const { data: users, loading: usersLoading } = useCollection<User>(usersQuery);
 
-    const isLoading = transactionsLoading || usersLoading;
+    const isLoading = authLoading || transactionsLoading || usersLoading;
 
     const filteredTransactions = useMemo(() => {
         if (!transactions) return [];
