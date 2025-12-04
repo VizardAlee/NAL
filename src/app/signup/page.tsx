@@ -84,37 +84,39 @@ export default function SignupPage() {
     }
   }, [emailState, toast, router]);
 
-  const handleGoogleSignUp = () => {
+  const handleGoogleSignUp = async () => {
     if (!auth || !firestore) return;
-    startGoogleTransition(async () => {
-        const provider = new GoogleAuthProvider();
-        try {
-            const result = await signInWithPopup(auth, provider);
-            const user = result.user;
+    const provider = new GoogleAuthProvider();
 
+    try {
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
+        
+        startGoogleTransition(async () => {
             const userDocRef = doc(firestore, 'users', user.uid);
             const userDoc = await getDoc(userDocRef);
 
-            // If user document doesn't exist, it's a new user. Create it.
             if (!userDoc.exists()) {
                 await setDoc(userDocRef, {
                     name: user.displayName,
                     email: user.email,
-                    role: null, // Role to be set in the next step
+                    role: null,
                 });
             }
             
             toast({ title: 'Success', description: "Signed in successfully. Let's set up your profile." });
             router.push('/signup/role');
+        });
 
-        } catch (error: any) {
-            toast({
+    } catch (error: any) {
+        if (error.code !== 'auth/popup-closed-by-user') {
+             toast({
                 variant: 'destructive',
                 title: 'Google Sign-up Failed',
                 description: error.message || 'An unknown error occurred.',
             });
         }
-    });
+    }
   }
 
   return (
