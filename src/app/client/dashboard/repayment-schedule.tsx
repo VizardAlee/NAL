@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState, useEffect, useCallback, useTransition } from 'react';
+import { useMemo, useState, useEffect, useCallback, useTransition, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import {
   Table,
@@ -50,45 +50,51 @@ type PenaltyTransaction = {
     details: string; // e.g. "Late fee for repayment <repayment_id>"
 };
 
+function SubmitLodgePaymentButton() {
+    const { pending } = useFormStatus();
+    return (
+        <Button size="sm" type="submit" disabled={pending}>
+            {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
+            Lodge Payment
+        </Button>
+    )
+}
+
 function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { installment: ScheduledPayment, dealId: string, userId: string, onPaymentLodged: (repayment: any) => void }) {
-    const [isPending, startTransition] = useTransition();
+    const [state, formAction] = useActionState(lodgePaymentAction, { success: false, message: '', repayment: null });
     const { toast } = useToast();
 
-    const handleSubmit = async (formData: FormData) => {
-        startTransition(async () => {
-            const result = await lodgePaymentAction({ success: false, message: '', repayment: null }, formData);
-            
-            if (result.success && result.repayment) {
+    useEffect(() => {
+        if (state.message) {
+            if (state.success && state.repayment) {
                 toast({
                     title: 'Success',
-                    description: result.message,
+                    description: state.message,
                 });
                 const newRepayment = {
-                    ...result.repayment,
-                    lodgedAt: new Timestamp(result.repayment.lodgedAt._seconds, result.repayment.lodgedAt._nanoseconds),
-                    dueDate: new Timestamp(result.repayment.dueDate._seconds, result.repayment.dueDate._nanoseconds)
+                    ...state.repayment,
+                    lodgedAt: new Timestamp(state.repayment.lodgedAt._seconds, state.repayment.lodgedAt._nanoseconds),
+                    dueDate: new Timestamp(state.repayment.dueDate._seconds, state.repayment.dueDate._nanoseconds)
                 };
                 onPaymentLodged(newRepayment);
-            } else {
+            } else if (!state.success) {
                 toast({
                     title: 'Error',
-                    description: result.message,
+                    description: state.message,
                     variant: 'destructive',
                 });
             }
-        });
-    };
+        }
+    }, [state, toast, onPaymentLodged]);
     
     return (
-        <form action={handleSubmit}>
+        <form action={formAction}>
             <input type="hidden" name="dealId" value={dealId} />
             <input type="hidden" name="amount" value={(installment.payment || 0) + (installment.penalty || 0)} />
             <input type="hidden" name="userId" value={userId} />
             <input type="hidden" name="dueDate" value={installment.dueDate.toISOString()} />
-            <Button size="sm" type="submit" disabled={isPending}>
-                {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
-                Lodge Payment
-            </Button>
+             <input type="hidden" name="installmentNumber" value={installment.installment} />
+            <SubmitLodgePaymentButton />
         </form>
     );
 }

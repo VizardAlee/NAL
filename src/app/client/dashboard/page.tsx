@@ -31,6 +31,7 @@ export type Repayment = DocumentData & {
   status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
   lodgedAt: Timestamp;
   dueDate: Timestamp;
+  installmentNumber: number;
 };
 
 const statusVariant = {

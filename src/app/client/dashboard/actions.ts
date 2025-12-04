@@ -22,6 +22,7 @@ const lodgePaymentSchema = z.object({
   amount: z.coerce.number().positive("Amount must be a positive number."),
   userId: z.string().min(1, "User ID is required."),
   dueDate: z.string().min(1, "Due date is required."),
+  installmentNumber: z.coerce.number().int().positive("Installment number is required."),
 });
 
 type RepaymentData = {
@@ -32,6 +33,7 @@ type RepaymentData = {
     status: 'Pending';
     lodgedAt: { _seconds: number; _nanoseconds: number; };
     dueDate: { _seconds: number; _nanoseconds: number; };
+    installmentNumber: number;
 }
 
 type LodgePaymentState = {
@@ -50,6 +52,7 @@ export async function lodgePaymentAction(
     amount: formData.get('amount'),
     userId: formData.get('userId'),
     dueDate: formData.get('dueDate'),
+    installmentNumber: formData.get('installmentNumber'),
   });
 
   if (!validatedFields.success) {
@@ -60,7 +63,7 @@ export async function lodgePaymentAction(
     };
   }
 
-  const { dealId, amount, userId, dueDate } = validatedFields.data;
+  const { dealId, amount, userId, dueDate, installmentNumber } = validatedFields.data;
 
   try {
     const { firestore } = initializeFirebase();
@@ -74,6 +77,7 @@ export async function lodgePaymentAction(
       status: 'Pending',
       lodgedAt: lodgedAt,
       dueDate: dueDateTimestamp,
+      installmentNumber,
     });
 
     const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
@@ -93,7 +97,8 @@ export async function lodgePaymentAction(
         amount,
         status: 'Pending' as const,
         lodgedAt: { _seconds: lodgedAt.seconds, _nanoseconds: lodgedAt.nanoseconds },
-        dueDate: { _seconds: dueDateTimestamp.seconds, _nanoseconds: dueDateTimestamp.nanoseconds }
+        dueDate: { _seconds: dueDateTimestamp.seconds, _nanoseconds: dueDateTimestamp.nanoseconds },
+        installmentNumber,
     };
 
     return {
@@ -172,5 +177,3 @@ export async function requestTerminationAction(
         return { success: false, message: `Failed to submit request: ${message}` };
     }
 }
-
-    
