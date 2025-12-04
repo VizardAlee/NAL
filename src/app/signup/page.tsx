@@ -56,18 +56,11 @@ export default function SignupPage() {
   
   const [state, formAction] = useActionState(signUpWithEmailAction, { success: false, message: '' });
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: { name: '', email: '', password: '' },
-  });
-
   useEffect(() => {
     if (state.message) {
         if(state.success) {
             toast({ title: "Success", description: state.message });
-            // The sign-up action creates the user on the server, but they still need to log in on the client.
-            // Redirecting to login is the most straightforward flow.
-            router.push('/login');
+            router.push(state.redirectUrl || '/login');
         } else {
             toast({ variant: 'destructive', title: 'Sign-up Failed', description: state.message });
         }
@@ -94,65 +87,33 @@ export default function SignupPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(formAction)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Full Name</FormLabel>
-                      <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl><Input placeholder="name@example.com" type="email" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Password</FormLabel>
-                      <FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                 <FormField
-                  control={form.control}
-                  name="role"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>I am a...</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a role" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
+            <form action={formAction} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Full Name</Label>
+                <Input id="name" name="name" placeholder="John Doe" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" name="email" placeholder="name@example.com" type="email" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input id="password" name="password" type="password" placeholder="••••••••" required />
+              </div>
+              <div className="space-y-2">
+                  <Label htmlFor="role">I am a...</Label>
+                  <Select name="role" required>
+                      <SelectTrigger id="role">
+                          <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                      <SelectContent>
                           <SelectItem value="Investor">Investor</SelectItem>
                           <SelectItem value="Client">Client</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <SubmitButton />
-              </form>
-            </Form>
+                      </SelectContent>
+                  </Select>
+              </div>
+              <SubmitButton />
+            </form>
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Already have an account?{' '}
