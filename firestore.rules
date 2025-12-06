@@ -188,7 +188,7 @@ service cloud.firestore {
       // Only participants (or Admins) can read or update conversation metadata.
       allow get, update: if isAdmin() || (request.auth != null && request.auth.uid in resource.data.participantIds);
       // Users can list conversations they are a part of. Admins can list all conversations.
-      allow list: if isAdmin() || (request.auth != null && request.query.where.field == "participantIds" && request.query.where.op == "array-contains" && request.query.where.value == request.auth.uid);
+      allow list: if isAdmin() || (request.auth != null && request.query.where.value == request.auth.uid);
     }
     
     // Rules for 'messages' subcollection
