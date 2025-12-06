@@ -68,9 +68,9 @@ export default function AdminMessagesPage() {
 
     const conversationsQuery = useMemo(() => {
         if (!firestore || !adminUser) return null;
+        // Admin should see all conversations, ordered by the most recently updated.
         return query(
             collection(firestore, 'conversations'),
-            where('participantIds', 'array-contains', adminUser.uid),
             orderBy('lastUpdatedAt', 'desc')
         );
     }, [firestore, adminUser]);
