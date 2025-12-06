@@ -21,9 +21,14 @@ type ActionResponse = {
 
 export async function signUpWithEmailAction(
     prevState: any,
-    data: z.infer<typeof signUpSchema>
+    formData: FormData
 ): Promise<ActionResponse> {
-    const validated = signUpSchema.safeParse(data);
+    const validated = signUpSchema.safeParse({
+        name: formData.get('name'),
+        email: formData.get('email'),
+        password: formData.get('password'),
+        role: formData.get('role'),
+    });
 
     if (!validated.success) {
         return { success: false, message: 'Invalid form data provided.' };
