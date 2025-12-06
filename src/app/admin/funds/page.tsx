@@ -32,6 +32,10 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { CalendarIcon } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
 
 
 type PlatformFundBatch = DocumentData & {
@@ -189,6 +193,7 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
 const recognizeAssetSchema = z.object({
     description: z.string().min(3, { message: "Description is required." }),
     acquisitionCost: z.coerce.number().min(0, "Cost must be a positive number or zero."),
+    acquisitionDate: z.date().optional(),
 });
 
 function RecognizeAssetForm({ onAssetRecognized }: { onAssetRecognized: () => void }) {
@@ -208,7 +213,7 @@ function RecognizeAssetForm({ onAssetRecognized }: { onAssetRecognized: () => vo
             await addDoc(collection(firestore, 'assets'), {
                 ...values,
                 status: 'Held',
-                acquisitionDate: serverTimestamp(),
+                acquisitionDate: values.acquisitionDate ? Timestamp.fromDate(values.acquisitionDate) : serverTimestamp(),
             });
             toast({ title: 'Asset Recognized', description: `${values.description} has been added to assets.` });
             onAssetRecognized();
@@ -235,7 +240,7 @@ function RecognizeAssetForm({ onAssetRecognized }: { onAssetRecognized: () => vo
                         </FormItem>
                     )}
                 />
-                <FormField
+                 <FormField
                     control={form.control}
                     name="acquisitionCost"
                     render={({ field }) => (
@@ -244,6 +249,50 @@ function RecognizeAssetForm({ onAssetRecognized }: { onAssetRecognized: () => vo
                             <FormControl><Input type="number" {...field} /></FormControl>
                              <FormDescription>Enter 0 if the cost is unknown or not applicable. This will not affect the administrative balance.</FormDescription>
                             <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                 <FormField
+                    control={form.control}
+                    name="acquisitionDate"
+                    render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                        <FormLabel>Acquisition Date (Optional)</FormLabel>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                            <FormControl>
+                                <Button
+                                variant={"outline"}
+                                className={cn(
+                                    "w-full pl-3 text-left font-normal",
+                                    !field.value && "text-muted-foreground"
+                                )}
+                                >
+                                {field.value ? (
+                                    format(field.value, "PPP")
+                                ) : (
+                                    <span>Pick a date</span>
+                                )}
+                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                            </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                                mode="single"
+                                selected={field.value}
+                                onSelect={field.onChange}
+                                disabled={(date) =>
+                                date > new Date() || date < new Date("1900-01-01")
+                                }
+                                initialFocus
+                            />
+                            </PopoverContent>
+                        </Popover>
+                        <FormDescription>
+                            The date the asset was acquired. Defaults to today if left blank.
+                        </FormDescription>
+                        <FormMessage />
                         </FormItem>
                     )}
                 />
@@ -597,4 +646,3 @@ export default function PlatformFundsPage() {
         </div>
     );
 }
-
