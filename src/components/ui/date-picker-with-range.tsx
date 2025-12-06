@@ -14,6 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface DatePickerWithRangeProps extends React.HTMLAttributes<HTMLDivElement> {
     onDateChange: (date: DateRange | undefined) => void;
@@ -21,6 +22,7 @@ interface DatePickerWithRangeProps extends React.HTMLAttributes<HTMLDivElement> 
 
 export function DatePickerWithRange({ className, onDateChange }: DatePickerWithRangeProps) {
   const [date, setDate] = React.useState<DateRange | undefined>()
+  const isMobile = useIsMobile();
 
   React.useEffect(() => {
     onDateChange(date);
@@ -60,7 +62,7 @@ export function DatePickerWithRange({ className, onDateChange }: DatePickerWithR
             defaultMonth={date?.from}
             selected={date}
             onSelect={setDate}
-            numberOfMonths={2}
+            numberOfMonths={isMobile ? 1 : 2}
           />
         </PopoverContent>
       </Popover>
