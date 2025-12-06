@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCollection, useUser, useFirestore } from '@/firebase';
-import { collection, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, Timestamp, Query } from 'firebase/firestore';
 import { PageHeader } from '@/components/page-header';
 import { MessageSquare } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -70,13 +70,13 @@ export default function InvestorMessagesPage() {
     const conversationsQuery = useMemo(() => {
         if (!firestore || !user) return null;
         return query(
-            collection(firestore, 'conversations'),
+            collection(firestore, 'conversations') as Query<Conversation>,
             where('participantIds', 'array-contains', user.uid),
             orderBy('lastUpdatedAt', 'desc')
         );
     }, [firestore, user]);
 
-    const { data: conversations, loading: conversationsLoading } = useCollection<Conversation>(conversationsQuery as any);
+    const { data: conversations, loading: conversationsLoading } = useCollection<Conversation>(conversationsQuery);
     
     const isLoading = userLoading || conversationsLoading;
 
