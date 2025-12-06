@@ -392,7 +392,7 @@
         "type": {
           "type": "string",
           "description": "The type of administrative transaction.",
-          "enum": ["AdminDeposit", "Expense", "TransferToInvestible", "TransferFromInvestible", "AssetAcquisition"]
+          "enum": ["AdminDeposit", "Expense", "TransferToInvestible", "TransferFromInvestible", "AssetAcquisition", "AssetSale"]
         },
         "amount": {
           "type": "number",
@@ -409,6 +409,20 @@
         }
       },
       "required": ["type", "amount", "description", "createdAt"]
+    },
+    "asset": {
+        "title": "Asset",
+        "description": "Represents a physical or digital asset owned by the platform.",
+        "type": "object",
+        "properties": {
+            "description": { "type": "string", "description": "A description of the asset (e.g., 'MacBook Pro 16-inch')." },
+            "acquisitionCost": { "type": "number", "description": "The cost to acquire the asset. Can be 0 for existing assets." },
+            "acquisitionDate": { "type": "string", "format": "date-time", "description": "When the asset was acquired or recognized." },
+            "status": { "type": "string", "enum": ["Held", "Sold"], "description": "The current status of the asset." },
+            "salePrice": { "type": "number", "description": "The price the asset was sold for." },
+            "saleDate": { "type": "string", "format": "date-time", "description": "When the asset was sold." }
+        },
+        "required": ["description", "acquisitionCost", "acquisitionDate", "status"]
     },
     "notification": {
       "title": "Notification",
@@ -572,6 +586,12 @@
             "$ref": "#/entities/administrativeTransaction"
         },
         "description": "Stores all administrative financial transactions."
+    },
+    "/assets/{assetId}": {
+        "schema": {
+            "$ref": "#/entities/asset"
+        },
+        "description": "Stores all platform-owned assets."
     },
     "/notifications/{notificationId}": {
         "schema": {

@@ -2,9 +2,9 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building } from "lucide-react";
+import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign } from "lucide-react";
 import { useCollection } from "@/firebase/firestore/use-collection";
-import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy, updateDoc } from 'firebase/firestore';
 import { useFirestore } from "@/firebase";
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +31,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 
 type PlatformFundBatch = DocumentData & {
   id: string;
@@ -51,10 +53,20 @@ type GenericTransaction = DocumentData & {
 
 type AdministrativeTransaction = DocumentData & {
   id:string;
-  type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible' | 'AssetAcquisition';
+  type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible' | 'AssetAcquisition' | 'AssetSale';
   amount: number;
   description: string;
   createdAt: Timestamp;
+};
+
+type Asset = DocumentData & {
+    id: string;
+    description: string;
+    acquisitionCost: number;
+    acquisitionDate: Timestamp;
+    status: 'Held' | 'Sold';
+    salePrice?: number;
+    saleDate?: Timestamp;
 };
 
 type FundBatch = DocumentData & {
@@ -93,13 +105,36 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
         if (!firestore) return;
 
         try {
-            const amount = type === 'AdminDeposit' ? values.amount : -Math.abs(values.amount);
-            await addDoc(collection(firestore, 'administrativeTransactions'), {
-                type,
-                amount,
-                description: values.description,
-                createdAt: serverTimestamp(),
-            });
+            const batch = writeBatch(firestore);
+            const now = serverTimestamp();
+            
+            if (type === 'AssetAcquisition') {
+                const assetRef = doc(collection(firestore, 'assets'));
+                batch.set(assetRef, {
+                    description: values.description,
+                    acquisitionCost: values.amount,
+                    acquisitionDate: now,
+                    status: 'Held'
+                });
+                
+                const adminTxRef = doc(collection(firestore, 'administrativeTransactions'));
+                batch.set(adminTxRef, {
+                    type,
+                    amount: -Math.abs(values.amount),
+                    description: `Acquired asset: ${values.description}`,
+                    createdAt: now
+                });
+            } else {
+                 const amount = type === 'AdminDeposit' ? values.amount : -Math.abs(values.amount);
+                 await addDoc(collection(firestore, 'administrativeTransactions'), {
+                    type,
+                    amount,
+                    description: values.description,
+                    createdAt: now,
+                });
+            }
+            
+            await batch.commit();
 
             toast({ title: "Success", description: `Transaction recorded: ${values.description}` });
             onTransactionComplete();
@@ -114,7 +149,7 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
     const buttonText = {
         AdminDeposit: "Add Funds",
         Expense: "Record Expense",
-        AssetAcquisition: "Record Asset"
+        AssetAcquisition: "Record Asset Purchase"
     }
 
     return (
@@ -125,7 +160,7 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
                     name="amount"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Amount</FormLabel>
+                            <FormLabel>{type === 'AssetAcquisition' ? 'Acquisition Cost' : 'Amount'}</FormLabel>
                             <FormControl><Input type="number" {...field} /></FormControl>
                             <FormMessage />
                         </FormItem>
@@ -136,7 +171,7 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
                     name="description"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Description</FormLabel>
+                            <FormLabel>{type === 'AssetAcquisition' ? 'Asset Description' : 'Description'}</FormLabel>
                             <FormControl><Input {...field} /></FormControl>
                             <FormMessage />
                         </FormItem>
@@ -150,6 +185,150 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
         </Form>
     );
 }
+
+const recognizeAssetSchema = z.object({
+    description: z.string().min(3, { message: "Description is required." }),
+    acquisitionCost: z.coerce.number().min(0, "Cost must be a positive number or zero."),
+});
+
+function RecognizeAssetForm({ onAssetRecognized }: { onAssetRecognized: () => void }) {
+    const { toast } = useToast();
+    const [isLoading, setIsLoading] = useState(false);
+    const firestore = useFirestore();
+
+    const form = useForm<z.infer<typeof recognizeAssetSchema>>({
+        resolver: zodResolver(recognizeAssetSchema),
+        defaultValues: { description: "", acquisitionCost: 0 },
+    });
+    
+    async function onSubmit(values: z.infer<typeof recognizeAssetSchema>) {
+        setIsLoading(true);
+        if (!firestore) return;
+        try {
+            await addDoc(collection(firestore, 'assets'), {
+                ...values,
+                status: 'Held',
+                acquisitionDate: serverTimestamp(),
+            });
+            toast({ title: 'Asset Recognized', description: `${values.description} has been added to assets.` });
+            onAssetRecognized();
+        } catch (error) {
+            console.error("Asset Recognition Error:", error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to recognize asset." });
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    return (
+         <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Asset Description</FormLabel>
+                            <FormControl><Input placeholder="e.g., Office building" {...field} /></FormControl>
+                            <FormDescription>Describe the asset you are logging.</FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="acquisitionCost"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Original Cost (if known)</FormLabel>
+                            <FormControl><Input type="number" {...field} /></FormControl>
+                             <FormDescription>Enter 0 if the cost is unknown or not applicable. This will not affect the administrative balance.</FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                 <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Recognize Asset
+                </Button>
+            </form>
+         </Form>
+    );
+}
+
+const sellAssetSchema = z.object({
+  salePrice: z.coerce.number().min(0, "Sale price cannot be negative."),
+});
+
+function SellAssetForm({ asset, onAssetSold }: { asset: Asset, onAssetSold: () => void }) {
+    const { toast } = useToast();
+    const [isLoading, setIsLoading] = useState(false);
+    const firestore = useFirestore();
+
+    const form = useForm<z.infer<typeof sellAssetSchema>>({
+        resolver: zodResolver(sellAssetSchema),
+        defaultValues: { salePrice: asset.acquisitionCost },
+    });
+
+    async function onSubmit(values: z.infer<typeof sellAssetSchema>) {
+        setIsLoading(true);
+        if (!firestore) return;
+        try {
+            const batch = writeBatch(firestore);
+            const now = serverTimestamp();
+
+            // 1. Update the asset's status
+            const assetRef = doc(firestore, 'assets', asset.id);
+            batch.update(assetRef, {
+                status: 'Sold',
+                salePrice: values.salePrice,
+                saleDate: now,
+            });
+
+            // 2. Create a positive administrative transaction for the sale
+            const adminTxRef = doc(collection(firestore, 'administrativeTransactions'));
+            batch.set(adminTxRef, {
+                type: 'AssetSale',
+                amount: values.salePrice,
+                description: `Sale of asset: ${asset.description}`,
+                createdAt: now,
+            });
+            
+            await batch.commit();
+
+            toast({ title: "Asset Sold", description: `${asset.description} has been marked as sold.`});
+            onAssetSold();
+        } catch (error) {
+            console.error("Asset Sale Error:", error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to record asset sale." });
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    return (
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                 <FormField
+                    control={form.control}
+                    name="salePrice"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Sale Price</FormLabel>
+                            <FormControl><Input type="number" {...field} /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Confirm Sale
+                </Button>
+            </form>
+        </Form>
+    );
+}
+
 
 const transferSchema = z.object({
     amount: z.coerce.number().positive(),
@@ -283,64 +462,38 @@ function TransferFundsForm({
 export default function PlatformFundsPage() {
     const firestore = useFirestore();
     const isMobile = useIsMobile();
-    const [isDepositOpen, setDepositOpen] = useState(false);
-    const [isExpenseOpen, setExpenseOpen] = useState(false);
-    const [isAssetOpen, setAssetOpen] = useState(false);
-    const [isTransferToInvestibleOpen, setTransferToInvestibleOpen] = useState(false);
-    const [isTransferFromInvestibleOpen, setTransferFromInvestibleOpen] = useState(false);
+    const [isDialogOpen, setDialogOpen] = useState<{ [key: string]: boolean }>({});
     const [currentPage, setCurrentPage] = useState(1);
 
-    const platformFundBatchesQuery = useMemo(() => {
-        if (!firestore) return null;
-        return query(collection(firestore, 'fundBatches'), where('sourceId', '==', 'platform'));
-    }, [firestore]);
-    
-    const adminTransactionsQuery = useMemo(() => {
-        if (!firestore) return null;
-        return query(collection(firestore, 'administrativeTransactions'), orderBy('createdAt', 'desc'));
-    }, [firestore]);
+    const openDialog = (key: string) => setDialogOpen(prev => ({ ...prev, [key]: true }));
+    const closeDialog = (key: string) => setDialogOpen(prev => ({ ...prev, [key]: false }));
 
-    const zakatTransactionsQuery = useMemo(() => {
-        if (!firestore) return null;
-        return query(collection(firestore, 'transactions'), where('type', 'in', ['Zakat', 'Penalty']));
-    }, [firestore]);
-
-    const allInvestmentsQuery = useMemo(() => {
-        if (!firestore) return null;
-        return collection(firestore, 'investments');
-    }, [firestore]);
-
-    const allFundBatchesQuery = useMemo(() => {
-        if (!firestore) return null;
-        return collection(firestore, 'fundBatches');
-    }, [firestore]);
+    const platformFundBatchesQuery = useMemo(() => firestore ? query(collection(firestore, 'fundBatches'), where('sourceId', '==', 'platform')) : null, [firestore]);
+    const adminTransactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'administrativeTransactions'), orderBy('createdAt', 'desc')) : null, [firestore]);
+    const zakatTransactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions'), where('type', 'in', ['Zakat', 'Penalty'])) : null, [firestore]);
+    const allInvestmentsQuery = useMemo(() => firestore ? collection(firestore, 'investments') : null, [firestore]);
+    const allFundBatchesQuery = useMemo(() => firestore ? collection(firestore, 'fundBatches') : null, [firestore]);
+    const assetsQuery = useMemo(() => firestore ? query(collection(firestore, 'assets'), orderBy('acquisitionDate', 'desc')) : null, [firestore]);
 
     const { data: platformFundBatches, loading: platformBatchesLoading } = useCollection<PlatformFundBatch>(platformFundBatchesQuery);
     const { data: adminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
     const { data: zakatTransactions, loading: zakatLoading } = useCollection<GenericTransaction>(zakatTransactionsQuery);
     const { data: allInvestments, loading: allInvestmentsLoading } = useCollection<Investment>(allInvestmentsQuery);
     const { data: allFundBatches, loading: allFundBatchesLoading } = useCollection<FundBatch>(allFundBatchesQuery);
+    const { data: assets, loading: assetsLoading } = useCollection<Asset>(assetsQuery);
 
-    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allInvestmentsLoading || allFundBatchesLoading;
+    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allInvestmentsLoading || allFundBatchesLoading || assetsLoading;
 
     const metrics = useMemo(() => {
-        const investibleCapital = platformFundBatches
-            ?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
-        
-        const administrativeBalance = adminTransactions
-            ?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
-        
-        const zakatPool = zakatTransactions
-            ?.reduce((sum, tx) => sum + Math.abs(tx.amount), 0) || 0;
-        
-        const totalInvested = allInvestments
-            ?.reduce((sum, inv) => sum + inv.amount, 0) || 0;
-            
-        const totalInvestiblePool = allFundBatches
-            ?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
+        const investibleCapital = platformFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
+        const administrativeBalance = adminTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
+        const zakatPool = zakatTransactions?.reduce((sum, tx) => sum + Math.abs(tx.amount), 0) || 0;
+        const totalInvested = allInvestments?.reduce((sum, inv) => sum + inv.amount, 0) || 0;
+        const totalInvestiblePool = allFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
+        const totalAssetValue = assets?.filter(a => a.status === 'Held').reduce((sum, asset) => sum + asset.acquisitionCost, 0) || 0;
 
-        return { investibleCapital, administrativeBalance, zakatPool, totalInvested, totalInvestiblePool };
-    }, [platformFundBatches, adminTransactions, zakatTransactions, allInvestments, allFundBatches]);
+        return { investibleCapital, administrativeBalance, zakatPool, totalInvested, totalInvestiblePool, totalAssetValue };
+    }, [platformFundBatches, adminTransactions, zakatTransactions, allInvestments, allFundBatches, assets]);
 
     const paginatedAdminTransactions = useMemo(() => {
         if (!adminTransactions) return [];
@@ -348,10 +501,7 @@ export default function PlatformFundsPage() {
         return adminTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
     }, [adminTransactions, currentPage]);
 
-    const totalPages = useMemo(() => {
-        if (!adminTransactions) return 0;
-        return Math.ceil(adminTransactions.length / ITEMS_PER_PAGE);
-    }, [adminTransactions]);
+    const totalPages = useMemo(() => adminTransactions ? Math.ceil(adminTransactions.length / ITEMS_PER_PAGE) : 0, [adminTransactions]);
 
     return (
         <div>
@@ -361,191 +511,89 @@ export default function PlatformFundsPage() {
                 icon={Banknote}
             />
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Investible Pool</CardTitle>
-                        <Library className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalInvestiblePool)}</div>}
-                        <p className="text-xs text-muted-foreground">Total capital from all sources available for deals.</p>
-                    </CardContent>
-                </Card>
-                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Capital Invested</CardTitle>
-                        <Landmark className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalInvested)}</div>}
-                        <p className="text-xs text-muted-foreground">Total amount from all sources invested in deals.</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Platform Investible Capital</CardTitle>
-                        <PiggyBank className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.investibleCapital)}</div>}
-                        <p className="text-xs text-muted-foreground">Platform-owned funds available for deals.</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Administrative Balance</CardTitle>
-                        <Wallet className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.administrativeBalance)}</div>}
-                        <p className="text-xs text-muted-foreground">Operational funds for expenses.</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Zakat Pool</CardTitle>
-                        <HandCoins className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.zakatPool)}</div>}
-                        <p className="text-xs text-muted-foreground">Collected Zakat and penalty fees.</p>
-                    </CardContent>
-                </Card>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                 <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Investible Pool</CardTitle><Library className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalInvestiblePool)}</div>}<p className="text-xs text-muted-foreground">Total available capital from all sources.</p></CardContent></Card>
+                 <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Capital Invested</CardTitle><Landmark className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalInvested)}</div>}<p className="text-xs text-muted-foreground">Total amount invested in active deals.</p></CardContent></Card>
+                 <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Held Asset Value</CardTitle><Building className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalAssetValue)}</div>}<p className="text-xs text-muted-foreground">Acquisition cost of held assets.</p></CardContent></Card>
+                 <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Administrative Balance</CardTitle><Wallet className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.administrativeBalance)}</div>}<p className="text-xs text-muted-foreground">Operational funds for expenses.</p></CardContent></Card>
             </div>
             
-            <div className="mt-8">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Administrative Activity</CardTitle>
-                        <CardDescription>
-                        Manage operational funds: deposits, expenses, and transfers.
-                        </CardDescription>
-                        <div className="flex flex-wrap gap-2 pt-2">
-                            <Dialog open={isDepositOpen} onOpenChange={setDepositOpen}>
-                                <DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2 h-4 w-4" />Add Funds</Button></DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader><DialogTitle>Add Funds to Admin Account</DialogTitle></DialogHeader>
-                                    <AdminTransactionForm type="AdminDeposit" onTransactionComplete={() => setDepositOpen(false)} />
-                                </DialogContent>
-                            </Dialog>
-                             <Dialog open={isAssetOpen} onOpenChange={setAssetOpen}>
-                                <DialogTrigger asChild><Button size="sm" variant="outline"><Building className="mr-2 h-4 w-4" />Record Asset</Button></DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader><DialogTitle>Record Asset Acquisition</DialogTitle></DialogHeader>
-                                    <AdminTransactionForm type="AssetAcquisition" onTransactionComplete={() => setAssetOpen(false)} />
-                                </DialogContent>
-                            </Dialog>
-                            <Dialog open={isExpenseOpen} onOpenChange={setExpenseOpen}>
-                                <DialogTrigger asChild><Button size="sm" variant="outline"><MinusCircle className="mr-2 h-4 w-4" />Record Expense</Button></DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader><DialogTitle>Record an Expense</DialogTitle></DialogHeader>
-                                    <AdminTransactionForm type="Expense" onTransactionComplete={() => setExpenseOpen(false)} />
-                                </DialogContent>
-                            </Dialog>
-                            <Dialog open={isTransferToInvestibleOpen} onOpenChange={setTransferToInvestibleOpen}>
-                                <DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Fund Investible</Button></DialogTrigger>
-                                <DialogContent>
-                                    <TransferFundsForm direction="toInvestible" maxAmount={metrics.administrativeBalance} onTransferComplete={() => setTransferToInvestibleOpen(false)} />
-                                </DialogContent>
-                            </Dialog>
-                            <Dialog open={isTransferFromInvestibleOpen} onOpenChange={setTransferFromInvestibleOpen}>
-                                <DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Withdraw to Admin</Button></DialogTrigger>
-                                <DialogContent>
-                                    <TransferFundsForm direction="fromInvestible" maxAmount={metrics.investibleCapital} onTransferComplete={() => setTransferFromInvestibleOpen(false)} />
-                                </DialogContent>
-                            </Dialog>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        {isLoading && (
-                            isMobile ? (
-                                <div className="space-y-3 p-4">
-                                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-lg" />)}
-                                </div>
-                            ) : (
+            <Tabs defaultValue="activity" className="mt-8">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="activity">Administrative Activity</TabsTrigger>
+                    <TabsTrigger value="assets">Asset Management</TabsTrigger>
+                </TabsList>
+                <TabsContent value="activity" className="mt-4">
+                     <Card>
+                        <CardHeader>
+                            <CardTitle>Administrative Activity</CardTitle>
+                            <CardDescription>Manage operational funds: deposits, expenses, and transfers.</CardDescription>
+                            <div className="flex flex-wrap gap-2 pt-2">
+                                <Dialog open={isDialogOpen['deposit']} onOpenChange={(isOpen) => isOpen ? openDialog('deposit') : closeDialog('deposit')}><DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2 h-4 w-4" />Add Funds</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Add Funds to Admin Account</DialogTitle></DialogHeader><AdminTransactionForm type="AdminDeposit" onTransactionComplete={() => closeDialog('deposit')} /></DialogContent></Dialog>
+                                <Dialog open={isDialogOpen['expense']} onOpenChange={(isOpen) => isOpen ? openDialog('expense') : closeDialog('expense')}><DialogTrigger asChild><Button size="sm" variant="outline"><MinusCircle className="mr-2 h-4 w-4" />Record Expense</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Record an Expense</DialogTitle></DialogHeader><AdminTransactionForm type="Expense" onTransactionComplete={() => closeDialog('expense')} /></DialogContent></Dialog>
+                                <Dialog open={isDialogOpen['transferToInvestible']} onOpenChange={(isOpen) => isOpen ? openDialog('transferToInvestible') : closeDialog('transferToInvestible')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Fund Investible</Button></DialogTrigger><DialogContent><TransferFundsForm direction="toInvestible" maxAmount={metrics.administrativeBalance} onTransferComplete={() => closeDialog('transferToInvestible')} /></DialogContent></Dialog>
+                                <Dialog open={isDialogOpen['transferFromInvestible']} onOpenChange={(isOpen) => isOpen ? openDialog('transferFromInvestible') : closeDialog('transferFromInvestible')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Withdraw to Admin</Button></DialogTrigger><DialogContent><TransferFundsForm direction="fromInvestible" maxAmount={metrics.investibleCapital} onTransferComplete={() => closeDialog('transferFromInvestible')} /></DialogContent></Dialog>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                           {!isLoading && paginatedAdminTransactions.length > 0 ? (<Table>
+                                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
+                                <TableBody>
+                                {paginatedAdminTransactions?.map(tx => (
+                                    <TableRow key={tx.id}><TableCell>{formatDate(tx.createdAt)}</TableCell><TableCell><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell><TableCell>{tx.description}</TableCell><TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell></TableRow>
+                                ))}
+                                </TableBody>
+                            </Table>) : ( <div className="p-4 py-12 text-center text-sm text-muted-foreground border-t">No administrative activities found.</div> )}
+                        </CardContent>
+                        {totalPages > 1 && (<div className="p-4 border-t"><Pagination><PaginationContent><PaginationItem><PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} /></PaginationItem>{[...Array(totalPages)].map((_, i) => (<PaginationItem key={i}><PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>{i + 1}</PaginationLink></PaginationItem>))}<PaginationItem><PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} /></PaginationItem></PaginationContent></Pagination></div>)}
+                    </Card>
+                </TabsContent>
+                <TabsContent value="assets" className="mt-4">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Asset Management</CardTitle>
+                            <CardDescription>Record, track, and manage all platform-owned assets.</CardDescription>
+                            <div className="flex flex-wrap gap-2 pt-2">
+                                <Dialog open={isDialogOpen['acquireAsset']} onOpenChange={(isOpen) => isOpen ? openDialog('acquireAsset') : closeDialog('acquireAsset')}><DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2 h-4 w-4" />Acquire Asset</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Record New Asset Purchase</DialogTitle></DialogHeader><AdminTransactionForm type="AssetAcquisition" onTransactionComplete={() => closeDialog('acquireAsset')} /></DialogContent></Dialog>
+                                <Dialog open={isDialogOpen['recognizeAsset']} onOpenChange={(isOpen) => isOpen ? openDialog('recognizeAsset') : closeDialog('recognizeAsset')}><DialogTrigger asChild><Button size="sm" variant="outline"><Star className="mr-2 h-4 w-4" />Recognize Existing Asset</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Log an Existing Asset</DialogTitle><DialogDescription>Use this to add an asset to the books without creating a new financial transaction.</DialogDescription></DialogHeader><RecognizeAssetForm onAssetRecognized={() => closeDialog('recognizeAsset')} /></DialogContent></Dialog>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <h3 className="text-lg font-semibold mb-2">Currently Held Assets</h3>
+                            <div className="rounded-md border">
                                 <Table>
-                                    <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
+                                    <TableHeader><TableRow><TableHead>Asset</TableHead><TableHead>Acquisition Date</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                                     <TableBody>
-                                        {Array.from({length: 4}).map((_, i) => (
-                                        <TableRow key={i}>
-                                                <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                                                <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                                                <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-                                                <TableCell><Skeleton className="h-5 w-24 ml-auto" /></TableCell>
+                                        {isLoading ? (Array.from({length: 2}).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-5 w-32"/></TableCell><TableCell><Skeleton className="h-5 w-24"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell><TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto"/></TableCell></TableRow>))
+                                        : assets?.filter(a => a.status === 'Held').length > 0 ? assets?.filter(a => a.status === 'Held').map(asset => (
+                                            <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{format(asset.acquisitionDate.toDate(), 'PPP')}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell>
+                                            <TableCell className="text-right">
+                                                <Dialog open={isDialogOpen[`sell-${asset.id}`]} onOpenChange={(isOpen) => isOpen ? openDialog(`sell-${asset.id}`) : closeDialog(`sell-${asset.id}`)}>
+                                                    <DialogTrigger asChild><Button size="sm" variant="outline"><DollarSign className="mr-2 h-4 w-4"/>Sell</Button></DialogTrigger>
+                                                    <DialogContent><DialogHeader><DialogTitle>Record Sale of {asset.description}</DialogTitle></DialogHeader><SellAssetForm asset={asset} onAssetSold={() => closeDialog(`sell-${asset.id}`)} /></DialogContent>
+                                                </Dialog>
+                                            </TableCell>
                                             </TableRow>
-                                        ))}
+                                        )) : <TableRow><TableCell colSpan={4} className="h-24 text-center">No assets are currently held.</TableCell></TableRow>}
                                     </TableBody>
                                 </Table>
-                            )
-                        )}
-                        {!isLoading && paginatedAdminTransactions && paginatedAdminTransactions.length > 0 ? (
-                            isMobile ? (
-                                <div className="space-y-3 p-4">
-                                    {paginatedAdminTransactions.map(tx => (
-                                        <Card key={tx.id} className="p-4">
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <p className="font-medium">{tx.description}</p>
-                                                    <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'} className="mt-1">{tx.type}</Badge>
-                                                    <p className="text-xs text-muted-foreground mt-1">{formatDate(tx.createdAt)}</p>
-                                                </div>
-                                                <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</p>
-                                            </div>
-                                        </Card>
-                                    ))}
-                                </div>
-                            ) : (
+                            </div>
+                             <h3 className="text-lg font-semibold mt-6 mb-2">Sold Assets</h3>
+                             <div className="rounded-md border">
                                 <Table>
-                                    <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Date</TableHead>
-                                        <TableHead>Type</TableHead>
-                                        <TableHead>Description</TableHead>
-                                        <TableHead className="text-right">Amount</TableHead>
-                                    </TableRow>
-                                    </TableHeader>
+                                    <TableHeader><TableRow><TableHead>Asset</TableHead><TableHead>Sale Date</TableHead><TableHead className="text-right">Sale Price</TableHead><TableHead className="text-right">Original Cost</TableHead></TableRow></TableHeader>
                                     <TableBody>
-                                    {paginatedAdminTransactions?.map(tx => (
-                                        <TableRow key={tx.id}>
-                                            <TableCell>{formatDate(tx.createdAt)}</TableCell>
-                                            <TableCell><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell>
-                                            <TableCell>{tx.description}</TableCell>
-                                            <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell>
-                                        </TableRow>
-                                    ))}
+                                        {isLoading ? (Array.from({length: 1}).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-5 w-32"/></TableCell><TableCell><Skeleton className="h-5 w-24"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell></TableRow>))
+                                        : assets?.filter(a => a.status === 'Sold').length > 0 ? assets?.filter(a => a.status === 'Sold').map(asset => (
+                                            <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{format(asset.saleDate.toDate(), 'PPP')}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.salePrice)}</TableCell><TableCell className="text-right text-muted-foreground">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell></TableRow>
+                                        )) : <TableRow><TableCell colSpan={4} className="h-24 text-center">No assets have been sold.</TableCell></TableRow>}
                                     </TableBody>
                                 </Table>
-                            )
-                        ) : (
-                            !isLoading && <div className="p-4 py-12 text-center text-sm text-muted-foreground border-t">No administrative activities found.</div>
-                        )}
-                    </CardContent>
-                    {totalPages > 1 && (
-                        <div className="p-4 border-t">
-                            <Pagination>
-                                <PaginationContent>
-                                    <PaginationItem>
-                                        <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} />
-                                    </PaginationItem>
-                                    {[...Array(totalPages)].map((_, i) => (
-                                        <PaginationItem key={i}>
-                                            <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>
-                                                {i + 1}
-                                            </PaginationLink>
-                                        </PaginationItem>
-                                    ))}
-                                    <PaginationItem>
-                                        <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} />
-                                    </PaginationItem>
-                                </PaginationContent>
-                            </Pagination>
-                        </div>
-                    )}
-                </Card>
-            </div>
-
-
+                             </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
         </div>
     );
 }

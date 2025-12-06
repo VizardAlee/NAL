@@ -141,9 +141,14 @@ service cloud.firestore {
       allow read: if isClient() && resource.data.clientId == request.auth.uid;
     }
     
-    // Rules for 'administrativeTransactions'
+    // Rules for 'administrativeTransactions' and 'assets'
     match /administrativeTransactions/{transactionId} {
         // Only admins can read or write administrative transactions.
+        allow read, write: if isAdmin();
+    }
+
+    match /assets/{assetId} {
+        // Only admins can read or write assets.
         allow read, write: if isAdmin();
     }
 
@@ -195,3 +200,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
