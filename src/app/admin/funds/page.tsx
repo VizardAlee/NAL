@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank } from "lucide-react";
+import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building } from "lucide-react";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy } from 'firebase/firestore';
 import { useFirestore } from "@/firebase";
@@ -51,7 +51,7 @@ type GenericTransaction = DocumentData & {
 
 type AdministrativeTransaction = DocumentData & {
   id:string;
-  type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible';
+  type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible' | 'AssetAcquisition';
   amount: number;
   description: string;
   createdAt: Timestamp;
@@ -78,7 +78,7 @@ const adminTransactionSchema = z.object({
     description: z.string().min(3, { message: "Description is required." }),
 });
 
-function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDeposit" | "Expense", onTransactionComplete: () => void }) {
+function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDeposit" | "Expense" | "AssetAcquisition", onTransactionComplete: () => void }) {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const firestore = useFirestore();
@@ -93,7 +93,7 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
         if (!firestore) return;
 
         try {
-            const amount = type === 'Expense' ? -Math.abs(values.amount) : values.amount;
+            const amount = type === 'AdminDeposit' ? values.amount : -Math.abs(values.amount);
             await addDoc(collection(firestore, 'administrativeTransactions'), {
                 type,
                 amount,
@@ -109,6 +109,12 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
         } finally {
             setIsLoading(false);
         }
+    }
+    
+    const buttonText = {
+        AdminDeposit: "Add Funds",
+        Expense: "Record Expense",
+        AssetAcquisition: "Record Asset"
     }
 
     return (
@@ -138,7 +144,7 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
                 />
                 <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {type === 'AdminDeposit' ? 'Add Funds' : 'Record Expense'}
+                    {buttonText[type]}
                 </Button>
             </form>
         </Form>
@@ -279,6 +285,7 @@ export default function PlatformFundsPage() {
     const isMobile = useIsMobile();
     const [isDepositOpen, setDepositOpen] = useState(false);
     const [isExpenseOpen, setExpenseOpen] = useState(false);
+    const [isAssetOpen, setAssetOpen] = useState(false);
     const [isTransferToInvestibleOpen, setTransferToInvestibleOpen] = useState(false);
     const [isTransferFromInvestibleOpen, setTransferFromInvestibleOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
@@ -422,6 +429,13 @@ export default function PlatformFundsPage() {
                                     <AdminTransactionForm type="AdminDeposit" onTransactionComplete={() => setDepositOpen(false)} />
                                 </DialogContent>
                             </Dialog>
+                             <Dialog open={isAssetOpen} onOpenChange={setAssetOpen}>
+                                <DialogTrigger asChild><Button size="sm" variant="outline"><Building className="mr-2 h-4 w-4" />Record Asset</Button></DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader><DialogTitle>Record Asset Acquisition</DialogTitle></DialogHeader>
+                                    <AdminTransactionForm type="AssetAcquisition" onTransactionComplete={() => setAssetOpen(false)} />
+                                </DialogContent>
+                            </Dialog>
                             <Dialog open={isExpenseOpen} onOpenChange={setExpenseOpen}>
                                 <DialogTrigger asChild><Button size="sm" variant="outline"><MinusCircle className="mr-2 h-4 w-4" />Record Expense</Button></DialogTrigger>
                                 <DialogContent>
@@ -535,3 +549,5 @@ export default function PlatformFundsPage() {
         </div>
     );
 }
+
+    

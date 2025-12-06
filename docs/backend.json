@@ -392,7 +392,7 @@
         "type": {
           "type": "string",
           "description": "The type of administrative transaction.",
-          "enum": ["AdminDeposit", "Expense", "TransferToInvestible", "TransferFromInvestible"]
+          "enum": ["AdminDeposit", "Expense", "TransferToInvestible", "TransferFromInvestible", "AssetAcquisition"]
         },
         "amount": {
           "type": "number",
