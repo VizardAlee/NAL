@@ -30,6 +30,7 @@ import {
   HandCoins,
   MessageSquarePlus,
   MessageSquare,
+  Library,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +59,7 @@ const menuItems = [
   { href: "/admin/funds", label: "Funds", icon: Banknote },
   { href: "/admin/analyzer", label: "Analyzer", icon: FlaskConical },
   { href: "/admin/activity", label: "Activity", icon: History },
+  { href: "/admin/reports", label: "Reports", icon: Library },
   { href: "/admin/migration", label: "Data Migration", icon: Database },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
