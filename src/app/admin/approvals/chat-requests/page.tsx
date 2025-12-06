@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, MessageSquarePlus } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, DocumentData, Timestamp, writeBatch, doc } from 'firebase/firestore';
+import { collection, query, DocumentData, Timestamp, writeBatch, doc, where, getDocs } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDistanceToNow } from 'date-fns';
@@ -53,10 +53,25 @@ export default function ChatRequestsPage() {
         setProcessingId(request.id);
         
         try {
+            // Check if a conversation already exists
+            const existingConvoQuery = query(
+                collection(firestore, 'conversations'),
+                where('participantIds', 'array-contains', adminUser.uid)
+            );
+            const existingConvoSnapshot = await getDocs(existingConvoQuery);
+            const existingConvo = existingConvoSnapshot.docs.find(doc => doc.data().participantIds.includes(request.userId));
+
+            if (existingConvo) {
+                // If conversation exists, just delete the request and redirect
+                await doc(firestore, 'chatRequests', request.id).delete();
+                router.push(`/admin/messages/${existingConvo.id}`);
+                return;
+            }
+
+            // If no conversation exists, create a new one
             const batch = writeBatch(firestore);
             const now = Timestamp.now();
 
-            // 1. Create a new conversation document
             const newConversationRef = doc(collection(firestore, 'conversations'));
             batch.set(newConversationRef, {
                 participantIds: [adminUser.uid, request.userId],
@@ -64,11 +79,10 @@ export default function ChatRequestsPage() {
                 participantAvatars: [`https://picsum.photos/seed/${adminUser.uid}/128/128`, `https://picsum.photos/seed/${request.userId}/128/128`],
                 lastMessage: `Hi ${request.userName}, this is ${adminUser.displayName}. How can I help you today?`,
                 lastMessageSenderId: adminUser.uid,
-                lastUpdatedAt: now, // This field is crucial for the query to work
+                lastUpdatedAt: now,
                 readBy: [adminUser.uid],
             });
             
-            // 2. Add the first message to the subcollection
             const firstMessageRef = doc(collection(newConversationRef, 'messages'));
              batch.set(firstMessageRef, {
                 conversationId: newConversationRef.id,
@@ -77,7 +91,6 @@ export default function ChatRequestsPage() {
                 createdAt: now,
             });
 
-            // 3. Delete the chat request
             const requestRef = doc(firestore, 'chatRequests', request.id);
             batch.delete(requestRef);
 
@@ -88,7 +101,6 @@ export default function ChatRequestsPage() {
                 description: `A conversation with ${request.userName} has been created.`,
             });
             
-            // Redirect to the new conversation page
             router.push(`/admin/messages/${newConversationRef.id}`);
 
         } catch (error) {
