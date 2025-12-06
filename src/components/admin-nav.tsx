@@ -40,7 +40,7 @@ import { useFirestore } from "@/firebase";
 
 const menuItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/messages", label: "Messages", icon: MessageSquare, notificationCollection: 'messages' },
+  { href: "/admin/messages", label: "Messages", icon: MessageSquare, notificationCollection: 'chatRequests' }, // Use chatRequests to show any pending
   { href: "/admin/deals", label: "Deals", icon: FileText },
   { href: "/admin/users", label: "Users", icon: Users },
   {
@@ -70,9 +70,9 @@ function NotificationBadge({ collectionName }: { collectionName: string }) {
     const q = React.useMemo(() => {
         if (!firestore || !user) return null;
         
-        // For messages, we query unread notifications targeted at the admin
+        // For messages, count open chat requests
         if (collectionName === 'messages') {
-             return query(collection(firestore, 'notifications'), where('recipientId', '==', user.uid), where('read', '==', false));
+             return query(collection(firestore, 'chatRequests'));
         }
 
         // For other collections with a 'status' field

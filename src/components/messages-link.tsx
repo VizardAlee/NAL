@@ -6,49 +6,43 @@ import { Button } from './ui/button';
 import { MessageSquare } from 'lucide-react';
 import { useUser, useCollection, useFirestore } from '@/firebase';
 import { useMemo } from 'react';
-import { collection, query, where } from 'firebase/firestore';
-
-type Conversation = {
-    id: string;
-    participantIds: string[];
-};
+import { collection, query, where, limit } from 'firebase/firestore';
 
 export function MessagesLink({ basePath }: { basePath: '/client' | '/investor' }) {
     const { user, loading: userLoading } = useUser();
     const firestore = useFirestore();
 
-    // Query for conversations where the current user is a participant.
-    // This will find the conversation with the admin.
-    const conversationsQuery = useMemo(() => {
+    const q = useMemo(() => {
         if (!firestore || !user) return null;
         return query(
-            collection(firestore, 'conversations'),
-            where('participantIds', 'array-contains', user.uid)
+            collection(firestore, 'notifications'), 
+            where('recipientId', '==', user.uid), 
+            where('read', '==', false),
+            limit(1)
         );
     }, [firestore, user]);
 
-    const { data: conversations, loading: conversationsLoading } = useCollection<Conversation>(conversationsQuery as any);
+    const { data: unreadNotifications, loading: notificationsLoading } = useCollection(q);
 
-    const isLoading = userLoading || conversationsLoading;
-
-    // Find the first (and likely only) conversation.
-    const conversation = useMemo(() => conversations?.[0], [conversations]);
-    
-    const href = conversation ? `${basePath}/messages/${conversation.id}` : '#';
-    const isDisabled = !conversation || isLoading;
+    const hasUnread = unreadNotifications && unreadNotifications.length > 0;
+    const href = `${basePath}/messages`;
 
     return (
         <Button
             variant="ghost"
             size="icon"
-            className="rounded-full"
+            className="rounded-full relative"
             asChild
-            title={isDisabled ? "No active messages" : "Messages"}
-            disabled={isDisabled}
-            style={{ opacity: isDisabled && !isLoading ? 0.5 : 1, cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+            title="Messages"
         >
             <Link href={href}>
                 <MessageSquare className="h-5 w-5" />
+                 {hasUnread && (
+                    <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                    </span>
+                )}
                 <span className="sr-only">Messages</span>
             </Link>
         </Button>

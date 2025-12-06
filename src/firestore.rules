@@ -1,0 +1,209 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return request.auth != null 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+    }
+
+    function isClient() {
+      return request.auth != null 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Client';
+    }
+    
+    function isInvestor() {
+      return request.auth != null 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Investor';
+    }
+
+    // Rules for the 'users' collection
+    match /users/{userId} {
+      // Admins can get any user. Owners can get their own data.
+      allow get: if isAdmin() || isOwner(userId);
+      // Admins can list all users.
+      allow list: if isAdmin();
+      
+      // Allow any authenticated user to create a new user document (e.g., during signup).
+      // In a real app, you would likely restrict this to admins or specific backend processes.
+      allow create: if request.auth != null;
+
+      // Only the user themself or an Admin can update a user document.
+      allow update: if isOwner(userId) || isAdmin();
+
+      // Only admins can delete users.
+      allow delete: if isAdmin();
+    }
+
+    // Rules for the 'deals' collection
+    match /deals/{dealId} {
+        // Admins can do anything.
+        // Clients can read deals they are associated with.
+        // Investors can read all deals (the client will filter to only show ones they've invested in).
+        allow read: if isAdmin() || (isClient() && resource.data.clientId == request.auth.uid) || isInvestor();
+        
+        // Only Admins can create, update or delete deals
+        allow create, update, delete: if isAdmin();
+    }
+
+    // Rules for the 'dealRequests' collection
+    match /dealRequests/{dealRequestId} {
+        // Admins can read/update all requests.
+        allow get, list, update: if isAdmin();
+        // Clients can create their own requests and read them.
+        allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
+        allow read: if isClient() && resource.data.clientId == request.auth.uid;
+    }
+
+    // Rules for the 'depositRequests' collection
+    match /depositRequests/{depositRequestId} {
+        // Admins can read/update all requests.
+        allow get, list, update: if isAdmin();
+        // Investors can create their own requests and read them.
+        allow create: if isInvestor() && request.resource.data.investorId == request.auth.uid;
+        allow read: if isInvestor() && resource.data.investorId == request.auth.uid;
+    }
+
+
+    // Rules for the 'investments' collection
+    match /investments/{investmentId} {
+      // Admins can write.
+      allow write: if isAdmin();
+      // Admins can read all. Investors can read their own investments.
+      allow read: if isAdmin() || (isInvestor() && resource.data.investorId == request.auth.uid);
+    }
+    
+    // Rules for 'fundBatches' and 'transactions'
+    match /fundBatches/{batchId} {
+        // Admin can do anything
+        allow write: if isAdmin();
+        // Investor can read their own fund batches, Admins can read all.
+        allow read: if isAdmin() || (isInvestor() && resource.data.sourceId == request.auth.uid);
+    }
+
+    match /transactions/{transactionId} {
+        // Admin can do anything
+        allow write: if isAdmin();
+        // Investor can read their own transactions, Admins can read all.
+        // Clients can read their own repayment transactions.
+        allow read: if isAdmin() || (isInvestor() && resource.data.userId == request.auth.uid) || (isClient() && resource.data.userId == request.auth.uid);
+    }
+
+    // Rules for 'repayments'
+    match /repayments/{repaymentId} {
+      // Admins can read and update all repayments.
+      allow get, list, update: if isAdmin();
+      // Clients can create their own repayments and read their own.
+      allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
+      allow read: if isClient() && resource.data.clientId == request.auth.uid;
+    }
+
+    // Rules for 'withdrawalRequests'
+    match /withdrawalRequests/{requestId} {
+      // Admins can read and update any request
+      allow get, update, list: if isAdmin();
+
+      // Investors can create their own requests
+      allow create: if isInvestor() && request.resource.data.investorId == request.auth.uid;
+
+      // Investors can read their own requests
+      allow read: if isInvestor() && resource.data.investorId == request.auth.uid;
+    }
+
+    // Rules for 'reinvestmentRequests'
+    match /reinvestmentRequests/{requestId} {
+      // Admins can read and update any request
+      allow get, update, list: if isAdmin();
+
+      // Investors can create their own requests
+      allow create: if isInvestor() && request.resource.data.investorId == request.auth.uid;
+
+      // Investors can read their own requests
+      allow read: if isInvestor() && resource.data.investorId == request.auth.uid;
+    }
+    
+    // Rules for 'terminationRequests'
+    match /terminationRequests/{requestId} {
+      // Admins can read and update any request
+      allow get, update, list: if isAdmin();
+      
+      // Clients can create their own requests and read them
+      allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
+      allow read: if isClient() && resource.data.clientId == request.auth.uid;
+    }
+    
+    // Rules for 'administrativeTransactions' and 'assets'
+    match /administrativeTransactions/{transactionId} {
+        // Only admins can read or write administrative transactions.
+        allow read, write: if isAdmin();
+    }
+
+    match /assets/{assetId} {
+        // Only admins can read or write assets.
+        allow read, write: if isAdmin();
+    }
+
+    // Rules for 'notifications'
+    match /notifications/{notificationId} {
+        // Admins can read/list their notifications.
+        allow get, list: if isAdmin() || (request.auth != null && resource.data.recipientId == request.auth.uid);
+        // Admins can update notifications (e.g., to mark as read).
+        allow update: if isAdmin();
+        // Any authenticated user can create a notification.
+        // In a production app, this would be locked down to a backend service/function.
+        allow create: if request.auth != null;
+    }
+
+    // Rules for 'platformSettings'
+    match /platformSettings/{settingId} {
+        // Allow public read for settings like branding
+        allow read: if true;
+        // Only admins can change settings.
+        allow write: if isAdmin();
+    }
+    
+    // --- Messaging System Rules ---
+
+    // Rules for 'chatRequests' collection
+    match /chatRequests/{requestId} {
+      // Admins can read, list and delete all requests.
+      allow get, list, delete: if isAdmin();
+      // Authenticated users can create their own chat requests.
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Rules for 'conversations' collection
+    match /conversations/{conversationId} {
+      // Admins can create conversations.
+      allow create: if isAdmin();
+      // Only participants (or Admins) can read or update conversation metadata.
+      allow get, update: if isAdmin() || (request.auth != null && request.auth.uid in resource.data.participantIds);
+      // Users can list conversations they are a part of. Admins can list all conversations.
+      allow list: if isAdmin() || (request.auth != null && request.query.where.value == request.auth.uid);
+    }
+    
+    // Rules for 'messages' subcollection
+    match /conversations/{conversationId}/messages/{messageId} {
+      // An admin can create any message (e.g. the first message in a new conversation)
+      // A user can create a message only if they are a participant of the conversation.
+      allow create: if isAdmin() || (request.auth != null 
+        && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds);
+
+      // A user can read a message only if they are a participant of the conversation.
+      allow read: if isAdmin() || (request.auth != null 
+        && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds);
+        
+      // A user can only update or delete their own messages.
+      allow update, delete: if request.auth != null && resource.data.senderId == request.auth.uid;
+    }
+  }
+}
