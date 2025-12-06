@@ -39,7 +39,7 @@ import { useFirestore } from "@/firebase";
 
 const menuItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/messages", label: "Messages", icon: MessageSquare },
+  { href: "/admin/messages", label: "Messages", icon: MessageSquare, notificationCollection: 'messages' },
   { href: "/admin/deals", label: "Deals", icon: FileText },
   { href: "/admin/users", label: "Users", icon: Users },
   {
@@ -69,6 +69,10 @@ function NotificationBadge({ collectionName }: { collectionName: string }) {
         // The chatRequests collection has no 'status' field, so we just count all documents.
         if (collectionName === 'chatRequests') {
             return query(collection(firestore, collectionName));
+        }
+        // For messages, we query the notifications collection for unread messages linking to the messages page
+        if (collectionName === 'messages') {
+             return query(collection(firestore, 'notifications'), where('link', '==', '/admin/messages'), where('read', '==', false));
         }
         return query(collection(firestore, collectionName), where('status', '==', 'Pending'));
     }, [firestore, collectionName]);
@@ -151,7 +155,7 @@ export function AdminNav() {
               variant="default"
               className="w-full justify-between"
             >
-              <Link href={item.href}>
+              <Link href={item.href} className="flex justify-between items-center w-full">
                  <div className="flex items-center gap-2">
                     <item.icon />
                     <span>{item.label}</span>

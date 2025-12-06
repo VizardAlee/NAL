@@ -76,9 +76,12 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
     const firestore = adminDb;
     const conversationRef = firestore.collection('conversations').doc(conversationId);
     
-    // Security check: Verify the sender is a participant of the conversation
     const conversationDoc = await conversationRef.get();
-    if (!conversationDoc.exists || !conversationDoc.data()?.participantIds?.includes(senderId)) {
+    if (!conversationDoc.exists) {
+      return { success: false, message: 'Conversation not found.' };
+    }
+    const conversationData = conversationDoc.data();
+    if (!conversationData?.participantIds?.includes(senderId)) {
       return { success: false, message: 'You are not authorized to send messages in this conversation.' };
     }
 
@@ -100,6 +103,22 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
       lastUpdatedAt: FieldValue.serverTimestamp(),
       readBy: [senderId], // Reset read status, only sender has read it
     });
+
+    // 3. Create a notification for the recipient(s)
+    const senderDoc = await firestore.collection('users').doc(senderId).get();
+    const senderName = senderDoc.data()?.name || 'A user';
+    const isSenderAdmin = senderDoc.data()?.role === 'Admin';
+    
+    // Only send notifications if the sender is NOT an admin
+    if (!isSenderAdmin) {
+        batch.set(firestore.collection('notifications').doc(), {
+            title: 'New Message',
+            message: `You have a new message from ${senderName}.`,
+            link: `/admin/messages/${conversationId}`,
+            read: false,
+            createdAt: FieldValue.serverTimestamp(),
+        });
+    }
 
     await batch.commit();
 
