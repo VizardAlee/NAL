@@ -29,6 +29,7 @@ import {
   RefreshCcw,
   HandCoins,
   MessageSquarePlus,
+  MessageSquare,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +39,7 @@ import { useFirestore } from "@/firebase";
 
 const menuItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/messages", label: "Messages", icon: MessageSquare },
   { href: "/admin/deals", label: "Deals", icon: FileText },
   { href: "/admin/users", label: "Users", icon: Users },
   {
