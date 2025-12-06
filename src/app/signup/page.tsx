@@ -4,8 +4,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { useActionState, useEffect } from 'react';
-import { useFormStatus } from 'react-dom';
+import { useEffect, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -39,23 +38,13 @@ const formSchema = z.object({
   role: z.enum(['Investor', 'Client'], { required_error: 'Please select a role.' }),
 });
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="w-full" disabled={pending}>
-      {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-      Create Account
-    </Button>
-  );
-}
 
 export default function SignupPage() {
   const { toast } = useToast();
   const router = useRouter();
   const { logoUrl } = useCompanyLogo();
+  const [isPending, startTransition] = useTransition();
   
-  const [state, formAction] = useActionState(signUpWithEmailAction, { success: false, message: '' });
-
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -65,16 +54,17 @@ export default function SignupPage() {
     },
   });
 
-  useEffect(() => {
-    if (state.message) {
-        if(state.success) {
-            toast({ title: "Success", description: state.message });
-            router.push(state.redirectUrl || '/login');
+  const onSubmit = (values: z.infer<typeof formSchema>) => {
+    startTransition(async () => {
+        const result = await signUpWithEmailAction(values);
+        if (result.success) {
+            toast({ title: "Success", description: result.message });
+            router.push(result.redirectUrl || '/login');
         } else {
-            toast({ variant: 'destructive', title: 'Sign-up Failed', description: state.message });
+            toast({ variant: 'destructive', title: 'Sign-up Failed', description: result.message });
         }
-    }
-  }, [state, toast, router]);
+    });
+  }
 
 
   return (
@@ -98,7 +88,7 @@ export default function SignupPage() {
           <CardContent>
             <Form {...form}>
                 <form 
-                    action={formAction} 
+                    onSubmit={form.handleSubmit(onSubmit)}
                     className="space-y-4"
                 >
                     <FormField
@@ -161,7 +151,10 @@ export default function SignupPage() {
                             </FormItem>
                         )}
                     />
-                    <SubmitButton />
+                    <Button type="submit" className="w-full" disabled={isPending}>
+                        {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Create Account
+                    </Button>
                 </form>
             </Form>
 
