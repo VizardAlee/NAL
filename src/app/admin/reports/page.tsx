@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -23,7 +24,7 @@ type Transaction = DocumentData & {
 };
 
 type AdministrativeTransaction = DocumentData & {
-  type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible';
+  type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible' | 'AssetSale' | 'AssetAcquisition';
   amount: number;
   createdAt: Timestamp;
 };
@@ -71,7 +72,7 @@ export default function ReportsPage() {
   const transactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions')) : null, [firestore]);
   const adminTransactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'administrativeTransactions')) : null, [firestore]);
   const fundBatchesQuery = useMemo(() => firestore ? query(collection(firestore, 'fundBatches')) : null, [firestore]);
-  const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals')) : null, [firestore]);
+  const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals'), where('status', '==', 'Active')) : null, [firestore]);
   const assetsQuery = useMemo(() => firestore ? query(collection(firestore, 'assets')) : null, [firestore]);
 
 
@@ -91,20 +92,23 @@ export default function ReportsPage() {
     const from = dateRange?.from ? startOfDay(dateRange.from) : null;
     const to = dateRange?.to ? endOfDay(dateRange.to) : null;
 
-    const filterByDate = (item: { createdAt: Timestamp }) => {
+    const filterByDate = (item: { createdAt?: Timestamp, saleDate?: Timestamp }) => {
         if (!from || !to) return true;
-        const itemDate = item.createdAt.toDate();
+        // Use saleDate for sold assets, createdAt otherwise
+        const itemDate = (item.saleDate || item.createdAt)?.toDate();
+        if (!itemDate) return false;
         return itemDate >= from && itemDate <= to;
     };
     
     const transactions = allTransactions.filter(filterByDate);
     const adminTransactions = allAdminTransactions.filter(filterByDate);
-    // Balance sheet items are generally balances, not flows, so we don't filter them by date
+    
+    // Balance sheet items are generally point-in-time, so we use all data
     const fundBatches = allFundBatches; 
-    const activeDeals = allDeals.filter(d => d.status === 'Active');
+    const activeDeals = allDeals;
     const heldAssets = allAssets.filter(a => a.status === 'Held');
 
-    // --- Balance Sheet Calculations (Point-in-time, ignores date filter for now) ---
+    // --- Balance Sheet Calculations (Point-in-time, ignores date filter) ---
     const cashAndEquivalents = allAdminTransactions.reduce((acc, tx) => acc + tx.amount, 0);
     const grossFinancingPortfolio = activeDeals.reduce((acc, deal) => acc + deal.principal, 0);
     const totalInvestibleCapital = fundBatches.reduce((acc, batch) => acc + batch.remainingAmount, 0);
@@ -122,15 +126,25 @@ export default function ReportsPage() {
     const totalLiabilitiesAndEquity = totalInvestorCapital + totalPlatformEquity;
     
     // --- Income Statement Calculations (Flow, uses date filter) ---
-    const totalRevenue = transactions.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
-    const totalExpenses = 0; 
+    const financingRevenue = transactions.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
+    const soldAssetsInPeriod = allAssets.filter(a => a.status === 'Sold' && filterByDate(a));
+    const gainOnAssetSale = soldAssetsInPeriod.reduce((acc, asset) => acc + ((asset.salePrice || 0) - asset.acquisitionCost), 0);
+    const totalRevenue = financingRevenue + gainOnAssetSale;
+
+    const totalExpenses = adminTransactions.filter(t => t.type === 'Expense').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
     const netIncome = totalRevenue - totalExpenses;
 
+
     // --- Cash Flow Calculations (Flow, uses date filter) ---
-    const netCashFromOperations = netIncome;
-    const cashFromInvesting = -transactions.filter(tx => tx.type === 'Investment').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+    const netCashFromOperations = netIncome; // Simplified for now
+    const cashFromInvesting = adminTransactions.filter(tx => tx.type === 'AssetSale').reduce((acc, tx) => acc + tx.amount, 0)
+                            - adminTransactions.filter(tx => tx.type === 'AssetAcquisition').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
+                            - transactions.filter(tx => tx.type === 'Investment').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+                            
     const cashFromFinancing = transactions.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0)
-                            - transactions.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+                            - transactions.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
+                            + adminTransactions.filter(tx => tx.type === 'AdminDeposit').reduce((acc, tx) => acc + tx.amount, 0);
+
     const netCashFlow = netCashFromOperations + cashFromInvesting + cashFromFinancing;
 
     return {
@@ -154,6 +168,8 @@ export default function ReportsPage() {
             discrepancy: totalAssets - totalLiabilitiesAndEquity,
         },
         incomeStatement: {
+            financingRevenue,
+            gainOnAssetSale,
             totalRevenue,
             totalExpenses,
             netIncome
@@ -246,8 +262,13 @@ export default function ReportsPage() {
                 <CardContent>
                      <Table>
                         <TableBody>
-                            <ReportRow label="Total Revenue (Platform Earnings)" value={financialData?.incomeStatement.totalRevenue || 0} />
-                            <ReportRow label="Total Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isNegative />
+                            <ReportRow label="Financing Revenue" value={financialData?.incomeStatement.financingRevenue || 0} />
+                            <ReportRow label="Gain on Asset Sale" value={financialData?.incomeStatement.gainOnAssetSale || 0} />
+                            <ReportRow label="Total Revenue" value={financialData?.incomeStatement.totalRevenue || 0} isTotal />
+                            <TableRow><TableCell colSpan={2}>&nbsp;</TableCell></TableRow>
+                            <ReportRow label="Operational Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isNegative />
+                            <ReportRow label="Total Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isTotal isNegative />
+                             <TableRow><TableCell colSpan={2}><Separator /></TableCell></TableRow>
                             <ReportRow label="Net Income" value={financialData?.incomeStatement.netIncome || 0} isTotal />
                         </TableBody>
                     </Table>
@@ -264,7 +285,7 @@ export default function ReportsPage() {
                      <Table>
                         <TableBody>
                             <ReportRow label="Net Cash from Operations" value={financialData?.cashFlow.netCashFromOperations || 0} />
-                            <ReportRow label="Net Cash from Investing" value={financialData?.cashFlow.cashFromInvesting || 0} isNegative />
+                            <ReportRow label="Net Cash from Investing" value={financialData?.cashFlow.cashFromInvesting || 0} />
                             <ReportRow label="Net Cash from Financing" value={financialData?.cashFlow.cashFromFinancing || 0} />
                             <ReportRow label="Net Change in Cash" value={financialData?.cashFlow.netCashFlow || 0} isTotal />
                         </TableBody>
