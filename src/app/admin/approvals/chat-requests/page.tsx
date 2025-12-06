@@ -54,21 +54,30 @@ export default function ChatRequestsPage() {
         
         try {
             const batch = writeBatch(firestore);
+            const now = Timestamp.now();
 
             // 1. Create a new conversation document
             const newConversationRef = doc(collection(firestore, 'conversations'));
             batch.set(newConversationRef, {
                 participantIds: [adminUser.uid, request.userId],
                 participantNames: [adminUser.displayName, request.userName],
-                // Placeholder avatars, you might get these from user profiles
                 participantAvatars: [`https://picsum.photos/seed/${adminUser.uid}/128/128`, `https://picsum.photos/seed/${request.userId}/128/128`],
-                lastMessage: `Conversation started by ${adminUser.displayName}.`,
+                lastMessage: `Hi ${request.userName}, this is ${adminUser.displayName}. How can I help you today?`,
                 lastMessageSenderId: adminUser.uid,
-                lastUpdatedAt: Timestamp.now(),
+                lastUpdatedAt: now, // This field is crucial for the query to work
                 readBy: [adminUser.uid],
             });
+            
+            // 2. Add the first message to the subcollection
+            const firstMessageRef = doc(collection(newConversationRef, 'messages'));
+             batch.set(firstMessageRef, {
+                conversationId: newConversationRef.id,
+                senderId: adminUser.uid,
+                text: `Hi ${request.userName}, this is ${adminUser.displayName}. How can I help you today?`,
+                createdAt: now,
+            });
 
-            // 2. Delete the chat request
+            // 3. Delete the chat request
             const requestRef = doc(firestore, 'chatRequests', request.id);
             batch.delete(requestRef);
 
@@ -79,9 +88,8 @@ export default function ChatRequestsPage() {
                 description: `A conversation with ${request.userName} has been created.`,
             });
             
-            // Redirect to the new conversation page (we'll build this next)
-            // For now, let's just log it. A full implementation would redirect.
-            // router.push(`/admin/messages/${newConversationRef.id}`);
+            // Redirect to the new conversation page
+            router.push(`/admin/messages/${newConversationRef.id}`);
 
         } catch (error) {
             console.error("Chat Initiation Error: ", error);
