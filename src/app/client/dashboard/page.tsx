@@ -4,7 +4,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare } from "lucide-react";
 import { useMemo, useTransition, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { requestChatWithAdmin } from "@/app/common/actions/chat-actions";
 
 
 export type Repayment = DocumentData & {
@@ -176,6 +177,8 @@ export default function ClientDashboard() {
     const router = useRouter();
     const { user, loading: userLoading } = useUser();
     const isMobile = useIsMobile();
+    const { toast } = useToast();
+    const [isChatPending, startChatTransition] = useTransition();
     
     const userProfileQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
@@ -216,6 +219,22 @@ export default function ClientDashboard() {
         return { mainDeal, olderDeals };
     }, [deals]);
 
+    const handleRequestChat = () => {
+        if (!user || !user.displayName) return;
+        startChatTransition(async () => {
+        const result = await requestChatWithAdmin({
+            userId: user.uid,
+            userName: user.displayName,
+            userRole: 'Client'
+        });
+        toast({
+            title: result.success ? 'Request Sent' : 'Request Failed',
+            description: result.message,
+            variant: result.success ? 'default' : 'destructive'
+        });
+        });
+    }
+
     return (
         <div>
             <PageHeader
@@ -223,12 +242,18 @@ export default function ClientDashboard() {
                 description="Here is an overview of your current and past financing deals."
                 icon={FileText}
             >
-                 <Button asChild>
-                    <Link href="/client/deals/request">
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                        Request a Deal
-                    </Link>
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={handleRequestChat} disabled={isChatPending}>
+                        {isChatPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <MessageSquare className="mr-2 h-4 w-4" />}
+                        Contact Admin
+                    </Button>
+                    <Button asChild>
+                        <Link href="/client/deals/request">
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Request a Deal
+                        </Link>
+                    </Button>
+                </div>
             </PageHeader>
             
             {isLoading ? (

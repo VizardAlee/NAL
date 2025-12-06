@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle } from "lucide-react";
+import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle, MessageSquare } from "lucide-react";
 import { useMemo, useState, useTransition, useEffect } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc, updateDoc } from 'firebase/firestore';
@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DepositForm } from "./deposit-form";
+import { requestChatWithAdmin } from "@/app/common/actions/chat-actions";
 
 
 type Transaction = DocumentData & {
@@ -117,6 +118,8 @@ export default function InvestorDashboard() {
   const [isWithdrawOpen, setWithdrawOpen] = useState(false);
   const [isDepositOpen, setDepositOpen] = useState(false);
   const isMobile = useIsMobile();
+  const { toast } = useToast();
+  const [isChatPending, startChatTransition] = useTransition();
 
   const userProfileRef = useMemo(() => {
     if (!firestore || !user?.uid) return null;
@@ -283,6 +286,22 @@ export default function InvestorDashboard() {
     const date = timestamp instanceof Timestamp ? timestamp.toDate() : date;
     try { return format(date, 'PPP'); } catch { return 'Invalid Date'; }
   };
+  
+  const handleRequestChat = () => {
+    if (!user || !user.displayName) return;
+    startChatTransition(async () => {
+      const result = await requestChatWithAdmin({
+        userId: user.uid,
+        userName: user.displayName,
+        userRole: 'Investor'
+      });
+      toast({
+        title: result.success ? 'Request Sent' : 'Request Failed',
+        description: result.message,
+        variant: result.success ? 'default' : 'destructive'
+      });
+    });
+  }
 
 
   return (
@@ -292,20 +311,26 @@ export default function InvestorDashboard() {
         description="Welcome to your personal investment hub."
         icon={Landmark}
       >
-        <Dialog open={isDepositOpen} onOpenChange={setDepositOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Request Deposit
+        <div className="flex gap-2">
+            <Button variant="outline" onClick={handleRequestChat} disabled={isChatPending}>
+              {isChatPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <MessageSquare className="mr-2 h-4 w-4" />}
+              Contact Admin
             </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Request a Deposit</DialogTitle>
-            </DialogHeader>
-            <DepositForm onDepositRequested={() => setDepositOpen(false)} />
-          </DialogContent>
-        </Dialog>
+            <Dialog open={isDepositOpen} onOpenChange={setDepositOpen}>
+            <DialogTrigger asChild>
+                <Button>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Request Deposit
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                <DialogTitle>Request a Deposit</DialogTitle>
+                </DialogHeader>
+                <DepositForm onDepositRequested={() => setDepositOpen(false)} />
+            </DialogContent>
+            </Dialog>
+        </div>
       </PageHeader>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">

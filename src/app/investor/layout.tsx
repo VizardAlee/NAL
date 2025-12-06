@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut } from "lucide-react";
+import { LogOut, MessageSquare } from "lucide-react";
 import { Logo } from "@/components/icons";
 import Link from "next/link";
 import { useUser } from "@/firebase";
@@ -79,6 +79,12 @@ export default function InvestorLayout({
             </Link>
             <div className="flex-1" />
             <ThemeToggle />
+            <Button variant="ghost" size="icon" className="rounded-full" asChild>
+                <Link href="/investor/messages">
+                    <MessageSquare className="h-5 w-5" />
+                    <span className="sr-only">Messages</span>
+                </Link>
+            </Button>
             <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
@@ -112,7 +118,3 @@ export default function InvestorLayout({
     </div>
   );
 }
-
-    
-
-    
