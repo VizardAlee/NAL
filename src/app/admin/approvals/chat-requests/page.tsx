@@ -53,16 +53,16 @@ export default function ChatRequestsPage() {
         setProcessingId(request.id);
         
         try {
-            // Check if a conversation already exists
+            // Correctly check if a conversation already exists with THIS specific user
             const existingConvoQuery = query(
                 collection(firestore, 'conversations'),
-                where('participantIds', 'array-contains', adminUser.uid)
+                where('participantIds', 'array-contains-all', [adminUser.uid, request.userId])
             );
             const existingConvoSnapshot = await getDocs(existingConvoQuery);
-            const existingConvo = existingConvoSnapshot.docs.find(doc => doc.data().participantIds.includes(request.userId));
 
-            if (existingConvo) {
+            if (!existingConvoSnapshot.empty) {
                 // If conversation exists, just delete the request and redirect
+                const existingConvo = existingConvoSnapshot.docs[0];
                 await deleteDoc(doc(firestore, 'chatRequests', request.id));
                 router.push(`/admin/messages/${existingConvo.id}`);
                 return;
