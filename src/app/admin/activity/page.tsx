@@ -38,6 +38,8 @@ import {
 } from "@/components/ui/pagination";
 import { User } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { DateRange } from "react-day-picker";
+import { DatePickerWithRange } from '@/components/ui/date-picker-with-range';
 
 
 type Transaction = DocumentData & {
@@ -69,6 +71,7 @@ export default function ActivityPage() {
     const isMobile = useIsMobile();
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedTypes, setSelectedTypes] = useState<TransactionTypeFilter[]>([]);
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
     const transactionsQuery = useMemo(() => {
         if (!firestore || !authUser) return null;
@@ -87,9 +90,22 @@ export default function ActivityPage() {
 
     const filteredTransactions = useMemo(() => {
         if (!transactions) return [];
-        if (selectedTypes.length === 0) return transactions;
-        return transactions.filter(tx => selectedTypes.includes(tx.type as TransactionTypeFilter));
-    }, [transactions, selectedTypes]);
+        
+        let filtered = transactions;
+        
+        if (selectedTypes.length > 0) {
+            filtered = filtered.filter(tx => selectedTypes.includes(tx.type as TransactionTypeFilter));
+        }
+
+        if (dateRange?.from && dateRange?.to) {
+            filtered = filtered.filter(tx => {
+                const txDate = tx.createdAt.toDate();
+                return txDate >= dateRange.from! && txDate <= dateRange.to!;
+            });
+        }
+
+        return filtered;
+    }, [transactions, selectedTypes, dateRange]);
 
     const paginatedTransactions = useMemo(() => {
         if (!filteredTransactions) return [];
@@ -109,6 +125,11 @@ export default function ActivityPage() {
                 : [...prev, type]
         );
         setCurrentPage(1); // Reset to first page on filter change
+    };
+    
+    const handleDateChange = (range: DateRange | undefined) => {
+        setDateRange(range);
+        setCurrentPage(1);
     };
 
     const formatDate = (timestamp: Timestamp | Date | undefined) => {
@@ -239,27 +260,30 @@ export default function ActivityPage() {
                 description="Track all significant actions for auditing purposes."
                 icon={History}
             >
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="shrink-0">
-                            <ListFilter className="mr-2 h-4 w-4" />
-                            Filter by Type
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Transaction Type</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {transactionTypes.map(type => (
-                             <DropdownMenuCheckboxItem
-                                key={type}
-                                checked={selectedTypes.includes(type)}
-                                onCheckedChange={() => handleFilterChange(type)}
-                             >
-                                {type}
-                            </DropdownMenuCheckboxItem>
-                        ))}
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <DatePickerWithRange onDateChange={handleDateChange} />
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" className="shrink-0">
+                                <ListFilter className="mr-2 h-4 w-4" />
+                                Filter by Type
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Transaction Type</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {transactionTypes.map(type => (
+                                <DropdownMenuCheckboxItem
+                                    key={type}
+                                    checked={selectedTypes.includes(type)}
+                                    onCheckedChange={() => handleFilterChange(type)}
+                                >
+                                    {type}
+                                </DropdownMenuCheckboxItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
             </PageHeader>
             
             {isMobile ? (
