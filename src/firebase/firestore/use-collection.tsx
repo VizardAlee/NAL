@@ -42,7 +42,8 @@ export function useCollection<T extends DocumentData>(
       },
       (err) => {
         if (err.code === 'permission-denied') {
-          const path = 'path' in q ? (q as any).path : 'unknown';
+          // Add a guard here to ensure q is valid before accessing its properties
+          const path = q && 'path' in q ? (q as any).path : 'unknown';
           errorEmitter.emit(
             'permission-error',
             new FirestorePermissionError({
