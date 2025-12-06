@@ -16,11 +16,23 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogClose,
 } from '@/components/ui/dialog';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FileText, PlusCircle, ChevronRight } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { FileText, PlusCircle, ChevronRight, Edit, Trash2, Loader2 } from 'lucide-react';
+import { useState, useMemo, useTransition } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, DocumentData, Timestamp } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
@@ -32,6 +44,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useRouter } from 'next/navigation';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Card, CardContent } from '@/components/ui/card';
+import { deleteDealAction } from './actions';
+import { useToast } from '@/hooks/use-toast';
+import { EditDealForm } from './edit-deal-form';
+
 
 const statusVariant = {
   Pending: 'secondary',
@@ -40,9 +56,72 @@ const statusVariant = {
   Terminated: 'destructive',
 } as const;
 
+function DealActions({ deal, onActionStart, onActionEnd }: { deal: Deal, onActionStart: () => void, onActionEnd: () => void }) {
+    const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [isEditDialogOpen, setEditDialogOpen] = useState(false);
+    const { toast } = useToast();
+
+    const handleDelete = async () => {
+        onActionStart();
+        const result = await deleteDealAction(deal.id);
+        if (result.success) {
+            toast({ title: 'Success', description: result.message });
+            setDeleteDialogOpen(false);
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.message });
+        }
+        onActionEnd();
+    };
+
+    if (deal.status !== 'Pending') {
+        return null;
+    }
+
+    return (
+        <div className="flex gap-2 justify-end">
+            <Dialog open={isEditDialogOpen} onOpenChange={setEditDialogOpen}>
+                <DialogTrigger asChild>
+                    <Button variant="outline" size="sm"><Edit className="mr-2 h-4 w-4" /> Edit</Button>
+                </DialogTrigger>
+                <DialogContent className="max-h-[90vh]">
+                    <DialogHeader>
+                        <DialogTitle>Edit Deal: {deal.dealName}</DialogTitle>
+                    </DialogHeader>
+                    <ScrollArea className="max-h-[80vh] p-0">
+                        <div className="p-6">
+                            <EditDealForm deal={deal} onDealUpdated={() => setEditDialogOpen(false)} />
+                        </div>
+                    </ScrollArea>
+                </DialogContent>
+            </Dialog>
+
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm"><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the deal "{deal.dealName}".
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete}>Continue</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </div>
+    );
+}
+
+
 function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean }) {
   const router = useRouter();
   const isMobile = useIsMobile();
+  const [isActionPending, startTransition] = useTransition();
+
 
   const handleRowClick = (dealId: string) => {
     router.push(`/admin/deals/${dealId}`);
@@ -80,6 +159,7 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
               <TableHead>Principal</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Created At</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -90,6 +170,7 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
                 <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                 <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                <TableCell><Skeleton className="h-8 w-24 ml-auto" /></TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -110,17 +191,25 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
     return (
       <div className="space-y-3">
         {deals.map((deal) => (
-          <Card key={deal.id} onClick={() => handleRowClick(deal.id)} className="cursor-pointer hover:bg-muted/50">
-            <CardContent className="flex items-center gap-4 p-4">
-              <div className="flex-1 space-y-1">
-                <p className="font-medium">{deal.dealName}</p>
-                <p className="text-sm text-muted-foreground truncate">{deal.clientName}</p>
-                <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</span>
+          <Card key={deal.id}>
+            <CardContent className="p-4 space-y-3">
+                 <div className="flex items-start justify-between cursor-pointer" onClick={() => handleRowClick(deal.id)}>
+                    <div className="flex-1 space-y-1">
+                        <p className="font-medium">{deal.dealName}</p>
+                        <p className="text-sm text-muted-foreground truncate">{deal.clientName}</p>
+                         <div className="flex items-center justify-between">
+                            <span className="text-sm font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</span>
+                        </div>
+                    </div>
                     <Badge variant={statusVariant[deal.status]}>{deal.status}</Badge>
                 </div>
-              </div>
-              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                 <div className="pt-3 border-t">
+                    <DealActions 
+                        deal={deal} 
+                        onActionStart={() => startTransition(() => {})} 
+                        onActionEnd={() => {}}
+                    />
+                </div>
             </CardContent>
           </Card>
         ))}
@@ -130,6 +219,7 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
 
   return (
     <div className="rounded-lg border shadow-sm">
+      {isActionPending && <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10"><Loader2 className="h-8 w-8 animate-spin"/></div>}
       <Table>
         <TableHeader>
           <TableRow>
@@ -138,21 +228,29 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
             <TableHead>Principal</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Created At</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {deals.map((deal) => (
-            <TableRow key={deal.id} onClick={() => handleRowClick(deal.id)} className="cursor-pointer">
-              <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
-              <TableCell data-label="Client">{deal.clientName}</TableCell>
-              <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
-              <TableCell data-label="Status">
+            <TableRow key={deal.id} >
+              <TableCell data-label="Deal Name" className="font-medium cursor-pointer" onClick={() => handleRowClick(deal.id)}>{deal.dealName}</TableCell>
+              <TableCell data-label="Client" className="cursor-pointer" onClick={() => handleRowClick(deal.id)}>{deal.clientName}</TableCell>
+              <TableCell data-label="Principal" className="cursor-pointer" onClick={() => handleRowClick(deal.id)}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
+              <TableCell data-label="Status" className="cursor-pointer" onClick={() => handleRowClick(deal.id)}>
                 <Badge variant={statusVariant[deal.status]}>
                   {deal.status}
                 </Badge>
               </TableCell>
-               <TableCell data-label="Created At">
+               <TableCell data-label="Created At" className="cursor-pointer" onClick={() => handleRowClick(deal.id)}>
                 {formatDate(deal.createdAt)}
+              </TableCell>
+              <TableCell>
+                 <DealActions 
+                    deal={deal} 
+                    onActionStart={() => startTransition(() => {})} 
+                    onActionEnd={() => {}}
+                />
               </TableCell>
             </TableRow>
           ))}
