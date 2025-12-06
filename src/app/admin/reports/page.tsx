@@ -40,6 +40,16 @@ type Deal = DocumentData & {
     createdAt: Timestamp;
 };
 
+type Asset = DocumentData & {
+    id: string;
+    description: string;
+    acquisitionCost: number;
+    acquisitionDate: Timestamp;
+    status: 'Held' | 'Sold';
+    salePrice?: number;
+    saleDate?: Timestamp;
+};
+
 const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(value);
 };
@@ -62,16 +72,19 @@ export default function ReportsPage() {
   const adminTransactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'administrativeTransactions')) : null, [firestore]);
   const fundBatchesQuery = useMemo(() => firestore ? query(collection(firestore, 'fundBatches')) : null, [firestore]);
   const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals')) : null, [firestore]);
+  const assetsQuery = useMemo(() => firestore ? query(collection(firestore, 'assets')) : null, [firestore]);
+
 
   const { data: allTransactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
   const { data: allAdminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
   const { data: allFundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
   const { data: allDeals, loading: activeDealsLoading } = useCollection<Deal>(dealsQuery);
+  const { data: allAssets, loading: assetsLoading } = useCollection<Asset>(assetsQuery);
   
-  const isLoading = transactionsLoading || adminTransactionsLoading || fundBatchesLoading || activeDealsLoading;
+  const isLoading = transactionsLoading || adminTransactionsLoading || fundBatchesLoading || activeDealsLoading || assetsLoading;
 
   const financialData = useMemo(() => {
-    if (isLoading || !allTransactions || !allAdminTransactions || !allFundBatches || !allDeals) {
+    if (isLoading || !allTransactions || !allAdminTransactions || !allFundBatches || !allDeals || !allAssets) {
         return null;
     }
 
@@ -89,12 +102,14 @@ export default function ReportsPage() {
     // Balance sheet items are generally balances, not flows, so we don't filter them by date
     const fundBatches = allFundBatches; 
     const activeDeals = allDeals.filter(d => d.status === 'Active');
+    const heldAssets = allAssets.filter(a => a.status === 'Held');
 
     // --- Balance Sheet Calculations (Point-in-time, ignores date filter for now) ---
     const cashAndEquivalents = allAdminTransactions.reduce((acc, tx) => acc + tx.amount, 0);
     const grossFinancingPortfolio = activeDeals.reduce((acc, deal) => acc + deal.principal, 0);
     const totalInvestibleCapital = fundBatches.reduce((acc, batch) => acc + batch.remainingAmount, 0);
-    const totalAssets = cashAndEquivalents + grossFinancingPortfolio + totalInvestibleCapital;
+    const totalAssetValue = heldAssets.reduce((sum, asset) => sum + asset.acquisitionCost, 0);
+    const totalAssets = cashAndEquivalents + grossFinancingPortfolio + totalInvestibleCapital + totalAssetValue;
 
     const investorCapitalDeposited = allTransactions.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0);
     const investorCapitalWithdrawn = allTransactions.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
@@ -124,6 +139,7 @@ export default function ReportsPage() {
                 cashAndEquivalents,
                 grossFinancingPortfolio,
                 totalInvestibleCapital,
+                totalAssetValue,
                 totalAssets,
             },
             liabilities: {
@@ -149,7 +165,7 @@ export default function ReportsPage() {
             netCashFlow
         }
     };
-  }, [allTransactions, allAdminTransactions, allFundBatches, allDeals, isLoading, dateRange]);
+  }, [allTransactions, allAdminTransactions, allFundBatches, allDeals, allAssets, isLoading, dateRange]);
 
   if (isLoading) {
       return (
@@ -208,6 +224,7 @@ export default function ReportsPage() {
                             <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Assets</TableCell></TableRow>
                             <ReportRow label="Cash & Equivalents (Admin)" value={financialData?.balanceSheet.assets.cashAndEquivalents || 0} isSub />
                             <ReportRow label="Gross Financing Portfolio (Active Deals)" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
+                            <ReportRow label="Held Asset Value" value={financialData?.balanceSheet.assets.totalAssetValue || 0} isSub />
                             <ReportRow label="Total Investible Capital (Uninvested)" value={financialData?.balanceSheet.assets.totalInvestibleCapital || 0} isSub />
                             <ReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
                             
