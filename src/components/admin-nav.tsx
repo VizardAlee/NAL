@@ -60,7 +60,6 @@ const menuItems = [
   { href: "/admin/analyzer", label: "Analyzer", icon: FlaskConical },
   { href: "/admin/activity", label: "Activity", icon: History },
   { href: "/admin/reports", label: "Reports", icon: Library },
-  { href: "/admin/migration", label: "Data Migration", icon: Database },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
