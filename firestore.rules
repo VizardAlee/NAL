@@ -154,8 +154,10 @@ service cloud.firestore {
 
     // Rules for 'notifications'
     match /notifications/{notificationId} {
-        // Only admins can read/list their notifications.
-        allow get, list: if isAdmin();
+        // Admins can list their notifications.
+        allow list: if isAdmin();
+        // A user can get a notification if it is for them.
+        allow get: if request.auth != null && resource.data.recipientId == request.auth.uid;
         // Admins can update notifications (e.g., to mark as read).
         allow update: if isAdmin();
         // Any authenticated user can create a notification.
@@ -185,25 +187,21 @@ service cloud.firestore {
     match /conversations/{conversationId} {
       // Admins can create conversations.
       allow create: if isAdmin();
-      // Only participants (or Admins) can read or update conversation metadata.
-      allow get, update: if isAdmin() || (request.auth != null && request.auth.uid in resource.data.participantIds);
-      // Users can list conversations they are a part of. Admins can list all conversations.
+      // Only participants (or Admins) can read a conversation.
+      allow get: if isAdmin() || (request.auth != null && request.auth.uid in resource.data.participantIds);
+      // Only participants can update conversation metadata (e.g. read status).
+      allow update: if request.auth != null && request.auth.uid in resource.data.participantIds;
+      // An authenticated user can list conversations where they are a participant. Admins can list all.
       allow list: if isAdmin() || (request.auth != null && request.query.where.value == request.auth.uid);
     }
     
     // Rules for 'messages' subcollection
     match /conversations/{conversationId}/messages/{messageId} {
-      // An admin can create any message (e.g. the first message in a new conversation)
       // A user can create a message only if they are a participant of the conversation.
-      allow create: if isAdmin() || (request.auth != null 
-        && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds);
-
-      // A user can read a message only if they are a participant of the conversation.
-      allow read: if request.auth != null 
-        && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
-        
-      // A user can only update or delete their own messages.
-      allow update, delete: if request.auth != null && resource.data.senderId == request.auth.uid;
+      allow create: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+      
+      // A user can read messages in a conversation only if they are a participant.
+      allow list, get: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
     }
   }
 }
