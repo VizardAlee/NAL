@@ -28,6 +28,7 @@ import {
   Wallet,
   RefreshCcw,
   HandCoins,
+  MessageSquarePlus,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +50,7 @@ const menuItems = [
       { href: "/admin/approvals/reinvestments", label: "Reinvestments", icon: RefreshCcw, notificationCollection: 'reinvestmentRequests' },
       { href: "/admin/approvals/repayments", label: "Repayments", icon: HandCoins, notificationCollection: 'repayments' },
       { href: "/admin/approvals/terminations", label: "Terminations", icon: ShieldAlert, notificationCollection: 'terminationRequests' },
+      { href: "/admin/approvals/chat-requests", label: "Chat Requests", icon: MessageSquarePlus, notificationCollection: 'chatRequests' },
     ],
   },
   { href: "/admin/funds", label: "Funds", icon: Banknote },
@@ -62,6 +64,10 @@ function NotificationBadge({ collectionName }: { collectionName: string }) {
     const firestore = useFirestore();
     const q = React.useMemo(() => {
         if (!firestore) return null;
+        // The chatRequests collection has no 'status' field, so we just count all documents.
+        if (collectionName === 'chatRequests') {
+            return query(collection(firestore, collectionName));
+        }
         return query(collection(firestore, collectionName), where('status', '==', 'Pending'));
     }, [firestore, collectionName]);
 
