@@ -30,7 +30,7 @@ type Message = {
     id: string;
     conversationId: string;
     senderId: string;
-    text: string;
+    text?: string;
     createdAt: Timestamp;
     attachmentUrl?: string;
     attachmentName?: string;
@@ -208,5 +208,3 @@ export default function InvestorConversationPage() {
         </div>
     )
 }
-
-    
