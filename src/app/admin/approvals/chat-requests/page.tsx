@@ -56,14 +56,16 @@ export default function ChatRequestsPage() {
             // Check if a conversation already exists with THIS specific user
             const existingConvoQuery = query(
                 collection(firestore, 'conversations'),
-                where('participantIds', 'array-contains', adminUser.uid),
-                where('participantIds', 'array-contains', request.userId)
+                where('participantIds', 'array-contains', adminUser.uid)
             );
             const existingConvoSnapshot = await getDocs(existingConvoQuery);
             
             // Because array-contains queries on the same field are not natively supported, 
             // we filter the results on the client side to ensure we find a conversation with ONLY these two participants.
-            const exactMatch = existingConvoSnapshot.docs.find(doc => doc.data().participantIds.length === 2);
+            const exactMatch = existingConvoSnapshot.docs.find(doc => {
+                const participantIds = doc.data().participantIds;
+                return participantIds.includes(request.userId) && participantIds.length === 2;
+            });
 
 
             if (exactMatch) {
