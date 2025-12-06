@@ -55,7 +55,7 @@ function DealCard({ deal }: { deal: Deal }) {
     }, [firestore, user?.uid, deal?.id]);
 
     const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(
-        user?.uid && deal?.id ? repaymentsQuery : null
+        repaymentsQuery
     );
 
     const lodgedRepayments = useMemo(() => {
@@ -186,7 +186,7 @@ export default function ClientDashboard() {
     }, [firestore, user?.uid]);
     
     const { data: userProfile, loading: profileLoading } = useCollection(
-        user?.uid ? userProfileQuery : null
+        userProfileQuery
     );
 
     const dealsQuery = useMemo(() => {
@@ -195,7 +195,7 @@ export default function ClientDashboard() {
     }, [firestore, user?.uid]);
 
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(
-        user?.uid ? dealsQuery : null
+        dealsQuery
     );
     
     const isLoading = userLoading || dealsLoading || profileLoading;

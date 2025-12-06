@@ -41,10 +41,6 @@ export function useCollection<T extends DocumentData>(
         setError(null);
       },
       (err) => {
-        console.error('onSnapshot error:', err);
-        setError(err);
-        setLoading(false);
-
         if (err.code === 'permission-denied') {
           const path = 'path' in q ? (q as any).path : 'unknown';
           errorEmitter.emit(
@@ -55,6 +51,8 @@ export function useCollection<T extends DocumentData>(
             })
           );
         }
+        setError(err);
+        setLoading(false);
       }
     );
 
