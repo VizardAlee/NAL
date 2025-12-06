@@ -183,16 +183,21 @@ service cloud.firestore {
 
     // Rules for 'conversations' collection
     match /conversations/{conversationId} {
-      // Admins can create conversations.
-      allow create: if isAdmin();
+      // Admins can create conversations and can read/list all of them.
+      allow create, list: if isAdmin();
       // Only participants (or Admins) can read or update conversation metadata.
-      allow read, update: if isAdmin() || (request.auth != null && request.auth.uid in resource.data.participantIds);
+      allow get, update: if isAdmin() || (request.auth != null && request.auth.uid in resource.data.participantIds);
     }
     
     // Rules for 'messages' subcollection
     match /conversations/{conversationId}/messages/{messageId} {
-      // A user can read or create a message only if they are a participant of the conversation.
-      allow read, create: if request.auth != null 
+      // An admin can create any message (e.g. the first message in a new conversation)
+      // A user can create a message only if they are a participant of the conversation.
+      allow create: if isAdmin() || (request.auth != null 
+        && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds);
+
+      // A user can read a message only if they are a participant of the conversation.
+      allow read: if request.auth != null 
         && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
         
       // A user can only update or delete their own messages.
