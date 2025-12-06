@@ -92,58 +92,67 @@ export default function ReportsPage() {
     const from = dateRange?.from ? startOfDay(dateRange.from) : null;
     const to = dateRange?.to ? endOfDay(dateRange.to) : null;
 
-    const filterByDate = (item: { createdAt?: Timestamp, saleDate?: Timestamp }) => {
+    const filterByDate = (item: { createdAt?: Timestamp, saleDate?: Timestamp, acquisitionDate?: Timestamp }) => {
         if (!from || !to) return true;
-        // Use saleDate for sold assets, createdAt otherwise
-        const itemDate = (item.saleDate || item.createdAt)?.toDate();
+        // Use saleDate for sold assets, otherwise acquisitionDate or createdAt
+        const itemDate = (item.saleDate || item.acquisitionDate || item.createdAt)?.toDate();
         if (!itemDate) return false;
         return itemDate >= from && itemDate <= to;
     };
     
-    const transactions = allTransactions.filter(filterByDate);
-    const adminTransactions = allAdminTransactions.filter(filterByDate);
+    const transactionsInPeriod = allTransactions.filter(filterByDate);
+    const adminTransactionsInPeriod = allAdminTransactions.filter(filterByDate);
     
-    // Balance sheet items are generally point-in-time, so we use all data
-    const fundBatches = allFundBatches; 
-    const activeDeals = allDeals;
-    const heldAssets = allAssets.filter(a => a.status === 'Held');
+    // Balance sheet items are generally point-in-time, so we use all data up to the 'to' date if it exists
+    const filterUpToDate = (item: { createdAt?: Timestamp, acquisitionDate?: Timestamp }) => {
+        if (!to) return true;
+        const itemDate = (item.acquisitionDate || item.createdAt)?.toDate();
+        if (!itemDate) return false;
+        return itemDate <= to;
+    }
 
-    // --- Balance Sheet Calculations (Point-in-time, ignores date filter) ---
-    const cashAndEquivalents = allAdminTransactions.reduce((acc, tx) => acc + tx.amount, 0);
+    const fundBatches = allFundBatches.filter(filterUpToDate); 
+    const activeDeals = allDeals.filter(filterUpToDate);
+    const heldAssets = allAssets.filter(a => a.status === 'Held' && filterUpToDate(a));
+    const allTimeAdminTransactions = allAdminTransactions.filter(filterUpToDate);
+    const allTimeTransactions = allTransactions.filter(filterUpToDate);
+
+    // --- Balance Sheet Calculations (Point-in-time, uses filterUpToDate) ---
+    const cashAndEquivalents = allTimeAdminTransactions.reduce((acc, tx) => acc + tx.amount, 0);
     const grossFinancingPortfolio = activeDeals.reduce((acc, deal) => acc + deal.principal, 0);
     const totalInvestibleCapital = fundBatches.reduce((acc, batch) => acc + batch.remainingAmount, 0);
     const totalAssetValue = heldAssets.reduce((sum, asset) => sum + asset.acquisitionCost, 0);
     const totalAssets = cashAndEquivalents + grossFinancingPortfolio + totalInvestibleCapital + totalAssetValue;
 
-    const investorCapitalDeposited = allTransactions.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0);
-    const investorCapitalWithdrawn = allTransactions.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
-    const investorZakatPaid = allTransactions.filter(t => t.type === 'Zakat').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+    const investorCapitalDeposited = allTimeTransactions.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0);
+    const investorCapitalWithdrawn = allTimeTransactions.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+    const investorZakatPaid = allTimeTransactions.filter(t => t.type === 'Zakat').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
     const totalInvestorCapital = investorCapitalDeposited - investorCapitalWithdrawn - investorZakatPaid;
 
     const platformInvestedCapital = fundBatches.filter(fb => fb.sourceId === 'platform').reduce((acc, batch) => acc + batch.amount, 0);
-    const platformRetainedEarnings = allTransactions.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
+    const platformRetainedEarnings = allTimeTransactions.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
     const totalPlatformEquity = platformInvestedCapital + platformRetainedEarnings;
     const totalLiabilitiesAndEquity = totalInvestorCapital + totalPlatformEquity;
     
     // --- Income Statement Calculations (Flow, uses date filter) ---
-    const financingRevenue = transactions.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
+    const financingRevenue = transactionsInPeriod.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
     const soldAssetsInPeriod = allAssets.filter(a => a.status === 'Sold' && filterByDate(a));
     const gainOnAssetSale = soldAssetsInPeriod.reduce((acc, asset) => acc + ((asset.salePrice || 0) - asset.acquisitionCost), 0);
     const totalRevenue = financingRevenue + gainOnAssetSale;
 
-    const totalExpenses = adminTransactions.filter(t => t.type === 'Expense').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+    const totalExpenses = adminTransactionsInPeriod.filter(t => t.type === 'Expense').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
     const netIncome = totalRevenue - totalExpenses;
 
 
     // --- Cash Flow Calculations (Flow, uses date filter) ---
     const netCashFromOperations = netIncome; // Simplified for now
-    const cashFromInvesting = adminTransactions.filter(tx => tx.type === 'AssetSale').reduce((acc, tx) => acc + tx.amount, 0)
-                            - adminTransactions.filter(tx => tx.type === 'AssetAcquisition').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
-                            - transactions.filter(tx => tx.type === 'Investment').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+    const cashFromInvesting = adminTransactionsInPeriod.filter(tx => tx.type === 'AssetSale').reduce((acc, tx) => acc + tx.amount, 0)
+                            - adminTransactionsInPeriod.filter(tx => tx.type === 'AssetAcquisition').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
+                            - transactionsInPeriod.filter(tx => tx.type === 'Investment').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
                             
-    const cashFromFinancing = transactions.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0)
-                            - transactions.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
-                            + adminTransactions.filter(tx => tx.type === 'AdminDeposit').reduce((acc, tx) => acc + tx.amount, 0);
+    const cashFromFinancing = transactionsInPeriod.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0)
+                            - transactionsInPeriod.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
+                            + adminTransactionsInPeriod.filter(tx => tx.type === 'AdminDeposit').reduce((acc, tx) => acc + tx.amount, 0);
 
     const netCashFlow = netCashFromOperations + cashFromInvesting + cashFromFinancing;
 
@@ -232,7 +241,7 @@ export default function ReportsPage() {
             <Card>
                 <CardHeader>
                     <CardTitle>Balance Sheet</CardTitle>
-                    <CardDescription>As of today. This report shows a snapshot in time and is not affected by the date filter.</CardDescription>
+                    <CardDescription>As of {dateRange?.to ? dateRange.to.toLocaleDateString() : 'today'}.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Table>
