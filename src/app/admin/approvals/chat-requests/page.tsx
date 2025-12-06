@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, MessageSquarePlus } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, DocumentData, Timestamp, writeBatch, doc, where, getDocs } from 'firebase/firestore';
+import { collection, query, DocumentData, Timestamp, writeBatch, doc, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDistanceToNow } from 'date-fns';
@@ -63,7 +63,7 @@ export default function ChatRequestsPage() {
 
             if (existingConvo) {
                 // If conversation exists, just delete the request and redirect
-                await doc(firestore, 'chatRequests', request.id).delete();
+                await deleteDoc(doc(firestore, 'chatRequests', request.id));
                 router.push(`/admin/messages/${existingConvo.id}`);
                 return;
             }
