@@ -453,6 +453,47 @@
           "description": "A base64 data URI of the company logo."
         }
       }
+    },
+    "chatRequest": {
+        "title": "Chat Request",
+        "description": "A request from a user to initiate a chat with an admin.",
+        "type": "object",
+        "properties": {
+            "userId": { "type": "string", "description": "The ID of the user requesting the chat." },
+            "userName": { "type": "string", "description": "The name of the user (denormalized)." },
+            "userRole": { "type": "string", "description": "The role of the user (denormalized).", "enum": ["Investor", "Client"] },
+            "requestedAt": { "type": "string", "format": "date-time", "description": "The timestamp of the request." },
+            "status": { "type": "string", "description": "The status of the request.", "enum": ["Pending"] }
+        },
+        "required": ["userId", "userName", "userRole", "requestedAt", "status"]
+    },
+    "conversation": {
+        "title": "Conversation",
+        "description": "A chat session between participants.",
+        "type": "object",
+        "properties": {
+            "participantIds": { "type": "array", "items": { "type": "string" }, "description": "Array of user IDs participating in the chat." },
+            "participantNames": { "type": "array", "items": { "type": "string" }, "description": "Denormalized names of participants for display." },
+            "participantAvatars": { "type": "array", "items": { "type": "string" }, "description": "Denormalized avatar URLs of participants." },
+            "lastMessage": { "type": "string", "description": "A snippet of the most recent message for previews." },
+            "lastMessageSenderId": { "type": "string", "description": "The ID of the user who sent the last message." },
+            "lastUpdatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of the last message." },
+            "readBy": { "type": "array", "items": { "type": "string" }, "description": "Array of user IDs who have read the last message." }
+        },
+        "required": ["participantIds", "lastUpdatedAt"]
+    },
+    "message": {
+        "title": "Message",
+        "description": "An individual message within a conversation.",
+        "type": "object",
+        "properties": {
+            "conversationId": { "type": "string", "description": "The ID of the parent conversation." },
+            "senderId": { "type": "string", "description": "The ID of the user who sent the message." },
+            "text": { "type": "string", "description": "The text content of the message." },
+            "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the message was sent." },
+            "imageUrl": { "type": "string", "description": "URL of an image attached to the message (optional)." }
+        },
+        "required": ["conversationId", "senderId", "text", "createdAt"]
     }
   },
   "auth": {
@@ -556,6 +597,24 @@
         }
       },
       "description": "Stores global platform settings, specifically the company branding."
+    },
+    "/chatRequests/{chatRequestId}": {
+        "schema": {
+            "$ref": "#/entities/chatRequest"
+        },
+        "description": "Stores user pings to an admin to start a chat."
+    },
+    "/conversations/{conversationId}": {
+        "schema": {
+            "$ref": "#/entities/conversation"
+        },
+        "description": "Stores metadata for a single chat conversation."
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+        "schema": {
+            "$ref": "#/entities/message"
+        },
+        "description": "Sub-collection for messages within a conversation."
     }
   }
 }

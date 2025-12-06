@@ -28,9 +28,8 @@ service cloud.firestore {
 
     // Rules for the 'users' collection
     match /users/{userId} {
-      // Allow the get() used in isClient/isAdmin even when auth is null (happens on page load)
-      // Allow the read if auth is null to prevent rule evaluation errors during auth state restoration.
-      allow get: if request.auth == null || isAdmin() || isOwner(userId);
+      // Admins can get any user. Owners can get their own data.
+      allow get: if isAdmin() || isOwner(userId);
       // Admins can list all users.
       allow list: if isAdmin();
       
@@ -166,7 +165,33 @@ service cloud.firestore {
         // Only admins can change settings.
         allow write: if isAdmin();
     }
+    
+    // --- Messaging System Rules ---
+
+    // Rules for 'chatRequests' collection
+    match /chatRequests/{requestId} {
+      // Admins can read, list and delete all requests.
+      allow get, list, delete: if isAdmin();
+      // Authenticated users can create their own chat requests.
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Rules for 'conversations' collection
+    match /conversations/{conversationId} {
+      // Admins can create conversations.
+      allow create: if isAdmin();
+      // Only participants (or Admins) can read or update conversation metadata.
+      allow read, update: if isAdmin() || (request.auth != null && request.auth.uid in resource.data.participantIds);
+    }
+    
+    // Rules for 'messages' subcollection
+    match /conversations/{conversationId}/messages/{messageId} {
+      // A user can read or create a message only if they are a participant of the conversation.
+      allow read, create: if request.auth != null 
+        && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+        
+      // A user can only update or delete their own messages.
+      allow update, delete: if request.auth != null && resource.data.senderId == request.auth.uid;
+    }
   }
 }
-
-    
