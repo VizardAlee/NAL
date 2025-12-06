@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCollection, useUser, useFirestore } from '@/firebase';
-import { collection, query, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { PageHeader } from '@/components/page-header';
 import { MessageSquare } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -103,4 +103,3 @@ export default function AdminMessagesPage() {
         </div>
     );
 }
-
