@@ -8,7 +8,9 @@ import { revalidatePath } from 'next/cache';
 const messageSchema = z.object({
   conversationId: z.string().min(1),
   senderId: z.string().min(1),
-  text: z.string().min(1),
+  text: z.string().optional(),
+  attachmentUrl: z.string().optional(),
+  attachmentName: z.string().optional(),
 });
 
 export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
@@ -21,3 +23,5 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
 
   return result;
 }
+
+    

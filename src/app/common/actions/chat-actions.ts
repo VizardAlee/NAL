@@ -61,7 +61,9 @@ export async function requestChatWithAdmin(input: z.infer<typeof requestChatSche
 const messageSchema = z.object({
   conversationId: z.string().min(1),
   senderId: z.string().min(1),
-  text: z.string().min(1),
+  text: z.string().optional(),
+  attachmentUrl: z.string().optional(),
+  attachmentName: z.string().optional(),
 });
 
 export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
@@ -70,7 +72,11 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
     return { success: false, message: 'Invalid message data.' };
   }
 
-  const { conversationId, senderId, text } = validated.data;
+  const { conversationId, senderId, text, attachmentUrl, attachmentName } = validated.data;
+  
+  if (!text && !attachmentUrl) {
+    return { success: false, message: 'Message must have either text or an attachment.' };
+  }
 
   try {
     const firestore = adminDb;
@@ -87,18 +93,26 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
 
     const batch = firestore.batch();
 
-    // 1. Add new message to the subcollection
-    const newMessageRef = conversationRef.collection('messages').doc();
-    batch.set(newMessageRef, {
+    const messageData: any = {
       conversationId,
       senderId,
-      text,
+      text: text || '',
       createdAt: FieldValue.serverTimestamp(),
-    });
+    };
+
+    if (attachmentUrl && attachmentName) {
+        messageData.attachmentUrl = attachmentUrl;
+        messageData.attachmentName = attachmentName;
+    }
+
+    // 1. Add new message to the subcollection
+    const newMessageRef = conversationRef.collection('messages').doc();
+    batch.set(newMessageRef, messageData);
 
     // 2. Update the parent conversation document
+    const lastMessage = text ? (text.length > 30 ? text.substring(0, 27) + '...' : text) : `Attachment: ${attachmentName}`;
     batch.update(conversationRef, {
-      lastMessage: text,
+      lastMessage,
       lastMessageSenderId: senderId,
       lastUpdatedAt: FieldValue.serverTimestamp(),
       readBy: [senderId], // Reset read status, only sender has read it
@@ -107,18 +121,33 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
     // 3. Create a notification for the recipient(s)
     const senderDoc = await firestore.collection('users').doc(senderId).get();
     const senderName = senderDoc.data()?.name || 'A user';
-    const isSenderAdmin = senderDoc.data()?.role === 'Admin';
-    
-    // Only send notifications if the sender is NOT an admin
-    if (!isSenderAdmin) {
+    const senderRole = senderDoc.data()?.role;
+
+    const recipients = conversationData.participantIds.filter((id: string) => id !== senderId);
+
+    for (const recipientId of recipients) {
+        const recipientDoc = await firestore.collection('users').doc(recipientId).get();
+        const recipientRole = recipientDoc.data()?.role;
+
+        let link = '/';
+        if (recipientRole === 'Admin') {
+            link = `/admin/messages/${conversationId}`;
+        } else if (recipientRole === 'Investor') {
+            link = `/investor/messages/${conversationId}`;
+        } else if (recipientRole === 'Client') {
+            link = `/client/messages/${conversationId}`;
+        }
+
         batch.set(firestore.collection('notifications').doc(), {
-            title: 'New Message',
-            message: `You have a new message from ${senderName}.`,
-            link: `/admin/messages/${conversationId}`,
+            title: `New Message from ${senderName}`,
+            message: lastMessage,
+            link,
+            recipientId, // Target the specific user
             read: false,
             createdAt: FieldValue.serverTimestamp(),
         });
     }
+
 
     await batch.commit();
 
@@ -128,3 +157,5 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
     return { success: false, message: error.message || 'Failed to send message.' };
   }
 }
+
+    

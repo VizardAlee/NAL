@@ -491,9 +491,10 @@
             "senderId": { "type": "string", "description": "The ID of the user who sent the message." },
             "text": { "type": "string", "description": "The text content of the message." },
             "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the message was sent." },
-            "imageUrl": { "type": "string", "description": "URL of an image attached to the message (optional)." }
+            "attachmentUrl": { "type": "string", "description": "URL of an attachment (e.g., a PDF data URI)." },
+            "attachmentName": { "type": "string", "description": "The original name of the attached file." }
         },
-        "required": ["conversationId", "senderId", "text", "createdAt"]
+        "required": ["conversationId", "senderId", "createdAt"]
     }
   },
   "auth": {
@@ -618,3 +619,5 @@
     }
   }
 }
+
+    
