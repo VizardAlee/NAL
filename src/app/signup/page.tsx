@@ -1,4 +1,3 @@
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -31,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCompanyLogo } from '@/components/company-logo-provider';
+import { Label } from "@/components/ui/label";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
