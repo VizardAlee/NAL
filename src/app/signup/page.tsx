@@ -100,13 +100,6 @@ export default function SignupPage() {
                 <form 
                     action={formAction} 
                     className="space-y-4"
-                    onSubmit={(evt) => {
-                        form.handleSubmit(() => {
-                            // we pass the form data to the server action directly
-                            const formData = new FormData(evt.currentTarget);
-                            formAction(formData as any);
-                        })(evt);
-                    }}
                 >
                     <FormField
                         control={form.control}
