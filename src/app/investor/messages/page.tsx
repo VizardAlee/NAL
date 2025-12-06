@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCollection, useUser, useFirestore } from '@/firebase';
-import { collection, query, where, orderBy, Timestamp, Query } from 'firebase/firestore';
+import { collection, query, where, orderBy, Timestamp, type DocumentData, type Query } from 'firebase/firestore';
 import { PageHeader } from '@/components/page-header';
 import { MessageSquare } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,8 +15,7 @@ import { cn } from '@/lib/utils';
 import { ViewPageNav } from '@/components/view-page-nav';
 
 
-type Conversation = {
-    id: string;
+type ConversationData = DocumentData & {
     participantIds: string[];
     participantNames: string[];
     participantAvatars: string[];
@@ -25,6 +24,10 @@ type Conversation = {
     lastUpdatedAt: Timestamp;
     readBy: string[];
 };
+
+type Conversation = ConversationData & {
+    id: string;
+}
 
 function ConversationItem({ conversation, currentUserId }: { conversation: Conversation, currentUserId: string }) {
     const router = useRouter();
@@ -70,13 +73,13 @@ export default function InvestorMessagesPage() {
     const conversationsQuery = useMemo(() => {
         if (!firestore || !user) return null;
         return query(
-            collection(firestore, 'conversations') as Query<Conversation>,
+            collection(firestore, 'conversations'),
             where('participantIds', 'array-contains', user.uid),
             orderBy('lastUpdatedAt', 'desc')
         );
     }, [firestore, user]);
 
-    const { data: conversations, loading: conversationsLoading } = useCollection<Conversation>(conversationsQuery);
+    const { data: conversations, loading: conversationsLoading } = useCollection<Conversation>(conversationsQuery as Query<Conversation> | null);
     
     const isLoading = userLoading || conversationsLoading;
 
