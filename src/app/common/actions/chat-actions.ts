@@ -121,8 +121,7 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
     // 3. Create a notification for the recipient(s)
     const senderDoc = await firestore.collection('users').doc(senderId).get();
     const senderName = senderDoc.data()?.name || 'A user';
-    const senderRole = senderDoc.data()?.role;
-
+    
     const recipients = conversationData.participantIds.filter((id: string) => id !== senderId);
 
     for (const recipientId of recipients) {
@@ -138,7 +137,8 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
             link = `/client/messages/${conversationId}`;
         }
 
-        batch.set(firestore.collection('notifications').doc(), {
+        const notificationRef = firestore.collection('notifications').doc();
+        batch.set(notificationRef, {
             title: `New Message from ${senderName}`,
             message: lastMessage,
             link,
