@@ -7,10 +7,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, where, DocumentData, Timestamp } from "firebase/firestore";
 import { useFirestore } from "@/firebase";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
+import { DateRange } from "react-day-picker";
+import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { startOfDay, endOfDay } from "date-fns";
 
 type Transaction = DocumentData & {
   type: 'PlatformEarning' | 'Zakat' | 'Penalty' | 'Investment' | 'Deposit' | 'Withdrawal' | 'ProfitDistribution';
@@ -33,6 +37,7 @@ type FundBatch = DocumentData & {
 type Deal = DocumentData & {
     principal: number;
     status: 'Active';
+    createdAt: Timestamp;
 };
 
 const formatCurrency = (value: number) => {
@@ -51,49 +56,66 @@ function ReportRow({ label, value, isTotal = false, isSub = false, isNegative = 
 
 export default function ReportsPage() {
   const firestore = useFirestore();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   const transactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions')) : null, [firestore]);
   const adminTransactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'administrativeTransactions')) : null, [firestore]);
   const fundBatchesQuery = useMemo(() => firestore ? query(collection(firestore, 'fundBatches')) : null, [firestore]);
-  const activeDealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals'), where('status', '==', 'Active')) : null, [firestore]);
+  const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals')) : null, [firestore]);
 
-  const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
-  const { data: adminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
-  const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
-  const { data: activeDeals, loading: activeDealsLoading } = useCollection<Deal>(activeDealsQuery);
+  const { data: allTransactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
+  const { data: allAdminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
+  const { data: allFundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
+  const { data: allDeals, loading: activeDealsLoading } = useCollection<Deal>(dealsQuery);
   
   const isLoading = transactionsLoading || adminTransactionsLoading || fundBatchesLoading || activeDealsLoading;
 
   const financialData = useMemo(() => {
-    if (isLoading || !transactions || !adminTransactions || !fundBatches || !activeDeals) {
+    if (isLoading || !allTransactions || !allAdminTransactions || !allFundBatches || !allDeals) {
         return null;
     }
 
-    // --- Balance Sheet Calculations ---
-    const cashAndEquivalents = adminTransactions.reduce((acc, tx) => acc + tx.amount, 0);
+    const from = dateRange?.from ? startOfDay(dateRange.from) : null;
+    const to = dateRange?.to ? endOfDay(dateRange.to) : null;
+
+    const filterByDate = (item: { createdAt: Timestamp }) => {
+        if (!from || !to) return true;
+        const itemDate = item.createdAt.toDate();
+        return itemDate >= from && itemDate <= to;
+    };
+    
+    const transactions = allTransactions.filter(filterByDate);
+    const adminTransactions = allAdminTransactions.filter(filterByDate);
+    // Balance sheet items are generally balances, not flows, so we don't filter them by date
+    const fundBatches = allFundBatches; 
+    const activeDeals = allDeals.filter(d => d.status === 'Active');
+
+    // --- Balance Sheet Calculations (Point-in-time, ignores date filter for now) ---
+    const cashAndEquivalents = allAdminTransactions.reduce((acc, tx) => acc + tx.amount, 0);
     const grossFinancingPortfolio = activeDeals.reduce((acc, deal) => acc + deal.principal, 0);
     const totalInvestibleCapital = fundBatches.reduce((acc, batch) => acc + batch.remainingAmount, 0);
     const totalAssets = cashAndEquivalents + grossFinancingPortfolio + totalInvestibleCapital;
 
-    const investorCapitalDeposited = transactions.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0);
-    const investorCapitalWithdrawn = transactions.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
-    const investorZakatPaid = transactions.filter(t => t.type === 'Zakat').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+    const investorCapitalDeposited = allTransactions.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0);
+    const investorCapitalWithdrawn = allTransactions.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+    const investorZakatPaid = allTransactions.filter(t => t.type === 'Zakat').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
     const totalInvestorCapital = investorCapitalDeposited - investorCapitalWithdrawn - investorZakatPaid;
 
     const platformInvestedCapital = fundBatches.filter(fb => fb.sourceId === 'platform').reduce((acc, batch) => acc + batch.amount, 0);
-    const platformRetainedEarnings = transactions.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
+    const platformRetainedEarnings = allTransactions.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
     const totalPlatformEquity = platformInvestedCapital + platformRetainedEarnings;
     const totalLiabilitiesAndEquity = totalInvestorCapital + totalPlatformEquity;
     
-    // --- Income Statement Calculations ---
-    const totalRevenue = platformRetainedEarnings; // Platform Earnings are the primary revenue
-    const totalExpenses = 0; // No direct expenses tracked in this model yet
+    // --- Income Statement Calculations (Flow, uses date filter) ---
+    const totalRevenue = transactions.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
+    const totalExpenses = 0; 
     const netIncome = totalRevenue - totalExpenses;
 
-    // --- Cash Flow Calculations ---
-    const netCashFromOperations = netIncome; // Simplified: starts with Net Income
+    // --- Cash Flow Calculations (Flow, uses date filter) ---
+    const netCashFromOperations = netIncome;
     const cashFromInvesting = -transactions.filter(tx => tx.type === 'Investment').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
-    const cashFromFinancing = investorCapitalDeposited - investorCapitalWithdrawn;
+    const cashFromFinancing = transactions.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0)
+                            - transactions.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
     const netCashFlow = netCashFromOperations + cashFromInvesting + cashFromFinancing;
 
     return {
@@ -127,7 +149,7 @@ export default function ReportsPage() {
             netCashFlow
         }
     };
-  }, [transactions, adminTransactions, fundBatches, activeDeals, isLoading]);
+  }, [allTransactions, allAdminTransactions, allFundBatches, allDeals, isLoading, dateRange]);
 
   if (isLoading) {
       return (
@@ -150,7 +172,9 @@ export default function ReportsPage() {
         title="Financial Reports"
         description="A real-time overview of the platform's financial health."
         icon={Library}
-      />
+      >
+        <DatePickerWithRange onDateChange={setDateRange} />
+      </PageHeader>
 
       {financialData?.balanceSheet.discrepancy && Math.abs(financialData.balanceSheet.discrepancy) > 1 && (
         <Card className="mb-6 border-destructive bg-destructive/10">
@@ -166,35 +190,41 @@ export default function ReportsPage() {
         </Card>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        <Card>
-            <CardHeader>
-                <CardTitle>Balance Sheet</CardTitle>
-                <CardDescription>As of today</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Table>
-                    <TableBody>
-                        <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Assets</TableCell></TableRow>
-                        <ReportRow label="Cash & Equivalents (Admin)" value={financialData?.balanceSheet.assets.cashAndEquivalents || 0} isSub />
-                        <ReportRow label="Gross Financing Portfolio (Active Deals)" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
-                        <ReportRow label="Total Investible Capital (Uninvested)" value={financialData?.balanceSheet.assets.totalInvestibleCapital || 0} isSub />
-                        <ReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
-                        
-                        <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Liabilities & Equity</TableCell></TableRow>
-                        <ReportRow label="Investor Capital" value={financialData?.balanceSheet.liabilities.totalInvestorCapital || 0} isSub />
-                        <ReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.totalPlatformEquity || 0} isSub />
-                        <ReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
-        
-        <div className="space-y-8">
+      <Tabs defaultValue="balance-sheet">
+        <TabsList>
+            <TabsTrigger value="balance-sheet">Balance Sheet</TabsTrigger>
+            <TabsTrigger value="income-statement">Income Statement</TabsTrigger>
+            <TabsTrigger value="cash-flow">Cash Flow</TabsTrigger>
+        </TabsList>
+        <TabsContent value="balance-sheet" className="mt-4">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Balance Sheet</CardTitle>
+                    <CardDescription>As of today. This report shows a snapshot in time and is not affected by the date filter.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableBody>
+                            <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Assets</TableCell></TableRow>
+                            <ReportRow label="Cash & Equivalents (Admin)" value={financialData?.balanceSheet.assets.cashAndEquivalents || 0} isSub />
+                            <ReportRow label="Gross Financing Portfolio (Active Deals)" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
+                            <ReportRow label="Total Investible Capital (Uninvested)" value={financialData?.balanceSheet.assets.totalInvestibleCapital || 0} isSub />
+                            <ReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
+                            
+                            <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Liabilities & Equity</TableCell></TableRow>
+                            <ReportRow label="Investor Capital" value={financialData?.balanceSheet.liabilities.totalInvestorCapital || 0} isSub />
+                            <ReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.totalPlatformEquity || 0} isSub />
+                            <ReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+        </TabsContent>
+         <TabsContent value="income-statement" className="mt-4">
             <Card>
                 <CardHeader>
                     <CardTitle>Income Statement</CardTitle>
-                    <CardDescription>Cumulative performance</CardDescription>
+                    <CardDescription>Performance over the selected period.</CardDescription>
                 </CardHeader>
                 <CardContent>
                      <Table>
@@ -206,11 +236,12 @@ export default function ReportsPage() {
                     </Table>
                 </CardContent>
             </Card>
-
+        </TabsContent>
+         <TabsContent value="cash-flow" className="mt-4">
              <Card>
                 <CardHeader>
                     <CardTitle>Cash Flow Statement</CardTitle>
-                    <CardDescription>Simplified view of cash movements</CardDescription>
+                    <CardDescription>Simplified view of cash movements for the selected period.</CardDescription>
                 </CardHeader>
                 <CardContent>
                      <Table>
@@ -223,8 +254,8 @@ export default function ReportsPage() {
                     </Table>
                 </CardContent>
             </Card>
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
