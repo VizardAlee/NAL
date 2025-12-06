@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare } from "lucide-react";
 import { useMemo, useTransition, useEffect } from 'react';
-import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
+import { useCollection, useDoc } from '@/firebase';
+import { collection, query, where, DocumentData, Timestamp, orderBy, doc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Deal } from '@/lib/types';
@@ -179,16 +179,14 @@ export default function ClientDashboard() {
     const isMobile = useIsMobile();
     const { toast } = useToast();
     const [isChatPending, startChatTransition] = useTransition();
-    
-    const userProfileQuery = useMemo(() => {
-        if (!firestore || !user?.uid) return null;
-        return query(collection(firestore, 'users'), where('__name__', '==', user.uid));
-    }, [firestore, user?.uid]);
-    
-    const { data: userProfile, loading: profileLoading } = useCollection(
-        userProfileQuery
-    );
 
+    const userProfileRef = useMemo(() => {
+        if (!firestore || !user?.uid) return null;
+        return doc(firestore, 'users', user.uid);
+    }, [firestore, user?.uid]);
+
+    const { data: userProfile, loading: profileLoading } = useDoc(userProfileRef);
+    
     const dealsQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
         return query(collection(firestore, 'deals'), where('clientId', '==', user.uid), orderBy('createdAt', 'desc'));
@@ -235,6 +233,15 @@ export default function ClientDashboard() {
         });
     }
 
+    if (isLoading) {
+        return <DealsSkeleton />;
+    }
+
+    if (!user) {
+        router.replace('/login');
+        return <DealsSkeleton />;
+    }
+
     return (
         <div>
             <PageHeader
@@ -256,20 +263,18 @@ export default function ClientDashboard() {
                 </div>
             </PageHeader>
             
-            {isLoading ? (
-                <DealsSkeleton />
-            ) : userProfile && userProfile.length > 0 ? (
+            {userProfile ? (
                 <div className="grid gap-8">
                      <Card>
                         <CardHeader className="flex flex-row items-center gap-4 space-y-0">
                             <Avatar className="h-16 w-16">
                                 <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/128/128`} />
-                                <AvatarFallback>{userProfile[0].name.charAt(0)}</AvatarFallback>
+                                <AvatarFallback>{userProfile.name.charAt(0)}</AvatarFallback>
                             </Avatar>
                             <div>
-                                <CardTitle className="font-headline text-2xl">{userProfile[0].name}</CardTitle>
-                                <p className="text-muted-foreground">{userProfile[0].email}</p>
-                                <Badge variant="secondary" className="mt-1">{userProfile[0].role}</Badge>
+                                <CardTitle className="font-headline text-2xl">{userProfile.name}</CardTitle>
+                                <p className="text-muted-foreground">{userProfile.email}</p>
+                                <Badge variant="secondary" className="mt-1">{userProfile.role}</Badge>
                             </div>
                         </CardHeader>
                     </Card>
