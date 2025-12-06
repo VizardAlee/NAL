@@ -566,7 +566,7 @@ export default function PlatformFundsPage() {
                                     <TableBody>
                                         {isLoading ? (Array.from({length: 2}).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-5 w-32"/></TableCell><TableCell><Skeleton className="h-5 w-24"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell><TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto"/></TableCell></TableRow>))
                                         : assets?.filter(a => a.status === 'Held').length > 0 ? assets?.filter(a => a.status === 'Held').map(asset => (
-                                            <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{format(asset.acquisitionDate.toDate(), 'PPP')}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell>
+                                            <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{asset.acquisitionDate ? format(asset.acquisitionDate.toDate(), 'PPP') : 'Pending...'}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell>
                                             <TableCell className="text-right">
                                                 <Dialog open={isDialogOpen[`sell-${asset.id}`]} onOpenChange={(isOpen) => isOpen ? openDialog(`sell-${asset.id}`) : closeDialog(`sell-${asset.id}`)}>
                                                     <DialogTrigger asChild><Button size="sm" variant="outline"><DollarSign className="mr-2 h-4 w-4"/>Sell</Button></DialogTrigger>
@@ -585,7 +585,7 @@ export default function PlatformFundsPage() {
                                     <TableBody>
                                         {isLoading ? (Array.from({length: 1}).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-5 w-32"/></TableCell><TableCell><Skeleton className="h-5 w-24"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell></TableRow>))
                                         : assets?.filter(a => a.status === 'Sold').length > 0 ? assets?.filter(a => a.status === 'Sold').map(asset => (
-                                            <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{format(asset.saleDate.toDate(), 'PPP')}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.salePrice)}</TableCell><TableCell className="text-right text-muted-foreground">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell></TableRow>
+                                            <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{asset.saleDate ? format(asset.saleDate.toDate(), 'PPP') : 'N/A'}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.salePrice)}</TableCell><TableCell className="text-right text-muted-foreground">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell></TableRow>
                                         )) : <TableRow><TableCell colSpan={4} className="h-24 text-center">No assets have been sold.</TableCell></TableRow>}
                                     </TableBody>
                                 </Table>
@@ -598,4 +598,3 @@ export default function PlatformFundsPage() {
     );
 }
 
-    
