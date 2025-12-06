@@ -585,14 +585,33 @@ export default function PlatformFundsPage() {
                             </div>
                         </CardHeader>
                         <CardContent className="p-0">
-                           {!isLoading && paginatedAdminTransactions.length > 0 ? (<Table>
+                           {isLoading ? <div className="p-4"><Skeleton className="h-40 w-full"/></div> : 
+                           !paginatedAdminTransactions || paginatedAdminTransactions.length === 0 ? <div className="p-4 py-12 text-center text-sm text-muted-foreground border-t">No administrative activities found.</div> :
+                           isMobile ? (
+                            <div className="p-4 space-y-3 border-t">
+                                {paginatedAdminTransactions.map(tx => (
+                                    <Card key={tx.id}>
+                                        <CardContent className="p-4 space-y-2">
+                                            <div className="flex justify-between items-start">
+                                                <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
+                                                <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</p>
+                                            </div>
+                                            <p className="text-sm">{tx.description}</p>
+                                            <p className="text-xs text-muted-foreground">{formatDate(tx.createdAt)}</p>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                           ) : (
+                           <Table>
                                 <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
                                 <TableBody>
                                 {paginatedAdminTransactions?.map(tx => (
                                     <TableRow key={tx.id}><TableCell>{formatDate(tx.createdAt)}</TableCell><TableCell><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell><TableCell>{tx.description}</TableCell><TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell></TableRow>
                                 ))}
                                 </TableBody>
-                            </Table>) : ( <div className="p-4 py-12 text-center text-sm text-muted-foreground border-t">No administrative activities found.</div> )}
+                            </Table>
+                            )}
                         </CardContent>
                         {totalPages > 1 && (<div className="p-4 border-t"><Pagination><PaginationContent><PaginationItem><PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} /></PaginationItem>{[...Array(totalPages)].map((_, i) => (<PaginationItem key={i}><PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>{i + 1}</PaginationLink></PaginationItem>))}<PaginationItem><PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} /></PaginationItem></PaginationContent></Pagination></div>)}
                     </Card>
