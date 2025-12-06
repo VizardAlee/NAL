@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { useCollection } from "@/firebase";
+import { useCollection, useUser } from "@/firebase";
 import { collection, query, where } from "firebase/firestore";
 import { useFirestore } from "@/firebase";
 
@@ -65,18 +65,28 @@ const menuItems = [
 
 function NotificationBadge({ collectionName }: { collectionName: string }) {
     const firestore = useFirestore();
+    const { user } = useUser();
+
     const q = React.useMemo(() => {
-        if (!firestore) return null;
-        // The chatRequests collection has no 'status' field, so we just count all documents.
+        if (!firestore || !user) return null;
+        
+        // For messages, we query unread notifications targeted at the admin
+        if (collectionName === 'messages') {
+             return query(collection(firestore, 'notifications'), where('recipientId', '==', user.uid), where('read', '==', false));
+        }
+
+        // For other collections with a 'status' field
+        if (['dealRequests', 'depositRequests', 'withdrawalRequests', 'reinvestmentRequests', 'repayments', 'terminationRequests'].includes(collectionName)) {
+            return query(collection(firestore, collectionName), where('status', '==', 'Pending'));
+        }
+
+        // For chatRequests which has no status
         if (collectionName === 'chatRequests') {
             return query(collection(firestore, collectionName));
         }
-        // For messages, we query the notifications collection for unread messages linking to the messages page
-        if (collectionName === 'messages') {
-             return query(collection(firestore, 'notifications'), where('link', '==', '/admin/messages'), where('read', '==', false));
-        }
-        return query(collection(firestore, collectionName), where('status', '==', 'Pending'));
-    }, [firestore, collectionName]);
+        
+        return null;
+    }, [firestore, user, collectionName]);
 
     const { data } = useCollection(q);
 
