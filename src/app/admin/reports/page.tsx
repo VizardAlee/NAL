@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Library, AlertTriangle, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCollection } from "@/firebase/firestore/use-collection";
-import { collection, query, DocumentData, Timestamp } from "firebase/firestore";
+import { collection, query, where, DocumentData, Timestamp } from "firebase/firestore";
 import { useFirestore } from "@/firebase";
 import { useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
