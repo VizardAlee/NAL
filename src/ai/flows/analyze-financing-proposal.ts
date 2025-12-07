@@ -37,7 +37,14 @@ const analyzeFinancingProposalPrompt = ai.definePrompt({
   name: 'analyzeFinancingProposalPrompt',
   input: {schema: AnalyzeFinancingProposalInputSchema},
   output: {schema: AnalyzeFinancingProposalOutputSchema},
-  prompt: `You are an expert financial analyst. You will analyze the provided financing proposal details and provide an assessment of its viability, risk level, and key insights.\n\nFinancing Proposal Details: {{{proposalDetails}}}\n\nProvide your analysis in a structured format, covering viability, risk level, and key insights. Be concise and focus on actionable recommendations.`,
+  prompt: `You are an expert financial analyst with deep expertise in the Nigerian market. Your primary focus is on business financing within Nigeria, and all financial figures should be assumed to be in Nigerian Naira (NGN).
+
+You will analyze the provided financing proposal details considering current Nigerian economic realities, market trends, and sector-specific challenges. Provide a concise assessment of its viability, risk level, and key insights.
+
+Financing Proposal Details:
+{{{proposalDetails}}}
+
+Provide your analysis in a structured format, covering viability, risk level, and key insights. Be concise and focus on actionable recommendations relevant to the Nigerian context.`,
 });
 
 const analyzeFinancingProposalFlow = ai.defineFlow(
