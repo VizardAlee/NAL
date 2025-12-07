@@ -115,22 +115,39 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
       lastMessage,
       lastMessageSenderId: senderId,
       lastUpdatedAt: FieldValue.serverTimestamp(),
-      readBy: [senderId], // Reset read status, only sender has read it
+      readBy: [senderId],
     });
 
     // 3. Create a notification for the recipient(s)
     const senderDoc = await firestore.collection('users').doc(senderId).get();
     const senderName = senderDoc.data()?.name || 'A user';
     
-    // Safely get participantIds, filter out the sender, and remove any duplicates.
+    // Safely get participantIds
     const participantIds = Array.isArray(conversationData.participantIds) 
       ? conversationData.participantIds 
       : [];
+    
+    console.log('=== DEBUG SEND MESSAGE ===');
+    console.log('Sender ID:', senderId);
+    console.log('Sender Name:', senderName);
+    console.log('Conversation ID:', conversationId);
+    console.log('Participant IDs from DB:', participantIds);
+    
     const recipients = [...new Set(participantIds.filter(id => id !== senderId))];
+    console.log('Calculated Recipients:', recipients);
+    console.log('Number of Recipients:', recipients.length);
+    
+    if (recipients.length === 0) {
+      console.log('WARNING: No recipients found — no notifications created');
+    } else {
+      console.log('Creating notifications for:', recipients);
+    }
 
     for (const recipientId of recipients) {
         const recipientDoc = await firestore.collection('users').doc(recipientId).get();
-        const recipientRole = recipientDoc.data()?.role;
+        const recipientRole = recipientDoc.data()?.role || 'Unknown';
+
+        console.log(`  - For recipient ${recipientId} (role: ${recipientRole})`);
 
         let link = '/';
         if (recipientRole === 'Admin') {
@@ -146,12 +163,15 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
             title: `New Message from ${senderName}`,
             message: lastMessage,
             link,
-            recipientId, // Target the specific user
+            recipientId, 
             read: false,
             createdAt: FieldValue.serverTimestamp(),
         });
+        
+        console.log(`  - Created notification for ${recipientId} with link: ${link}`);
     }
 
+    console.log('=== END DEBUG ===');
 
     await batch.commit();
 
