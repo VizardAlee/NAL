@@ -50,13 +50,15 @@ type Notification = {
 function useClearNotificationsByPath() {
     const firestore = useFirestore();
     const pathname = usePathname();
+    const { user } = useUser();
 
     useEffect(() => {
-        if (!firestore || !pathname) return;
+        if (!firestore || !pathname || !user) return;
 
         const clearNotifications = async () => {
             const notificationsToClearQuery = query(
                 collection(firestore, 'notifications'),
+                where('recipientId', '==', user.uid),
                 where('link', '==', pathname),
                 where('read', '==', false)
             );
@@ -77,7 +79,7 @@ function useClearNotificationsByPath() {
 
         return () => clearTimeout(timer);
 
-    }, [firestore, pathname]);
+    }, [firestore, pathname, user]);
 }
 
 
@@ -109,17 +111,19 @@ function AdminSkeleton() {
 function NotificationBell() {
     const firestore = useFirestore();
     const router = useRouter();
+    const { user } = useUser();
 
     const notificationsQuery = useMemo(() => {
-        if (!firestore) return null;
-        // Fetch only unread notifications
+        if (!firestore || !user) return null;
+        // Fetch only unread notifications for the current user
         return query(
             collection(firestore, 'notifications'), 
+            where('recipientId', '==', user.uid),
             where('read', '==', false), 
             orderBy('createdAt', 'desc'), 
             limit(20)
         );
-    }, [firestore]);
+    }, [firestore, user]);
 
     const { data: notifications } = useCollection<Notification>(notificationsQuery);
 
