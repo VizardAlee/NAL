@@ -17,7 +17,6 @@ import {
   CarouselPrevious,
 } from '@/components/ui/carousel';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from './ui/card';
 import type { LucideIcon } from 'lucide-react';
 import { useUser } from '@/firebase';
 
@@ -74,7 +73,7 @@ export function OnboardingTourProvider({ children, steps, storageKey }: { childr
     <OnboardingTourContext.Provider value={contextValue}>
       {children}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-md p-0">
+        <DialogContent className="sm:max-w-lg p-0">
           <DialogHeader className="sr-only">
             <DialogTitle>Application Tour</DialogTitle>
             <DialogDescription>A quick tour of the application's key features.</DialogDescription>
@@ -84,21 +83,26 @@ export function OnboardingTourProvider({ children, steps, storageKey }: { childr
               {steps.map((step, index) => (
                 <CarouselItem key={index}>
                   <div className="p-1">
-                    <Card className="border-none shadow-none">
-                      <CardContent className="flex flex-col items-center justify-center p-12 text-center space-y-4">
-                        <div className="p-4 bg-primary/10 rounded-full">
-                          <step.icon className="h-12 w-12 text-primary" />
+                    <div className="grid md:grid-cols-2 items-center">
+                        <div className="hidden md:flex items-center justify-center p-8 bg-muted/50 h-full rounded-l-lg">
+                           <div className="p-6 bg-gradient-to-br from-primary/20 to-primary/5 rounded-full">
+                             <step.icon className="h-16 w-16 text-primary" />
+                           </div>
                         </div>
-                        <h3 className="text-2xl font-semibold font-headline">{step.title}</h3>
-                        <p className="text-muted-foreground">{step.description}</p>
-                      </CardContent>
-                    </Card>
+                        <div className="p-8 space-y-4">
+                            <div className="flex md:hidden items-center justify-center p-4 bg-muted/50 rounded-full w-24 h-24 mx-auto">
+                                <step.icon className="h-10 w-10 text-primary" />
+                            </div>
+                            <h3 className="text-2xl font-semibold font-headline text-center md:text-left">{step.title}</h3>
+                            <p className="text-muted-foreground text-center md:text-left">{step.description}</p>
+                        </div>
+                    </div>
                   </div>
                 </CarouselItem>
               ))}
             </CarouselContent>
-            <CarouselPrevious className="left-4" />
-            <CarouselNext className="right-4" />
+            <CarouselPrevious className="left-4 hidden sm:flex" />
+            <CarouselNext className="right-4 hidden sm:flex" />
           </Carousel>
           <div className="px-6 pb-6 text-center">
               <Button onClick={handleDismiss} className="w-full">
