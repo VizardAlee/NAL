@@ -140,7 +140,7 @@ export default function InvestorConversationPage() {
         <div className="flex flex-col h-[calc(100vh-8rem)] bg-card rounded-lg border">
             <header className="flex items-center gap-4 p-4 border-b">
                 <Button variant="ghost" size="icon" asChild>
-                    <Link href="/investor/messages"><ArrowLeft /></Link>
+                    <Link href="/investor/dashboard"><ArrowLeft /></Link>
                 </Button>
                 <Avatar>
                     <AvatarImage src={otherParticipantAvatar} />
