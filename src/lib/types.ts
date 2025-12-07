@@ -1,4 +1,5 @@
 
+
 import { type DocumentData, type Timestamp } from 'firebase/firestore';
 
 export type Deal = DocumentData & {
@@ -30,4 +31,14 @@ export type User = DocumentData & {
     name: string;
     email: string;
     role: 'Admin' | 'Investor' | 'Client';
+};
+
+export type Repayment = DocumentData & {
+  id: string;
+  dealId: string;
+  amount: number;
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
+  lodgedAt: Timestamp;
+  dueDate: Timestamp;
+  installmentNumber: number;
 };

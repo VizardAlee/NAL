@@ -1,7 +1,8 @@
 
+
 'use client';
 
-import { useMemo, useState, useEffect, useCallback, useTransition, useActionState } from 'react';
+import { useMemo, useState, useEffect, useCallback, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import {
   Table,
@@ -13,10 +14,9 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { HandCoins, CheckCircle, Hourglass, Loader2, Ban, AlertTriangle } from 'lucide-react';
+import { HandCoins, CheckCircle, Hourglass, Loader2, Ban } from 'lucide-react';
 import { generateAmortizationSchedule, ScheduleInstallment } from '@/lib/amortization';
-import { Deal } from '@/lib/types';
-import { Repayment } from './page';
+import { Deal, Repayment } from '@/lib/types';
 import { format, isSameDay, startOfToday } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -28,7 +28,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination"
 import { useUser, useCollection } from '@/firebase';
-import { lodgePaymentAction } from './actions';
+import { lodgePaymentAction } from '@/app/client/dashboard/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Timestamp, collection, query, where } from 'firebase/firestore';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -42,13 +42,7 @@ interface ScheduledPayment extends ScheduleInstallment {
   status: RepaymentStatus;
   repaymentDoc?: Repayment;
   isActionable?: boolean;
-  penalty?: number;
 }
-
-type PenaltyTransaction = {
-    amount: number;
-    details: string; // e.g. "Late fee for repayment <repayment_id>"
-};
 
 function SubmitLodgePaymentButton() {
     const { pending } = useFormStatus();
@@ -90,7 +84,7 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
     return (
         <form action={formAction}>
             <input type="hidden" name="dealId" value={dealId} />
-            <input type="hidden" name="amount" value={(installment.payment || 0) + (installment.penalty || 0)} />
+            <input type="hidden" name="amount" value={installment.payment} />
             <input type="hidden" name="userId" value={userId} />
             <input type="hidden" name="dueDate" value={installment.dueDate.toISOString()} />
              <input type="hidden" name="installmentNumber" value={installment.installment} />
@@ -101,24 +95,13 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
 
 export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }: { deal: Deal, initialRepayments: Repayment[] | null, repaymentsLoading: boolean }) {
   const [currentPage, setCurrentPage] = useState(1);
-  const { user, firestore } = useUser();
+  const { user } = useUser();
   const [allRepayments, setAllRepayments] = useState<Repayment[] | null>(initialRepayments);
   const isMobile = useIsMobile();
   
   useEffect(() => {
     setAllRepayments(initialRepayments);
   }, [initialRepayments]);
-
-  const penaltyQuery = useMemo(() => {
-    if (!firestore || !deal?.id) return null;
-    return query(
-        collection(firestore, 'transactions'),
-        where('dealId', '==', deal.id),
-        where('type', '==', 'Penalty')
-    );
-  }, [firestore, deal]);
-
-  const { data: penalties, loading: penaltiesLoading } = useCollection<PenaltyTransaction>(penaltyQuery as any);
 
   const handlePaymentLodged = useCallback((newRepayment: Repayment) => {
     setAllRepayments(prev => {
@@ -151,8 +134,6 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
           if (!r.dueDate) return false;
           return isSameDay(r.dueDate.toDate(), installment.dueDate);
       });
-      
-      const installmentPenalties = penalties?.filter(p => p.details.includes(installment.installment.toString())).reduce((sum, p) => sum + p.amount, 0) || 0;
 
       let status: RepaymentStatus = 'Upcoming';
       if (matchingRepayment) {
@@ -163,9 +144,9 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
         status = 'Due';
       }
 
-      return { ...installment, status, repaymentDoc: matchingRepayment, penalty: installmentPenalties };
+      return { ...installment, status, repaymentDoc: matchingRepayment };
     });
-  }, [schedule, allRepayments, penalties]);
+  }, [schedule, allRepayments]);
   
   const upcomingSchedule = useMemo(() => {
       return enhancedSchedule.filter(p => p.status === 'Due' || p.status === 'Upcoming');
@@ -215,7 +196,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
 
   const formatCurrency = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
 
-  if (repaymentsLoading || penaltiesLoading) {
+  if (repaymentsLoading) {
       return (
           <div className="p-4">
               <Skeleton className="h-40 w-full" />
@@ -257,7 +238,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                             <CardContent className="p-4 space-y-3">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <p className="font-bold">{formatCurrency(item.payment + (item.penalty || 0))}</p>
+                                        <p className="font-bold">{formatCurrency(item.payment)}</p>
                                         <p className="text-xs text-muted-foreground">Due: {format(item.dueDate, 'PPP')}</p>
                                     </div>
                                     <StatusBadge status={item.status} />
@@ -265,7 +246,6 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                                 <div className="text-xs space-y-1 pt-2 border-t">
                                     <div className="flex justify-between"><span className="text-muted-foreground">Principal:</span> <span>{formatCurrency(item.principal)}</span></div>
                                     <div className="flex justify-between"><span className="text-muted-foreground">Markup:</span> <span>{formatCurrency(item.interest)}</span></div>
-                                    {item.penalty && item.penalty > 0 && <div className="flex justify-between text-destructive"><span className="font-medium">Penalty:</span> <span className="font-medium">{formatCurrency(item.penalty)}</span></div>}
                                     <div className="flex justify-between"><span className="text-muted-foreground">Balance:</span> <span>{formatCurrency(item.balance)}</span></div>
                                 </div>
                                 {(item.isActionable && user) && (
@@ -281,10 +261,9 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                 <Table>
                     <TableHeader>
                     <TableRow>
-                        <TableHead>Due</TableHead>
+                        <TableHead>Due Date</TableHead>
                         <TableHead>Principal</TableHead>
                         <TableHead>Markup</TableHead>
-                        <TableHead>Penalty</TableHead>
                         <TableHead>Total Payment</TableHead>
                         <TableHead>Balance</TableHead>
                         <TableHead>Status</TableHead>
@@ -294,13 +273,10 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                     <TableBody>
                     {paginatedSchedule.map(item => (
                         <TableRow key={`${item.installment}-${item.status}`} className={item.isActionable ? 'bg-muted/50' : ''}>
-                            <TableCell data-label="Due">{format(item.dueDate, 'PPP')}</TableCell>
+                            <TableCell data-label="Due Date">{format(item.dueDate, 'PPP')}</TableCell>
                             <TableCell data-label="Principal">{formatCurrency(item.principal)}</TableCell>
                             <TableCell data-label="Markup">{formatCurrency(item.interest)}</TableCell>
-                            <TableCell data-label="Penalty" className={item.penalty ? 'text-destructive font-medium' : ''}>
-                                {item.penalty ? formatCurrency(item.penalty) : '-'}
-                            </TableCell>
-                            <TableCell data-label="Total Payment" className="font-bold">{formatCurrency(item.payment + (item.penalty || 0))}</TableCell>
+                            <TableCell data-label="Total Payment" className="font-bold">{formatCurrency(item.payment)}</TableCell>
                             <TableCell data-label="Balance">{formatCurrency(item.balance)}</TableCell>
                             <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
                             <TableCell data-label="Action" className="text-right">

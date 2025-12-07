@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -10,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Repayment } from './page';
+import { Repayment } from '@/lib/types';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CheckCircle, Hourglass } from 'lucide-react';

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -10,10 +11,9 @@ import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, doc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Deal } from '@/lib/types';
-import { RepaymentSchedule } from "./repayment-schedule";
+import { Deal, Repayment } from '@/lib/types';
+import { RepaymentSchedule, RepaymentHistory } from "@/components/deals/page";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RepaymentHistory } from "./repayment-history";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { requestTerminationAction } from "./actions";
@@ -24,16 +24,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { requestChatWithAdmin } from "@/app/common/actions/chat-actions";
 
-
-export type Repayment = DocumentData & {
-  id: string;
-  dealId: string;
-  amount: number;
-  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
-  lodgedAt: Timestamp;
-  dueDate: Timestamp;
-  installmentNumber: number;
-};
 
 const statusVariant = {
     Pending: 'secondary',

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
@@ -14,12 +15,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format, differenceInDays as fnsDifferenceInDays } from 'date-fns';
-import { Deal, Investment } from '@/lib/types';
+import { Deal, Investment, Repayment } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { ViewPageNav } from '@/components/view-page-nav';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RepaymentSchedule, RepaymentHistory } from '@/components/deals/page';
 
 type User = {
     id: string;
@@ -96,8 +99,16 @@ export default function DealDetailPage() {
   const { data: investments, loading: investmentsLoading } = useCollection<Investment>(investmentsQuery);
   const { data: users, loading: usersLoading } = useCollection<User>(usersQuery);
   const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
+  
+  const repaymentsQuery = useMemo(() => {
+    if (!firestore || !deal?.id) return null;
+    return query(collection(firestore, 'repayments'), where('dealId', '==', deal.id));
+  }, [firestore, deal]);
 
-  const isLoading = dealLoading || investmentsLoading || usersLoading || fundBatchesLoading || isMobile === undefined;
+  const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery);
+
+
+  const isLoading = dealLoading || investmentsLoading || usersLoading || fundBatchesLoading || repaymentsLoading || isMobile === undefined;
 
   const totalFunded = useMemo(() => {
     if (!investments) return 0;
@@ -234,6 +245,23 @@ export default function DealDetailPage() {
                         <div className="font-medium">Date Created</div><div>{formatDate(deal.createdAt)}</div>
                     </CardContent>
                 </Card>
+
+                 <Tabs defaultValue="schedule" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="schedule">Repayment Schedule</TabsTrigger>
+                        <TabsTrigger value="history">Repayment History</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="schedule">
+                        <Card>
+                            <RepaymentSchedule deal={deal} initialRepayments={repayments} repaymentsLoading={repaymentsLoading} />
+                        </Card>
+                    </TabsContent>
+                    <TabsContent value="history">
+                         <Card>
+                            <RepaymentHistory repayments={repayments} loading={repaymentsLoading} />
+                        </Card>
+                    </TabsContent>
+                </Tabs>
                 
                 {deal.status === 'Pending' && (
                     <Card>
