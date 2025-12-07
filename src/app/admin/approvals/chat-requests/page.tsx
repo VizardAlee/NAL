@@ -12,9 +12,9 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Loader2, MessageSquarePlus } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useTransition } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, DocumentData, Timestamp, writeBatch, doc, where, getDocs, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, DocumentData, Timestamp } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDistanceToNow } from 'date-fns';
@@ -23,6 +23,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { initiateChat } from './actions';
 
 
 type ChatRequest = DocumentData & {
@@ -45,7 +46,7 @@ export default function ChatRequestsPage() {
     const { data: requests, loading } = useCollection<ChatRequest>(requestsQuery);
     
     const handleInitiateChat = async (request: ChatRequest) => {
-        if (!firestore || !adminUser || !adminUser.displayName) {
+        if (!adminUser || !adminUser.displayName) {
             toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in as an admin to perform this action.'});
             return;
         };
@@ -53,62 +54,24 @@ export default function ChatRequestsPage() {
         setProcessingId(request.id);
         
         try {
-            // Check if a conversation already exists with THIS specific user
-            const existingConvoQuery = query(
-                collection(firestore, 'conversations'),
-                where('participantIds', 'array-contains', adminUser.uid)
+            const result = await initiateChat(
+                request.id,
+                request.userId,
+                request.userName,
+                adminUser.uid,
+                adminUser.displayName
             );
-            const existingConvoSnapshot = await getDocs(existingConvoQuery);
-            
-            // Because array-contains queries on the same field are not natively supported, 
-            // we filter the results on the client side to ensure we find a conversation with ONLY these two participants.
-            const exactMatch = existingConvoSnapshot.docs.find(doc => {
-                const participantIds = doc.data().participantIds;
-                return participantIds.includes(request.userId) && participantIds.length === 2;
-            });
 
-
-            if (exactMatch) {
-                // If conversation exists, just delete the request and redirect
-                await deleteDoc(doc(firestore, 'chatRequests', request.id));
-                router.push(`/admin/messages/${exactMatch.id}`);
-                return;
+            if (!result.success) {
+                throw new Error(result.message);
             }
-
-            // If no conversation exists, create a new one
-            const batch = writeBatch(firestore);
-            const now = serverTimestamp();
-
-            const newConversationRef = doc(collection(firestore, 'conversations'));
-            batch.set(newConversationRef, {
-                participantIds: [adminUser.uid, request.userId],
-                participantNames: [adminUser.displayName, request.userName],
-                participantAvatars: [`https://picsum.photos/seed/${adminUser.uid}/128/128`, `https://picsum.photos/seed/${request.userId}/128/128`],
-                lastMessage: `Hi ${request.userName}, this is ${adminUser.displayName}. How can I help you today?`,
-                lastMessageSenderId: adminUser.uid,
-                lastUpdatedAt: now,
-                readBy: [adminUser.uid],
-            });
-            
-            const firstMessageRef = doc(collection(newConversationRef, 'messages'));
-             batch.set(firstMessageRef, {
-                conversationId: newConversationRef.id,
-                senderId: adminUser.uid,
-                text: `Hi ${request.userName}, this is ${adminUser.displayName}. How can I help you today?`,
-                createdAt: now,
-            });
-
-            const requestRef = doc(firestore, 'chatRequests', request.id);
-            batch.delete(requestRef);
-
-            await batch.commit();
 
             toast({
                 title: 'Chat Initiated',
                 description: `A conversation with ${request.userName} has been created.`,
             });
             
-            router.push(`/admin/messages/${newConversationRef.id}`);
+            router.push(`/admin/messages/${result.conversationId}`);
 
         } catch (error) {
             console.error("Chat Initiation Error: ", error);
