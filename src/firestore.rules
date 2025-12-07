@@ -185,10 +185,12 @@ service cloud.firestore {
     match /conversations/{conversationId} {
       // Admins can create conversations.
       allow create: if isAdmin();
-      // Only participants (or Admins) can read or update conversation metadata.
-      allow get, update: if isAdmin() || (request.auth != null && request.auth.uid in resource.data.participantIds);
-      // Users can list conversations they are a part of. Admins can list all conversations.
-      allow list: if isAdmin() || (request.auth != null && request.query.where.value == request.auth.uid);
+      // Only participants (or Admins) can read a conversation.
+      allow get: if isAdmin() || (request.auth != null && request.auth.uid in resource.data.participantIds);
+      // Only participants can update conversation metadata (e.g. read status).
+      allow update: if request.auth != null && request.auth.uid in resource.data.participantIds;
+      // An authenticated user can list conversations where they are a participant. Admins can list all.
+      allow list: if isAdmin() || (request.auth != null && request.query.where[0] == "participantIds" && request.query.where[1] == "array-contains" && request.query.where[2] == request.auth.uid);
     }
     
     // Rules for 'messages' subcollection
