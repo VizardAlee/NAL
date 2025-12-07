@@ -154,10 +154,9 @@ service cloud.firestore {
 
     // Rules for 'notifications'
     match /notifications/{notificationId} {
-      // Admins can create any notification
-      allow create: if isAdmin();
-      // A user can list/read/update notifications where they are the recipient
-      allow get, list, update: if request.auth != null && resource.data.recipientId == request.auth.uid;
+        // Admins can create and read/update any notification
+        allow create: if isAdmin();
+        allow read, update: if isAdmin() || (request.auth != null && resource.data.recipientId == request.auth.uid);
     }
 
     // Rules for 'platformSettings'
@@ -198,3 +197,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
