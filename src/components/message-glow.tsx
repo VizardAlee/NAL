@@ -8,6 +8,8 @@ import { SidebarMenuButton } from './ui/sidebar';
 
 type Conversation = {
   id: string;
+  participantIds: string[];
+  lastMessageSenderId: string;
   readBy: string[];
 };
 
@@ -17,10 +19,10 @@ export function MessageGlow({ children, isActive, tooltip }: { children: React.R
 
   const unreadQuery = useMemo(() => {
     if (!firestore || !user?.uid) return null;
+    // Query for conversations where the user is a participant.
     return query(
       collection(firestore, 'conversations'),
-      where('participantIds', 'array-contains', user.uid),
-      where('lastMessageSenderId', '!=', user.uid) // We only care if someone else sent the last message
+      where('participantIds', 'array-contains', user.uid)
     );
   }, [firestore, user]);
 
@@ -28,8 +30,11 @@ export function MessageGlow({ children, isActive, tooltip }: { children: React.R
 
   const hasUnread = useMemo(() => {
     if (!conversations || !user) return false;
-    // Check if there is any conversation where the user's ID is not in the `readBy` array.
-    return conversations.some(convo => !convo.readBy.includes(user.uid));
+    // An unread conversation exists if the user is not the last sender AND their ID is not in the `readBy` array.
+    return conversations.some(convo => 
+      convo.lastMessageSenderId !== user.uid && 
+      !convo.readBy.includes(user.uid)
+    );
   }, [conversations, user]);
 
   return (
