@@ -33,31 +33,10 @@ type OnboardingTourContextType = {
 const OnboardingTourContext = createContext<OnboardingTourContextType | null>(null);
 
 export function OnboardingTourProvider({ children, steps, storageKey }: { children: React.ReactNode, steps: OnboardingStep[], storageKey: string }) {
-  const { user, loading } = useUser();
   const [isOpen, setIsOpen] = useState(false);
 
-  useEffect(() => {
-    if (loading || !user) return;
-
-    try {
-      const hasSeenTour = localStorage.getItem(storageKey);
-      if (!hasSeenTour) {
-        setIsOpen(true);
-      }
-    } catch (error) {
-      console.error("Could not access localStorage:", error);
-      setIsOpen(false);
-    }
-  }, [storageKey, user, loading]);
-
   const handleDismiss = () => {
-    try {
-      localStorage.setItem(storageKey, 'true');
-      setIsOpen(false);
-    } catch (error)      {
-      console.error("Could not write to localStorage:", error);
-      setIsOpen(false);
-    }
+    setIsOpen(false);
   };
   
   const contextValue = useMemo(() => ({
