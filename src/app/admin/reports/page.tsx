@@ -16,6 +16,19 @@ import { DateRange } from "react-day-picker";
 import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { startOfDay, endOfDay } from "date-fns";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from "recharts";
+import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 
 type Transaction = DocumentData & {
   type: 'PlatformEarning' | 'Zakat' | 'Penalty' | 'Investment' | 'Deposit' | 'Withdrawal' | 'ProfitDistribution';
@@ -54,6 +67,17 @@ type Asset = DocumentData & {
 const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(value);
 };
+
+const formatCurrencyShort = (value: number) => {
+  if (value >= 1_000_000) {
+    return `₦${(value / 1_000_000).toFixed(1)}M`;
+  }
+  if (value >= 1_000) {
+    return `₦${(value / 1_000).toFixed(0)}K`;
+  }
+  return `₦${value.toFixed(0)}`;
+};
+
 
 function ReportRow({ label, value, isTotal = false, isSub = false, isNegative = false }: { label: string, value: number, isTotal?: boolean, isSub?: boolean, isNegative?: boolean }) {
     const valueClass = isNegative ? 'text-destructive' : (isTotal ? '' : 'text-muted-foreground');
@@ -192,6 +216,27 @@ export default function ReportsPage() {
     };
   }, [allTransactions, allAdminTransactions, allFundBatches, allDeals, allAssets, isLoading, dateRange]);
 
+  const chartData = useMemo(() => {
+    if (!financialData) return null;
+    return {
+      assetComposition: [
+        { name: 'Admin Cash', value: financialData.balanceSheet.assets.cashAndEquivalents, fill: "hsl(var(--chart-1))" },
+        { name: 'Financing Portfolio', value: financialData.balanceSheet.assets.grossFinancingPortfolio, fill: "hsl(var(--chart-2))" },
+        { name: 'Held Assets', value: financialData.balanceSheet.assets.totalAssetValue, fill: "hsl(var(--chart-3))" },
+        { name: 'Investible Capital', value: financialData.balanceSheet.assets.totalInvestibleCapital, fill: "hsl(var(--chart-4))" },
+      ].filter(item => item.value > 0),
+      income: [
+        { name: 'Income', revenue: financialData.incomeStatement.totalRevenue, expenses: financialData.incomeStatement.totalExpenses }
+      ],
+      cashFlow: [
+        { name: 'Operations', value: financialData.cashFlow.netCashFromOperations },
+        { name: 'Investing', value: financialData.cashFlow.cashFromInvesting },
+        { name: 'Financing', value: financialData.cashFlow.cashFromFinancing },
+      ],
+    };
+  }, [financialData]);
+
+
   if (isLoading) {
       return (
           <div>
@@ -243,7 +288,7 @@ export default function ReportsPage() {
                     <CardTitle>Balance Sheet</CardTitle>
                     <CardDescription>As of {dateRange?.to ? dateRange.to.toLocaleDateString() : 'today'}.</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="grid gap-8 md:grid-cols-2">
                     <Table>
                         <TableBody>
                             <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Assets</TableCell></TableRow>
@@ -259,6 +304,32 @@ export default function ReportsPage() {
                             <ReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
                         </TableBody>
                     </Table>
+                    <div className="flex flex-col items-center justify-center">
+                        <h3 className="mb-4 text-center font-medium">Asset Composition</h3>
+                         <ChartContainer config={{}} className="h-64 w-full">
+                           <ResponsiveContainer>
+                                <PieChart>
+                                    <Pie
+                                        data={chartData?.assetComposition}
+                                        dataKey="value"
+                                        nameKey="name"
+                                        cx="50%"
+                                        cy="50%"
+                                        outerRadius={80}
+                                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                    >
+                                    {chartData?.assetComposition.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                                    ))}
+                                    </Pie>
+                                     <Tooltip
+                                        content={<ChartTooltipContent formatter={(value) => formatCurrency(value as number)} />}
+                                    />
+                                    <Legend />
+                                </PieChart>
+                           </ResponsiveContainer>
+                        </ChartContainer>
+                    </div>
                 </CardContent>
             </Card>
         </TabsContent>
@@ -268,7 +339,7 @@ export default function ReportsPage() {
                     <CardTitle>Income Statement</CardTitle>
                     <CardDescription>Performance over the selected period.</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="grid gap-8 md:grid-cols-2">
                      <Table>
                         <TableBody>
                             <ReportRow label="Financing Revenue" value={financialData?.incomeStatement.financingRevenue || 0} />
@@ -281,6 +352,21 @@ export default function ReportsPage() {
                             <ReportRow label="Net Income" value={financialData?.incomeStatement.netIncome || 0} isTotal />
                         </TableBody>
                     </Table>
+                     <div className="flex flex-col items-center justify-center">
+                         <h3 className="mb-4 text-center font-medium">Revenue vs Expenses</h3>
+                         <ChartContainer config={{}} className="h-64 w-full">
+                            <ResponsiveContainer>
+                                <BarChart data={chartData?.income} margin={{ top: 20 }}>
+                                    <XAxis dataKey="name" stroke="hsl(var(--foreground))" />
+                                    <YAxis stroke="hsl(var(--foreground))" tickFormatter={formatCurrencyShort} />
+                                    <Tooltip content={<ChartTooltipContent formatter={(value) => formatCurrency(value as number)} />} />
+                                    <Legend />
+                                    <Bar dataKey="revenue" fill="hsl(var(--chart-1))" name="Revenue" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="expenses" fill="hsl(var(--destructive))" name="Expenses" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </ChartContainer>
+                    </div>
                 </CardContent>
             </Card>
         </TabsContent>
@@ -290,7 +376,7 @@ export default function ReportsPage() {
                     <CardTitle>Cash Flow Statement</CardTitle>
                     <CardDescription>Simplified view of cash movements for the selected period.</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="grid gap-8 md:grid-cols-2">
                      <Table>
                         <TableBody>
                             <ReportRow label="Net Cash from Operations" value={financialData?.cashFlow.netCashFromOperations || 0} />
@@ -299,6 +385,23 @@ export default function ReportsPage() {
                             <ReportRow label="Net Change in Cash" value={financialData?.cashFlow.netCashFlow || 0} isTotal />
                         </TableBody>
                     </Table>
+                    <div className="flex flex-col items-center justify-center">
+                         <h3 className="mb-4 text-center font-medium">Cash Flow by Activity</h3>
+                         <ChartContainer config={{}} className="h-64 w-full">
+                            <ResponsiveContainer>
+                                <BarChart data={chartData?.cashFlow} margin={{ top: 20 }}>
+                                    <XAxis dataKey="name" stroke="hsl(var(--foreground))" />
+                                    <YAxis stroke="hsl(var(--foreground))" tickFormatter={formatCurrencyShort}/>
+                                    <Tooltip content={<ChartTooltipContent formatter={(value) => formatCurrency(value as number)} />} />
+                                    <Bar dataKey="value" name="Cash Flow" radius={[4, 4, 0, 0]}>
+                                        {chartData?.cashFlow.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.value >= 0 ? "hsl(var(--chart-1))" : "hsl(var(--destructive))"} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </ChartContainer>
+                    </div>
                 </CardContent>
             </Card>
         </TabsContent>
