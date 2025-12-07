@@ -283,30 +283,37 @@ export default function ReportsPage() {
             <TabsTrigger value="cash-flow">Cash Flow</TabsTrigger>
         </TabsList>
         <TabsContent value="balance-sheet" className="mt-4">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Balance Sheet</CardTitle>
-                    <CardDescription>As of {dateRange?.to ? dateRange.to.toLocaleDateString() : 'today'}.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-8 md:grid-cols-2">
-                    <Table>
-                        <TableBody>
-                            <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Assets</TableCell></TableRow>
-                            <ReportRow label="Cash & Equivalents (Admin)" value={financialData?.balanceSheet.assets.cashAndEquivalents || 0} isSub />
-                            <ReportRow label="Gross Financing Portfolio (Active Deals)" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
-                            <ReportRow label="Held Asset Value" value={financialData?.balanceSheet.assets.totalAssetValue || 0} isSub />
-                            <ReportRow label="Total Investible Capital (Uninvested)" value={financialData?.balanceSheet.assets.totalInvestibleCapital || 0} isSub />
-                            <ReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
-                            
-                            <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Liabilities & Equity</TableCell></TableRow>
-                            <ReportRow label="Investor Capital" value={financialData?.balanceSheet.liabilities.totalInvestorCapital || 0} isSub />
-                            <ReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.totalPlatformEquity || 0} isSub />
-                            <ReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
-                        </TableBody>
-                    </Table>
-                    <div className="flex flex-col items-center justify-center">
-                        <h3 className="mb-4 text-center font-medium">Asset Composition</h3>
-                         <ChartContainer config={{}} className="h-64 w-full">
+            <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Balance Sheet</CardTitle>
+                        <CardDescription>As of {dateRange?.to ? dateRange.to.toLocaleDateString() : 'today'}.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableBody>
+                                <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Assets</TableCell></TableRow>
+                                <ReportRow label="Cash & Equivalents (Admin)" value={financialData?.balanceSheet.assets.cashAndEquivalents || 0} isSub />
+                                <ReportRow label="Gross Financing Portfolio (Active Deals)" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
+                                <ReportRow label="Held Asset Value" value={financialData?.balanceSheet.assets.totalAssetValue || 0} isSub />
+                                <ReportRow label="Total Investible Capital (Uninvested)" value={financialData?.balanceSheet.assets.totalInvestibleCapital || 0} isSub />
+                                <ReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
+                                
+                                <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Liabilities & Equity</TableCell></TableRow>
+                                <ReportRow label="Investor Capital" value={financialData?.balanceSheet.liabilities.totalInvestorCapital || 0} isSub />
+                                <ReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.totalPlatformEquity || 0} isSub />
+                                <ReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Asset Composition</CardTitle>
+                        <CardDescription>A breakdown of the platform's assets.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ChartContainer config={{}} className="h-64 w-full">
                            <ResponsiveContainer>
                                 <PieChart>
                                     <Pie
@@ -329,32 +336,39 @@ export default function ReportsPage() {
                                 </PieChart>
                            </ResponsiveContainer>
                         </ChartContainer>
-                    </div>
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
+            </div>
         </TabsContent>
          <TabsContent value="income-statement" className="mt-4">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Income Statement</CardTitle>
-                    <CardDescription>Performance over the selected period.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-8 md:grid-cols-2">
-                     <Table>
-                        <TableBody>
-                            <ReportRow label="Financing Revenue" value={financialData?.incomeStatement.financingRevenue || 0} />
-                            <ReportRow label="Gain on Asset Sale" value={financialData?.incomeStatement.gainOnAssetSale || 0} />
-                            <ReportRow label="Total Revenue" value={financialData?.incomeStatement.totalRevenue || 0} isTotal />
-                            <TableRow><TableCell colSpan={2}>&nbsp;</TableCell></TableRow>
-                            <ReportRow label="Operational Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isNegative />
-                            <ReportRow label="Total Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isTotal isNegative />
-                             <TableRow><TableCell colSpan={2}><Separator /></TableCell></TableRow>
-                            <ReportRow label="Net Income" value={financialData?.incomeStatement.netIncome || 0} isTotal />
-                        </TableBody>
-                    </Table>
-                     <div className="flex flex-col items-center justify-center">
-                         <h3 className="mb-4 text-center font-medium">Revenue vs Expenses</h3>
-                         <ChartContainer config={{}} className="h-64 w-full">
+            <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Income Statement</CardTitle>
+                        <CardDescription>Performance over the selected period.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableBody>
+                                <ReportRow label="Financing Revenue" value={financialData?.incomeStatement.financingRevenue || 0} />
+                                <ReportRow label="Gain on Asset Sale" value={financialData?.incomeStatement.gainOnAssetSale || 0} />
+                                <ReportRow label="Total Revenue" value={financialData?.incomeStatement.totalRevenue || 0} isTotal />
+                                <TableRow><TableCell colSpan={2}>&nbsp;</TableCell></TableRow>
+                                <ReportRow label="Operational Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isNegative />
+                                <ReportRow label="Total Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isTotal isNegative />
+                                <TableRow><TableCell colSpan={2}><Separator /></TableCell></TableRow>
+                                <ReportRow label="Net Income" value={financialData?.incomeStatement.netIncome || 0} isTotal />
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Revenue vs Expenses</CardTitle>
+                        <CardDescription>A visual comparison of income and expenses.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ChartContainer config={{}} className="h-64 w-full">
                             <ResponsiveContainer>
                                 <BarChart data={chartData?.income} margin={{ top: 20 }}>
                                     <XAxis dataKey="name" stroke="hsl(var(--foreground))" />
@@ -366,28 +380,35 @@ export default function ReportsPage() {
                                 </BarChart>
                             </ResponsiveContainer>
                         </ChartContainer>
-                    </div>
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
+            </div>
         </TabsContent>
          <TabsContent value="cash-flow" className="mt-4">
-             <Card>
-                <CardHeader>
-                    <CardTitle>Cash Flow Statement</CardTitle>
-                    <CardDescription>Simplified view of cash movements for the selected period.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-8 md:grid-cols-2">
-                     <Table>
-                        <TableBody>
-                            <ReportRow label="Net Cash from Operations" value={financialData?.cashFlow.netCashFromOperations || 0} />
-                            <ReportRow label="Net Cash from Investing" value={financialData?.cashFlow.cashFromInvesting || 0} />
-                            <ReportRow label="Net Cash from Financing" value={financialData?.cashFlow.cashFromFinancing || 0} />
-                            <ReportRow label="Net Change in Cash" value={financialData?.cashFlow.netCashFlow || 0} isTotal />
-                        </TableBody>
-                    </Table>
-                    <div className="flex flex-col items-center justify-center">
-                         <h3 className="mb-4 text-center font-medium">Cash Flow by Activity</h3>
-                         <ChartContainer config={{}} className="h-64 w-full">
+             <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Cash Flow Statement</CardTitle>
+                        <CardDescription>Simplified view of cash movements for the selected period.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableBody>
+                                <ReportRow label="Net Cash from Operations" value={financialData?.cashFlow.netCashFromOperations || 0} />
+                                <ReportRow label="Net Cash from Investing" value={financialData?.cashFlow.cashFromInvesting || 0} />
+                                <ReportRow label="Net Cash from Financing" value={financialData?.cashFlow.cashFromFinancing || 0} />
+                                <ReportRow label="Net Change in Cash" value={financialData?.cashFlow.netCashFlow || 0} isTotal />
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Cash Flow by Activity</CardTitle>
+                        <CardDescription>Sources and uses of cash.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ChartContainer config={{}} className="h-64 w-full">
                             <ResponsiveContainer>
                                 <BarChart data={chartData?.cashFlow} margin={{ top: 20 }}>
                                     <XAxis dataKey="name" stroke="hsl(var(--foreground))" />
@@ -401,9 +422,9 @@ export default function ReportsPage() {
                                 </BarChart>
                             </ResponsiveContainer>
                         </ChartContainer>
-                    </div>
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
+             </div>
         </TabsContent>
       </Tabs>
     </div>
