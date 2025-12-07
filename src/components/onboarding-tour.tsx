@@ -68,6 +68,10 @@ export function OnboardingTour({ steps, storageKey }: OnboardingTourProps) {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-md p-0">
+        <DialogHeader className="sr-only">
+          <DialogTitle>Application Tour</DialogTitle>
+          <DialogDescription>A quick tour of the application's key features.</DialogDescription>
+        </DialogHeader>
         <Carousel className="w-full">
           <CarouselContent>
             {steps.map((step, index) => (
