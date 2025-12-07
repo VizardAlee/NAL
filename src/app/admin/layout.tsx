@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, LogOut, Circle } from "lucide-react";
+import { Bell, LogOut, Circle, LayoutDashboard, FileText, Users, CheckCircle, Banknote, FlaskConical, History, Settings, Library, MessageSquare } from "lucide-react";
 import {
   SidebarProvider,
   Sidebar,
@@ -35,7 +35,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { usePathname } from 'next/navigation';
 import { ScrollArea } from "@/components/ui/scroll-area";
-
+import { OnboardingTour, OnboardingStep } from "@/components/onboarding-tour";
 
 type Notification = {
     id: string;
@@ -175,6 +175,30 @@ function NotificationBell() {
     )
 }
 
+const adminOnboardingSteps: OnboardingStep[] = [
+  {
+    icon: LayoutDashboard,
+    title: 'Welcome to Your Dashboard',
+    description: "This is your command center. Get a high-level overview of platform metrics, from total value locked to recent user activity.",
+  },
+  {
+    icon: CheckCircle,
+    title: 'Manage Approvals',
+    description: "All user requests, from new deals and deposits to withdrawals and terminations, appear in the 'Approvals' section for your review.",
+  },
+  {
+    icon: Users,
+    title: 'Oversee Users',
+    description: "The 'Users' section allows you to view profiles and financial histories for every investor and client on the platform.",
+  },
+  {
+    icon: FileText,
+    title: 'Handle Deals',
+    description: "Create, view, and manage all financing deals. Once a deal is ready, you can activate it by funding it from available capital.",
+  },
+];
+
+
 export default function AdminLayout({
   children,
 }: {
@@ -208,6 +232,7 @@ export default function AdminLayout({
 
   return (
     <SidebarProvider>
+      <OnboardingTour steps={adminOnboardingSteps} storageKey="hasSeenAdminTour" />
       <Sidebar>
         <SidebarHeader>
           <div className="flex items-center gap-2 p-2">

@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut } from "lucide-react";
+import { LogOut, FileText, PlusCircle } from "lucide-react";
 import { Logo } from "@/components/icons";
 import Link from "next/link";
 import { useUser } from "@/firebase";
@@ -22,6 +22,7 @@ import React, { useEffect } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { MessagesLink } from "@/components/messages-link";
+import { OnboardingTour, OnboardingStep } from "@/components/onboarding-tour";
 
 function ClientSkeleton() {
     return (
@@ -40,6 +41,20 @@ function ClientSkeleton() {
       </div>
     );
 }
+
+const clientOnboardingSteps: OnboardingStep[] = [
+  {
+    icon: FileText,
+    title: 'Welcome, Client!',
+    description: "This is your dashboard where you can manage your financing deals, track repayment schedules, and communicate with administrators.",
+  },
+  {
+    icon: PlusCircle,
+    title: 'Request a New Deal',
+    description: "Need new financing? Use the 'Request a Deal' button to submit a new proposal for review by our administrative team.",
+  },
+];
+
 
 export default function ClientLayout({
   children,
@@ -73,6 +88,7 @@ export default function ClientLayout({
 
   return (
     <div className="flex min-h-screen w-full flex-col">
+        <OnboardingTour steps={clientOnboardingSteps} storageKey="hasSeenClientTour" />
         <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
             <Link href="/client/dashboard" className="flex items-center gap-2 font-bold font-headline text-primary">
               <Logo imageUrl={logoUrl} className="h-7 w-7" />

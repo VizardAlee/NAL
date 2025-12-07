@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut } from "lucide-react";
+import { LogOut, Wallet, Banknote } from "lucide-react";
 import { Logo } from "@/components/icons";
 import Link from "next/link";
 import { useUser } from "@/firebase";
@@ -22,6 +22,7 @@ import React, { useEffect } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { MessagesLink } from "@/components/messages-link";
+import { OnboardingTour, OnboardingStep } from "@/components/onboarding-tour";
 
 function InvestorSkeleton() {
     return (
@@ -42,6 +43,20 @@ function InvestorSkeleton() {
       </div>
     );
 }
+
+const investorOnboardingSteps: OnboardingStep[] = [
+  {
+    icon: Wallet,
+    title: 'Welcome, Investor!',
+    description: "This is your personal hub to track your portfolio value, view your investable balance, and see your overall return on investment.",
+  },
+  {
+    icon: Banknote,
+    title: 'Deposit and Withdraw',
+    description: "Use the 'Request Deposit' button to add funds. When your profits are available, you can request a withdrawal or choose to reinvest them.",
+  },
+];
+
 
 export default function InvestorLayout({
   children,
@@ -73,6 +88,7 @@ export default function InvestorLayout({
 
   return (
     <div className="flex min-h-screen w-full flex-col">
+        <OnboardingTour steps={investorOnboardingSteps} storageKey="hasSeenInvestorTour" />
         <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
             <Link href="/investor/dashboard" className="flex items-center gap-2 font-bold font-headline text-primary">
               <Logo imageUrl={logoUrl} className="h-7 w-7" />
