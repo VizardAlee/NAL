@@ -7,7 +7,7 @@ export interface ScheduleInstallment {
   dueDate: Date;
   payment: number;
   principal: number;
-  interest: number;
+  interest: number; // This will now represent "profit" or "markup"
   balance: number;
 }
 
@@ -67,7 +67,7 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
   if (!termStartDate) return [];
 
   const principal = deal.principal;
-  const annualRate = (deal.profitRate || 0) / 100;
+  const markupRate = (deal.profitRate || 0) / 100;
   const { totalPeriods, addPeriod } = getPeriods(deal);
 
   if (totalPeriods === 0) return [];
@@ -75,23 +75,13 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
   const schedule: ScheduleInstallment[] = [];
 
   if (deal.repaymentType === 'Balloon Payment') {
-    const durationInYears = (() => {
-        switch (deal.durationUnit) {
-            case 'Days': return deal.durationValue / 365.25;
-            case 'Weeks': return deal.durationValue / 52;
-            case 'Fortnights': return deal.durationValue / 26;
-            case 'Months': return deal.durationValue / 12;
-            case 'Years': return deal.durationValue;
-            default: return 0;
-        }
-    })();
-    const totalInterest = principal * annualRate * durationInYears;
-    const interestPerInstallment = totalPeriods > 0 ? totalInterest / totalPeriods : 0;
+    const totalProfit = principal * markupRate;
+    const profitPerInstallment = totalPeriods > 0 ? totalProfit / totalPeriods : 0;
 
     for (let i = 1; i <= totalPeriods; i++) {
         const isLastPayment = i === totalPeriods;
         const principalPayment = isLastPayment ? principal : 0;
-        const payment = interestPerInstallment + principalPayment;
+        const payment = profitPerInstallment + principalPayment;
         const balance = isLastPayment ? 0 : principal;
         
         schedule.push({
@@ -99,49 +89,49 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
             dueDate: addPeriod(termStartDate, i),
             payment: payment,
             principal: principalPayment,
-            interest: interestPerInstallment,
+            interest: profitPerInstallment,
             balance: balance,
         });
     }
 
-  } else { // Equal Installments
-      const frequencyMap = {
-        Daily: 365,
-        Weekly: 52,
-        Fortnightly: 26,
-        Monthly: 12,
-      };
-      const periodsPerYear = frequencyMap[deal.repaymentFrequency] || 12;
-      const profitRatePerPeriod = annualRate / periodsPerYear;
+  } else { // Equal Installments (with flat markup)
+      const totalProfit = principal * markupRate;
+      const totalRepayment = principal + totalProfit;
+      const equalPayment = totalRepayment / totalPeriods;
       
-      let emi: number;
-      if (profitRatePerPeriod === 0) {
-        emi = principal / totalPeriods;
-      } else {
-        emi = principal * profitRatePerPeriod * 
-          (Math.pow(1 + profitRatePerPeriod, totalPeriods)) / 
-          (Math.pow(1 + profitRatePerPeriod, totalPeriods) - 1);
-      }
-
       let remainingBalance = principal;
+      let remainingProfit = totalProfit;
 
       for (let i = 1; i <= totalPeriods; i++) {
-        const interestPayment = remainingBalance * profitRatePerPeriod;
-        const principalPayment = emi - interestPayment;
+        // To mimic amortization, we can calculate this period's profit as a proportion
+        // of the remaining balance relative to the sum of balances over the term.
+        // A simpler method is to just distribute profit evenly. Let's do that for clarity.
+        const profitPayment = totalProfit / totalPeriods;
+        const principalPayment = equalPayment - profitPayment;
+        
         remainingBalance -= principalPayment;
+        remainingProfit -= profitPayment;
 
-        if (i === totalPeriods && Math.abs(remainingBalance) < 1) {
-            remainingBalance = 0;
+        // On the last payment, adjust for any rounding errors to ensure balance is exactly zero.
+        if (i === totalPeriods) {
+            schedule.push({
+              installment: i,
+              dueDate: addPeriod(termStartDate, i),
+              payment: equalPayment + remainingBalance, // Adjust final payment
+              principal: principalPayment + remainingBalance,
+              interest: profitPayment,
+              balance: 0,
+            });
+        } else {
+             schedule.push({
+              installment: i,
+              dueDate: addPeriod(termStartDate, i),
+              payment: equalPayment,
+              principal: principalPayment,
+              interest: profitPayment,
+              balance: remainingBalance,
+            });
         }
-
-        schedule.push({
-          installment: i,
-          dueDate: addPeriod(termStartDate, i),
-          payment: emi,
-          principal: principalPayment,
-          interest: interestPayment,
-          balance: remainingBalance,
-        });
       }
   }
 
