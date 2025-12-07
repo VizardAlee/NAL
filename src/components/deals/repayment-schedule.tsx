@@ -248,7 +248,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                                     <div className="flex justify-between"><span className="text-muted-foreground">Markup:</span> <span>{formatCurrency(item.interest)}</span></div>
                                     <div className="flex justify-between"><span className="text-muted-foreground">Balance:</span> <span>{formatCurrency(item.balance)}</span></div>
                                 </div>
-                                {(item.isActionable && user) && (
+                                {(item.isActionable && user && user.role === 'Client') && (
                                     <div className="pt-3 border-t">
                                         <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
                                     </div>
@@ -280,7 +280,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                             <TableCell data-label="Balance">{formatCurrency(item.balance)}</TableCell>
                             <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
                             <TableCell data-label="Action" className="text-right">
-                            {(item.isActionable && user) && (
+                            {(item.isActionable && user && user.role === 'Client') && (
                                 <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
                             )}
                             </TableCell>

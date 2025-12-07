@@ -30,11 +30,14 @@ export function RepaymentHistory({ repayments, loading }: RepaymentHistoryProps)
         ? [...repayments].sort((a, b) => b.lodgedAt.toMillis() - a.lodgedAt.toMillis())
         : [];
 
-    const StatusBadge = ({ status }: { status: 'Pending' | 'Approved' | 'Rejected' }) => {
+    const StatusBadge = ({ status }: { status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' }) => {
         const isApproved = status === 'Approved';
+        const variant = isApproved ? 'default' : (status === 'Rejected' || status === 'Cancelled') ? 'destructive' : 'secondary';
+        const Icon = isApproved ? CheckCircle : Hourglass;
+
         return (
-            <Badge variant={isApproved ? 'default' : 'secondary'} className="flex items-center gap-1.5">
-                {isApproved ? <CheckCircle className="h-3 w-3" /> : <Hourglass className="h-3 w-3" />}
+            <Badge variant={variant} className="flex items-center gap-1.5">
+                <Icon className="h-3 w-3" />
                 {status}
             </Badge>
         );
@@ -68,7 +71,7 @@ export function RepaymentHistory({ repayments, loading }: RepaymentHistoryProps)
                                     <p className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(repayment.amount)}</p>
                                     <p className="text-xs text-muted-foreground">Lodged: {format(repayment.lodgedAt.toDate(), 'PPP')}</p>
                                 </div>
-                                <StatusBadge status={repayment.status as any} />
+                                <StatusBadge status={repayment.status} />
                             </CardContent>
                         </Card>
                     ))}
@@ -93,7 +96,7 @@ export function RepaymentHistory({ repayments, loading }: RepaymentHistoryProps)
                             }).format(repayment.amount)}
                         </TableCell>
                         <TableCell data-label="Status">
-                            <StatusBadge status={repayment.status as any} />
+                            <StatusBadge status={repayment.status} />
                         </TableCell>
                         </TableRow>
                     ))}
