@@ -94,36 +94,46 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
         });
     }
 
-  } else { // Equal Installments (with flat markup)
+  } else { // Equal Installments
       const totalProfit = principal * markupRate;
       const totalRepayment = principal + totalProfit;
-      const equalPayment = totalRepayment / totalPeriods;
+      const equalPayment = totalPeriods > 0 ? totalRepayment / totalPeriods : 0;
       
+      // To create an amortized effect, we need an effective periodic rate that, when applied,
+      // results in the desired total profit. This requires solving for the rate.
+      // A common approximation for this is the "Rule of 78s" or simply calculating
+      // an effective rate. Let's find a rate 'r' such that the sum of interest payments equals totalProfit.
+      // This is a complex calculation, so a more direct method is to use a financial formula to find
+      // the rate that produces the `equalPayment`.
+      // Let's solve for the monthly rate `r`. P = L[r(1+r)^n]/[(1+r)^n-1]
+      // We can't solve for r algebraically, but we can iterate or use a simpler apportionment logic.
+
+      // A simpler, more direct logic: Sum of Digits Method (Rule of 78s).
+      const sumOfDigits = (totalPeriods * (totalPeriods + 1)) / 2;
       let remainingBalance = principal;
       let remainingProfit = totalProfit;
 
       for (let i = 1; i <= totalPeriods; i++) {
-        // To mimic amortization, we can calculate this period's profit as a proportion
-        // of the remaining balance relative to the sum of balances over the term.
-        // A simpler method is to just distribute profit evenly. Let's do that for clarity.
-        const profitPayment = totalProfit / totalPeriods;
-        const principalPayment = equalPayment - profitPayment;
-        
-        remainingBalance -= principalPayment;
-        remainingProfit -= profitPayment;
+          const profitProportion = (totalPeriods - i + 1) / sumOfDigits;
+          const profitPayment = totalProfit * profitProportion;
+          const principalPayment = equalPayment - profitPayment;
+          
+          remainingBalance -= principalPayment;
+          remainingProfit -= profitPayment;
 
-        // On the last payment, adjust for any rounding errors to ensure balance is exactly zero.
-        if (i === totalPeriods) {
+          if (i === totalPeriods) {
+            // Adjust the final payment to clear any rounding discrepancies
+            const finalPrincipalPayment = principalPayment + remainingBalance;
             schedule.push({
               installment: i,
               dueDate: addPeriod(termStartDate, i),
-              payment: equalPayment + remainingBalance, // Adjust final payment
-              principal: principalPayment + remainingBalance,
+              payment: finalPrincipalPayment + profitPayment,
+              principal: finalPrincipalPayment,
               interest: profitPayment,
               balance: 0,
             });
-        } else {
-             schedule.push({
+          } else {
+            schedule.push({
               installment: i,
               dueDate: addPeriod(termStartDate, i),
               payment: equalPayment,
@@ -131,7 +141,7 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
               interest: profitPayment,
               balance: remainingBalance,
             });
-        }
+          }
       }
   }
 
