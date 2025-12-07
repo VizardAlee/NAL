@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, MessageSquarePlus } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, DocumentData, Timestamp, writeBatch, doc, where, getDocs, deleteDoc } from 'firebase/firestore';
+import { collection, query, DocumentData, Timestamp, writeBatch, doc, where, getDocs, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDistanceToNow } from 'date-fns';
@@ -77,7 +77,7 @@ export default function ChatRequestsPage() {
 
             // If no conversation exists, create a new one
             const batch = writeBatch(firestore);
-            const now = Timestamp.now();
+            const now = serverTimestamp();
 
             const newConversationRef = doc(collection(firestore, 'conversations'));
             batch.set(newConversationRef, {
