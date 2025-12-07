@@ -37,10 +37,11 @@ import { Badge } from "@/components/ui/badge";
 import { useCollection, useUser } from "@/firebase";
 import { collection, query, where } from "firebase/firestore";
 import { useFirestore } from "@/firebase";
+import { MessageGlow } from "@/components/message-glow";
 
 const menuItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/messages", label: "Messages", icon: MessageSquare, notificationCollection: 'chatRequests' }, // Use chatRequests to show any pending
+  { href: "/admin/messages", label: "Messages", icon: MessageSquare, isMessages: true },
   { href: "/admin/deals", label: "Deals", icon: FileText },
   { href: "/admin/users", label: "Users", icon: Users },
   {
@@ -156,6 +157,18 @@ export function AdminNav() {
                 </SidebarMenuSub>
               </CollapsibleContent>
             </Collapsible>
+          </SidebarMenuItem>
+        ) : item.isMessages ? (
+          <SidebarMenuItem key={item.href}>
+            <MessageGlow
+              isActive={pathname.startsWith(item.href)}
+              tooltip={item.label}
+            >
+              <Link href={item.href} className="flex items-center gap-2">
+                <item.icon />
+                <span>{item.label}</span>
+              </Link>
+            </MessageGlow>
           </SidebarMenuItem>
         ) : (
           <SidebarMenuItem key={item.href}>
