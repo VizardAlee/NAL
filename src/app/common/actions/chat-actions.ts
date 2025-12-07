@@ -122,18 +122,13 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
     const senderDoc = await firestore.collection('users').doc(senderId).get();
     const senderName = senderDoc.data()?.name || 'A user';
     
-    // Dedupe participantIds to prevent bugs if data is bad
-    const uniqueParticipantIds = [...new Set(conversationData.participantIds)];
-    console.log('Unique Participant IDs:', uniqueParticipantIds); // Debug: Check for dups
-    
-    const recipients = uniqueParticipantIds.filter((id: string) => id !== senderId);
-    console.log('Sender ID:', senderId); // Debug
-    console.log('Recipients (should not include sender):', recipients); // Debug: Verify exclusion
+    // Safely get participantIds, filter out the sender, and remove any duplicates.
+    const participantIds = Array.isArray(conversationData.participantIds) 
+      ? conversationData.participantIds 
+      : [];
+    const recipients = [...new Set(participantIds.filter(id => id !== senderId))];
 
     for (const recipientId of recipients) {
-        // Extra check (redundant but safe)
-        if (recipientId === senderId) continue;
-
         const recipientDoc = await firestore.collection('users').doc(recipientId).get();
         const recipientRole = recipientDoc.data()?.role;
 
