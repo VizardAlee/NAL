@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, LogOut, Circle, LayoutDashboard, FileText, Users, CheckCircle, Banknote, FlaskConical, History, Settings, Library, MessageSquare } from "lucide-react";
+import { Bell, LogOut, Circle, LayoutDashboard, FileText, Users, CheckCircle, Banknote, FlaskConical, History, Settings, Library, MessageSquare, HelpCircle } from "lucide-react";
 import {
   SidebarProvider,
   Sidebar,
@@ -35,7 +35,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { usePathname } from 'next/navigation';
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { OnboardingTour, OnboardingStep } from "@/components/onboarding-tour";
+import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
 
 type Notification = {
     id: string;
@@ -175,7 +175,7 @@ function NotificationBell() {
     )
 }
 
-const adminOnboardingSteps: OnboardingStep[] = [
+const adminOnboardingSteps = [
   {
     icon: LayoutDashboard,
     title: 'Welcome to Your Dashboard',
@@ -198,6 +198,47 @@ const adminOnboardingSteps: OnboardingStep[] = [
   },
 ];
 
+function AccountMenu() {
+    const { user } = useUser();
+    const auth = useAuth();
+    const router = useRouter();
+    const { showTour } = useOnboardingTour();
+
+    const handleLogout = async () => {
+        if (auth) {
+            await auth.signOut();
+        }
+        router.push('/login');
+    };
+    
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="rounded-full">
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/128/128`} alt={user?.displayName ?? ''} />
+                  <AvatarFallback>{user?.displayName?.charAt(0) ?? user?.email?.charAt(0)}</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild><Link href="/admin/settings">Settings</Link></DropdownMenuItem>
+              <DropdownMenuItem onClick={showTour} className="flex items-center gap-2 cursor-pointer"><HelpCircle className="h-4 w-4" /><span>Show Tour</span></DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <a href="https://wa.me/2347032545288" target="_blank" rel="noopener noreferrer">Support</a>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2 cursor-pointer">
+                <LogOut className="h-4 w-4" />
+                <span>Logout</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+    )
+}
+
 
 export default function AdminLayout({
   children,
@@ -205,19 +246,10 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const { user, loading } = useUser();
-  const auth = useAuth();
   const router = useRouter();
   const { logoUrl, loading: logoLoading } = useCompanyLogo();
 
-  // Initialize the hook here
   useClearNotificationsByPath();
-
-  const handleLogout = async () => {
-    if (auth) {
-        await auth.signOut();
-    }
-    router.push('/login');
-  };
 
   useEffect(() => {
     if (!loading && !user) {
@@ -231,61 +263,40 @@ export default function AdminLayout({
   }
 
   return (
-    <SidebarProvider>
-      <OnboardingTour steps={adminOnboardingSteps} storageKey="hasSeenAdminTour" />
-      <Sidebar>
-        <SidebarHeader>
-          <div className="flex items-center gap-2 p-2">
-             <Link href="/admin/dashboard" className="flex items-center gap-2">
-              <Logo imageUrl={logoUrl} className="h-7 w-7 text-primary" />
-              <span className="text-lg font-bold font-headline text-primary group-data-[collapsible=icon]:hidden">
-                NAL General Marchant
-              </span>
-            </Link>
-          </div>
-        </SidebarHeader>
-        <SidebarContent>
-          <AdminNav />
-        </SidebarContent>
-        <SidebarFooter>
-          {/* Future footer content */}
-        </SidebarFooter>
-      </Sidebar>
-      <SidebarInset>
-        <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
-          <SidebarTrigger className="hidden md:flex" />
-          <div className="flex-1">
-             {/* Mobile sidebar trigger */}
-            <SidebarTrigger className="md:hidden" />
-          </div>
-          <ThemeToggle />
-          <NotificationBell />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/128/128`} alt={user?.displayName ?? ''} />
-                  <AvatarFallback>{user?.displayName?.charAt(0) ?? user?.email?.charAt(0)}</AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild><Link href="/admin/settings">Settings</Link></DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a href="https://wa.me/2347032545288" target="_blank" rel="noopener noreferrer">Support</a>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2 cursor-pointer">
-                <LogOut className="h-4 w-4" />
-                <span>Logout</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </header>
-        <main className="flex-1 p-4 md:p-6">{children}</main>
-      </SidebarInset>
-    </SidebarProvider>
+    <OnboardingTourProvider steps={adminOnboardingSteps} storageKey="hasSeenAdminTour">
+        <SidebarProvider>
+        <Sidebar>
+            <SidebarHeader>
+            <div className="flex items-center gap-2 p-2">
+                <Link href="/admin/dashboard" className="flex items-center gap-2">
+                <Logo imageUrl={logoUrl} className="h-7 w-7 text-primary" />
+                <span className="text-lg font-bold font-headline text-primary group-data-[collapsible=icon]:hidden">
+                    NAL General Marchant
+                </span>
+                </Link>
+            </div>
+            </SidebarHeader>
+            <SidebarContent>
+            <AdminNav />
+            </SidebarContent>
+            <SidebarFooter>
+            {/* Future footer content */}
+            </SidebarFooter>
+        </Sidebar>
+        <SidebarInset>
+            <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+            <SidebarTrigger className="hidden md:flex" />
+            <div className="flex-1">
+                {/* Mobile sidebar trigger */}
+                <SidebarTrigger className="md:hidden" />
+            </div>
+            <ThemeToggle />
+            <NotificationBell />
+            <AccountMenu />
+            </header>
+            <main className="flex-1 p-4 md:p-6">{children}</main>
+        </SidebarInset>
+        </SidebarProvider>
+    </OnboardingTourProvider>
   );
 }

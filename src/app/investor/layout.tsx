@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Wallet, Banknote, FlaskConical } from "lucide-react";
+import { LogOut, Wallet, Banknote, FlaskConical, HelpCircle } from "lucide-react";
 import { Logo } from "@/components/icons";
 import Link from "next/link";
 import { useUser } from "@/firebase";
@@ -22,7 +22,7 @@ import React, { useEffect } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { MessagesLink } from "@/components/messages-link";
-import { OnboardingTour, OnboardingStep } from "@/components/onboarding-tour";
+import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
 
 function InvestorSkeleton() {
     return (
@@ -44,7 +44,7 @@ function InvestorSkeleton() {
     );
 }
 
-const investorOnboardingSteps: OnboardingStep[] = [
+const investorOnboardingSteps = [
   {
     icon: Wallet,
     title: 'Welcome, Investor!',
@@ -57,55 +57,21 @@ const investorOnboardingSteps: OnboardingStep[] = [
   },
 ];
 
+function AccountMenu() {
+    const { user } = useUser();
+    const auth = useAuth();
+    const router = useRouter();
+    const { showTour } = useOnboardingTour();
 
-export default function InvestorLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { user, loading } = useUser();
-  const auth = useAuth();
-  const router = useRouter();
-  const { logoUrl, loading: logoLoading } = useCompanyLogo();
+    const handleLogout = async () => {
+        if (auth) {
+            await auth.signOut();
+        }
+        router.push('/login');
+    };
 
-  const handleLogout = async () => {
-    if (auth) {
-        await auth.signOut();
-    }
-    router.push('/login');
-  };
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    }
-  }, [user, loading, router]);
-  
-
-  if (loading || !user || logoLoading) {
-    return <InvestorSkeleton />;
-  }
-
-  return (
-    <div className="flex min-h-screen w-full flex-col">
-        <OnboardingTour steps={investorOnboardingSteps} storageKey="hasSeenInvestorTour" />
-        <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
-            <Link href="/investor/dashboard" className="flex items-center gap-2 font-bold font-headline text-primary">
-              <Logo imageUrl={logoUrl} className="h-7 w-7" />
-              <span>NAL General Marchant</span>
-            </Link>
-            <div className="flex-1" />
-            <nav className="flex items-center gap-2 text-sm font-medium">
-                <Button variant="ghost" asChild>
-                    <Link href="/app/analyzer">
-                        <FlaskConical className="h-4 w-4 mr-2" />
-                        Analyzer
-                    </Link>
-                </Button>
-            </nav>
-            <ThemeToggle />
-            <MessagesLink basePath="/investor" />
-            <DropdownMenu>
+    return (
+         <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
                 <Avatar className="h-8 w-8">
@@ -126,6 +92,7 @@ export default function InvestorLayout({
                <DropdownMenuItem asChild>
                 <Link href="/investor/settings">Settings</Link>
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={showTour} className="flex items-center gap-2 cursor-pointer"><HelpCircle className="h-4 w-4" /><span>Show Tour</span></DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2 cursor-pointer">
                 <LogOut className="h-4 w-4" />
@@ -133,8 +100,52 @@ export default function InvestorLayout({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </header>
-        <main className="flex-1 p-4 md:p-6">{children}</main>
-    </div>
+    )
+}
+
+export default function InvestorLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { user, loading } = useUser();
+  const router = useRouter();
+  const { logoUrl, loading: logoLoading } = useCompanyLogo();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+  
+
+  if (loading || !user || logoLoading) {
+    return <InvestorSkeleton />;
+  }
+
+  return (
+    <OnboardingTourProvider steps={investorOnboardingSteps} storageKey="hasSeenInvestorTour">
+        <div className="flex min-h-screen w-full flex-col">
+            <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+                <Link href="/investor/dashboard" className="flex items-center gap-2 font-bold font-headline text-primary">
+                <Logo imageUrl={logoUrl} className="h-7 w-7" />
+                <span>NAL General Marchant</span>
+                </Link>
+                <div className="flex-1" />
+                <nav className="flex items-center gap-2 text-sm font-medium">
+                    <Button variant="ghost" asChild>
+                        <Link href="/app/analyzer">
+                            <FlaskConical className="h-4 w-4 mr-2" />
+                            Analyzer
+                        </Link>
+                    </Button>
+                </nav>
+                <ThemeToggle />
+                <MessagesLink basePath="/investor" />
+                <AccountMenu />
+            </header>
+            <main className="flex-1 p-4 md:p-6">{children}</main>
+        </div>
+    </OnboardingTourProvider>
   );
 }
