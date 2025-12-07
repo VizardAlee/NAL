@@ -154,12 +154,10 @@ service cloud.firestore {
 
     // Rules for 'notifications'
     match /notifications/{notificationId} {
-        // A user can get or list notifications where they are the recipient.
-        allow get, list: if isAdmin() || (request.auth != null && request.auth.uid == resource.data.recipientId);
-        // Admins can update notifications (e.g., to mark as read).
-        allow update: if isAdmin();
-        // Any authenticated user can create a notification.
-        allow create: if request.auth != null;
+      // Admins can create any notification
+      allow create: if isAdmin();
+      // A user can list/read/update notifications where they are the recipient
+      allow get, list, update: if request.auth != null && resource.data.recipientId == request.auth.uid;
     }
 
     // Rules for 'platformSettings'
@@ -182,21 +180,21 @@ service cloud.firestore {
 
     // Rules for 'conversations' collection
     match /conversations/{conversationId} {
-      // Admins can create conversations.
-      allow create: if isAdmin();
-      // Only participants (or Admins) can read or update conversation metadata.
-      allow get, list, update: if isAdmin() || (request.auth != null && request.auth.uid in resource.data.participantIds);
+        // Admins can do everything.
+        allow create, get, list, update: if isAdmin();
+
+        // Regular users can only read/list/update conversations they are a part of.
+        allow get, list, update: if request.auth != null
+            && 'participantIds' in resource.data
+            && request.auth.uid in resource.data.participantIds;
     }
     
     // Rules for 'messages' subcollection
     match /conversations/{conversationId}/messages/{messageId} {
-      // Allow creating a message if:
-      // 1. The user is a participant of an existing conversation.
-      // 2. The user is an Admin creating the conversation (in a batch write).
-      allow create: if (request.auth != null && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds) || (isAdmin() && !exists(/databases/$(database)/documents/conversations/$(conversationId)));
-      
-      // A user can read messages in a conversation only if they are a participant.
-      allow list, get: if isAdmin() || (request.auth != null && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds);
+        // Users can read/create messages only if they are a participant in the parent conversation.
+        allow read, create: if request.auth != null
+            && exists(/databases/$(database)/documents/conversations/$(conversationId))
+            && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
     }
   }
 }
