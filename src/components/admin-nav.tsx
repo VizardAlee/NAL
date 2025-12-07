@@ -57,7 +57,7 @@ const menuItems = [
     ],
   },
   { href: "/admin/funds", label: "Funds", icon: Banknote },
-  { href: "/admin/analyzer", label: "Analyzer", icon: FlaskConical },
+  { href: "/app/analyzer", label: "Analyzer", icon: FlaskConical },
   { href: "/admin/activity", label: "Activity", icon: History },
   { href: "/admin/reports", label: "Reports", icon: Library },
   { href: "/admin/settings", label: "Settings", icon: Settings },

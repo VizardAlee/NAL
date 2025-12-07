@@ -121,7 +121,7 @@ export default function Home() {
                 Leverage the power of generative AI to assess financing proposals instantly. Paste in deal details and receive an expert analysis of viability, risk level, and key strategic insights to make smarter, faster decisions.
               </p>
               <Button asChild>
-                <Link href="/admin/analyzer">
+                <Link href="/login">
                   Try the Analyzer <Bot className="ml-2 h-4 w-4" />
                 </Link>
               </Button>

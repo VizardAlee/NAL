@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Wallet, Banknote } from "lucide-react";
+import { LogOut, Wallet, Banknote, FlaskConical } from "lucide-react";
 import { Logo } from "@/components/icons";
 import Link from "next/link";
 import { useUser } from "@/firebase";
@@ -95,6 +95,14 @@ export default function InvestorLayout({
               <span>NAL General Marchant</span>
             </Link>
             <div className="flex-1" />
+            <nav className="flex items-center gap-2 text-sm font-medium">
+                <Button variant="ghost" asChild>
+                    <Link href="/app/analyzer">
+                        <FlaskConical className="h-4 w-4 mr-2" />
+                        Analyzer
+                    </Link>
+                </Button>
+            </nav>
             <ThemeToggle />
             <MessagesLink basePath="/investor" />
             <DropdownMenu>
