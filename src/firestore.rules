@@ -154,15 +154,11 @@ service cloud.firestore {
 
     // Rules for 'notifications'
     match /notifications/{notificationId} {
-        // Admins can get a notification for any user.
-        // A user can get a notification if it is for them.
-        allow get: if isAdmin() || (request.auth != null && resource.data.recipientId == request.auth.uid);
-        // Admins can list all notifications.
-        allow list: if isAdmin();
+        // A user can get or list notifications where they are the recipient.
+        allow get, list: if isAdmin() || (request.auth != null && request.auth.uid == resource.data.recipientId);
         // Admins can update notifications (e.g., to mark as read).
         allow update: if isAdmin();
         // Any authenticated user can create a notification.
-        // In a production app, this would be locked down to a backend service/function.
         allow create: if request.auth != null;
     }
 
@@ -194,12 +190,13 @@ service cloud.firestore {
     
     // Rules for 'messages' subcollection
     match /conversations/{conversationId}/messages/{messageId} {
-      // A user can create a message only if they are a participant of the conversation.
-      allow create: if request.auth != null 
-        && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+      // Allow creating a message if:
+      // 1. The user is a participant of an existing conversation.
+      // 2. The user is an Admin creating the conversation (in a batch write).
+      allow create: if (request.auth != null && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds) || (isAdmin() && !exists(/databases/$(database)/documents/conversations/$(conversationId)));
       
       // A user can read messages in a conversation only if they are a participant.
-      allow list, get: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+      allow list, get: if isAdmin() || (request.auth != null && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds);
     }
   }
 }
