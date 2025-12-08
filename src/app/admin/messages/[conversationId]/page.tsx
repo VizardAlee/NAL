@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useMemo, useState, useTransition, useEffect, useRef } from 'react';
@@ -7,7 +8,7 @@ import { useDoc, useCollection, useUser, useFirestore } from '@/firebase';
 import { doc, collection, query, orderBy, addDoc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { ArrowLeft, Loader2, MessageSquare, Send, Paperclip, X, Download } from 'lucide-react';
+import { ArrowLeft, Loader2, MessageSquare, Send, Paperclip, X, Download, Phone } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
@@ -16,6 +17,14 @@ import { format, formatDistanceToNowStrict } from 'date-fns';
 import { sendMessageAction } from './actions';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
+
+type UserProfile = {
+    id: string;
+    name: string;
+    email: string;
+    phoneNumber?: string;
+    role: 'Admin' | 'Investor' | 'Client';
+};
 
 type Conversation = {
     id: string;
@@ -78,6 +87,18 @@ export default function AdminConversationPage() {
     const { data: conversation, loading: conversationLoading } = useDoc<Conversation>(conversationRef as any);
     const { data: messages, loading: messagesLoading } = useCollection<Message>(messagesQuery as any);
 
+    const otherParticipantId = useMemo(() => {
+        return conversation?.participantIds.find(id => id !== adminUser?.uid);
+    }, [conversation, adminUser]);
+
+    const otherUserRef = useMemo(() => {
+        if (!firestore || !otherParticipantId) return null;
+        return doc(firestore, 'users', otherParticipantId);
+    }, [firestore, otherParticipantId]);
+
+    const { data: otherUser, loading: otherUserLoading } = useDoc<UserProfile>(otherUserRef as any);
+
+
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
@@ -128,12 +149,11 @@ export default function AdminConversationPage() {
         }
     };
 
-    const otherParticipantIndex = conversation ? conversation.participantIds.findIndex(id => id !== adminUser?.uid) : -1;
-    const otherParticipantName = otherParticipantIndex !== -1 ? conversation?.participantNames[otherParticipantIndex] : 'User';
-    const otherParticipantAvatar = otherParticipantIndex !== -1 ? conversation?.participantAvatars[otherParticipantIndex] : '/placeholder.svg';
+    const otherParticipantName = otherUser?.name || 'User';
+    const otherParticipantAvatar = otherUser ? `https://picsum.photos/seed/${otherUser.id}/128/128` : '/placeholder.svg';
 
 
-    if (conversationLoading) {
+    if (conversationLoading || otherUserLoading) {
         return <Skeleton className="h-screen w-full" />;
     }
 
@@ -147,7 +167,15 @@ export default function AdminConversationPage() {
                     <AvatarImage src={otherParticipantAvatar} />
                     <AvatarFallback>{otherParticipantName.charAt(0)}</AvatarFallback>
                 </Avatar>
-                <h2 className="text-lg font-semibold">{otherParticipantName}</h2>
+                <div>
+                    <h2 className="text-lg font-semibold">{otherParticipantName}</h2>
+                    {otherUser?.phoneNumber && (
+                         <div className="text-xs text-muted-foreground flex items-center gap-2">
+                            <Phone className="h-3 w-3" />
+                            <span>{otherUser.phoneNumber}</span>
+                        </div>
+                    )}
+                </div>
             </header>
             <main className="flex-1 overflow-auto p-4 space-y-4">
                 {messagesLoading && <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />}
