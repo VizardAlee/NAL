@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState, useEffect, useCallback, useActionState } from 'react';
+import { useMemo, useState, useEffect, useCallback, useActionState, useRef } from 'react';
 import { useFormStatus } from 'react-dom';
 import {
   Table,
@@ -32,6 +32,17 @@ import { useToast } from '@/hooks/use-toast';
 import { Timestamp } from 'firebase/firestore';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 const ITEMS_PER_PAGE = 5;
 
@@ -45,16 +56,17 @@ interface ScheduledPayment extends ScheduleInstallment {
 function SubmitLodgePaymentButton() {
     const { pending } = useFormStatus();
     return (
-        <Button size="sm" type="submit" disabled={pending} className="w-full">
+        <AlertDialogAction type="submit" disabled={pending} className="w-full">
             {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
-            Lodge Payment
-        </Button>
+            Confirm Payment
+        </AlertDialogAction>
     )
 }
 
 function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { installment: ScheduledPayment, dealId: string, userId: string, onPaymentLodged: (repayment: any) => void }) {
     const [state, formAction] = useActionState(lodgePaymentAction, { success: false, message: '', repayment: null });
     const { toast } = useToast();
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
 
     useEffect(() => {
         if (state.message) {
@@ -69,6 +81,7 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
                     dueDate: new Timestamp(state.repayment.dueDate._seconds, state.repayment.dueDate._nanoseconds)
                 };
                 onPaymentLodged(newRepayment);
+                setIsDialogOpen(false); // Close dialog on success
             } else if (!state.success) {
                 toast({
                     title: 'Error',
@@ -80,14 +93,34 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
     }, [state, toast, onPaymentLodged]);
     
     return (
-        <form action={formAction}>
-            <input type="hidden" name="dealId" value={dealId} />
-            <input type="hidden" name="amount" value={installment.payment} />
-            <input type="hidden" name="userId" value={userId} />
-            <input type="hidden" name="dueDate" value={installment.dueDate.toISOString()} />
-             <input type="hidden" name="installmentNumber" value={installment.installment} />
-            <SubmitLodgePaymentButton />
-        </form>
+        <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <AlertDialogTrigger asChild>
+                <Button size="sm" className="w-full">
+                    <HandCoins className="mr-2 h-4 w-4" />
+                    Lodge Payment
+                </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+                <form action={formAction}>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Confirm Payment Lodging</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            You are about to lodge a payment of <span className="font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(installment.payment)}</span> for installment #{installment.installment}.
+                            Please ensure you have made the payment to the platform's bank account. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <input type="hidden" name="dealId" value={dealId} />
+                    <input type="hidden" name="amount" value={installment.payment} />
+                    <input type="hidden" name="userId" value={userId} />
+                    <input type="hidden" name="dueDate" value={installment.dueDate.toISOString()} />
+                    <input type="hidden" name="installmentNumber" value={installment.installment} />
+                    <AlertDialogFooter className="mt-4">
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <SubmitLodgePaymentButton />
+                    </AlertDialogFooter>
+                </form>
+            </AlertDialogContent>
+        </AlertDialog>
     );
 }
 
@@ -131,7 +164,7 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
       }
 
       let isActionable = false;
-      if (!firstActionableFound && status !== 'Paid' && status !== 'Pending' && status !== 'Cancelled') {
+      if (!firstActionableFound && (status === 'Due' || status === 'Upcoming')) {
         isActionable = true;
         firstActionableFound = true;
       }
@@ -141,7 +174,8 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
   }, [schedule, allRepayments]);
   
   const upcomingSchedule = useMemo(() => {
-      return enhancedSchedule.filter(p => p.status === 'Due' || p.status === 'Upcoming');
+      // Show all non-paid/non-cancelled items
+      return enhancedSchedule.filter(p => p.status !== 'Paid' && p.status !== 'Cancelled');
   }, [enhancedSchedule]);
 
   const finalSchedule = useMemo(() => {
