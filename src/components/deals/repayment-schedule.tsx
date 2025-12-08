@@ -128,13 +128,12 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
   const enhancedSchedule = useMemo((): ScheduledPayment[] => {
     if (!schedule) return [];
     const today = startOfToday();
-    let nextActionableInstallmentFound = false;
-
-    return schedule.map(installment => {
-      const matchingRepayment = allRepayments?.find(r => {
-          if (!r.dueDate) return false;
-          return isSameDay(r.dueDate.toDate(), installment.dueDate);
-      });
+    
+    // First, map the schedule to their statuses
+    const scheduleWithStatus = schedule.map(installment => {
+      const matchingRepayment = allRepayments?.find(r => 
+          r.dueDate && isSameDay(r.dueDate.toDate(), installment.dueDate)
+      );
 
       let status: RepaymentStatus = 'Upcoming';
       if (matchingRepayment) {
@@ -145,14 +144,20 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
         status = 'Due';
       }
       
-      let isActionable = false;
-      if (!nextActionableInstallmentFound && (status === 'Due' || status === 'Upcoming')) {
-        isActionable = true;
-        nextActionableInstallmentFound = true;
-      }
-
-      return { ...installment, status, isActionable, repaymentDoc: matchingRepayment };
+      return { ...installment, status, repaymentDoc: matchingRepayment };
     });
+
+    // Then, find the index of the first actionable item
+    const firstActionableIndex = scheduleWithStatus.findIndex(
+      item => item.status === 'Due' || item.status === 'Upcoming'
+    );
+
+    // Finally, map again to set the isActionable flag
+    return scheduleWithStatus.map((item, index) => ({
+      ...item,
+      isActionable: index === firstActionableIndex
+    }));
+
   }, [schedule, allRepayments]);
   
   const upcomingSchedule = useMemo(() => {
