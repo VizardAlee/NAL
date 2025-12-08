@@ -47,7 +47,7 @@ interface ScheduledPayment extends ScheduleInstallment {
 function SubmitLodgePaymentButton() {
     const { pending } = useFormStatus();
     return (
-        <Button size="sm" type="submit" disabled={pending}>
+        <Button size="sm" type="submit" disabled={pending} className="w-full">
             {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
             Lodge Payment
         </Button>

@@ -7,13 +7,22 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 async function createNotification(firestore: FirebaseFirestore.Firestore, title: string, message: string, link: string) {
-    await firestore.collection('notifications').add({
-        title,
-        message,
-        link,
-        read: false,
-        createdAt: Timestamp.now(),
-    });
+    const adminQuery = await firestore.collection('users').where('role', '==', 'Admin').get();
+    const adminIds = adminQuery.docs.map(doc => doc.id);
+
+    const batch = firestore.batch();
+    for (const adminId of adminIds) {
+        const notificationRef = firestore.collection('notifications').doc();
+        batch.set(notificationRef, {
+            recipientId: adminId,
+            title,
+            message,
+            link,
+            read: false,
+            createdAt: Timestamp.now(),
+        });
+    }
+    await batch.commit();
 }
 
 // --- Lodge Payment Action ---
