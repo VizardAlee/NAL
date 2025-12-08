@@ -144,7 +144,9 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
         status = 'Due';
       }
 
-      return { ...installment, status, repaymentDoc: matchingRepayment };
+      const isActionable = status === 'Due';
+
+      return { ...installment, status, isActionable, repaymentDoc: matchingRepayment };
     });
   }, [schedule, allRepayments]);
   
@@ -153,16 +155,10 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
   }, [enhancedSchedule]);
 
   const finalSchedule = useMemo(() => {
-    const nextPayableInstallmentIndex = upcomingSchedule.findIndex(
-      p => p.status === 'Due' || p.status === 'Upcoming'
-    );
-    
-    return upcomingSchedule.map((installment, index) => ({
-      ...installment,
-      isActionable: index === nextPayableInstallmentIndex,
-    })).sort((a, b) => {
-        if (a.isActionable && !b.isActionable) return -1;
-        if (!a.isActionable && b.isActionable) return 1;
+    // Sort to show 'Due' items first, then by due date
+    return upcomingSchedule.sort((a, b) => {
+        if (a.status === 'Due' && b.status !== 'Due') return -1;
+        if (a.status !== 'Due' && b.status === 'Due') return 1;
         return a.installment - b.installment;
     });
   }, [upcomingSchedule]);
@@ -312,3 +308,4 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
     </div>
   );
 }
+
