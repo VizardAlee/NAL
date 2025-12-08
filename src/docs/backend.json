@@ -484,6 +484,18 @@
         "logoUrl": {
           "type": "string",
           "description": "A base64 data URI of the company logo."
+        },
+        "bankName": {
+          "type": "string",
+          "description": "The platform's bank name."
+        },
+        "accountName": {
+          "type": "string",
+          "description": "The platform's bank account name."
+        },
+        "accountNumber": {
+          "type": "string",
+          "description": "The platform's bank account number."
         }
       }
     },
@@ -637,6 +649,22 @@
         }
       },
       "description": "Stores global platform settings, specifically the company branding."
+    },
+    "/platformSettings/bankDetails": {
+      "schema": {
+        "properties": {
+          "bankName": {
+            "$ref": "#/entities/platformSetting/properties/bankName"
+          },
+          "accountName": {
+            "$ref": "#/entities/platformSetting/properties/accountName"
+          },
+          "accountNumber": {
+            "$ref": "#/entities/platformSetting/properties/accountNumber"
+          }
+        }
+      },
+      "description": "Stores the platform's main bank account details for user deposits."
     },
     "/chatRequests/{chatRequestId}": {
         "schema": {

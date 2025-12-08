@@ -1,12 +1,11 @@
 
-
 'use client';
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare } from "lucide-react";
-import { useMemo, useTransition, useEffect } from 'react';
+import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy } from "lucide-react";
+import { useMemo, useTransition, useEffect, useState } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, doc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
@@ -32,6 +31,68 @@ const statusVariant = {
     Terminated: 'destructive',
 } as const;
 
+function BankDetailsCard() {
+    const firestore = useFirestore();
+    const { toast } = useToast();
+
+    const bankDetailsRef = useMemo(() => firestore ? doc(firestore, 'platformSettings', 'bankDetails') : null, [firestore]);
+    const { data: bankDetails, loading } = useDoc(bankDetailsRef);
+
+    const handleCopy = (text: string, field: string) => {
+        navigator.clipboard.writeText(text);
+        toast({ title: 'Copied!', description: `${field} copied to clipboard.` });
+    };
+
+    if (loading) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Landmark /> Bank Details</CardTitle>
+                    <CardDescription>For making deposits and manual repayments.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                    <Skeleton className="h-6 w-3/4" />
+                    <Skeleton className="h-6 w-1/2" />
+                    <Skeleton className="h-6 w-2/3" />
+                </CardContent>
+            </Card>
+        );
+    }
+    
+    if (!bankDetails) return null;
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Landmark /> Bank Details</CardTitle>
+                <CardDescription>For making deposits and manual repayments.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <p className="text-muted-foreground">Bank Name</p>
+                        <p className="font-medium">{bankDetails.bankName}</p>
+                    </div>
+                </div>
+                <div className="flex justify-between items-center">
+                    <div>
+                        <p className="text-muted-foreground">Account Name</p>
+                        <p className="font-medium">{bankDetails.accountName}</p>
+                    </div>
+                </div>
+                <div className="flex justify-between items-center">
+                    <div>
+                        <p className="text-muted-foreground">Account Number</p>
+                        <p className="font-medium">{bankDetails.accountNumber}</p>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => handleCopy(bankDetails.accountNumber, 'Account Number')}>
+                        <Copy className="h-4 w-4" />
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
 
 function DealCard({ deal }: { deal: Deal }) {
     const firestore = useFirestore();
@@ -269,6 +330,8 @@ export default function ClientDashboard() {
                         </CardHeader>
                     </Card>
 
+                    <BankDetailsCard />
+
                     {mainDeal ? (
                         <>
                             <DealCard deal={mainDeal} />
@@ -361,3 +424,5 @@ export default function ClientDashboard() {
         </div>
     );
 }
+
+    

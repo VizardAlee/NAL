@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Settings, Image as ImageIcon, Loader2, HandCoins } from "lucide-react";
+import { Settings, Image as ImageIcon, Loader2, HandCoins, Landmark } from "lucide-react";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { setNisabAction } from "./actions";
 import { setLogoAction } from "./logo-actions";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { UpdateProfileForm } from "@/components/update-profile-form";
+import { setBankDetailsAction } from './bank-details-actions';
 
 function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoading: boolean }) {
     const { toast } = useToast();
@@ -36,7 +37,6 @@ function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoadin
         }
     }, [state, toast, toastShown]);
 
-    // Reset toastShown when the form is not pending anymore
     useEffect(() => {
         if (!isPending) {
             setToastShown(false);
@@ -76,6 +76,59 @@ function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoadin
         </Card>
     );
 }
+
+function BankDetailsForm({ currentDetails, isLoading }: { currentDetails: any, isLoading: boolean }) {
+    const { toast } = useToast();
+    const [state, formAction, isPending] = useActionState(setBankDetailsAction, { success: false, message: '' });
+
+     useEffect(() => {
+        if (state.message) {
+            toast({
+                title: state.success ? "Success" : "Error",
+                description: state.message,
+                variant: state.success ? "default" : "destructive",
+            });
+        }
+    }, [state, toast]);
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Platform Bank Details</CardTitle>
+                <CardDescription>Set the bank details for user deposits. This will be visible on user dashboards.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {isLoading ? (
+                     <div className="space-y-4 max-w-md">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-24" />
+                    </div>
+                ) : (
+                    <form action={formAction} className="space-y-4 max-w-md">
+                        <div>
+                            <label htmlFor="bankName" className="block text-sm font-medium text-muted-foreground mb-1">Bank Name</label>
+                            <Input id="bankName" name="bankName" defaultValue={currentDetails?.bankName} placeholder="e.g., Guaranty Trust Bank" />
+                        </div>
+                         <div>
+                            <label htmlFor="accountName" className="block text-sm font-medium text-muted-foreground mb-1">Account Name</label>
+                            <Input id="accountName" name="accountName" defaultValue={currentDetails?.accountName} placeholder="e.g., NAL General Marchant" />
+                        </div>
+                         <div>
+                            <label htmlFor="accountNumber" className="block text-sm font-medium text-muted-foreground mb-1">Account Number</label>
+                            <Input id="accountNumber" name="accountNumber" defaultValue={currentDetails?.accountNumber} placeholder="0123456789" />
+                        </div>
+                        <Button type="submit" disabled={isPending}>
+                            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Landmark className="mr-2 h-4 w-4" />}
+                            Save Bank Details
+                        </Button>
+                    </form>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
 
 function CompanyLogoForm() {
     const { logoUrl, loading } = useCompanyLogo();
@@ -134,13 +187,6 @@ function CompanyLogoForm() {
                             className="h-32 w-32 rounded-lg object-contain border bg-muted"
                         />
                         <input type="hidden" name="logoUrl" value={preview || ''} />
-                        <Input
-                            ref={fileInputRef}
-                            type="file"
-                            className="hidden"
-                            accept="image/png, image/jpeg, image/svg+xml"
-                            onChange={handleFileChange}
-                        />
                         <div className="flex flex-col gap-2">
                              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
                                 <ImageIcon className="mr-2 h-4 w-4" />
@@ -161,14 +207,12 @@ function CompanyLogoForm() {
 
 export default function SettingsPage() {
   const firestore = useFirestore();
-  const { user } = useUser();
   
-  const zakatSettingsRef = useMemo(() => {
-    if (!firestore || !user) return null;
-    return doc(firestore, 'platformSettings', 'zakat');
-  }, [firestore, user]);
+  const zakatSettingsRef = useMemo(() => firestore ? doc(firestore, 'platformSettings', 'zakat') : null, [firestore]);
+  const bankDetailsRef = useMemo(() => firestore ? doc(firestore, 'platformSettings', 'bankDetails') : null, [firestore]);
   
   const { data: zakatSettings, loading: zakatLoading } = useDoc<{ nisab: number }>(zakatSettingsRef);
+  const { data: bankDetails, loading: bankDetailsLoading } = useDoc(bankDetailsRef);
 
   return (
     <div>
@@ -180,6 +224,7 @@ export default function SettingsPage() {
         <div className="space-y-6">
             <UpdateProfileForm />
             <CompanyLogoForm />
+            <BankDetailsForm currentDetails={bankDetails} isLoading={bankDetailsLoading} />
             <NisabForm currentNisab={zakatSettings?.nisab || 0} isLoading={zakatLoading} />
             <Card>
                 <CardHeader>
@@ -194,3 +239,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+    
