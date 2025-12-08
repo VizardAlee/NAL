@@ -15,13 +15,13 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { Loader2, User } from 'lucide-react';
 import { useFirestore, useUser } from '@/firebase';
-import { FirebaseError } from 'firebase/app';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Skeleton } from './ui/skeleton';
+import { updateProfileAction } from './common-actions';
 
 const profileSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -33,7 +33,7 @@ type ProfileData = z.infer<typeof profileSchema>;
 
 export function UpdateProfileForm() {
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [isFetching, setIsFetching] = useState(true);
   const firestore = useFirestore();
   const { user } = useUser();
@@ -68,37 +68,31 @@ export function UpdateProfileForm() {
   }, [user, firestore, form]);
 
   async function onSubmit(values: ProfileData) {
-    setIsLoading(true);
-    if (!firestore || !user) {
-      toast({ variant: 'destructive', title: 'Error', description: 'User or database not available.' });
-      setIsLoading(false);
+    if (!user) {
+      toast({ variant: 'destructive', title: 'Error', description: 'User not available.' });
       return;
     }
     
-    // Email update is disabled as it requires re-authentication, which is complex.
-    // We only update name and phone number.
-    const { name, phoneNumber } = values;
+    startTransition(async () => {
+        const result = await updateProfileAction({
+            userId: user.uid,
+            name: values.name,
+            phoneNumber: values.phoneNumber,
+        });
 
-    try {
-      const userDocRef = doc(firestore, 'users', user.uid);
-      await updateDoc(userDocRef, {
-        name,
-        phoneNumber,
-      });
-
-      toast({
-        title: 'Profile Updated',
-        description: 'Your profile information has been saved.',
-      });
-    } catch (error) {
-      let errorMessage = 'An unknown error occurred.';
-      if (error instanceof FirebaseError) {
-        errorMessage = error.message;
-      }
-      toast({ variant: 'destructive', title: 'Update Failed', description: errorMessage });
-    } finally {
-      setIsLoading(false);
-    }
+        if (result.success) {
+            toast({
+                title: 'Profile Updated',
+                description: result.message,
+            });
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Update Failed',
+                description: result.message,
+            });
+        }
+    });
   }
 
   return (
@@ -156,8 +150,8 @@ export function UpdateProfileForm() {
                     </FormItem>
                 )}
                 />
-                <Button type="submit" disabled={isLoading}>
-                {isLoading ? (
+                <Button type="submit" disabled={isPending}>
+                {isPending ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                     <User className="mr-2 h-4 w-4" />
