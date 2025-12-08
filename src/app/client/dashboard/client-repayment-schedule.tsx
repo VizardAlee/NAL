@@ -1,7 +1,8 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useCallback, useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import {
   Table,
   TableBody,
@@ -10,8 +11,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { HandCoins, CheckCircle, Hourglass, Ban } from 'lucide-react';
+import { HandCoins, CheckCircle, Hourglass, Loader2, Ban } from 'lucide-react';
 import { generateAmortizationSchedule, ScheduleInstallment } from '@/lib/amortization';
 import { Deal, Repayment } from '@/lib/types';
 import { format, isSameDay, startOfToday } from 'date-fns';
@@ -24,6 +26,10 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
+import { useUser } from '@/firebase';
+import { lodgePaymentAction } from '@/app/client/dashboard/actions';
+import { useToast } from '@/hooks/use-toast';
+import { Timestamp } from 'firebase/firestore';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -33,12 +39,74 @@ type RepaymentStatus = 'Paid' | 'Pending' | 'Due' | 'Upcoming' | 'Cancelled';
 
 interface ScheduledPayment extends ScheduleInstallment {
   status: RepaymentStatus;
+  isActionable?: boolean;
 }
 
+function SubmitLodgePaymentButton() {
+    const { pending } = useFormStatus();
+    return (
+        <Button size="sm" type="submit" disabled={pending} className="w-full">
+            {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
+            Lodge Payment
+        </Button>
+    )
+}
 
-export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }: { deal: Deal, initialRepayments: Repayment[] | null, repaymentsLoading: boolean }) {
+function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { installment: ScheduledPayment, dealId: string, userId: string, onPaymentLodged: (repayment: any) => void }) {
+    const [state, formAction] = useActionState(lodgePaymentAction, { success: false, message: '', repayment: null });
+    const { toast } = useToast();
+
+    useEffect(() => {
+        if (state.message) {
+            if (state.success && state.repayment) {
+                toast({
+                    title: 'Success',
+                    description: state.message,
+                });
+                const newRepayment = {
+                    ...state.repayment,
+                    lodgedAt: new Timestamp(state.repayment.lodgedAt._seconds, state.repayment.lodgedAt._nanoseconds),
+                    dueDate: new Timestamp(state.repayment.dueDate._seconds, state.repayment.dueDate._nanoseconds)
+                };
+                onPaymentLodged(newRepayment);
+            } else if (!state.success) {
+                toast({
+                    title: 'Error',
+                    description: state.message,
+                    variant: 'destructive',
+                });
+            }
+        }
+    }, [state, toast, onPaymentLodged]);
+    
+    return (
+        <form action={formAction}>
+            <input type="hidden" name="dealId" value={dealId} />
+            <input type="hidden" name="amount" value={installment.payment} />
+            <input type="hidden" name="userId" value={userId} />
+            <input type="hidden" name="dueDate" value={installment.dueDate.toISOString()} />
+             <input type="hidden" name="installmentNumber" value={installment.installment} />
+            <SubmitLodgePaymentButton />
+        </form>
+    );
+}
+
+export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoading }: { deal: Deal, initialRepayments: Repayment[] | null, repaymentsLoading: boolean }) {
   const [currentPage, setCurrentPage] = useState(1);
+  const { user } = useUser();
+  const [allRepayments, setAllRepayments] = useState<Repayment[] | null>(initialRepayments);
   const isMobile = useIsMobile();
+  
+  useEffect(() => {
+    setAllRepayments(initialRepayments);
+  }, [initialRepayments]);
+
+  const handlePaymentLodged = useCallback((newRepayment: Repayment) => {
+    setAllRepayments(prev => {
+        if (!prev) return [newRepayment];
+        return [...prev, newRepayment];
+    });
+  }, []);
   
   const schedule = useMemo(() => generateAmortizationSchedule(deal), [deal]);
   
@@ -46,8 +114,10 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
     if (!schedule) return [];
     const today = startOfToday();
     
+    // First, map the schedule to their statuses
+    let firstActionableFound = false;
     return schedule.map(installment => {
-      const matchingRepayment = initialRepayments?.find(r => 
+      const matchingRepayment = allRepayments?.find(r => 
           r.dueDate && isSameDay(r.dueDate.toDate(), installment.dueDate)
       );
 
@@ -59,10 +129,16 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
       } else if (installment.dueDate < today) {
         status = 'Due';
       }
+
+      let isActionable = false;
+      if (!firstActionableFound && (status === 'Due' || status === 'Upcoming')) {
+        isActionable = true;
+        firstActionableFound = true;
+      }
       
-      return { ...installment, status };
+      return { ...installment, status, isActionable };
     });
-  }, [schedule, initialRepayments]);
+  }, [schedule, allRepayments]);
   
   const upcomingSchedule = useMemo(() => {
       return enhancedSchedule.filter(p => p.status === 'Due' || p.status === 'Upcoming');
@@ -144,7 +220,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
             {isMobile ? (
                 <div className="space-y-3">
                     {paginatedSchedule.map(item => (
-                        <Card key={`${item.installment}-${item.status}`}>
+                        <Card key={`${item.installment}-${item.status}`} className={item.isActionable ? 'border-primary' : ''}>
                             <CardContent className="p-4 space-y-3">
                                 <div className="flex justify-between items-start">
                                     <div>
@@ -158,6 +234,11 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                                     <div className="flex justify-between"><span className="text-muted-foreground">Markup:</span> <span>{formatCurrency(item.interest)}</span></div>
                                     <div className="flex justify-between"><span className="text-muted-foreground">Balance:</span> <span>{formatCurrency(item.balance)}</span></div>
                                 </div>
+                                {(item.isActionable && user) && (
+                                    <div className="pt-3 border-t">
+                                        <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     ))}
@@ -167,22 +248,22 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                     <TableHeader>
                     <TableRow>
                         <TableHead>Due Date</TableHead>
-                        <TableHead>Principal</TableHead>
-                        <TableHead>Markup</TableHead>
-                        <TableHead>Total Payment</TableHead>
-                        <TableHead>Balance</TableHead>
+                        <TableHead>Payment</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                     </TableHeader>
                     <TableBody>
                     {paginatedSchedule.map(item => (
-                        <TableRow key={`${item.installment}-${item.status}`}>
+                        <TableRow key={`${item.installment}-${item.status}`} className={item.isActionable ? 'bg-muted/50' : ''}>
                             <TableCell data-label="Due Date">{format(item.dueDate, 'PPP')}</TableCell>
-                            <TableCell data-label="Principal">{formatCurrency(item.principal)}</TableCell>
-                            <TableCell data-label="Markup">{formatCurrency(item.interest)}</TableCell>
                             <TableCell data-label="Total Payment" className="font-bold">{formatCurrency(item.payment)}</TableCell>
-                            <TableCell data-label="Balance">{formatCurrency(item.balance)}</TableCell>
                             <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
+                            <TableCell data-label="Action" className="text-right w-40">
+                            {(item.isActionable && user) && (
+                                <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
+                            )}
+                            </TableCell>
                         </TableRow>
                     ))}
                     </TableBody>

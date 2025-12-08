@@ -11,7 +11,8 @@ import { collection, query, where, DocumentData, Timestamp, orderBy, doc } from 
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Deal, Repayment } from '@/lib/types';
-import { RepaymentSchedule, RepaymentHistory } from "@/components/deals/page";
+import { RepaymentHistory } from "@/components/deals/repayment-history";
+import { ClientRepaymentSchedule } from "./client-repayment-schedule";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -200,7 +201,7 @@ function DealCard({ deal }: { deal: Deal }) {
                         <TabsTrigger value="history">Repayment History</TabsTrigger>
                     </TabsList>
                     <TabsContent value="schedule">
-                        <RepaymentSchedule deal={deal} initialRepayments={repayments} repaymentsLoading={repaymentsLoading} />
+                        <ClientRepaymentSchedule deal={deal} initialRepayments={repayments} repaymentsLoading={repaymentsLoading} />
                     </TabsContent>
                     <TabsContent value="history">
                         <RepaymentHistory repayments={lodgedRepayments} loading={repaymentsLoading} />
