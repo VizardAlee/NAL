@@ -10,7 +10,7 @@ import { doc, collection, query, where, DocumentData, Timestamp, orderBy, limit 
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone } from 'lucide-react';
+import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone, MessageSquare } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +32,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Deal } from '@/lib/types';
+import { getOrCreateConversation } from '@/app/common/actions/chat-actions';
 
 
 type UserProfile = DocumentData & {
@@ -146,11 +147,12 @@ export default function UserDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const firestore = useFirestore();
   const router = useRouter();
-  const { user, loading: userLoading } = useUser();
+  const { user: adminUser, loading: userLoading } = useUser();
   const [isAddFundOpen, setAddFundOpen] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [currentPage, setCurrentPage] = useState(1);
+  const [isChatPending, startChatTransition] = useTransition();
 
   const userRef = useMemo(() => {
     if (!firestore || !userId) return null;
@@ -178,9 +180,9 @@ export default function UserDetailPage() {
   }, [firestore, userId]);
 
   const zakatSettingsRef = useMemo(() => {
-      if (!firestore || !user) return null;
+      if (!firestore || !adminUser) return null;
       return doc(firestore, 'platformSettings', 'zakat');
-  }, [firestore, user]);
+  }, [firestore, adminUser]);
 
   const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userRef);
   const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
@@ -190,6 +192,28 @@ export default function UserDetailPage() {
   const { data: zakatSettings, loading: zakatLoading } = useDoc<{nisab: number}>(zakatSettingsRef);
 
   const isLoading = userLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading || clientDealsLoading;
+
+  const handleInitiateChat = () => {
+    if (!adminUser || !userProfile) return;
+    startChatTransition(async () => {
+      const result = await getOrCreateConversation({
+        adminId: adminUser.uid,
+        adminName: adminUser.displayName || 'Admin',
+        userId: userProfile.id,
+        userName: userProfile.name,
+      });
+
+      if (result.success && result.conversationId) {
+        router.push(`/admin/messages/${result.conversationId}`);
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: result.message,
+        });
+      }
+    });
+  };
 
   const financialMetrics = useMemo(() => {
       if (!transactions) return { portfolioValue: 0, investibleBalance: 0 };
@@ -260,7 +284,13 @@ export default function UserDetailPage() {
             description={userProfile.email}
             icon={User}
         >
+          <div className="flex items-center gap-2">
+            <Button onClick={handleInitiateChat} disabled={isChatPending}>
+              {isChatPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <MessageSquare className="mr-2 h-4 w-4"/>}
+              Chat with User
+            </Button>
             <ViewPageNav homePath="/admin/users" />
+          </div>
         </PageHeader>
         <div className="grid gap-6 lg:grid-cols-3">
             <div className="lg:col-span-1 space-y-6">

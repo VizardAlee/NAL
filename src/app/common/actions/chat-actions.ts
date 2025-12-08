@@ -122,32 +122,15 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
     const senderDoc = await firestore.collection('users').doc(senderId).get();
     const senderName = senderDoc.data()?.name || 'A user';
     
-    // Safely get participantIds
     const participantIds = Array.isArray(conversationData.participantIds) 
       ? conversationData.participantIds 
       : [];
     
-    console.log('=== DEBUG SEND MESSAGE ===');
-    console.log('Sender ID:', senderId);
-    console.log('Sender Name:', senderName);
-    console.log('Conversation ID:', conversationId);
-    console.log('Participant IDs from DB:', participantIds);
-    
     const recipients = [...new Set(participantIds.filter(id => id !== senderId))];
-    console.log('Calculated Recipients:', recipients);
-    console.log('Number of Recipients:', recipients.length);
     
-    if (recipients.length === 0) {
-      console.log('WARNING: No recipients found — no notifications created');
-    } else {
-      console.log('Creating notifications for:', recipients);
-    }
-
     for (const recipientId of recipients) {
         const recipientDoc = await firestore.collection('users').doc(recipientId).get();
         const recipientRole = recipientDoc.data()?.role || 'Unknown';
-
-        console.log(`  - For recipient ${recipientId} (role: ${recipientRole})`);
 
         let link = '/';
         if (recipientRole === 'Admin') {
@@ -167,11 +150,7 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
             read: false,
             createdAt: FieldValue.serverTimestamp(),
         });
-        
-        console.log(`  - Created notification for ${recipientId} with link: ${link}`);
     }
-
-    console.log('=== END DEBUG ===');
 
     await batch.commit();
 
@@ -180,4 +159,64 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
     console.error("SEND MESSAGE ERROR:", error);
     return { success: false, message: error.message || 'Failed to send message.' };
   }
+}
+
+const getOrCreateConvoSchema = z.object({
+  adminId: z.string().min(1),
+  adminName: z.string().min(1),
+  userId: z.string().min(1),
+  userName: z.string().min(1),
+});
+
+export async function getOrCreateConversation(input: z.infer<typeof getOrCreateConvoSchema>) {
+    const validated = getOrCreateConvoSchema.safeParse(input);
+    if (!validated.success) {
+        return { success: false, message: 'Invalid data for conversation.' };
+    }
+    const { adminId, adminName, userId, userName } = validated.data;
+    
+    try {
+        const existingConvoQuery = adminDb.collection('conversations')
+            .where('participantIds', 'array-contains', adminId);
+
+        const querySnapshot = await existingConvoQuery.get();
+        const existingConvo = querySnapshot.docs.find(doc => {
+            const data = doc.data();
+            return data.participantIds.includes(userId) && data.participantIds.length === 2;
+        });
+
+        if (existingConvo) {
+            return { success: true, conversationId: existingConvo.id };
+        }
+
+        const newConversationRef = adminDb.collection('conversations').doc();
+        const batch = adminDb.batch();
+        const now = FieldValue.serverTimestamp();
+        const initialMessage = `Hi ${userName}, this is ${adminName}. How can I assist you?`;
+
+        batch.set(newConversationRef, {
+            participantIds: [adminId, userId],
+            participantNames: [adminName, userName],
+            participantAvatars: [`https://picsum.photos/seed/${adminId}/128/128`, `https://picsum.photos/seed/${userId}/128/128`],
+            lastMessage: initialMessage,
+            lastMessageSenderId: adminId,
+            lastUpdatedAt: now,
+            readBy: [adminId],
+        });
+
+        const firstMessageRef = newConversationRef.collection('messages').doc();
+        batch.set(firstMessageRef, {
+            conversationId: newConversationRef.id,
+            senderId: adminId,
+            text: initialMessage,
+            createdAt: now,
+        });
+
+        await batch.commit();
+
+        return { success: true, conversationId: newConversationRef.id };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+        return { success: false, message };
+    }
 }
