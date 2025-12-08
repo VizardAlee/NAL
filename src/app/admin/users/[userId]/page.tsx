@@ -9,7 +9,7 @@ import { doc, collection, query, where, DocumentData, Timestamp, orderBy, limit 
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight } from 'lucide-react';
+import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +37,7 @@ type UserProfile = DocumentData & {
     id: string;
     name: string;
     email: string;
+    phoneNumber?: string;
     role: 'Admin' | 'Investor' | 'Client';
     lastZakatPaymentDate?: Timestamp;
 };
@@ -263,7 +264,7 @@ export default function UserDetailPage() {
         <div className="grid gap-6 lg:grid-cols-3">
             <div className="lg:col-span-1 space-y-6">
                 <Card>
-                    <CardHeader className="flex flex-row items-center gap-4 space-y-0">
+                    <CardHeader className="flex-row items-center gap-4 space-y-0">
                          <Avatar className="h-16 w-16">
                             <AvatarImage src={`https://picsum.photos/seed/${userProfile.id}/128/128`} />
                             <AvatarFallback>{userProfile.name?.charAt(0)}</AvatarFallback>
@@ -274,6 +275,12 @@ export default function UserDetailPage() {
                                 <Badge variant="secondary">{userProfile.role}</Badge>
                                 {isZakatEligible && <Badge variant="default">Zakat Eligible</Badge>}
                             </div>
+                            {userProfile.phoneNumber && (
+                                <div className="text-sm text-muted-foreground mt-2 flex items-center gap-2">
+                                    <Phone className="h-4 w-4" />
+                                    <span>{userProfile.phoneNumber}</span>
+                                </div>
+                            )}
                         </div>
                     </CardHeader>
                 </Card>

@@ -1,0 +1,645 @@
+
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "Represents a user in the system, who can be an Admin, Investor, or Client.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The user's full name."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address.",
+          "format": "email"
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "The user's phone number (optional)."
+        },
+        "role": {
+          "type": "string",
+          "description": "The role of the user.",
+          "enum": ["Admin", "Investor", "Client", null]
+        },
+        "lastZakatPaymentDate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp of the user's last Zakat payment."
+        }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "deal": {
+      "title": "Deal",
+      "description": "Represents a financing deal for a client.",
+      "type": "object",
+      "properties": {
+        "dealName": {
+          "type": "string",
+          "description": "A descriptive name for the deal."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "The ID of the client associated with this deal."
+        },
+        "clientName": {
+          "type": "string",
+          "description": "The name of the client (denormalized for display)."
+        },
+        "principal": {
+          "type": "number",
+          "description": "The principal amount of the loan."
+        },
+        "profitRate": {
+          "type": "number",
+          "description": "The annual profit rate for the deal."
+        },
+        "durationValue": {
+          "type": "number",
+          "description": "The numeric value for the duration of the deal."
+        },
+        "durationUnit": {
+          "type": "string",
+          "description": "The unit of time for the deal's duration.",
+          "enum": ["Days", "Weeks", "Fortnights", "Months", "Years"]
+        },
+        "repaymentType": {
+          "type": "string",
+          "description": "The type of repayment plan.",
+          "enum": ["Equal Installments", "Balloon Payment"]
+        },
+        "repaymentFrequency": {
+          "type": "string",
+          "description": "The frequency of repayments.",
+          "enum": ["Daily", "Weekly", "Fortnightly", "Monthly"]
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the deal.",
+          "enum": ["Pending", "Active", "Completed", "Terminated"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the deal record was created in the system."
+        },
+        "startDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The official start date of the financing term, used for amortization calculations. Defaults to createdAt if not provided."
+        }
+      },
+      "required": [
+        "dealName",
+        "clientId",
+        "clientName",
+        "principal",
+        "profitRate",
+        "durationValue",
+        "durationUnit",
+        "repaymentType",
+        "repaymentFrequency",
+        "status",
+        "createdAt"
+      ]
+    },
+    "dealRequest": {
+      "title": "Deal Request",
+      "description": "Represents a deal requested by a client, pending admin approval.",
+      "type": "object",
+      "properties": {
+        "dealName": { "type": "string", "description": "A descriptive name for the deal." },
+        "clientId": { "type": "string", "description": "The ID of the client requesting the deal." },
+        "clientName": { "type": "string", "description": "The name of the client (denormalized)." },
+        "principal": { "type": "number", "description": "The principal amount requested." },
+        "profitRate": { "type": "number", "description": "The proposed annual profit rate." },
+        "durationValue": { "type": "number", "description": "The proposed numeric value for the deal duration." },
+        "durationUnit": { "type": "string", "description": "The unit for the deal's duration.", "enum": ["Days", "Weeks", "Fortnights", "Months", "Years"] },
+        "repaymentType": { "type": "string", "description": "The proposed repayment plan.", "enum": ["Equal Installments", "Balloon Payment"] },
+        "repaymentFrequency": { "type": "string", "description": "The proposed frequency of repayments.", "enum": ["Daily", "Weekly", "Fortnightly", "Monthly"] },
+        "proposalDetails": { "type": "string", "description": "The text summary of the client's deal proposal." },
+        "proposalPdf": { "type": "string", "description": "A Base64-encoded Data URI of the uploaded proposal PDF." },
+        "status": { "type": "string", "description": "The status of the request.", "enum": ["Pending", "Approved", "Rejected"] },
+        "requestedAt": { "type": "string", "format": "date-time", "description": "Timestamp of the request." },
+        "processedAt": { "type": "string", "format": "date-time", "description": "Timestamp when an admin processed the request." }
+      },
+      "required": ["dealName", "clientId", "clientName", "principal", "profitRate", "durationValue", "durationUnit", "repaymentType", "repaymentFrequency", "status", "requestedAt"]
+    },
+    "depositRequest": {
+      "title": "Deposit Request",
+      "description": "A request from an investor to deposit funds into their investible account.",
+      "type": "object",
+      "properties": {
+        "investorId": { "type": "string", "description": "The ID of the investor making the request." },
+        "investorName": { "type": "string", "description": "The name of the investor (denormalized)." },
+        "amount": { "type": "number", "description": "The amount requested for deposit." },
+        "status": { "type": "string", "description": "The status of the deposit request.", "enum": ["Pending", "Approved", "Rejected"] },
+        "requestedAt": { "type": "string", "format": "date-time", "description": "Timestamp of the request." },
+        "processedAt": { "type": "string", "format": "date-time", "description": "Timestamp when an admin processed the request." }
+      },
+      "required": ["investorId", "investorName", "amount", "status", "requestedAt"]
+    },
+    "fundBatch": {
+      "title": "Fund Batch",
+      "description": "A specific batch of capital from an investor or the platform, available for investment.",
+      "type": "object",
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "description": "The ID of the source (Investor's user ID or 'platform')."
+        },
+        "amount": {
+          "type": "number",
+          "description": "The amount of capital in this batch."
+        },
+        "remainingAmount": {
+          "type": "number",
+          "description": "The amount of capital from this batch that is still available to be invested."
+        },
+        "tenureValue": {
+            "type": "number",
+            "description": "The numeric value for the tenure of the investment."
+        },
+        "tenureUnit": {
+            "type": "string",
+            "description": "The unit of time for the investment's tenure.",
+            "enum": ["Days", "Weeks", "Fortnights", "Months", "Years"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the funds were added."
+        }
+      },
+      "required": ["sourceId", "amount", "remainingAmount", "tenureValue", "tenureUnit", "createdAt"]
+    },
+    "investment": {
+      "title": "Investment",
+      "description": "Links an investor to a deal and the amount they invested.",
+      "type": "object",
+      "properties": {
+        "investorId": {
+          "type": "string",
+          "description": "The ID of the investor user."
+        },
+        "dealId": {
+          "type": "string",
+          "description": "The ID of the deal being invested in."
+        },
+        "amount": {
+          "type": "number",
+          "description": "The amount invested."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp of the investment."
+        }
+      },
+      "required": ["investorId", "dealId", "amount", "createdAt"]
+    },
+    "transaction": {
+      "title": "Transaction",
+      "description": "Logs every financial transaction within the platform.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "The type of transaction.",
+          "enum": ["Deposit", "Withdrawal", "Investment", "Repayment", "ProfitDistribution", "PlatformEarning", "Zakat", "Penalty"]
+        },
+        "amount": {
+          "type": "number",
+          "description": "The transaction amount."
+        },
+        "dealId": {
+          "type": "string",
+          "description": "The ID of the deal related to this transaction (if applicable)."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user related to this transaction (if applicable)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp of the transaction."
+        }
+      },
+      "required": ["type", "amount", "createdAt"]
+    },
+    "repayment": {
+      "title": "Repayment",
+      "description": "Represents a repayment made by a client for a deal.",
+      "type": "object",
+      "properties": {
+        "dealId": {
+          "type": "string",
+          "description": "The ID of the deal this repayment is for."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "The ID of the client making the payment."
+        },
+        "amount": {
+          "type": "number",
+          "description": "The amount of the repayment."
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the repayment.",
+          "enum": ["Pending", "Approved", "Rejected", "Cancelled"]
+        },
+        "lodgedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the client lodged the payment."
+        },
+        "approvedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the admin approved the payment."
+        },
+        "dueDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The original due date for this repayment from the schedule."
+        },
+        "installmentNumber": {
+            "type": "number",
+            "description": "The installment number from the amortization schedule."
+        }
+      },
+      "required": ["dealId", "clientId", "amount", "status", "lodgedAt"]
+    },
+    "withdrawalRequest": {
+      "title": "Withdrawal Request",
+      "description": "A request from an investor to withdraw funds from their account.",
+      "type": "object",
+      "properties": {
+        "investorId": {
+          "type": "string",
+          "description": "The ID of the investor making the request."
+        },
+        "investorName": {
+            "type": "string",
+            "description": "The name of the investor (denormalized for display)."
+        },
+        "amount": {
+          "type": "number",
+          "description": "The amount requested for withdrawal."
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the withdrawal request.",
+          "enum": ["Pending", "Approved", "Rejected"]
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the investor made the request."
+        },
+        "processedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when an admin processed the request."
+        }
+      },
+      "required": ["investorId", "investorName", "amount", "status", "requestedAt"]
+    },
+    "reinvestmentRequest": {
+      "title": "Reinvestment Request",
+      "description": "A request from an investor to reinvest their profits.",
+      "type": "object",
+      "properties": {
+        "investorId": {
+          "type": "string",
+          "description": "The ID of the investor making the request."
+        },
+        "investorName": {
+          "type": "string",
+          "description": "The name of the investor (denormalized for display)."
+        },
+        "amount": {
+          "type": "number",
+          "description": "The amount of profit to reinvest."
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the reinvestment request.",
+          "enum": ["Pending", "Approved", "Rejected"]
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the investor made the request."
+        },
+        "processedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when an admin processed the request."
+        }
+      },
+      "required": ["investorId", "investorName", "amount", "status", "requestedAt"]
+    },
+    "terminationRequest": {
+      "title": "Termination Request",
+      "description": "A request from a client to terminate a deal early.",
+      "type": "object",
+      "properties": {
+        "dealId": {
+          "type": "string",
+          "description": "The ID of the deal being requested for termination."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "The ID of the client making the request."
+        },
+        "clientName": {
+          "type": "string",
+          "description": "The name of the client (denormalized)."
+        },
+        "dealName": {
+          "type": "string",
+          "description": "The name of the deal (denormalized)."
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the termination request.",
+          "enum": ["Pending", "Approved", "Rejected"]
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the client made the request."
+        },
+        "processedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when an admin processed the request."
+        },
+         "platformEarning": {
+          "type": "number",
+          "description": "The profit earned by the platform upon termination."
+        }
+      },
+      "required": ["dealId", "clientId", "clientName", "dealName", "status", "requestedAt"]
+    },
+    "administrativeTransaction": {
+      "title": "Administrative Transaction",
+      "description": "Logs financial activities related to the platform's operational account (e.g., expenses, admin deposits).",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "The type of administrative transaction.",
+          "enum": ["AdminDeposit", "Expense", "TransferToInvestible", "TransferFromInvestible", "AssetAcquisition", "AssetSale"]
+        },
+        "amount": {
+          "type": "number",
+          "description": "The transaction amount. Positive for deposits/inflows, negative for expenses/outflows."
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief description of the transaction (e.g., 'Office Supplies', 'Initial float')."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp of the transaction."
+        }
+      },
+      "required": ["type", "amount", "description", "createdAt"]
+    },
+    "asset": {
+        "title": "Asset",
+        "description": "Represents a physical or digital asset owned by the platform.",
+        "type": "object",
+        "properties": {
+            "description": { "type": "string", "description": "A description of the asset (e.g., 'MacBook Pro 16-inch')." },
+            "acquisitionCost": { "type": "number", "description": "The cost to acquire the asset. Can be 0 for existing assets." },
+            "acquisitionDate": { "type": "string", "format": "date-time", "description": "When the asset was acquired or recognized." },
+            "status": { "type": "string", "enum": ["Held", "Sold"], "description": "The current status of the asset." },
+            "salePrice": { "type": "number", "description": "The price the asset was sold for." },
+            "saleDate": { "type": "string", "format": "date-time", "description": "When the asset was sold." }
+        },
+        "required": ["description", "acquisitionCost", "acquisitionDate", "status"]
+    },
+    "notification": {
+      "title": "Notification",
+      "description": "Represents a notification for an admin.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The title of the notification."
+        },
+        "message": {
+          "type": "string",
+          "description": "The main content of the notification."
+        },
+        "link": {
+          "type": "string",
+          "description": "A URL to the relevant page (e.g., an approval page)."
+        },
+        "read": {
+          "type": "boolean",
+          "description": "Whether the notification has been read."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the notification was created."
+        }
+      },
+      "required": ["title", "message", "link", "read", "createdAt"]
+    },
+    "platformSetting": {
+      "title": "Platform Setting",
+      "description": "A global setting for the platform, like the Zakat Nisab or company logo.",
+      "type": "object",
+      "properties": {
+        "nisab": {
+          "type": "number",
+          "description": "The minimum wealth threshold for Zakat eligibility in Naira."
+        },
+        "logoUrl": {
+          "type": "string",
+          "description": "A base64 data URI of the company logo."
+        }
+      }
+    },
+    "chatRequest": {
+        "title": "Chat Request",
+        "description": "A request from a user to initiate a chat with an admin.",
+        "type": "object",
+        "properties": {
+            "userId": { "type": "string", "description": "The ID of the user requesting the chat." },
+            "userName": { "type": "string", "description": "The name of the user (denormalized)." },
+            "userRole": { "type": "string", "description": "The role of the user (denormalized).", "enum": ["Investor", "Client"] },
+            "requestedAt": { "type": "string", "format": "date-time", "description": "The timestamp of the request." },
+            "status": { "type": "string", "description": "The status of the request.", "enum": ["Pending"] }
+        },
+        "required": ["userId", "userName", "userRole", "requestedAt", "status"]
+    },
+    "conversation": {
+        "title": "Conversation",
+        "description": "A chat session between participants.",
+        "type": "object",
+        "properties": {
+            "participantIds": { "type": "array", "items": { "type": "string" }, "description": "Array of user IDs participating in the chat." },
+            "participantNames": { "type": "array", "items": { "type": "string" }, "description": "Denormalized names of participants for display." },
+            "participantAvatars": { "type": "array", "items": { "type": "string" }, "description": "Denormalized avatar URLs of participants." },
+            "lastMessage": { "type": "string", "description": "A snippet of the most recent message for previews." },
+            "lastMessageSenderId": { "type": "string", "description": "The ID of the user who sent the last message." },
+            "lastUpdatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of the last message." },
+            "readBy": { "type": "array", "items": { "type": "string" }, "description": "Array of user IDs who have read the last message." }
+        },
+        "required": ["participantIds", "lastUpdatedAt"]
+    },
+    "message": {
+        "title": "Message",
+        "description": "An individual message within a conversation.",
+        "type": "object",
+        "properties": {
+            "conversationId": { "type": "string", "description": "The ID of the parent conversation." },
+            "senderId": { "type": "string", "description": "The ID of the user who sent the message." },
+            "text": { "type": "string", "description": "The text content of the message." },
+            "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the message was sent." },
+            "attachmentUrl": { "type": "string", "description": "URL of an attachment (e.g., a PDF data URI)." },
+            "attachmentName": { "type": "string", "description": "The original name of the attached file." }
+        },
+        "required": ["conversationId", "senderId", "createdAt"]
+    }
+  },
+  "auth": {
+    "providers": ["email"]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/user"
+      },
+      "description": "Stores individual user profiles."
+    },
+    "/deals/{dealId}": {
+      "schema": {
+        "$ref": "#/entities/deal"
+      },
+      "description": "Stores all financing deals."
+    },
+    "/dealRequests/{dealRequestId}": {
+        "schema": {
+            "$ref": "#/entities/dealRequest"
+        },
+        "description": "Stores client requests for new deals, pending admin approval."
+    },
+    "/depositRequests/{depositRequestId}": {
+        "schema": {
+            "$ref": "#/entities/depositRequest"
+        },
+        "description": "Stores investor requests to deposit funds."
+    },
+    "/fundBatches/{fundBatchId}": {
+      "schema": {
+        "$ref": "#/entities/fundBatch"
+      },
+      "description": "A ledger of all investable capital batches."
+    },
+    "/investments/{investmentId}": {
+      "schema": {
+        "$ref": "#/entities/investment"
+      },
+      "description": "Tracks which investor has invested in which deal."
+    },
+    "/transactions/{transactionId}": {
+      "schema": {
+        "$ref": "#/entities/transaction"
+      },
+      "description": "A log of all financial transactions."
+    },
+    "/repayments/{repaymentId}": {
+      "schema": {
+        "$ref": "#/entities/repayment"
+      },
+      "description": "Tracks client repayments that are pending or completed."
+    },
+    "/withdrawalRequests/{withdrawalRequestId}": {
+      "schema": {
+        "$ref": "#/entities/withdrawalRequest"
+      },
+      "description": "Tracks investor requests to withdraw funds."
+    },
+    "/reinvestmentRequests/{reinvestmentRequestId}": {
+      "schema": {
+        "$ref": "#/entities/reinvestmentRequest"
+      },
+      "description": "Tracks investor requests to reinvest their profits."
+    },
+    "/terminationRequests/{terminationRequestId}": {
+      "schema": {
+        "$ref": "#/entities/terminationRequest"
+      },
+      "description": "Tracks client requests to terminate a deal."
+    },
+    "/administrativeTransactions/{transactionId}": {
+        "schema": {
+            "$ref": "#/entities/administrativeTransaction"
+        },
+        "description": "Stores all administrative financial transactions."
+    },
+    "/assets/{assetId}": {
+        "schema": {
+            "$ref": "#/entities/asset"
+        },
+        "description": "Stores all platform-owned assets."
+    },
+    "/notifications/{notificationId}": {
+        "schema": {
+            "$ref": "#/entities/notification"
+        },
+        "description": "Stores admin notifications for pending actions."
+    },
+    "/platformSettings/zakat": {
+      "schema": {
+        "properties": {
+            "nisab": {
+                "$ref": "#/entities/platformSetting/properties/nisab"
+            }
+        }
+      },
+      "description": "Stores global platform settings, specifically the Zakat configuration."
+    },
+    "/platformSettings/branding": {
+      "schema": {
+        "properties": {
+            "logoUrl": {
+                "$ref": "#/entities/platformSetting/properties/logoUrl"
+            }
+        }
+      },
+      "description": "Stores global platform settings, specifically the company branding."
+    },
+    "/chatRequests/{chatRequestId}": {
+        "schema": {
+            "$ref": "#/entities/chatRequest"
+        },
+        "description": "Stores user pings to an admin to start a chat."
+    },
+    "/conversations/{conversationId}": {
+        "schema": {
+            "$ref": "#/entities/conversation"
+        },
+        "description": "Stores metadata for a single chat conversation."
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+        "schema": {
+            "$ref": "#/entities/message"
+        },
+        "description": "Sub-collection for messages within a conversation."
+    }
+  }
+}

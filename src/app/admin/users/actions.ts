@@ -9,6 +9,7 @@ const createUserSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(8),
+  phoneNumber: z.string().optional(),
   role: z.enum(['Investor', 'Client']),
 });
 
@@ -18,7 +19,7 @@ export async function createUserAction(data: z.infer<typeof createUserSchema>) {
     return { success: false, message: 'Invalid data provided.' };
   }
 
-  const { name, email, password, role } = validated.data;
+  const { name, email, password, role, phoneNumber } = validated.data;
 
   try {
     const auth = getAuth(adminDb.app);
@@ -40,11 +41,17 @@ export async function createUserAction(data: z.infer<typeof createUserSchema>) {
     await auth.setCustomUserClaims(userRecord.uid, { role: finalRole });
 
     // 4. Create user document in Firestore
-    await usersCollection.doc(userRecord.uid).set({
+    const userData: any = {
       name,
       email,
       role: finalRole,
-    });
+    };
+
+    if (phoneNumber) {
+      userData.phoneNumber = phoneNumber;
+    }
+
+    await usersCollection.doc(userRecord.uid).set(userData);
 
     return { success: true, message: `User ${name} created successfully as ${finalRole}.` };
   } catch (error: any) {

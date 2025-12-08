@@ -18,7 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { setNisabAction } from "./actions";
 import { setLogoAction } from "./logo-actions";
 import { useCompanyLogo } from "@/components/company-logo-provider";
-
+import { UpdateProfileForm } from "@/components/update-profile-form";
 
 function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoading: boolean }) {
     const { toast } = useToast();
@@ -178,6 +178,7 @@ export default function SettingsPage() {
             icon={Settings}
         />
         <div className="space-y-6">
+            <UpdateProfileForm />
             <CompanyLogoForm />
             <NisabForm currentNisab={zakatSettings?.nisab || 0} isLoading={zakatLoading} />
             <Card>

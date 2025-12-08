@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/page-header";
 import { Settings } from "lucide-react";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { UpdateProfileForm } from "@/components/update-profile-form";
 
 export default function SettingsPage() {
   return (
@@ -12,15 +13,18 @@ export default function SettingsPage() {
             description="Manage your account settings."
             icon={Settings}
         />
-        <Card>
-            <CardHeader>
-                <CardTitle>Change Password</CardTitle>
-                <CardDescription>Update your password here. It's recommended to use a strong, unique password.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <ChangePasswordForm />
-            </CardContent>
-        </Card>
+        <div className="space-y-6">
+            <UpdateProfileForm />
+            <Card>
+                <CardHeader>
+                    <CardTitle>Change Password</CardTitle>
+                    <CardDescription>Update your password here. It's recommended to use a strong, unique password.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ChangePasswordForm />
+                </CardContent>
+            </Card>
+        </div>
     </div>
   );
 }

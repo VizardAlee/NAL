@@ -10,6 +10,7 @@ const signUpSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
   email: z.string().email("Please enter a valid email address."),
   password: z.string().min(8, "Password must be at least 8 characters."),
+  phoneNumber: z.string().optional(),
   role: z.enum(['Investor', 'Client'], { required_error: 'Role is required.' }),
 });
 
@@ -28,7 +29,7 @@ export async function signUpWithEmailAction(
         return { success: false, message: 'Invalid form data provided.' };
     }
 
-    const { name, email, password, role } = validated.data;
+    const { name, email, password, role, phoneNumber } = validated.data;
     const auth = getAuth(adminDb.app);
 
     try {
@@ -49,11 +50,16 @@ export async function signUpWithEmailAction(
         await auth.setCustomUserClaims(userRecord.uid, { role });
 
         // 3. Create user document in Firestore with the selected role
-        await adminDb.collection('users').doc(userRecord.uid).set({
+        const userData: any = {
             name,
             email,
-            role: role,
-        });
+            role,
+        };
+        if (phoneNumber) {
+            userData.phoneNumber = phoneNumber;
+        }
+
+        await adminDb.collection('users').doc(userRecord.uid).set(userData);
 
         revalidatePath('/admin/users');
         

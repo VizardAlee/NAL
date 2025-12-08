@@ -33,6 +33,7 @@ const formSchema = z.object({
   password: z
     .string()
     .min(8, { message: 'Password must be at least 8 characters.' }),
+  phoneNumber: z.string().optional(),
   role: z.enum(['Investor', 'Client'], { required_error: 'Role is required.' }),
 });
 
@@ -50,6 +51,7 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
       name: '',
       email: '',
       password: '',
+      phoneNumber: '',
     },
   });
 
@@ -60,6 +62,7 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
       name: values.name,
       email: values.email,
       password: values.password,
+      phoneNumber: values.phoneNumber,
       role: values.role,
     });
 
@@ -104,6 +107,19 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
               <FormLabel>Email</FormLabel>
               <FormControl>
                 <Input placeholder="name@example.com" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="phoneNumber"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Phone Number (Optional)</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g. +2348012345678" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
