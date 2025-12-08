@@ -5,7 +5,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2 } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, HandCoins } from "lucide-react";
 import { useMemo, useTransition } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, doc } from 'firebase/firestore';
@@ -145,6 +145,16 @@ export default function ClientDealDetailPage() {
                             <p className="text-muted-foreground">Frequency</p>
                             <p className="font-medium">{deal.repaymentFrequency}</p>
                         </div>
+                    </div>
+                     <div className="flex items-center justify-between p-3 rounded-md border text-sm">
+                        <div className="flex items-center gap-2">
+                            <HandCoins className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-muted-foreground">Management Fee</span>
+                        </div>
+                        <span className="font-medium">
+                            {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)}
+                            <span className="text-xs text-muted-foreground"> ({deal.managementFeeRate || 0}%)</span>
+                        </span>
                     </div>
                     {deal.status === 'Active' && (
                         <Button variant="destructive" size="sm" onClick={handleTerminationRequest} disabled={isPendingTermination}>

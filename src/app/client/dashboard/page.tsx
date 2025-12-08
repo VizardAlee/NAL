@@ -4,7 +4,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy, HandCoins } from "lucide-react";
 import { useMemo, useTransition, useEffect, useState } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, doc } from 'firebase/firestore';
@@ -176,6 +176,16 @@ function DealCard({ deal }: { deal: Deal }) {
                         <p className="font-medium">{deal.repaymentFrequency}</p>
                     </div>
                 </div>
+                <div className="flex items-center justify-between p-3 rounded-md border text-sm">
+                    <div className="flex items-center gap-2">
+                        <HandCoins className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">Management Fee</span>
+                    </div>
+                    <span className="font-medium">
+                        {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)}
+                         <span className="text-xs text-muted-foreground"> ({deal.managementFeeRate || 0}%)</span>
+                    </span>
+               </div>
                 {deal.status === 'Active' && (
                     <Button variant="destructive" size="sm" onClick={handleTerminationRequest} disabled={isPendingTermination}>
                         {isPendingTermination ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldAlert className="mr-2 h-4 w-4" />}
@@ -350,7 +360,7 @@ export default function ClientDashboard() {
                                                         <div className="flex justify-between items-start">
                                                             <div>
                                                                 <p className="font-medium">{deal.dealName}</p>
-                                                                <p className="text-sm">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</p>
+                                                                 <p className="text-sm">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</p>
                                                             </div>
                                                             <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
                                                         </div>
@@ -424,5 +434,3 @@ export default function ClientDashboard() {
         </div>
     );
 }
-
-    
