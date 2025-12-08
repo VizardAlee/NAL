@@ -115,25 +115,28 @@ function NotificationBell() {
 
     const notificationsQuery = useMemo(() => {
         if (!firestore || !user) return null;
-        // Fetch only unread notifications for the current user
+        // Fetch only unread notifications that are NOT message notifications
         return query(
-            collection(firestore, 'notifications'), 
+            collection(firestore, 'notifications'),
             where('recipientId', '==', user.uid),
-            where('read', '==', false), 
-            orderBy('createdAt', 'desc'), 
+            where('read', '==', false),
+            orderBy('createdAt', 'desc'),
             limit(20)
         );
     }, [firestore, user]);
 
-    const { data: notifications } = useCollection<Notification>(notificationsQuery);
+    const { data: allUnreadNotifications } = useCollection<Notification>(notificationsQuery);
+
+    const notifications = useMemo(() => {
+        // Further filter on the client to exclude message-related notifications
+        return allUnreadNotifications?.filter(n => !n.link.includes('/messages/')) || [];
+    }, [allUnreadNotifications]);
 
     const handleNotificationClick = async (notification: Notification) => {
         if (!firestore) return;
         
-        // Optimistically navigate first
         router.push(notification.link);
         
-        // Then mark as read in the background
         const notifRef = doc(firestore, 'notifications', notification.id);
         await updateDoc(notifRef, { read: true });
     };
