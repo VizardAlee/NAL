@@ -128,6 +128,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
   const enhancedSchedule = useMemo((): ScheduledPayment[] => {
     if (!schedule) return [];
     const today = startOfToday();
+    let nextActionableInstallmentFound = false;
 
     return schedule.map(installment => {
       const matchingRepayment = allRepayments?.find(r => {
@@ -143,8 +144,12 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
       } else if (installment.dueDate < today) {
         status = 'Due';
       }
-
-      const isActionable = status === 'Due';
+      
+      let isActionable = false;
+      if (!nextActionableInstallmentFound && (status === 'Due' || status === 'Upcoming')) {
+        isActionable = true;
+        nextActionableInstallmentFound = true;
+      }
 
       return { ...installment, status, isActionable, repaymentDoc: matchingRepayment };
     });
@@ -308,4 +313,3 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
     </div>
   );
 }
-
