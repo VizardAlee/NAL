@@ -131,7 +131,7 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
       }
 
       let isActionable = false;
-      if (!firstActionableFound && (status === 'Due' || status === 'Upcoming')) {
+      if (!firstActionableFound && status !== 'Paid' && status !== 'Pending' && status !== 'Cancelled') {
         isActionable = true;
         firstActionableFound = true;
       }
