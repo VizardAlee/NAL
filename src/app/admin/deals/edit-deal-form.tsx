@@ -42,6 +42,7 @@ const formSchema = z.object({
   clientId: z.string({ required_error: 'Please select a client.' }),
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
+  managementFeeRate: z.coerce.number().min(0, { message: 'Management fee rate cannot be negative.' }),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
@@ -167,6 +168,17 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
               )}
             />
         </div>
+         <FormField
+              control={form.control}
+              name="managementFeeRate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Management Fee Rate (%)</FormLabel>
+                  <FormControl><Input type="number" step="0.1" placeholder="2" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
@@ -292,3 +304,5 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
     </Form>
   );
 }
+
+    

@@ -57,6 +57,18 @@
           "type": "number",
           "description": "The annual profit rate for the deal."
         },
+        "managementFeeRate": {
+            "type": "number",
+            "description": "The percentage of the principal to be charged as a management fee."
+        },
+        "managementFeeAmount": {
+            "type": "number",
+            "description": "The calculated management fee amount."
+        },
+        "managementFeePaid": {
+            "type": "boolean",
+            "description": "Whether the management fee has been paid and approved."
+        },
         "durationValue": {
           "type": "number",
           "description": "The numeric value for the duration of the deal."
@@ -98,6 +110,9 @@
         "clientName",
         "principal",
         "profitRate",
+        "managementFeeRate",
+        "managementFeeAmount",
+        "managementFeePaid",
         "durationValue",
         "durationUnit",
         "repaymentType",
@@ -396,7 +411,7 @@
         "type": {
           "type": "string",
           "description": "The type of administrative transaction.",
-          "enum": ["AdminDeposit", "Expense", "TransferToInvestible", "TransferFromInvestible", "AssetAcquisition", "AssetSale"]
+          "enum": ["AdminDeposit", "Expense", "TransferToInvestible", "TransferFromInvestible", "AssetAcquisition", "AssetSale", "ManagementFee"]
         },
         "amount": {
           "type": "number",
@@ -643,3 +658,5 @@
     }
   }
 }
+
+    

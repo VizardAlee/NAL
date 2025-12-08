@@ -10,7 +10,7 @@ import { doc, collection, query, where, DocumentData, Timestamp, orderBy } from 
 import { useFirestore } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { FileText, Users, Landmark, Zap, Loader2, UserCheck } from 'lucide-react';
+import { FileText, Users, Landmark, Zap, Loader2, UserCheck, HandCoins, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -23,6 +23,7 @@ import { ViewPageNav } from '@/components/view-page-nav';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RepaymentSchedule, RepaymentHistory } from '@/components/deals/page';
+import { approveManagementFeeAction } from '../actions';
 
 type User = {
     id: string;
@@ -80,6 +81,7 @@ export default function DealDetailPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const [isFeePending, startFeeTransition] = useTransition();
   const isMobile = useIsMobile();
 
   const dealRef = useMemo(() => {
@@ -205,6 +207,18 @@ export default function DealDetailPage() {
     });
   }
 
+  const handleApproveFee = () => {
+    if (!deal) return;
+    startFeeTransition(async () => {
+        const result = await approveManagementFeeAction(deal.id, deal.dealName, deal.managementFeeAmount);
+        if (result.success) {
+            toast({ title: 'Success', description: result.message });
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.message });
+        }
+    });
+  }
+
   if (isLoading) {
     return <DealDetailSkeleton />;
   }
@@ -243,6 +257,7 @@ export default function DealDetailPage() {
                         <div className="font-medium">Repayment Frequency</div><div>{deal.repaymentFrequency}</div>
                         <div className="font-medium">Term Start Date</div><div>{formatDate(deal.startDate)}</div>
                         <div className="font-medium">Date Created</div><div>{formatDate(deal.createdAt)}</div>
+                        <div className="font-medium">Management Fee</div><div>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)} ({deal.managementFeeRate || 0}%)</div>
                     </CardContent>
                 </Card>
 
@@ -367,6 +382,20 @@ export default function DealDetailPage() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
+                        {deal.status === 'Pending' && !deal.managementFeePaid && (
+                             <Card className="bg-muted border-primary">
+                                <CardHeader>
+                                    <CardTitle className="text-base flex items-center gap-2"><HandCoins /> Management Fee</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <p className="text-sm text-muted-foreground">This deal requires a management fee of <span className="font-bold text-foreground">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount)}</span> to be paid before it can be funded.</p>
+                                    <Button className="w-full" onClick={handleApproveFee} disabled={isFeePending}>
+                                        {isFeePending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+                                        Approve Fee Payment
+                                    </Button>
+                                </CardContent>
+                             </Card>
+                        )}
                         <div>
                             <div className="flex justify-between items-center mb-2 text-sm">
                                 <span className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(totalFunded)}</span>
@@ -375,7 +404,7 @@ export default function DealDetailPage() {
                             <Progress value={fundingProgress} />
                         </div>
                         {deal.status === 'Pending' && (
-                             <Button className="w-full" onClick={handleFundDeal} disabled={isPending || isFullyFunded}>
+                             <Button className="w-full" onClick={handleFundDeal} disabled={isPending || isFullyFunded || !deal.managementFeePaid}>
                                 {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4"/>}
                                 {isFullyFunded ? 'Fully Funded' : 'Auto-Fund Deal'}
                             </Button>
@@ -387,3 +416,5 @@ export default function DealDetailPage() {
     </div>
   );
 }
+
+    

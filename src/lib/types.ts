@@ -9,6 +9,9 @@ export type Deal = DocumentData & {
   clientName: string;
   principal: number;
   profitRate: number;
+  managementFeeRate?: number;
+  managementFeeAmount?: number;
+  managementFeePaid?: boolean;
   durationValue: number;
   durationUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
   repaymentType: 'Equal Installments' | 'Balloon Payment';
@@ -42,3 +45,5 @@ export type Repayment = DocumentData & {
   dueDate: Timestamp;
   installmentNumber: number;
 };
+
+    

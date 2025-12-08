@@ -40,6 +40,7 @@ const formSchema = z.object({
   clientId: z.string({ required_error: 'Please select a client.' }),
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
+  managementFeeRate: z.coerce.number().min(0, { message: 'Management fee rate cannot be negative.' }),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
@@ -77,6 +78,7 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
       dealName: '',
       principal: 10000,
       profitRate: 5,
+      managementFeeRate: 2,
       durationValue: 12,
       durationUnit: 'Months',
       repaymentType: 'Equal Installments',
@@ -100,9 +102,16 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
     }
 
     try {
+      const { principal, managementFeeRate, ...restOfValues } = values;
+      const managementFeeAmount = (principal * managementFeeRate) / 100;
+      
       const dealsCollection = collection(firestore, 'deals');
       await addDoc(dealsCollection, {
-        ...values,
+        ...restOfValues,
+        principal,
+        managementFeeRate,
+        managementFeeAmount,
+        managementFeePaid: false, // Default to unpaid
         createdAt: values.createdAt ? Timestamp.fromDate(values.createdAt) : Timestamp.now(),
         startDate: values.startDate ? Timestamp.fromDate(values.startDate) : (values.createdAt ? Timestamp.fromDate(values.createdAt) : Timestamp.now()),
         clientName: selectedClient.name, // Denormalize client name
@@ -188,6 +197,17 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
               )}
             />
         </div>
+        <FormField
+              control={form.control}
+              name="managementFeeRate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Management Fee Rate (%)</FormLabel>
+                  <FormControl><Input type="number" step="0.1" placeholder="2" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
@@ -355,3 +375,5 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
     </Form>
   );
 }
+
+    

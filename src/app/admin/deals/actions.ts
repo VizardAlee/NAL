@@ -11,6 +11,7 @@ const formSchema = z.object({
   clientId: z.string({ required_error: 'Please select a client.' }),
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
+  managementFeeRate: z.coerce.number().min(0, { message: 'Management fee rate cannot be negative.' }),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
@@ -28,11 +29,17 @@ export async function updateDealAction(dealId: string, clientName: string, value
     if (!validated.success) {
         return { success: false, message: 'Invalid data provided.' };
     }
+    
+    const { principal, managementFeeRate, ...restOfData } = validated.data;
+    const managementFeeAmount = (principal * managementFeeRate) / 100;
 
     try {
         const dealRef = adminDb.collection('deals').doc(dealId);
         await dealRef.update({
-            ...validated.data,
+            ...restOfData,
+            principal,
+            managementFeeRate,
+            managementFeeAmount,
             clientName, // Keep client name in sync
             startDate: validated.data.startDate ? validated.data.startDate : FieldValue.serverTimestamp()
         });
@@ -71,3 +78,36 @@ export async function deleteDealAction(dealId: string) {
     }
 }
 
+export async function approveManagementFeeAction(dealId: string, dealName: string, feeAmount: number) {
+    if (!dealId) return { success: false, message: 'Deal ID is missing.' };
+    if (!feeAmount || feeAmount <= 0) return { success: false, message: 'Fee amount is invalid.' };
+
+    try {
+        const batch = adminDb.batch();
+        const dealRef = adminDb.collection('deals').doc(dealId);
+        
+        // 1. Mark the fee as paid on the deal
+        batch.update(dealRef, { managementFeePaid: true });
+
+        // 2. Create an administrative transaction for the income
+        const adminTxRef = adminDb.collection('administrativeTransactions').doc();
+        batch.set(adminTxRef, {
+            type: 'ManagementFee',
+            amount: feeAmount,
+            description: `Management fee for deal: ${dealName}`,
+            createdAt: FieldValue.serverTimestamp(),
+        });
+        
+        await batch.commit();
+        
+        revalidatePath(`/admin/deals/${dealId}`);
+        revalidatePath('/admin/funds');
+        
+        return { success: true, message: 'Management fee approved and recorded.' };
+    } catch (error: any) {
+        console.error("Management Fee Approval Error: ", error);
+        return { success: false, message: error.message || 'An unknown error occurred.' };
+    }
+}
+
+    
