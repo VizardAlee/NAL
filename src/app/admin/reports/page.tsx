@@ -172,21 +172,21 @@ export default function ReportsPage() {
 
     let grossFinancingReceivable = 0;
     for (const deal of activeDeals) {
-        const schedule = generateAmortizationSchedule(deal);
         const approvedRepayments = transactionsUpToDate.filter(
-            t => t.dealId === deal.id && t.type === 'Repayment' && t.status === 'Approved'
+            t => t.dealId === deal.id && t.type === 'Repayment'
         );
-        const paidInstallmentNumbers = approvedRepayments.map(r => r.installmentNumber).filter(n => n !== undefined);
+        const principalRepaid = approvedRepayments.reduce((sum, r) => {
+            const schedule = generateAmortizationSchedule(deal);
+            const installment = schedule.find(inst => inst.installment === r.installmentNumber);
+            return sum + (installment?.principal || 0);
+        }, 0);
         
-        const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
-        
-        grossFinancingReceivable += remainingInstallments.reduce((sum, inst) => sum + inst.principal, 0);
+        grossFinancingReceivable += (deal.principal - principalRepaid);
     }
     const totalAssets = cashAndEquivalents + grossFinancingReceivable + heldAssetValue;
 
     // LIABILITIES & EQUITY
-    const investorLiability = allTransactions
-      .filter(filterUpToDate)
+    const investorLiability = transactionsUpToDate
       .filter(t => t.userId !== 'platform' && ['Deposit', 'Withdrawal', 'ProfitDistribution', 'Zakat', 'Investment'].includes(t.type))
       .reduce((sum, tx) => sum + tx.amount, 0);
 
@@ -194,20 +194,18 @@ export default function ReportsPage() {
     for (const deal of activeDeals) {
         const schedule = generateAmortizationSchedule(deal);
         const approvedRepayments = transactionsUpToDate.filter(
-            t => t.dealId === deal.id && t.type === 'Repayment' && t.status === 'Approved'
+            t => t.dealId === deal.id && t.type === 'Repayment'
         );
         const paidInstallmentNumbers = approvedRepayments.map(r => r.installmentNumber).filter(n => n !== undefined);
         const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
         totalUnearnedMarkup += remainingInstallments.reduce((sum, inst) => sum + inst.interest, 0);
     }
 
-    const unearnedMarkup = totalUnearnedMarkup;
-
-    const platformCapitalContributions = allFundBatches
+    const platformCapitalContributions = fundBatchesUpToDate
         .filter(b => b.sourceId === 'platform')
         .reduce((sum, b) => sum + b.amount, 0);
 
-    const platformCapitalInvested = allTransactions
+    const platformCapitalInvested = transactionsUpToDate
         .filter(t => t.userId === 'platform' && t.type === 'Investment')
         .reduce((sum, tx) => sum + tx.amount, 0);
 
@@ -227,7 +225,7 @@ export default function ReportsPage() {
     
     const platformEquity = retainedEarnings + platformCapitalContributions + platformCapitalInvested;
 
-    const totalLiabilitiesAndEquity = investorLiability + unearnedMarkup + platformEquity;
+    const totalLiabilitiesAndEquity = investorLiability + totalUnearnedMarkup + platformEquity;
     
     const discrepancy = totalAssets - totalLiabilitiesAndEquity;
 
@@ -261,7 +259,7 @@ export default function ReportsPage() {
             },
             liabilities: {
                 investorLiability: investorLiability,
-                unearnedMarkup,
+                unearnedMarkup: totalUnearnedMarkup,
             },
             equity: {
                 platformEquity,
@@ -561,3 +559,4 @@ export default function ReportsPage() {
     </div>
   );
 }
+
