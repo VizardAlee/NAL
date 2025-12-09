@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign, Info } from "lucide-react";
+import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign, Info, FileText } from "lucide-react";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy, updateDoc } from 'firebase/firestore';
 import { useFirestore } from "@/firebase";
@@ -10,7 +10,7 @@ import { useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { format } from "date-fns";
+import { format, isSameDay } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -22,7 +22,7 @@ import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Investment } from "@/lib/types";
+import { Investment, Deal, Repayment } from "@/lib/types";
 import {
   Pagination,
   PaginationContent,
@@ -36,6 +36,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
+import { generateAmortizationSchedule } from "@/lib/amortization";
 
 
 type PlatformFundBatch = DocumentData & {
@@ -87,6 +88,10 @@ const formatDate = (timestamp: Timestamp | Date | undefined) => {
     } catch {
       return 'Invalid Date';
     }
+};
+
+const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(value);
 };
 
 const adminTransactionSchema = z.object({
@@ -524,6 +529,9 @@ export default function PlatformFundsPage() {
     const allInvestmentsQuery = useMemo(() => firestore ? collection(firestore, 'investments') : null, [firestore]);
     const allFundBatchesQuery = useMemo(() => firestore ? collection(firestore, 'fundBatches') : null, [firestore]);
     const assetsQuery = useMemo(() => firestore ? query(collection(firestore, 'assets'), orderBy('acquisitionDate', 'desc')) : null, [firestore]);
+    const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals'), where('status', '==', 'Active')) : null, [firestore]);
+    const repaymentsQuery = useMemo(() => firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Approved')) : null, [firestore]);
+
 
     const { data: platformFundBatches, loading: platformBatchesLoading } = useCollection<PlatformFundBatch>(platformFundBatchesQuery);
     const { data: adminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
@@ -531,8 +539,11 @@ export default function PlatformFundsPage() {
     const { data: allInvestments, loading: allInvestmentsLoading } = useCollection<Investment>(allInvestmentsQuery);
     const { data: allFundBatches, loading: allFundBatchesLoading } = useCollection<FundBatch>(allFundBatchesQuery);
     const { data: assets, loading: assetsLoading } = useCollection<Asset>(assetsQuery);
+    const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
+    const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery);
 
-    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allInvestmentsLoading || allFundBatchesLoading || assetsLoading;
+
+    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allInvestmentsLoading || allFundBatchesLoading || assetsLoading || dealsLoading || repaymentsLoading;
 
     const metrics = useMemo(() => {
         const investibleCapital = platformFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
@@ -542,8 +553,20 @@ export default function PlatformFundsPage() {
         const totalInvestiblePool = allFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
         const totalAssetValue = assets?.filter(a => a.status === 'Held').reduce((sum, asset) => sum + asset.acquisitionCost, 0) || 0;
 
-        return { investibleCapital, administrativeBalance, zakatPool, totalInvested, totalInvestiblePool, totalAssetValue };
-    }, [platformFundBatches, adminTransactions, zakatTransactions, allInvestments, allFundBatches, assets]);
+        let totalClientDebt = 0;
+        if (deals && repayments) {
+            for (const deal of deals) {
+                const schedule = generateAmortizationSchedule(deal);
+                const approvedRepaymentsForDeal = repayments.filter(r => r.dealId === deal.id);
+                const paidInstallmentNumbers = approvedRepaymentsForDeal.map(r => r.installmentNumber);
+                const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
+                totalClientDebt += remainingInstallments.reduce((sum, inst) => sum + inst.payment, 0);
+            }
+        }
+
+
+        return { investibleCapital, administrativeBalance, zakatPool, totalInvested, totalInvestiblePool, totalAssetValue, totalClientDebt };
+    }, [platformFundBatches, adminTransactions, zakatTransactions, allInvestments, allFundBatches, assets, deals, repayments]);
 
     const paginatedAdminTransactions = useMemo(() => {
         if (!adminTransactions) return [];
@@ -568,7 +591,7 @@ export default function PlatformFundsPage() {
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                  <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Investible Pool</CardTitle><Library className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalInvestiblePool)}</div>}<p className="text-xs text-muted-foreground">Total available capital from all sources.</p></CardContent></Card>
                  <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Capital Invested</CardTitle><Landmark className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalInvested)}</div>}<p className="text-xs text-muted-foreground">Total amount invested in active deals.</p></CardContent></Card>
-                 <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Held Asset Value</CardTitle><Building className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalAssetValue)}</div>}<p className="text-xs text-muted-foreground">Acquisition cost of held assets.</p></CardContent></Card>
+                 <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Client Debt</CardTitle><FileText className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalClientDebt)}</div>}<p className="text-xs text-muted-foreground">Total outstanding on active deals.</p></CardContent></Card>
                  <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Administrative Balance</CardTitle><Wallet className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.administrativeBalance)}</div>}<p className="text-xs text-muted-foreground">Operational funds for expenses.</p></CardContent></Card>
             </div>
             
@@ -707,4 +730,3 @@ export default function PlatformFundsPage() {
         </div>
     );
 }
-
