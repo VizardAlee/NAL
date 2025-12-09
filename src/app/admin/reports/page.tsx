@@ -371,7 +371,7 @@ export default function ReportsPage() {
             <TabsTrigger value="cash-flow">Cash Flow</TabsTrigger>
         </TabsList>
         <TabsContent value="balance-sheet" className="mt-4">
-            <div className="grid gap-6 md:grid-cols-2">
+            <div className="grid gap-6">
                 {isMobile ? (
                     <div className="space-y-4">
                         <Card>
@@ -435,38 +435,6 @@ export default function ReportsPage() {
                         </CardContent>
                     </Card>
                 )}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Asset Composition</CardTitle>
-                        <CardDescription>A breakdown of the platform's assets.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ChartContainer config={{}} className="h-64 w-full">
-                           <ResponsiveContainer>
-                                <PieChart>
-                                    <Pie
-                                        data={chartData?.assetComposition}
-                                        dataKey="value"
-                                        nameKey="name"
-                                        cx="50%"
-                                        cy="50%"
-                                        outerRadius={isMobile ? 60 : 80}
-                                        labelLine={!isMobile}
-                                        label={isMobile ? ({name}) => name : ({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                    >
-                                    {chartData?.assetComposition.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                                    ))}
-                                    </Pie>
-                                     <Tooltip
-                                        content={<ChartTooltipContent formatter={(value) => formatCurrency(value as number)} />}
-                                    />
-                                    <Legend />
-                                </PieChart>
-                           </ResponsiveContainer>
-                        </ChartContainer>
-                    </CardContent>
-                </Card>
             </div>
         </TabsContent>
          <TabsContent value="income-statement" className="mt-4">
