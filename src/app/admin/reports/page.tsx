@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -166,13 +165,14 @@ export default function ReportsPage() {
     
     // --- BALANCE SHEET (POINT-IN-TIME SNAPSHOT) ---
     // ASSETS
-    const totalInvestiblePool = fundBatchesUpToDate.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
     const administrativeBalance = adminTransactionsUpToDate.reduce((acc, tx) => acc + tx.amount, 0);
-    const cashAndEquivalents = totalInvestiblePool + administrativeBalance;
+    const totalInvestiblePool = fundBatchesUpToDate.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
+    const cashAndEquivalents = administrativeBalance + totalInvestiblePool;
     
     const heldAssetValue = heldAssets.reduce((sum, asset) => sum + asset.acquisitionCost, 0);
 
     let grossFinancingPortfolio = 0;
+    let outstandingPrincipal = 0;
     let unearnedMarkupRevenue = 0;
 
     for (const deal of activeDeals) {
@@ -183,31 +183,27 @@ export default function ReportsPage() {
         const paidInstallmentNumbers = approvedRepayments.map(r => r.installmentNumber).filter(n => n !== undefined);
         const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
         
-        grossFinancingPortfolio += remainingInstallments.reduce((sum, inst) => sum + inst.principal, 0);
+        grossFinancingPortfolio += remainingInstallments.reduce((sum, inst) => sum + inst.payment, 0);
+        outstandingPrincipal += remainingInstallments.reduce((sum, inst) => sum + inst.principal, 0);
         unearnedMarkupRevenue += remainingInstallments.reduce((sum, inst) => sum + inst.interest, 0);
     }
     const totalAssets = cashAndEquivalents + grossFinancingPortfolio + heldAssetValue;
 
     // LIABILITIES & EQUITY
     const investorFundBatches = fundBatchesUpToDate.filter(b => b.sourceId !== 'platform');
-    const totalInvestorDeposits = transactionsUpToDate.filter(tx => tx.userId !== 'platform' && tx.type === 'Deposit').reduce((sum, tx) => sum + tx.amount, 0);
-    const totalInvestorWithdrawals = transactionsUpToDate.filter(tx => tx.userId !== 'platform' && tx.type === 'Withdrawal').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    const totalInvestorProfits = transactionsUpToDate.filter(tx => tx.userId !== 'platform' && tx.type === 'ProfitDistribution').reduce((sum, tx) => sum + tx.amount, 0);
-    const totalInvestorZakat = transactionsUpToDate.filter(tx => tx.userId !== 'platform' && tx.type === 'Zakat').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    const totalInvestorInvestments = transactionsUpToDate.filter(tx => tx.userId !== 'platform' && tx.type === 'Investment').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const investorCashLiability = investorFundBatches.reduce((sum, batch) => sum + batch.remainingAmount, 0);
     
-    const investorLiability = (totalInvestorDeposits + totalInvestorProfits) - (totalInvestorWithdrawals + totalInvestorZakat + totalInvestorInvestments);
-
+    const principalPayable = outstandingPrincipal;
 
     const platformFundBatches = fundBatchesUpToDate.filter(b => b.sourceId === 'platform');
-    const platformCapitalContribution = platformFundBatches.reduce((sum, batch) => sum + batch.amount, 0);
-    const retainedEarnings = transactionsUpToDate.filter(t => t.type === 'PlatformEarning').reduce((sum, tx) => sum + tx.amount, 0)
-     + adminTransactionsUpToDate.filter(t => t.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0)
-     - adminTransactionsUpToDate.filter(tx => tx.type === 'Expense').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const platformCapital = platformFundBatches.reduce((sum, batch) => sum + batch.remainingAmount, 0);
+    const retainedEarnings = adminTransactionsUpToDate.filter(t => t.type === 'ManagementFee' || t.type === 'AssetSale').reduce((sum, tx) => sum + tx.amount, 0)
+                           + transactionsUpToDate.filter(t => t.type === 'PlatformEarning').reduce((sum, tx) => sum + tx.amount, 0)
+                           - adminTransactionsUpToDate.filter(t => t.type === 'Expense' || t.type === 'AssetAcquisition').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+    const platformEquity = platformCapital + retainedEarnings;
     
-    const platformEquity = platformCapitalContribution + retainedEarnings;
-    
-    const totalLiabilitiesAndEquity = investorLiability + unearnedMarkupRevenue + platformEquity;
+    const totalLiabilitiesAndEquity = investorCashLiability + principalPayable + unearnedMarkupRevenue + platformEquity;
     
     const discrepancy = totalAssets - totalLiabilitiesAndEquity;
 
@@ -226,7 +222,7 @@ export default function ReportsPage() {
                             - adminTransactionsInPeriod.filter(tx => tx.type === 'AssetAcquisition').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
                             - transactionsInPeriod.filter(tx => tx.type === 'Investment').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
     const cashFromFinancing = transactionsInPeriod.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0)
-                            + transactionsInPeriod.filter(t => t.type === 'Repayment').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
+                            + transactionsInPeriod.filter(t => t.type === 'Repayment' && t.status === 'Approved').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
                             - transactionsInPeriod.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
                             + adminTransactionsInPeriod.filter(tx => tx.type === 'AdminDeposit' || tx.type === 'TransferFromInvestible').reduce((acc, tx) => acc + tx.amount, 0)
                             - adminTransactionsInPeriod.filter(tx => tx.type === 'TransferToInvestible').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
@@ -241,7 +237,8 @@ export default function ReportsPage() {
                 totalAssets,
             },
             liabilities: {
-                investorLiability,
+                investorCashLiability,
+                principalPayable,
                 unearnedMarkup: unearnedMarkupRevenue,
             },
             equity: {
@@ -272,7 +269,7 @@ export default function ReportsPage() {
     return {
       assetComposition: [
         { name: 'Cash & Equivalents', value: financialData.balanceSheet.assets.cashAndEquivalents || 0, fill: "hsl(var(--chart-1))" },
-        { name: 'Financing Portfolio', value: financialData.balanceSheet.assets.grossFinancingPortfolio || 0, fill: "hsl(var(--chart-2))" },
+        { name: 'Financing Receivable', value: financialData.balanceSheet.assets.grossFinancingPortfolio || 0, fill: "hsl(var(--chart-2))" },
         { name: 'Held Assets', value: financialData.balanceSheet.assets.totalAssetValue || 0, fill: "hsl(var(--chart-3))" },
       ].filter(item => item.value > 0),
       income: [
@@ -349,7 +346,8 @@ export default function ReportsPage() {
                         <Card>
                             <CardHeader><CardTitle>Liabilities & Equity</CardTitle></CardHeader>
                             <CardContent className="space-y-2">
-                                <MobileReportRow label="Net Investor Liability" value={financialData?.balanceSheet.liabilities.investorLiability || 0} />
+                                <MobileReportRow label="Investor Cash Liability" value={financialData?.balanceSheet.liabilities.investorCashLiability || 0} />
+                                <MobileReportRow label="Principal Payable" value={financialData?.balanceSheet.liabilities.principalPayable || 0} />
                                 <MobileReportRow label="Unearned Markup Revenue" value={financialData?.balanceSheet.liabilities.unearnedMarkup || 0} />
                                 <MobileReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.platformEquity || 0} />
                                 <Separator className="my-2" />
@@ -368,12 +366,13 @@ export default function ReportsPage() {
                                 <TableBody>
                                     <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Assets</TableCell></TableRow>
                                     <ReportRow label="Cash & Equivalents" value={financialData?.balanceSheet.assets.cashAndEquivalents || 0} isSub />
-                                    <ReportRow label="Gross Financing Receivable (Principal)" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
+                                    <ReportRow label="Gross Financing Receivable" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
                                     <ReportRow label="Held Asset Value" value={financialData?.balanceSheet.assets.totalAssetValue || 0} isSub />
                                     <ReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
                                     
                                     <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Liabilities & Equity</TableCell></TableRow>
-                                    <ReportRow label="Net Investor Liability" value={financialData?.balanceSheet.liabilities.investorLiability || 0} isSub />
+                                    <ReportRow label="Investor Cash Liability" value={financialData?.balanceSheet.liabilities.investorCashLiability || 0} isSub />
+                                    <ReportRow label="Principal Payable" value={financialData?.balanceSheet.liabilities.principalPayable || 0} isSub />
                                     <ReportRow label="Unearned Markup Revenue" value={financialData?.balanceSheet.liabilities.unearnedMarkup || 0} isSub />
                                     <ReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.platformEquity || 0} isSub />
                                     <ReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
@@ -542,7 +541,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-
-
-
