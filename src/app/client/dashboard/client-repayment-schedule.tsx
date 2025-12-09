@@ -282,7 +282,10 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
                     <TableHeader>
                     <TableRow>
                         <TableHead>Due Date</TableHead>
-                        <TableHead>Payment</TableHead>
+                        <TableHead>Principal</TableHead>
+                        <TableHead>Markup</TableHead>
+                        <TableHead>Total Payment</TableHead>
+                        <TableHead>Balance</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Action</TableHead>
                     </TableRow>
@@ -291,7 +294,10 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
                     {paginatedSchedule.map(item => (
                         <TableRow key={`${item.installment}-${item.status}`} className={item.isActionable ? 'bg-muted/50' : ''}>
                             <TableCell data-label="Due Date">{format(item.dueDate, 'PPP')}</TableCell>
+                            <TableCell data-label="Principal">{formatCurrency(item.principal)}</TableCell>
+                            <TableCell data-label="Markup">{formatCurrency(item.interest)}</TableCell>
                             <TableCell data-label="Total Payment" className="font-bold">{formatCurrency(item.payment)}</TableCell>
+                            <TableCell data-label="Balance">{formatCurrency(item.balance)}</TableCell>
                             <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
                             <TableCell data-label="Action" className="text-right w-40">
                             {(item.isActionable && user) && (
