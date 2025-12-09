@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -132,119 +131,113 @@ export default function ReportsPage() {
         return null;
     }
 
+    const to = dateRange?.to ? endOfDay(dateRange.to) : new Date();
     const from = dateRange?.from ? startOfDay(dateRange.from) : null;
-    const to = dateRange?.to ? endOfDay(dateRange.to) : null;
 
-    const filterByDate = (item: { createdAt?: Timestamp, saleDate?: Timestamp, acquisitionDate?: Timestamp }) => {
-        if (!from || !to) return true;
+    const filterUpToDate = <T extends { createdAt?: Timestamp; acquisitionDate?: Timestamp }>(item: T) => {
+        const itemDate = (item.acquisitionDate || item.createdAt)?.toDate();
+        if (!itemDate) return false;
+        return itemDate <= to;
+    };
+    
+    const filterByDateRange = <T extends { createdAt?: Timestamp; saleDate?: Timestamp, acquisitionDate?: Timestamp }>(item: T) => {
+        if (!from) return true;
         const itemDate = (item.saleDate || item.acquisitionDate || item.createdAt)?.toDate();
         if (!itemDate) return false;
         return itemDate >= from && itemDate <= to;
     };
-    
-    const transactionsInPeriod = allTransactions.filter(filterByDate);
-    const adminTransactionsInPeriod = allAdminTransactions.filter(filterByDate);
-    
-    const filterUpToDate = (item: { createdAt?: Timestamp, acquisitionDate?: Timestamp }) => {
-        if (!to) return true;
-        const itemDate = (item.acquisitionDate || item.createdAt)?.toDate();
-        if (!itemDate) return false;
-        return itemDate <= to;
-    }
+
+    const transactionsInPeriod = allTransactions.filter(filterByDateRange);
+    const adminTransactionsInPeriod = allAdminTransactions.filter(filterByDateRange);
 
     const deals = allDeals.filter(filterUpToDate);
     const activeDeals = deals.filter(d => d.status === 'Active');
-    const activeDealIds = activeDeals.map(d => d.id);
     const heldAssets = allAssets.filter(a => a.status === 'Held' && filterUpToDate(a));
-    const allTimeAdminTransactions = allAdminTransactions.filter(filterUpToDate);
-    const allTimeTransactions = allTransactions.filter(filterUpToDate);
+    const transactionsUpToDate = allTransactions.filter(filterUpToDate);
+    const adminTransactionsUpToDate = allAdminTransactions.filter(filterUpToDate);
     
-    // --- Balance Sheet Calculations (Accrual-based) ---
+    // --- BALANCE SHEET (POINT-IN-TIME SNAPSHOT) ---
     // ASSETS
-    const cashAndEquivalents = allTimeAdminTransactions.reduce((acc, tx) => acc + tx.amount, 0);
-    const totalAssetValue = heldAssets.reduce((sum, asset) => sum + asset.acquisitionCost, 0);
+    const administrativeBalance = adminTransactionsUpToDate.reduce((acc, tx) => acc + tx.amount, 0);
+    const totalInvestiblePool = allFundBatches.filter(filterUpToDate).reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
+    const cashAndEquivalents = administrativeBalance + totalInvestiblePool;
+    const heldAssetValue = heldAssets.reduce((sum, asset) => sum + asset.acquisitionCost, 0);
 
-    let totalRemainingReceivables = 0;
+    let grossFinancingReceivable = 0;
     let totalUnearnedMarkup = 0;
 
     for (const deal of activeDeals) {
         const schedule = generateAmortizationSchedule(deal);
-        const approvedRepayments = allTimeTransactions.filter(
-            t => t.dealId === deal.id && t.type === 'Repayment' && t.status === 'Approved'
+        const approvedRepayments = transactionsUpToDate.filter(
+            t => t.dealId === deal.id && t.type === 'Repayment'
         );
         const paidInstallmentNumbers = approvedRepayments.map(r => r.installmentNumber);
-
+        
         const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
-        const dealRemainingReceivable = remainingInstallments.reduce((sum, inst) => sum + inst.payment, 0);
-        const dealUnearnedMarkup = remainingInstallments.reduce((sum, inst) => sum + inst.interest, 0);
-
-        totalRemainingReceivables += dealRemainingReceivable;
-        totalUnearnedMarkup += dealUnearnedMarkup;
+        
+        grossFinancingReceivable += remainingInstallments.reduce((sum, inst) => sum + inst.principal, 0);
+        totalUnearnedMarkup += remainingInstallments.reduce((sum, inst) => sum + inst.interest, 0);
     }
-    const grossFinancingPortfolio = totalRemainingReceivables;
-    const totalAssets = cashAndEquivalents + grossFinancingPortfolio + totalAssetValue;
+    const totalAssets = cashAndEquivalents + grossFinancingReceivable + heldAssetValue;
 
     // LIABILITIES & EQUITY
-    const allInvestorTx = allTimeTransactions.filter(t => t.userId !== 'platform');
-    const investorLiability = allInvestorTx.reduce((sum, tx) => sum + tx.amount, 0);
+    const investorTransactions = transactionsUpToDate.filter(t => t.userId !== 'platform');
+    const investorLiability = investorTransactions.reduce((sum, tx) => {
+        // Investment is a transfer of capital, not a change in liability to the investor.
+        if (tx.type === 'Investment') return sum;
+        return sum + tx.amount;
+    }, 0);
 
-    const platformEarningTxs = allTimeTransactions.filter(t => t.type === 'PlatformEarning');
-    const totalEarnedRevenue = platformEarningTxs.reduce((sum, tx) => sum + tx.amount, 0);
-    const platformCapitalContributions = allTimeAdminTransactions.filter(tx => tx.type === 'TransferToInvestible').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    const platformCapitalWithdrawals = allTimeAdminTransactions.filter(tx => tx.type === 'TransferFromInvestible').reduce((sum, tx) => sum + tx.amount, 0);
-    
-    const unearnedPlatformShare = totalUnearnedMarkup * 0.6;
-    const unearnedInvestorShare = totalUnearnedMarkup * 0.4;
-    
-    // Total Equity = (Earned Revenue - Expenses) + Platform Capital +/- Transfers + Unearned Platform Share
-    const netRetainedEarnings = totalEarnedRevenue - allTimeAdminTransactions.filter(t => t.type === 'Expense').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
-    const totalPlatformEquity = netRetainedEarnings + platformCapitalContributions - platformCapitalWithdrawals + unearnedPlatformShare;
+    const unearnedMarkup = totalUnearnedMarkup;
 
-    const totalLiabilitiesAndEquity = investorLiability + totalPlatformEquity + unearnedInvestorShare;
+    const platformEarnings = transactionsUpToDate.filter(t => t.type === 'PlatformEarning').reduce((sum, tx) => sum + tx.amount, 0);
+    const managementFees = adminTransactionsUpToDate.filter(t => t.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0);
+    const platformCapitalContributions = adminTransactionsUpToDate.filter(tx => tx.type === 'TransferToInvestible').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const platformExpenses = adminTransactionsUpToDate.filter(tx => tx.type === 'Expense').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const retainedEarnings = platformEarnings + managementFees - platformExpenses;
     
-    // --- Income Statement Calculations (Flow, uses date filter) ---
+    const platformEquity = retainedEarnings + platformCapitalContributions;
+
+    const totalLiabilitiesAndEquity = investorLiability + unearnedMarkup + platformEquity;
+    
+    const discrepancy = totalAssets - totalLiabilitiesAndEquity;
+
+    // --- INCOME STATEMENT (FLOW) ---
     const financingRevenue = transactionsInPeriod.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
     const managementFeeRevenue = adminTransactionsInPeriod.filter(t => t.type === 'ManagementFee').reduce((acc, tx) => acc + tx.amount, 0);
-    const soldAssetsInPeriod = allAssets.filter(a => a.status === 'Sold' && filterByDate(a));
+    const soldAssetsInPeriod = allAssets.filter(a => a.status === 'Sold' && filterByDateRange(a));
     const gainOnAssetSale = soldAssetsInPeriod.reduce((acc, asset) => acc + ((asset.salePrice || 0) - asset.acquisitionCost), 0);
     const totalRevenue = financingRevenue + managementFeeRevenue + gainOnAssetSale;
-
     const totalExpenses = adminTransactionsInPeriod.filter(t => t.type === 'Expense').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
     const netIncome = totalRevenue - totalExpenses;
 
-    // --- Cash Flow Calculations (Flow, uses date filter) ---
-    const netCashFromOperations = netIncome; 
-
+    // --- CASH FLOW (FLOW) ---
+    const netCashFromOperations = netIncome;
     const cashFromInvesting = adminTransactionsInPeriod.filter(tx => tx.type === 'AssetSale').reduce((acc, tx) => acc + tx.amount, 0)
                             - adminTransactionsInPeriod.filter(tx => tx.type === 'AssetAcquisition').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
-                            - transactionsInPeriod.filter(tx => tx.type === 'Investment').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
-                            
+                            - transactionsInPeriod.filter(tx => tx.type === 'Investment' && tx.userId !== 'platform').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
     const cashFromFinancing = transactionsInPeriod.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0)
                             - transactionsInPeriod.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
-                            + adminTransactionsInPeriod.filter(tx => tx.type === 'AdminDeposit').reduce((acc, tx) => acc + tx.amount, 0)
-                            + adminTransactionsInPeriod.filter(tx => tx.type === 'TransferFromInvestible').reduce((acc, tx) => acc + tx.amount, 0)
-                            - adminTransactionsInPeriod.filter(tx => tx.type === 'TransferToInvestible').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
-
-
+                            + adminTransactionsInPeriod.filter(tx => tx.type === 'AdminDeposit').reduce((acc, tx) => acc + tx.amount, 0);
     const netCashFlow = netCashFromOperations + cashFromInvesting + cashFromFinancing;
 
     return {
         balanceSheet: {
             assets: {
                 cashAndEquivalents,
-                grossFinancingPortfolio,
-                totalAssetValue,
+                grossFinancingPortfolio: grossFinancingReceivable,
+                totalAssetValue: heldAssetValue,
                 totalAssets,
             },
             liabilities: {
                 investorLiability,
-                unearnedInvestorShare,
+                unearnedMarkup,
             },
             equity: {
-                platformEquity: totalPlatformEquity,
+                platformEquity,
             },
             totalLiabilitiesAndEquity,
-            discrepancy: totalAssets - totalLiabilitiesAndEquity,
+            discrepancy,
         },
         incomeStatement: {
             financingRevenue,
@@ -267,9 +260,9 @@ export default function ReportsPage() {
     if (!financialData) return null;
     return {
       assetComposition: [
-        { name: 'Admin Cash', value: financialData.balanceSheet.assets.cashAndEquivalents, fill: "hsl(var(--chart-1))" },
-        { name: 'Financing Portfolio', value: financialData.balanceSheet.assets.grossFinancingPortfolio, fill: "hsl(var(--chart-2))" },
-        { name: 'Held Assets', value: financialData.balanceSheet.assets.totalAssetValue, fill: "hsl(var(--chart-3))" },
+        { name: 'Admin Cash', value: financialData.balanceSheet.assets.cashAndEquivalents || 0, fill: "hsl(var(--chart-1))" },
+        { name: 'Financing Portfolio', value: financialData.balanceSheet.assets.grossFinancingPortfolio || 0, fill: "hsl(var(--chart-2))" },
+        { name: 'Held Assets', value: financialData.balanceSheet.assets.totalAssetValue || 0, fill: "hsl(var(--chart-3))" },
       ].filter(item => item.value > 0),
       income: [
         { name: 'Income', revenue: financialData.incomeStatement.totalRevenue, expenses: financialData.incomeStatement.totalExpenses }
@@ -336,7 +329,7 @@ export default function ReportsPage() {
                             <CardHeader><CardTitle>Assets</CardTitle></CardHeader>
                             <CardContent className="space-y-2">
                                 <MobileReportRow label="Cash & Equivalents" value={financialData?.balanceSheet.assets.cashAndEquivalents || 0} />
-                                <MobileReportRow label="Financing Portfolio" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} />
+                                <MobileReportRow label="Gross Financing Receivable" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} />
                                 <MobileReportRow label="Held Asset Value" value={financialData?.balanceSheet.assets.totalAssetValue || 0} />
                                 <Separator className="my-2" />
                                 <MobileReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
@@ -346,7 +339,7 @@ export default function ReportsPage() {
                             <CardHeader><CardTitle>Liabilities & Equity</CardTitle></CardHeader>
                             <CardContent className="space-y-2">
                                 <MobileReportRow label="Net Investor Liability" value={financialData?.balanceSheet.liabilities.investorLiability || 0} />
-                                <MobileReportRow label="Payable to Investors (Unearned)" value={financialData?.balanceSheet.liabilities.unearnedInvestorShare || 0} />
+                                <MobileReportRow label="Unearned Markup Revenue" value={financialData?.balanceSheet.liabilities.unearnedMarkup || 0} />
                                 <MobileReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.platformEquity || 0} />
                                 <Separator className="my-2" />
                                 <MobileReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
@@ -363,14 +356,14 @@ export default function ReportsPage() {
                             <Table>
                                 <TableBody>
                                     <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Assets</TableCell></TableRow>
-                                    <ReportRow label="Cash & Equivalents (Admin)" value={financialData?.balanceSheet.assets.cashAndEquivalents || 0} isSub />
-                                    <ReportRow label="Gross Financing Portfolio (Receivable)" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
+                                    <ReportRow label="Cash & Equivalents" value={financialData?.balanceSheet.assets.cashAndEquivalents || 0} isSub />
+                                    <ReportRow label="Gross Financing Receivable (Principal)" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
                                     <ReportRow label="Held Asset Value" value={financialData?.balanceSheet.assets.totalAssetValue || 0} isSub />
                                     <ReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
                                     
                                     <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Liabilities & Equity</TableCell></TableRow>
                                     <ReportRow label="Net Investor Liability" value={financialData?.balanceSheet.liabilities.investorLiability || 0} isSub />
-                                    <ReportRow label="Payable to Investors (Unearned Profit)" value={financialData?.balanceSheet.liabilities.unearnedInvestorShare || 0} isSub />
+                                    <ReportRow label="Unearned Markup Revenue" value={financialData?.balanceSheet.liabilities.unearnedMarkup || 0} isSub />
                                     <ReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.platformEquity || 0} isSub />
                                     <ReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
                                 </TableBody>
@@ -537,5 +530,5 @@ export default function ReportsPage() {
       </Tabs>
     </div>
   );
-}
-
+    
+    
