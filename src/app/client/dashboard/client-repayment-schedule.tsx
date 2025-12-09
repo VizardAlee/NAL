@@ -229,7 +229,7 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
   if (paginatedSchedule.length === 0) {
      return (
       <div className="p-6 text-sm text-muted-foreground text-center">
-        No upcoming payments due.
+        No payments found in this view.
       </div>
     );
   }
