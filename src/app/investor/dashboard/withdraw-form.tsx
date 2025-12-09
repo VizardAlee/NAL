@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { addDoc, collection, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, writeBatch, doc, getDocs, query, where } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { FirebaseError } from 'firebase/app';
 
@@ -69,14 +69,20 @@ export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: Withdraw
       });
 
       const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(values.amount);
-      const notificationRef = doc(collection(firestore, 'notifications'));
-      batch.set(notificationRef, {
-          title: "Withdrawal Request",
-          message: `${user.displayName || 'An investor'} requested a withdrawal of ${formattedAmount}.`,
-          link: "/admin/approvals/withdrawals",
-          read: false,
-          createdAt: serverTimestamp()
+      
+      const adminQuery = await getDocs(query(collection(firestore, 'users'), where('role', '==', 'Admin')));
+      adminQuery.forEach(adminDoc => {
+          const notificationRef = doc(collection(firestore, 'notifications'));
+          batch.set(notificationRef, {
+              recipientId: adminDoc.id,
+              title: "Withdrawal Request",
+              message: `${user.displayName || 'An investor'} requested a withdrawal of ${formattedAmount}.`,
+              link: "/admin/approvals/withdrawals",
+              read: false,
+              createdAt: serverTimestamp()
+          });
       });
+
 
       await batch.commit();
 

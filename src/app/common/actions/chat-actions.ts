@@ -37,13 +37,23 @@ export async function requestChatWithAdmin(input: z.infer<typeof requestChatSche
       requestedAt: Timestamp.now(),
     });
 
-    await adminDb.collection('notifications').add({
-      title: 'New Chat Request',
-      message: `${userName} (${userRole}) has requested a chat.`,
-      link: '/admin/approvals/chat-requests',
-      read: false,
-      createdAt: Timestamp.now(),
-    });
+    const adminQuery = await adminDb.collection('users').where('role', '==', 'Admin').get();
+    const adminIds = adminQuery.docs.map(doc => doc.id);
+    const batch = adminDb.batch();
+
+    for (const adminId of adminIds) {
+        const notificationRef = adminDb.collection('notifications').doc();
+        batch.set(notificationRef, {
+            recipientId: adminId,
+            title: 'New Chat Request',
+            message: `${userName} (${userRole}) has requested a chat.`,
+            link: '/admin/approvals/chat-requests',
+            read: false,
+            createdAt: Timestamp.now(),
+        });
+    }
+    await batch.commit();
+
 
     revalidatePath('/admin/approvals/chat-requests');
 
