@@ -51,6 +51,7 @@ type FundBatch = DocumentData & {
     amount: number;
     remainingAmount: number;
     sourceId: string;
+    createdAt: Timestamp;
 };
 
 type Deal = DocumentData & {
@@ -59,6 +60,11 @@ type Deal = DocumentData & {
     profitRate: number;
     status: 'Active' | 'Pending' | 'Completed' | 'Terminated';
     createdAt: Timestamp;
+    startDate: Timestamp;
+    durationValue: number;
+    durationUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
+    repaymentType: 'Equal Installments' | 'Balloon Payment';
+    repaymentFrequency: 'Daily' | 'Weekly' | 'Fortnightly' | 'Monthly';
 };
 
 type Asset = DocumentData & {
@@ -120,7 +126,7 @@ export default function ReportsPage() {
 
   const { data: allTransactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
   const { data: allAdminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
-  const { data: allFundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
+  const { data: allFundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(allFundBatchesQuery);
   const { data: allDeals, loading: allDealsLoading } = useCollection<Deal>(dealsQuery);
   const { data: allAssets, loading: assetsLoading } = useCollection<Asset>(assetsQuery);
   
@@ -155,23 +161,23 @@ export default function ReportsPage() {
     const heldAssets = allAssets.filter(a => a.status === 'Held' && filterUpToDate(a));
     const transactionsUpToDate = allTransactions.filter(filterUpToDate);
     const adminTransactionsUpToDate = allAdminTransactions.filter(filterUpToDate);
+    const fundBatchesUpToDate = allFundBatches.filter(filterUpToDate);
     
     // --- BALANCE SHEET (POINT-IN-TIME SNAPSHOT) ---
     // ASSETS
     const administrativeBalance = adminTransactionsUpToDate.reduce((acc, tx) => acc + tx.amount, 0);
-    const totalInvestiblePool = allFundBatches.filter(filterUpToDate).reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
+    const totalInvestiblePool = fundBatchesUpToDate.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
     const cashAndEquivalents = administrativeBalance + totalInvestiblePool;
     const heldAssetValue = heldAssets.reduce((sum, asset) => sum + asset.acquisitionCost, 0);
 
     let grossFinancingReceivable = 0;
     let totalUnearnedMarkup = 0;
-
     for (const deal of activeDeals) {
         const schedule = generateAmortizationSchedule(deal);
         const approvedRepayments = transactionsUpToDate.filter(
-            t => t.dealId === deal.id && t.type === 'Repayment'
+            t => t.dealId === deal.id && t.type === 'Repayment' && t.status === 'Approved'
         );
-        const paidInstallmentNumbers = approvedRepayments.map(r => r.installmentNumber);
+        const paidInstallmentNumbers = approvedRepayments.map(r => r.installmentNumber).filter(n => n !== undefined);
         
         const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
         
@@ -181,24 +187,38 @@ export default function ReportsPage() {
     const totalAssets = cashAndEquivalents + grossFinancingReceivable + heldAssetValue;
 
     // LIABILITIES & EQUITY
-    const investorTransactions = transactionsUpToDate.filter(t => t.userId !== 'platform');
-    const investorLiability = investorTransactions.reduce((sum, tx) => {
-        // Investment is a transfer of capital, not a change in liability to the investor.
-        if (tx.type === 'Investment') return sum;
-        return sum + tx.amount;
-    }, 0);
-
+    const investorCapital = allTransactions
+        .filter(filterUpToDate)
+        .filter(t => t.userId !== 'platform' && ['Deposit', 'Withdrawal', 'ProfitDistribution', 'Zakat', 'Investment'].includes(t.type))
+        .reduce((sum, tx) => sum + tx.amount, 0);
+    
     const unearnedMarkup = totalUnearnedMarkup;
 
-    const platformEarnings = transactionsUpToDate.filter(t => t.type === 'PlatformEarning').reduce((sum, tx) => sum + tx.amount, 0);
-    const managementFees = adminTransactionsUpToDate.filter(t => t.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0);
-    const platformCapitalContributions = adminTransactionsUpToDate.filter(tx => tx.type === 'TransferToInvestible').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    const platformExpenses = adminTransactionsUpToDate.filter(tx => tx.type === 'Expense').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const platformCapitalContributions = allFundBatches
+        .filter(b => b.sourceId === 'platform')
+        .reduce((sum, b) => sum + b.amount, 0);
+
+    const platformCapitalInvested = allTransactions
+        .filter(t => t.userId === 'platform' && t.type === 'Investment')
+        .reduce((sum, tx) => sum + tx.amount, 0);
+
+    const platformEarnings = transactionsUpToDate
+        .filter(t => t.type === 'PlatformEarning')
+        .reduce((sum, tx) => sum + tx.amount, 0);
+
+    const managementFees = adminTransactionsUpToDate
+        .filter(t => t.type === 'ManagementFee')
+        .reduce((sum, tx) => sum + tx.amount, 0);
+
+    const platformExpenses = adminTransactionsUpToDate
+        .filter(tx => tx.type === 'Expense')
+        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    
     const retainedEarnings = platformEarnings + managementFees - platformExpenses;
     
-    const platformEquity = retainedEarnings + platformCapitalContributions;
+    const platformEquity = retainedEarnings + platformCapitalContributions + platformCapitalInvested;
 
-    const totalLiabilitiesAndEquity = investorLiability + unearnedMarkup + platformEquity;
+    const totalLiabilitiesAndEquity = investorCapital + unearnedMarkup + platformEquity;
     
     const discrepancy = totalAssets - totalLiabilitiesAndEquity;
 
@@ -217,6 +237,7 @@ export default function ReportsPage() {
                             - adminTransactionsInPeriod.filter(tx => tx.type === 'AssetAcquisition').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
                             - transactionsInPeriod.filter(tx => tx.type === 'Investment' && tx.userId !== 'platform').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
     const cashFromFinancing = transactionsInPeriod.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0)
+                            + transactionsInPeriod.filter(t => t.type === 'Repayment').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
                             - transactionsInPeriod.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
                             + adminTransactionsInPeriod.filter(tx => tx.type === 'AdminDeposit').reduce((acc, tx) => acc + tx.amount, 0);
     const netCashFlow = netCashFromOperations + cashFromInvesting + cashFromFinancing;
@@ -230,7 +251,7 @@ export default function ReportsPage() {
                 totalAssets,
             },
             liabilities: {
-                investorLiability,
+                investorLiability: investorCapital,
                 unearnedMarkup,
             },
             equity: {
@@ -530,5 +551,4 @@ export default function ReportsPage() {
       </Tabs>
     </div>
   );
-    
-    
+}
