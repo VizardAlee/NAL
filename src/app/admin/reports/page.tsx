@@ -29,6 +29,7 @@ import {
   ResponsiveContainer
 } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type Transaction = DocumentData & {
   type: 'PlatformEarning' | 'Zakat' | 'Penalty' | 'Investment' | 'Deposit' | 'Withdrawal' | 'ProfitDistribution';
@@ -89,9 +90,20 @@ function ReportRow({ label, value, isTotal = false, isSub = false, isNegative = 
     );
 }
 
+function MobileReportRow({ label, value, isTotal = false, isNegative = false }: { label: string, value: number, isTotal?: boolean, isNegative?: boolean }) {
+    const valueClass = isNegative ? 'text-destructive' : 'text-foreground';
+    return (
+        <div className={`flex justify-between text-sm ${isTotal ? 'font-bold' : ''}`}>
+            <span>{label}</span>
+            <span className={valueClass}>{formatCurrency(value)}</span>
+        </div>
+    );
+}
+
 export default function ReportsPage() {
   const firestore = useFirestore();
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const isMobile = useIsMobile();
 
   const transactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions')) : null, [firestore]);
   const adminTransactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'administrativeTransactions')) : null, [firestore]);
@@ -237,7 +249,7 @@ export default function ReportsPage() {
   }, [financialData]);
 
 
-  if (isLoading) {
+  if (isLoading || isMobile === undefined) {
       return (
           <div>
               <PageHeader
@@ -284,29 +296,54 @@ export default function ReportsPage() {
         </TabsList>
         <TabsContent value="balance-sheet" className="mt-4">
             <div className="grid gap-6 md:grid-cols-2">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Balance Sheet</CardTitle>
-                        <CardDescription>As of {dateRange?.to ? dateRange.to.toLocaleDateString() : 'today'}.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableBody>
-                                <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Assets</TableCell></TableRow>
-                                <ReportRow label="Cash & Equivalents (Admin)" value={financialData?.balanceSheet.assets.cashAndEquivalents || 0} isSub />
-                                <ReportRow label="Gross Financing Portfolio (Active Deals)" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
-                                <ReportRow label="Held Asset Value" value={financialData?.balanceSheet.assets.totalAssetValue || 0} isSub />
-                                <ReportRow label="Total Investible Capital (Uninvested)" value={financialData?.balanceSheet.assets.totalInvestibleCapital || 0} isSub />
-                                <ReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
-                                
-                                <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Liabilities & Equity</TableCell></TableRow>
-                                <ReportRow label="Investor Capital" value={financialData?.balanceSheet.liabilities.totalInvestorCapital || 0} isSub />
-                                <ReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.totalPlatformEquity || 0} isSub />
-                                <ReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
+                {isMobile ? (
+                    <div className="space-y-4">
+                        <Card>
+                            <CardHeader><CardTitle>Assets</CardTitle></CardHeader>
+                            <CardContent className="space-y-2">
+                                <MobileReportRow label="Cash & Equivalents" value={financialData?.balanceSheet.assets.cashAndEquivalents || 0} />
+                                <MobileReportRow label="Financing Portfolio" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} />
+                                <MobileReportRow label="Held Asset Value" value={financialData?.balanceSheet.assets.totalAssetValue || 0} />
+                                <MobileReportRow label="Investible Capital" value={financialData?.balanceSheet.assets.totalInvestibleCapital || 0} />
+                                <Separator className="my-2" />
+                                <MobileReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader><CardTitle>Liabilities & Equity</CardTitle></CardHeader>
+                            <CardContent className="space-y-2">
+                                <MobileReportRow label="Investor Capital" value={financialData?.balanceSheet.liabilities.totalInvestorCapital || 0} />
+                                <MobileReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.totalPlatformEquity || 0} />
+                                <Separator className="my-2" />
+                                <MobileReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
+                            </CardContent>
+                        </Card>
+                    </div>
+                ) : (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Balance Sheet</CardTitle>
+                            <CardDescription>As of {dateRange?.to ? dateRange.to.toLocaleDateString() : 'today'}.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableBody>
+                                    <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Assets</TableCell></TableRow>
+                                    <ReportRow label="Cash & Equivalents (Admin)" value={financialData?.balanceSheet.assets.cashAndEquivalents || 0} isSub />
+                                    <ReportRow label="Gross Financing Portfolio (Active Deals)" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
+                                    <ReportRow label="Held Asset Value" value={financialData?.balanceSheet.assets.totalAssetValue || 0} isSub />
+                                    <ReportRow label="Total Investible Capital (Uninvested)" value={financialData?.balanceSheet.assets.totalInvestibleCapital || 0} isSub />
+                                    <ReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
+                                    
+                                    <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Liabilities & Equity</TableCell></TableRow>
+                                    <ReportRow label="Investor Capital" value={financialData?.balanceSheet.liabilities.totalInvestorCapital || 0} isSub />
+                                    <ReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.totalPlatformEquity || 0} isSub />
+                                    <ReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                )}
                 <Card>
                     <CardHeader>
                         <CardTitle>Asset Composition</CardTitle>
@@ -322,8 +359,9 @@ export default function ReportsPage() {
                                         nameKey="name"
                                         cx="50%"
                                         cy="50%"
-                                        outerRadius={80}
-                                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                        outerRadius={isMobile ? 60 : 80}
+                                        labelLine={!isMobile}
+                                        label={isMobile ? ({name}) => name : ({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                                     >
                                     {chartData?.assetComposition.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -342,26 +380,44 @@ export default function ReportsPage() {
         </TabsContent>
          <TabsContent value="income-statement" className="mt-4">
             <div className="grid gap-6 md:grid-cols-2">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Income Statement</CardTitle>
-                        <CardDescription>Performance over the selected period.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableBody>
-                                <ReportRow label="Financing Revenue" value={financialData?.incomeStatement.financingRevenue || 0} />
-                                <ReportRow label="Gain on Asset Sale" value={financialData?.incomeStatement.gainOnAssetSale || 0} />
-                                <ReportRow label="Total Revenue" value={financialData?.incomeStatement.totalRevenue || 0} isTotal />
-                                <TableRow><TableCell colSpan={2}>&nbsp;</TableCell></TableRow>
-                                <ReportRow label="Operational Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isNegative />
-                                <ReportRow label="Total Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isTotal isNegative />
-                                <TableRow><TableCell colSpan={2}><Separator /></TableCell></TableRow>
-                                <ReportRow label="Net Income" value={financialData?.incomeStatement.netIncome || 0} isTotal />
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
+                {isMobile ? (
+                    <Card>
+                         <CardHeader>
+                            <CardTitle>Income Statement</CardTitle>
+                            <CardDescription>Performance over the selected period.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            <MobileReportRow label="Financing Revenue" value={financialData?.incomeStatement.financingRevenue || 0} />
+                            <MobileReportRow label="Gain on Asset Sale" value={financialData?.incomeStatement.gainOnAssetSale || 0} />
+                            <Separator className="my-2" />
+                            <MobileReportRow label="Total Revenue" value={financialData?.incomeStatement.totalRevenue || 0} isTotal />
+                            <MobileReportRow label="Operational Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isNegative />
+                             <Separator className="my-2" />
+                            <MobileReportRow label="Net Income" value={financialData?.incomeStatement.netIncome || 0} isTotal isNegative={financialData?.incomeStatement.netIncome < 0}/>
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Income Statement</CardTitle>
+                            <CardDescription>Performance over the selected period.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableBody>
+                                    <ReportRow label="Financing Revenue" value={financialData?.incomeStatement.financingRevenue || 0} />
+                                    <ReportRow label="Gain on Asset Sale" value={financialData?.incomeStatement.gainOnAssetSale || 0} />
+                                    <ReportRow label="Total Revenue" value={financialData?.incomeStatement.totalRevenue || 0} isTotal />
+                                    <TableRow><TableCell colSpan={2}>&nbsp;</TableCell></TableRow>
+                                    <ReportRow label="Operational Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isNegative />
+                                    <ReportRow label="Total Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isTotal isNegative />
+                                    <TableRow><TableCell colSpan={2}><Separator /></TableCell></TableRow>
+                                    <ReportRow label="Net Income" value={financialData?.incomeStatement.netIncome || 0} isTotal />
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                )}
                 <Card>
                     <CardHeader>
                         <CardTitle>Revenue vs Expenses</CardTitle>
@@ -386,22 +442,38 @@ export default function ReportsPage() {
         </TabsContent>
          <TabsContent value="cash-flow" className="mt-4">
              <div className="grid gap-6 md:grid-cols-2">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Cash Flow Statement</CardTitle>
-                        <CardDescription>Simplified view of cash movements for the selected period.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableBody>
-                                <ReportRow label="Net Cash from Operations" value={financialData?.cashFlow.netCashFromOperations || 0} />
-                                <ReportRow label="Net Cash from Investing" value={financialData?.cashFlow.cashFromInvesting || 0} />
-                                <ReportRow label="Net Cash from Financing" value={financialData?.cashFlow.cashFromFinancing || 0} />
-                                <ReportRow label="Net Change in Cash" value={financialData?.cashFlow.netCashFlow || 0} isTotal />
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
+                {isMobile ? (
+                    <Card>
+                         <CardHeader>
+                            <CardTitle>Cash Flow Statement</CardTitle>
+                            <CardDescription>Simplified view of cash movements.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                           <MobileReportRow label="Net Cash from Operations" value={financialData?.cashFlow.netCashFromOperations || 0} isNegative={financialData?.cashFlow.netCashFromOperations < 0} />
+                           <MobileReportRow label="Net Cash from Investing" value={financialData?.cashFlow.cashFromInvesting || 0} isNegative={financialData?.cashFlow.cashFromInvesting < 0} />
+                           <MobileReportRow label="Net Cash from Financing" value={financialData?.cashFlow.cashFromFinancing || 0} isNegative={financialData?.cashFlow.cashFromFinancing < 0} />
+                           <Separator className="my-2" />
+                           <MobileReportRow label="Net Change in Cash" value={financialData?.cashFlow.netCashFlow || 0} isTotal isNegative={financialData?.cashFlow.netCashFlow < 0} />
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Cash Flow Statement</CardTitle>
+                            <CardDescription>Simplified view of cash movements for the selected period.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableBody>
+                                    <ReportRow label="Net Cash from Operations" value={financialData?.cashFlow.netCashFromOperations || 0} />
+                                    <ReportRow label="Net Cash from Investing" value={financialData?.cashFlow.cashFromInvesting || 0} />
+                                    <ReportRow label="Net Cash from Financing" value={financialData?.cashFlow.cashFromFinancing || 0} />
+                                    <ReportRow label="Net Change in Cash" value={financialData?.cashFlow.netCashFlow || 0} isTotal />
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                )}
                 <Card>
                     <CardHeader>
                         <CardTitle>Cash Flow by Activity</CardTitle>
@@ -430,3 +502,4 @@ export default function ReportsPage() {
     </div>
   );
 }
+
