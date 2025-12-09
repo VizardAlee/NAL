@@ -79,7 +79,7 @@ service cloud.firestore {
       // Admins can write.
       allow write: if isAdmin();
       // Admins can read all. Investors can read their own investments.
-      allow read: if isAdmin() || (isInvestor() && resource.data.investorId == request.auth.uid);
+      allow read, list: if isAdmin() || (isInvestor() && resource.data.investorId == request.auth.uid);
     }
     
     // Rules for 'fundBatches' and 'transactions'
