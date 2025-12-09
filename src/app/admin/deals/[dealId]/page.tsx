@@ -23,7 +23,7 @@ import { ViewPageNav } from '@/components/view-page-nav';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RepaymentSchedule, RepaymentHistory } from '@/components/deals/page';
-import { approveManagementFeeAction } from '../actions';
+import { approveManagementFeeAction } from './actions';
 
 type User = {
     id: string;
@@ -210,7 +210,7 @@ export default function DealDetailPage() {
   const handleApproveFee = () => {
     if (!deal) return;
     startFeeTransition(async () => {
-        const result = await approveManagementFeeAction(deal.id, deal.dealName, deal.managementFeeAmount);
+        const result = await approveManagementFeeAction(deal.id);
         if (result.success) {
             toast({ title: 'Success', description: result.message });
         } else {
@@ -416,5 +416,3 @@ export default function DealDetailPage() {
     </div>
   );
 }
-
-    

@@ -78,13 +78,25 @@ export async function deleteDealAction(dealId: string) {
     }
 }
 
-export async function approveManagementFeeAction(dealId: string, dealName: string, feeAmount: number) {
+export async function approveManagementFeeAction(dealId: string) {
     if (!dealId) return { success: false, message: 'Deal ID is missing.' };
-    if (!feeAmount || feeAmount <= 0) return { success: false, message: 'Fee amount is invalid.' };
-
+    
     try {
-        const batch = adminDb.batch();
         const dealRef = adminDb.collection('deals').doc(dealId);
+        const dealDoc = await dealRef.get();
+        if (!dealDoc.exists) {
+            return { success: false, message: 'Deal not found.'};
+        }
+        const dealData = dealDoc.data();
+        if (!dealData) {
+            return { success: false, message: 'Deal data is missing.' };
+        }
+        const { dealName, feeAmount, clientId, clientName } = dealData;
+        const managementFeeAmount = dealData.managementFeeAmount || 0;
+        
+        if (managementFeeAmount <= 0) return { success: false, message: 'Fee amount is invalid.' };
+
+        const batch = adminDb.batch();
         
         // 1. Mark the fee as paid on the deal
         batch.update(dealRef, { managementFeePaid: true });
@@ -93,9 +105,13 @@ export async function approveManagementFeeAction(dealId: string, dealName: strin
         const adminTxRef = adminDb.collection('administrativeTransactions').doc();
         batch.set(adminTxRef, {
             type: 'ManagementFee',
-            amount: feeAmount,
-            description: `Management fee for deal: ${dealName}`,
+            amount: managementFeeAmount,
+            description: `Management fee for deal: ${dealData.dealName}`,
             createdAt: FieldValue.serverTimestamp(),
+            dealId: dealId,
+            dealName: dealData.dealName,
+            clientId: dealData.clientId,
+            clientName: dealData.clientName,
         });
         
         await batch.commit();
@@ -109,5 +125,3 @@ export async function approveManagementFeeAction(dealId: string, dealName: strin
         return { success: false, message: error.message || 'An unknown error occurred.' };
     }
 }
-
-    

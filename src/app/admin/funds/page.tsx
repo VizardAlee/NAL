@@ -62,6 +62,10 @@ type AdministrativeTransaction = DocumentData & {
   amount: number;
   description: string;
   createdAt: Timestamp;
+  dealId?: string;
+  dealName?: string;
+  clientId?: string;
+  clientName?: string;
 };
 
 type Asset = DocumentData & {
@@ -610,6 +614,12 @@ export default function PlatformFundsPage() {
                                 <span className="text-muted-foreground">Amount:</span>
                                 <span className={`font-medium ${selectedTx.amount > 0 ? 'text-primary' : ''}`}>{formatCurrency(selectedTx.amount)}</span>
                             </div>
+                            {selectedTx.type === 'ManagementFee' && selectedTx.clientName && (
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Client:</span>
+                                    <span>{selectedTx.clientName}</span>
+                                </div>
+                            )}
                              <div className="flex justify-between">
                                 <span className="text-muted-foreground">Date:</span>
                                 <span>{formatDate(selectedTx.createdAt)}</span>

@@ -425,7 +425,11 @@
           "type": "string",
           "format": "date-time",
           "description": "The timestamp of the transaction."
-        }
+        },
+        "dealId": { "type": "string", "description": "The ID of the associated deal (if applicable)." },
+        "dealName": { "type": "string", "description": "The name of the associated deal (if applicable)." },
+        "clientId": { "type": "string", "description": "The ID of the associated client (if applicable)." },
+        "clientName": { "type": "string", "description": "The name of the associated client (if applicable)." }
       },
       "required": ["type", "amount", "description", "createdAt"]
     },
@@ -686,5 +690,3 @@
     }
   }
 }
-
-    
