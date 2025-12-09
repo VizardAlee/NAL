@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -128,7 +129,7 @@ export default function ReportsPage() {
 
   const transactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions')) : null, [firestore]);
   const adminTransactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'administrativeTransactions')) : null, [firestore]);
-  const fundBatchesQuery = useMemo(() => firestore ? query(collection(firestore, 'fundBatches')) : null, [firestore]);
+  const allFundBatchesQuery = useMemo(() => firestore ? query(collection(firestore, 'fundBatches')) : null, [firestore]);
   const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals')) : null, [firestore]);
   const assetsQuery = useMemo(() => firestore ? query(collection(firestore, 'assets')) : null, [firestore]);
   const investmentsQuery = useMemo(() => firestore ? query(collection(firestore, 'investments')) : null, [firestore]);
@@ -136,7 +137,7 @@ export default function ReportsPage() {
 
   const { data: allTransactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
   const { data: allAdminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
-  const { data: allFundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
+  const { data: allFundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(allFundBatchesQuery);
   const { data: allDeals, loading: allDealsLoading } = useCollection<Deal>(dealsQuery);
   const { data: allAssets, loading: assetsLoading } = useCollection<Asset>(assetsQuery);
   const { data: allInvestments, loading: investmentsLoading } = useCollection<Investment>(investmentsQuery);
@@ -233,8 +234,9 @@ export default function ReportsPage() {
     const platformFundBatches = fundBatchesUpToDate.filter(b => b.sourceId === 'platform');
     const platformUninvestedCapital = platformFundBatches.reduce((sum, batch) => sum + batch.remainingAmount, 0);
     
+    // Corrected Retained Earnings: only includes income/expenses from the administrative account.
+    // PlatformEarning from deals is already reflected in the platform's fund batches.
     const retainedEarnings = adminTransactionsUpToDate.filter(t => t.type === 'ManagementFee' || t.type === 'AssetSale').reduce((sum, tx) => sum + tx.amount, 0)
-                           + transactionsUpToDate.filter(t => t.type === 'PlatformEarning').reduce((sum, tx) => sum + tx.amount, 0)
                            - adminTransactionsUpToDate.filter(t => t.type === 'Expense' || t.type === 'AssetAcquisition').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
     
@@ -418,13 +420,13 @@ export default function ReportsPage() {
                                     <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Liabilities & Equity</TableCell></TableRow>
                                     <TableRow className="font-medium text-base"><TableCell colSpan={2}>Investor Liabilities</TableCell></TableRow>
                                     <ReportRow label="Uninvested Capital" value={financialData?.balanceSheet.liabilities.investorUninvestedCapital || 0} isSub />
-                                    <ReportRow label="Principal Payable" value={financialData?.balanceSheet.liabilities.principalPayableToInvestors || 0} isSub />
-                                    <ReportRow label="Markup Payable" value={financialData?.balanceSheet.liabilities.markupPayableToInvestors || 0} isSub />
+                                    <ReportRow label="Principal Payable to Investors" value={financialData?.balanceSheet.liabilities.principalPayableToInvestors || 0} isSub />
+                                    <ReportRow label="Markup Payable to Investors" value={financialData?.balanceSheet.liabilities.markupPayableToInvestors || 0} isSub />
                                     
                                     <TableRow className="font-medium text-base"><TableCell colSpan={2}>Platform Equity</TableCell></TableRow>
                                     <ReportRow label="Uninvested Capital" value={financialData?.balanceSheet.equity.platformUninvestedCapital || 0} isSub />
                                     <ReportRow label="Principal in Deals" value={financialData?.balanceSheet.equity.principalPayableToPlatform || 0} isSub />
-                                    <ReportRow label="Unearned Markup" value={financialData?.balanceSheet.equity.unearnedPlatformMarkup || 0} isSub />
+                                    <ReportRow label="Unearned Platform Markup" value={financialData?.balanceSheet.equity.unearnedPlatformMarkup || 0} isSub />
                                     <ReportRow label="Retained Earnings" value={financialData?.balanceSheet.equity.retainedEarnings || 0} isSub />
 
                                     <ReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
