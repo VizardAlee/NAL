@@ -161,18 +161,21 @@ export default function ReportsPage() {
 
     const initialFinancingPortfolio = activeDeals.reduce((acc, deal) => acc + deal.principal, 0);
     const principalRepaidOnActiveDeals = allTimeTransactions
-        .filter(t => t.type === 'Repayment' && activeDealIds.includes(t.dealId) && t.status === 'Approved')
+        .filter(t => t.type === 'Repayment' && activeDealIds.includes(t.dealId ?? '') && t.status === 'Approved')
         .reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
     const grossFinancingPortfolio = initialFinancingPortfolio - principalRepaidOnActiveDeals;
     
     const totalInvestibleCapital = fundBatches.reduce((acc, batch) => acc + batch.remainingAmount, 0);
     const totalAssetValue = heldAssets.reduce((sum, asset) => sum + asset.acquisitionCost, 0);
     const totalAssets = cashAndEquivalents + grossFinancingPortfolio + totalInvestibleCapital + totalAssetValue;
-
-    const investorCapitalDeposited = allTimeTransactions.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0);
-    const investorCapitalWithdrawn = allTimeTransactions.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
-    const investorZakatPaid = allTimeTransactions.filter(t => t.type === 'Zakat').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
-    const totalInvestorCapital = investorCapitalDeposited - investorCapitalWithdrawn - investorZakatPaid;
+    
+    const investorLiabilityTransactions = allTimeTransactions.filter(tx => 
+        tx.type === 'Deposit' || 
+        tx.type === 'Withdrawal' || 
+        tx.type === 'ProfitDistribution' || 
+        tx.type === 'Zakat'
+    );
+    const totalInvestorCapital = investorLiabilityTransactions.reduce((acc, tx) => acc + tx.amount, 0);
 
     const platformInvestedCapital = fundBatches.filter(fb => fb.sourceId === 'platform').reduce((acc, batch) => acc + batch.amount, 0);
     const platformRetainedEarnings = allTimeTransactions.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
@@ -518,5 +521,7 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    
 
     
