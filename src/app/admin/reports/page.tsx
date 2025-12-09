@@ -183,23 +183,29 @@ export default function ReportsPage() {
         const paidInstallmentNumbers = approvedRepayments.map(r => r.installmentNumber).filter(n => n !== undefined);
         const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
         
-        grossFinancingPortfolio += remainingInstallments.reduce((sum, inst) => sum + inst.payment, 0);
+        grossFinancingPortfolio += remainingInstallments.reduce((sum, inst) => sum + inst.principal, 0);
         unearnedMarkupRevenue += remainingInstallments.reduce((sum, inst) => sum + inst.interest, 0);
     }
     const totalAssets = cashAndEquivalents + grossFinancingPortfolio + heldAssetValue;
 
     // LIABILITIES & EQUITY
     const investorFundBatches = fundBatchesUpToDate.filter(b => b.sourceId !== 'platform');
-    const investorLiability = investorFundBatches.reduce((sum, batch) => sum + batch.amount, 0);
+    const totalInvestorDeposits = transactionsUpToDate.filter(tx => tx.userId !== 'platform' && tx.type === 'Deposit').reduce((sum, tx) => sum + tx.amount, 0);
+    const totalInvestorWithdrawals = transactionsUpToDate.filter(tx => tx.userId !== 'platform' && tx.type === 'Withdrawal').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const totalInvestorProfits = transactionsUpToDate.filter(tx => tx.userId !== 'platform' && tx.type === 'ProfitDistribution').reduce((sum, tx) => sum + tx.amount, 0);
+    const totalInvestorZakat = transactionsUpToDate.filter(tx => tx.userId !== 'platform' && tx.type === 'Zakat').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const totalInvestorInvestments = transactionsUpToDate.filter(tx => tx.userId !== 'platform' && tx.type === 'Investment').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
     
+    const investorLiability = (totalInvestorDeposits + totalInvestorProfits) - (totalInvestorWithdrawals + totalInvestorZakat + totalInvestorInvestments);
+
+
     const platformFundBatches = fundBatchesUpToDate.filter(b => b.sourceId === 'platform');
-    const platformCapital = platformFundBatches.reduce((sum, batch) => sum + batch.amount, 0);
-
-    const retainedEarnings = allTransactions.filter(t => t.type === 'PlatformEarning').reduce((sum, tx) => sum + tx.amount, 0)
-     + allAdminTransactions.filter(t => t.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0)
-     - allAdminTransactions.filter(tx => tx.type === 'Expense').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-
-    const platformEquity = platformCapital + retainedEarnings;
+    const platformCapitalContribution = platformFundBatches.reduce((sum, batch) => sum + batch.amount, 0);
+    const retainedEarnings = transactionsUpToDate.filter(t => t.type === 'PlatformEarning').reduce((sum, tx) => sum + tx.amount, 0)
+     + adminTransactionsUpToDate.filter(t => t.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0)
+     - adminTransactionsUpToDate.filter(tx => tx.type === 'Expense').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    
+    const platformEquity = platformCapitalContribution + retainedEarnings;
     
     const totalLiabilitiesAndEquity = investorLiability + unearnedMarkupRevenue + platformEquity;
     
@@ -362,7 +368,7 @@ export default function ReportsPage() {
                                 <TableBody>
                                     <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Assets</TableCell></TableRow>
                                     <ReportRow label="Cash & Equivalents" value={financialData?.balanceSheet.assets.cashAndEquivalents || 0} isSub />
-                                    <ReportRow label="Gross Financing Receivable" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
+                                    <ReportRow label="Gross Financing Receivable (Principal)" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
                                     <ReportRow label="Held Asset Value" value={financialData?.balanceSheet.assets.totalAssetValue || 0} isSub />
                                     <ReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
                                     
@@ -536,6 +542,7 @@ export default function ReportsPage() {
     </div>
   );
 }
+
 
 
 

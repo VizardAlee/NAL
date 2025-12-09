@@ -66,81 +66,83 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
   const termStartDate = deal.startDate?.toDate() || deal.createdAt?.toDate();
   if (!termStartDate) return [];
 
-  const principal = deal.principal;
+  // --- Use Integers for Calculations (Kobo) ---
+  const principalInKobo = Math.round(deal.principal * 100);
   const markupRate = (deal.profitRate || 0) / 100;
+  
   const { totalPeriods, addPeriod } = getPeriods(deal);
 
-  if (totalPeriods === 0) return [];
-  
-  const schedule: ScheduleInstallment[] = [];
+  if (totalPeriods <= 0) return [];
 
+  const schedule: ScheduleInstallment[] = [];
+  const totalProfitInKobo = Math.round(principalInKobo * markupRate);
+  
   if (deal.repaymentType === 'Balloon Payment') {
-    const totalProfit = principal * markupRate;
-    const profitPerInstallment = totalPeriods > 0 ? totalProfit / totalPeriods : 0;
+    const profitPerInstallmentInKobo = Math.floor(totalProfitInKobo / totalPeriods);
+    let accumulatedProfit = 0;
 
     for (let i = 1; i <= totalPeriods; i++) {
         const isLastPayment = i === totalPeriods;
-        const principalPayment = isLastPayment ? principal : 0;
-        const payment = profitPerInstallment + principalPayment;
-        const balance = isLastPayment ? 0 : principal;
+        let currentProfit = profitPerInstallmentInKobo;
+        if (isLastPayment) {
+            currentProfit = totalProfitInKobo - accumulatedProfit;
+        }
+        accumulatedProfit += currentProfit;
+        
+        const principalPaymentInKobo = isLastPayment ? principalInKobo : 0;
+        const paymentInKobo = currentProfit + principalPaymentInKobo;
+        const balanceInKobo = isLastPayment ? 0 : principalInKobo;
         
         schedule.push({
             installment: i,
             dueDate: addPeriod(termStartDate, i),
-            payment: payment,
-            principal: principalPayment,
-            interest: profitPerInstallment,
-            balance: balance,
+            payment: paymentInKobo / 100,
+            principal: principalPaymentInKobo / 100,
+            interest: currentProfit / 100,
+            balance: balanceInKobo / 100,
         });
     }
 
   } else { // Equal Installments
-      const totalProfit = principal * markupRate;
-      const totalRepayment = principal + totalProfit;
-      const equalPayment = totalPeriods > 0 ? totalRepayment / totalPeriods : 0;
+      const totalRepaymentInKobo = principalInKobo + totalProfitInKobo;
+      const equalPaymentInKobo = Math.floor(totalRepaymentInKobo / totalPeriods);
       
-      // To create an amortized effect, we need an effective periodic rate that, when applied,
-      // results in the desired total profit. This requires solving for the rate.
-      // A common approximation for this is the "Rule of 78s" or simply calculating
-      // an effective rate. Let's find a rate 'r' such that the sum of interest payments equals totalProfit.
-      // This is a complex calculation, so a more direct method is to use a financial formula to find
-      // the rate that produces the `equalPayment`.
-      // Let's solve for the monthly rate `r`. P = L[r(1+r)^n]/[(1+r)^n-1]
-      // We can't solve for r algebraically, but we can iterate or use a simpler apportionment logic.
+      let remainingBalanceInKobo = principalInKobo;
+      let accumulatedPayment = 0;
 
-      // A simpler, more direct logic: Sum of Digits Method (Rule of 78s).
       const sumOfDigits = (totalPeriods * (totalPeriods + 1)) / 2;
-      let remainingBalance = principal;
-      let remainingProfit = totalProfit;
 
       for (let i = 1; i <= totalPeriods; i++) {
-          const profitProportion = (totalPeriods - i + 1) / sumOfDigits;
-          const profitPayment = totalProfit * profitProportion;
-          const principalPayment = equalPayment - profitPayment;
-          
-          remainingBalance -= principalPayment;
-          remainingProfit -= profitPayment;
-
           if (i === totalPeriods) {
-            // Adjust the final payment to clear any rounding discrepancies
-            const finalPrincipalPayment = principalPayment + remainingBalance;
-            schedule.push({
-              installment: i,
-              dueDate: addPeriod(termStartDate, i),
-              payment: finalPrincipalPayment + profitPayment,
-              principal: finalPrincipalPayment,
-              interest: profitPayment,
-              balance: 0,
-            });
+              const finalPayment = totalRepaymentInKobo - accumulatedPayment;
+              const finalInterest = Math.round(finalPayment * (totalProfitInKobo / totalRepaymentInKobo));
+              const finalPrincipal = finalPayment - finalInterest;
+
+              schedule.push({
+                  installment: i,
+                  dueDate: addPeriod(termStartDate, i),
+                  payment: finalPayment / 100,
+                  principal: (remainingBalanceInKobo / 100), // The last principal payment must be the remaining balance
+                  interest: (finalPayment - remainingBalanceInKobo) / 100,
+                  balance: 0,
+              });
+
           } else {
-            schedule.push({
-              installment: i,
-              dueDate: addPeriod(termStartDate, i),
-              payment: equalPayment,
-              principal: principalPayment,
-              interest: profitPayment,
-              balance: remainingBalance,
-            });
+              const profitProportion = (totalPeriods - i + 1) / sumOfDigits;
+              const interestPaymentInKobo = Math.round(totalProfitInKobo * profitProportion);
+              const principalPaymentInKobo = equalPaymentInKobo - interestPaymentInKobo;
+              
+              remainingBalanceInKobo -= principalPaymentInKobo;
+              accumulatedPayment += equalPaymentInKobo;
+
+              schedule.push({
+                  installment: i,
+                  dueDate: addPeriod(termStartDate, i),
+                  payment: equalPaymentInKobo / 100,
+                  principal: principalPaymentInKobo / 100,
+                  interest: interestPaymentInKobo / 100,
+                  balance: remainingBalanceInKobo / 100,
+              });
           }
       }
   }
