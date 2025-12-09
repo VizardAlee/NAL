@@ -31,6 +31,7 @@ import {
   MessageSquarePlus,
   MessageSquare,
   Library,
+  Landmark,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -57,9 +58,10 @@ const menuItems = [
     ],
   },
   { href: "/admin/funds", label: "Funds", icon: Banknote },
+  { href: "/admin/reports", label: "Reports", icon: Library },
+  { href: "/admin/tax", label: "Tax", icon: Landmark },
   { href: "/app/analyzer", label: "Analyzer", icon: FlaskConical },
   { href: "/admin/activity", label: "Activity", icon: History },
-  { href: "/admin/reports", label: "Reports", icon: Library },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 

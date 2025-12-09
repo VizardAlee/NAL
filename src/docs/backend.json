@@ -544,6 +544,21 @@
             "attachmentName": { "type": "string", "description": "The original name of the attached file." }
         },
         "required": ["conversationId", "senderId", "createdAt"]
+    },
+    "taxRecord": {
+      "title": "Tax Record",
+      "description": "A record of a tax calculation for a specific period.",
+      "type": "object",
+      "properties": {
+        "periodStart": { "type": "string", "format": "date-time", "description": "The start date of the calculation period." },
+        "periodEnd": { "type": "string", "format": "date-time", "description": "The end date of the calculation period." },
+        "grossProfit": { "type": "number", "description": "The gross profit for the period." },
+        "educationTax": { "type": "number", "description": "The calculated Tertiary Education Tax (EDT)." },
+        "companyIncomeTax": { "type": "number", "description": "The calculated Company Income Tax (CIT)." },
+        "profitAfterTax": { "type": "number", "description": "The final profit after all taxes." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When this record was generated." }
+      },
+      "required": ["periodStart", "periodEnd", "grossProfit", "educationTax", "companyIncomeTax", "createdAt"]
     }
   },
   "auth": {
@@ -687,6 +702,12 @@
             "$ref": "#/entities/message"
         },
         "description": "Sub-collection for messages within a conversation."
+    },
+    "/taxRecords/{taxRecordId}": {
+      "schema": {
+        "$ref": "#/entities/taxRecord"
+      },
+      "description": "Stores historical tax calculations for auditing."
     }
   }
 }
