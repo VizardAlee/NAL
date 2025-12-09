@@ -22,7 +22,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { requestChatWithAdmin } from "@/app/common/actions/chat-actions";
+import { getOrCreateConversation } from "@/app/common/actions/chat-actions";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 
 const statusVariant = {
@@ -92,6 +93,74 @@ function BankDetailsCard() {
                 </div>
             </CardContent>
         </Card>
+    );
+}
+
+function ContactAdminSheet() {
+    const firestore = useFirestore();
+    const router = useRouter();
+    const { user } = useUser();
+    const { toast } = useToast();
+    const [isPending, startTransition] = useTransition();
+
+    const adminsQuery = useMemo(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'users'), where('role', '==', 'Admin'));
+    }, [firestore]);
+
+    const { data: admins, loading } = useCollection<any>(adminsQuery);
+
+    const handleSelectAdmin = (admin: any) => {
+        if (!user?.displayName) return;
+        startTransition(async () => {
+            const result = await getOrCreateConversation({
+                adminId: admin.id,
+                adminName: admin.name,
+                userId: user.uid,
+                userName: user.displayName
+            });
+
+            if (result.success && result.conversationId) {
+                router.push(`/client/messages/${result.conversationId}`);
+            } else {
+                toast({
+                    variant: 'destructive',
+                    title: 'Error',
+                    description: result.message || "Could not start conversation.",
+                });
+            }
+        });
+    }
+
+    return (
+        <Sheet>
+            <SheetTrigger asChild>
+                <Button variant="outline">
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Contact Admin
+                </Button>
+            </SheetTrigger>
+            <SheetContent>
+                <SheetHeader>
+                    <SheetTitle>Contact an Administrator</SheetTitle>
+                </SheetHeader>
+                <div className="py-4 space-y-3">
+                    {loading && <p>Loading admins...</p>}
+                    {admins?.map(admin => (
+                        <Button
+                            key={admin.id}
+                            variant="secondary"
+                            className="w-full justify-start h-14"
+                            onClick={() => handleSelectAdmin(admin)}
+                            disabled={isPending}
+                        >
+                            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <MessageSquare className="mr-4 h-4 w-4" />}
+                            Chat with {admin.name}
+                        </Button>
+                    ))}
+                </div>
+            </SheetContent>
+        </Sheet>
     );
 }
 
@@ -239,9 +308,7 @@ export default function ClientDashboard() {
     const router = useRouter();
     const { user, loading: userLoading } = useUser();
     const isMobile = useIsMobile();
-    const { toast } = useToast();
-    const [isChatPending, startChatTransition] = useTransition();
-
+    
     const userProfileRef = useMemo(() => {
         if (!firestore || !user?.uid) return null;
         return doc(firestore, 'users', user.uid);
@@ -279,22 +346,6 @@ export default function ClientDashboard() {
         return { mainDeal, olderDeals };
     }, [deals]);
 
-    const handleRequestChat = () => {
-        if (!user || !user.displayName) return;
-        startChatTransition(async () => {
-        const result = await requestChatWithAdmin({
-            userId: user.uid,
-            userName: user.displayName,
-            userRole: 'Client'
-        });
-        toast({
-            title: result.success ? 'Request Sent' : 'Request Failed',
-            description: result.message,
-            variant: result.success ? 'default' : 'destructive'
-        });
-        });
-    }
-
     if (isLoading) {
         return <DealsSkeleton />;
     }
@@ -312,10 +363,7 @@ export default function ClientDashboard() {
                 icon={FileText}
             >
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={handleRequestChat} disabled={isChatPending}>
-                        {isChatPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <MessageSquare className="mr-2 h-4 w-4" />}
-                        Contact Admin
-                    </Button>
+                    <ContactAdminSheet />
                     <Button asChild>
                         <Link href="/client/deals/request">
                             <PlusCircle className="mr-2 h-4 w-4" />
@@ -331,7 +379,7 @@ export default function ClientDashboard() {
                         <CardHeader className="flex flex-row items-center gap-4 space-y-0">
                             <Avatar className="h-16 w-16">
                                 <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/128/128`} />
-                                <AvatarFallback>{userProfile.name.charAt(0)}</AvatarFallback>
+                                <AvatarFallback>{(userProfile.name as string).charAt(0)}</AvatarFallback>
                             </Avatar>
                             <div>
                                 <CardTitle className="font-headline text-2xl">{userProfile.name}</CardTitle>

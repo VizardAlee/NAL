@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 
 type Conversation = {
@@ -25,10 +26,33 @@ type Conversation = {
     readBy: string[];
 };
 
+type UserProfile = {
+    id: string;
+    name: string;
+    role: 'Admin' | 'Client' | 'Investor';
+};
+
+function ConversationList({ conversations, currentUserId }: { conversations: Conversation[] | null, currentUserId: string }) {
+    if (!conversations || conversations.length === 0) {
+        return (
+            <Card className="h-48 flex items-center justify-center border-dashed">
+                <p className="text-muted-foreground">No conversations found.</p>
+            </Card>
+        );
+    }
+    
+    return (
+        <div className="space-y-4">
+            {conversations.map(convo => (
+                <ConversationItem key={convo.id} conversation={convo} currentUserId={currentUserId} />
+            ))}
+        </div>
+    )
+}
+
 function ConversationItem({ conversation, currentUserId }: { conversation: Conversation, currentUserId: string }) {
     const router = useRouter();
     
-    // Find the other participant's details
     const otherParticipantIndex = conversation.participantIds.findIndex(id => id !== currentUserId);
     const otherParticipantName = otherParticipantIndex !== -1 ? conversation.participantNames[otherParticipantIndex] : 'Unknown User';
     const otherParticipantAvatar = otherParticipantIndex !== -1 ? conversation.participantAvatars[otherParticipantIndex] : '/placeholder.svg';
@@ -66,40 +90,66 @@ export default function AdminMessagesPage() {
     const { user: adminUser, loading: userLoading } = useUser();
     const firestore = useFirestore();
 
-    const conversationsQuery = useMemo(() => {
-        if (!firestore || !adminUser) return null;
-        // Admin should see all conversations, ordered by the most recently updated.
-        return query(
-            collection(firestore, 'conversations'),
-            orderBy('lastUpdatedAt', 'desc')
-        );
-    }, [firestore, adminUser]);
+    const allAdminsQuery = useMemo(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'users'), where('role', '==', 'Admin'));
+    }, [firestore]);
 
-    const { data: conversations, loading: conversationsLoading } = useCollection<Conversation>(conversationsQuery as any);
+    const allConversationsQuery = useMemo(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'conversations'), orderBy('lastUpdatedAt', 'desc'));
+    }, [firestore]);
+
+    const { data: allAdmins, loading: adminsLoading } = useCollection<UserProfile>(allAdminsQuery);
+    const { data: allConversations, loading: conversationsLoading } = useCollection<Conversation>(allConversationsQuery);
     
-    const isLoading = userLoading || conversationsLoading;
+    const isLoading = userLoading || adminsLoading || conversationsLoading;
+    
+    const myConversations = useMemo(() => {
+        if (!allConversations || !adminUser) return [];
+        return allConversations.filter(c => c.participantIds.includes(adminUser.uid));
+    }, [allConversations, adminUser]);
+
+    const otherAdmins = useMemo(() => {
+        if (!allAdmins || !adminUser) return [];
+        return allAdmins.filter(a => a.id !== adminUser.uid);
+    }, [allAdmins, adminUser]);
+
+    if (isLoading || !adminUser) {
+        return (
+             <div>
+                <PageHeader title="Messages" description="All your conversations in one place." icon={MessageSquare} />
+                <div className="space-y-4">
+                    {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div>
-            <PageHeader title="Messages" description="All your conversations in one place." icon={MessageSquare} />
+            <PageHeader title="Messages" description="Review all conversations across the platform." icon={MessageSquare} />
+            <Tabs defaultValue={adminUser.uid}>
+                <TabsList>
+                    <TabsTrigger value={adminUser.uid}>My Chats</TabsTrigger>
+                    {otherAdmins.map(admin => (
+                        <TabsTrigger key={admin.id} value={admin.id}>{admin.name}'s Chats</TabsTrigger>
+                    ))}
+                </TabsList>
 
-            <div className="space-y-4">
-                {isLoading && (
-                    Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)
-                )}
-
-                {!isLoading && conversations && conversations.length > 0 && adminUser && (
-                    conversations.map(convo => (
-                        <ConversationItem key={convo.id} conversation={convo} currentUserId={adminUser.uid} />
-                    ))
-                )}
+                <TabsContent value={adminUser.uid} className="mt-4">
+                    <ConversationList conversations={myConversations} currentUserId={adminUser.uid} />
+                </TabsContent>
                 
-                {!isLoading && (!conversations || conversations.length === 0) && (
-                    <Card className="h-48 flex items-center justify-center border-dashed">
-                        <p className="text-muted-foreground">No conversations yet.</p>
-                    </Card>
-                )}
-            </div>
+                {otherAdmins.map(admin => (
+                    <TabsContent key={admin.id} value={admin.id} className="mt-4">
+                        <ConversationList 
+                            conversations={allConversations?.filter(c => c.participantIds.includes(admin.id)) || []} 
+                            currentUserId={adminUser.uid} 
+                        />
+                    </TabsContent>
+                ))}
+            </Tabs>
         </div>
     );
 }

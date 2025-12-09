@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -16,6 +15,7 @@ import { format, differenceInDays, addDays } from 'date-fns';
 import { Deal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { WithdrawForm } from "./withdraw-form";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
@@ -24,7 +24,8 @@ import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DepositForm } from "./deposit-form";
-import { requestChatWithAdmin } from "@/app/common/actions/chat-actions";
+import { getOrCreateConversation } from "@/app/common/actions/chat-actions";
+import { useRouter } from "next/navigation";
 
 
 type Transaction = DocumentData & {
@@ -56,6 +57,8 @@ type FundBatch = DocumentData & {
 type UserProfile = DocumentData & {
     id: string;
     lastWithdrawalDate?: Timestamp;
+    name: string;
+    role: 'Admin' | 'Client' | 'Investor';
 };
 
 
@@ -177,6 +180,75 @@ function BankDetailsCard() {
     );
 }
 
+function ContactAdminSheet() {
+    const firestore = useFirestore();
+    const router = useRouter();
+    const { user } = useUser();
+    const { toast } = useToast();
+    const [isPending, startTransition] = useTransition();
+
+    const adminsQuery = useMemo(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'users'), where('role', '==', 'Admin'));
+    }, [firestore]);
+
+    const { data: admins, loading } = useCollection<UserProfile>(adminsQuery);
+
+    const handleSelectAdmin = (admin: UserProfile) => {
+        if (!user?.displayName) return;
+        startTransition(async () => {
+            const result = await getOrCreateConversation({
+                adminId: admin.id,
+                adminName: admin.name,
+                userId: user.uid,
+                userName: user.displayName
+            });
+
+            if (result.success && result.conversationId) {
+                router.push(`/investor/messages/${result.conversationId}`);
+            } else {
+                toast({
+                    variant: 'destructive',
+                    title: 'Error',
+                    description: result.message || "Could not start conversation.",
+                });
+            }
+        });
+    }
+
+    return (
+        <Sheet>
+            <SheetTrigger asChild>
+                <Button variant="outline">
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Contact Admin
+                </Button>
+            </SheetTrigger>
+            <SheetContent>
+                <SheetHeader>
+                    <SheetTitle>Contact an Administrator</SheetTitle>
+                </SheetHeader>
+                <div className="py-4 space-y-3">
+                    {loading && <p>Loading admins...</p>}
+                    {admins?.map(admin => (
+                        <Button
+                            key={admin.id}
+                            variant="secondary"
+                            className="w-full justify-start h-14"
+                            onClick={() => handleSelectAdmin(admin)}
+                            disabled={isPending}
+                        >
+                            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <MessageSquare className="mr-4 h-4 w-4" />}
+                            Chat with {admin.name}
+                        </Button>
+                    ))}
+                </div>
+            </SheetContent>
+        </Sheet>
+    );
+}
+
+
 export default function InvestorDashboard() {
   const firestore = useFirestore();
   const { user, loading: userLoading } = useUser();
@@ -184,7 +256,6 @@ export default function InvestorDashboard() {
   const [isDepositOpen, setDepositOpen] = useState(false);
   const isMobile = useIsMobile();
   const { toast } = useToast();
-  const [isChatPending, startChatTransition] = useTransition();
   const [isReinvestPending, startReinvestTransition] = useTransition();
 
   const userProfileRef = useMemo(() => {
@@ -386,23 +457,6 @@ export default function InvestorDashboard() {
     const date = timestamp instanceof Timestamp ? timestamp.toDate() : date;
     try { return format(date, 'PPP'); } catch { return 'Invalid Date'; }
   };
-  
-  const handleRequestChat = () => {
-    if (!user || !user.displayName) return;
-    startChatTransition(async () => {
-      const result = await requestChatWithAdmin({
-        userId: user.uid,
-        userName: user.displayName,
-        userRole: 'Investor'
-      });
-      toast({
-        title: result.success ? 'Request Sent' : 'Request Failed',
-        description: result.message,
-        variant: result.success ? 'default' : 'destructive'
-      });
-    });
-  }
-
 
   return (
     <div>
@@ -412,10 +466,7 @@ export default function InvestorDashboard() {
         icon={Landmark}
       >
         <div className="flex gap-2">
-            <Button variant="outline" onClick={handleRequestChat} disabled={isChatPending}>
-              {isChatPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <MessageSquare className="mr-2 h-4 w-4" />}
-              Contact Admin
-            </Button>
+            <ContactAdminSheet />
             <Dialog open={isDepositOpen} onOpenChange={setDepositOpen}>
             <DialogTrigger asChild>
                 <Button>
@@ -719,5 +770,3 @@ export default function InvestorDashboard() {
     </div>
   );
 }
-
-    
