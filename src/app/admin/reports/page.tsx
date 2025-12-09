@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -29,6 +30,7 @@ import {
 } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { generateAmortizationSchedule } from "@/lib/amortization";
 
 type Transaction = DocumentData & {
   type: 'PlatformEarning' | 'Zakat' | 'Penalty' | 'Investment' | 'Deposit' | 'Withdrawal' | 'ProfitDistribution' | 'Repayment';
@@ -37,6 +39,7 @@ type Transaction = DocumentData & {
   dealId?: string;
   userId?: string;
   status?: 'Approved' | 'Pending'; // for repayments
+  installmentNumber?: number;
 };
 
 type AdministrativeTransaction = DocumentData & {
@@ -54,6 +57,7 @@ type FundBatch = DocumentData & {
 type Deal = DocumentData & {
     id: string;
     principal: number;
+    profitRate: number;
     status: 'Active' | 'Pending' | 'Completed' | 'Terminated';
     createdAt: Timestamp;
 };
@@ -155,40 +159,48 @@ export default function ReportsPage() {
     const allTimeAdminTransactions = allAdminTransactions.filter(filterUpToDate);
     const allTimeTransactions = allTransactions.filter(filterUpToDate);
     
-    // --- Balance Sheet Calculations ---
+    // --- Balance Sheet Calculations (Accrual-based) ---
+    // ASSETS
     const cashAndEquivalents = allTimeAdminTransactions.reduce((acc, tx) => acc + tx.amount, 0);
-
-    const initialFinancingPortfolio = activeDeals.reduce((acc, deal) => acc + deal.principal, 0);
-    const principalRepaidOnActiveDeals = allTimeTransactions
-        .filter(t => t.type === 'Repayment' && activeDealIds.includes(t.dealId ?? '') && t.status === 'Approved')
-        .reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
-    const grossFinancingPortfolio = initialFinancingPortfolio - principalRepaidOnActiveDeals;
-    
     const totalAssetValue = heldAssets.reduce((sum, asset) => sum + asset.acquisitionCost, 0);
-    
+
+    let totalRemainingReceivables = 0;
+    let totalUnearnedMarkup = 0;
+
+    for (const deal of activeDeals) {
+        const schedule = generateAmortizationSchedule(deal);
+        const approvedRepayments = allTimeTransactions.filter(
+            t => t.dealId === deal.id && t.type === 'Repayment' && t.status === 'Approved'
+        );
+        const paidInstallmentNumbers = approvedRepayments.map(r => r.installmentNumber);
+
+        const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
+        const dealRemainingReceivable = remainingInstallments.reduce((sum, inst) => sum + inst.payment, 0);
+        const dealUnearnedMarkup = remainingInstallments.reduce((sum, inst) => sum + inst.interest, 0);
+
+        totalRemainingReceivables += dealRemainingReceivable;
+        totalUnearnedMarkup += dealUnearnedMarkup;
+    }
+    const grossFinancingPortfolio = totalRemainingReceivables;
     const totalAssets = cashAndEquivalents + grossFinancingPortfolio + totalAssetValue;
 
-    // Investor liability is their net position: Deposits + Profits - Withdrawals - Zakat - Investments
-    const investorLiabilityTransactions = allTimeTransactions.filter(tx => 
-        tx.userId !== 'platform' && (
-            tx.type === 'Deposit' || 
-            tx.type === 'Withdrawal' || 
-            tx.type === 'ProfitDistribution' ||
-            tx.type === 'Zakat' ||
-            tx.type === 'Investment' // The capital they have put into deals
-        )
-    );
-    const totalInvestorCapital = investorLiabilityTransactions.reduce((acc, tx) => acc + tx.amount, 0);
+    // LIABILITIES & EQUITY
+    const allInvestorTx = allTimeTransactions.filter(t => t.userId !== 'platform');
+    const investorLiability = allInvestorTx.reduce((sum, tx) => sum + tx.amount, 0);
 
-    // Platform equity is its earnings + capital contributions - transfers to admin
-    const platformEarnings = allTimeTransactions.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
-    const platformInvestments = allTimeTransactions.filter(t => t.userId === 'platform' && t.type === 'Investment').reduce((acc, tx) => acc + tx.amount, 0);
-    const platformAdminContributions = allTimeAdminTransactions.filter(tx => tx.type === 'TransferToInvestible').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
-    const platformAdminWithdrawals = allTimeAdminTransactions.filter(tx => tx.type === 'TransferFromInvestible').reduce((acc, tx) => acc + tx.amount, 0);
+    const platformEarningTxs = allTimeTransactions.filter(t => t.type === 'PlatformEarning');
+    const totalEarnedRevenue = platformEarningTxs.reduce((sum, tx) => sum + tx.amount, 0);
+    const platformCapitalContributions = allTimeAdminTransactions.filter(tx => tx.type === 'TransferToInvestible').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const platformCapitalWithdrawals = allTimeAdminTransactions.filter(tx => tx.type === 'TransferFromInvestible').reduce((sum, tx) => sum + tx.amount, 0);
     
-    const totalPlatformEquity = platformEarnings + platformInvestments + platformAdminContributions - platformAdminWithdrawals;
+    const unearnedPlatformShare = totalUnearnedMarkup * 0.6;
+    const unearnedInvestorShare = totalUnearnedMarkup * 0.4;
+    
+    // Total Equity = (Earned Revenue - Expenses) + Platform Capital +/- Transfers + Unearned Platform Share
+    const netRetainedEarnings = totalEarnedRevenue - allTimeAdminTransactions.filter(t => t.type === 'Expense').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+    const totalPlatformEquity = netRetainedEarnings + platformCapitalContributions - platformCapitalWithdrawals + unearnedPlatformShare;
 
-    const totalLiabilitiesAndEquity = totalInvestorCapital + totalPlatformEquity;
+    const totalLiabilitiesAndEquity = investorLiability + totalPlatformEquity + unearnedInvestorShare;
     
     // --- Income Statement Calculations (Flow, uses date filter) ---
     const financingRevenue = transactionsInPeriod.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
@@ -201,7 +213,7 @@ export default function ReportsPage() {
     const netIncome = totalRevenue - totalExpenses;
 
     // --- Cash Flow Calculations (Flow, uses date filter) ---
-    const netCashFromOperations = netIncome; // Simplified for now
+    const netCashFromOperations = netIncome; 
 
     const cashFromInvesting = adminTransactionsInPeriod.filter(tx => tx.type === 'AssetSale').reduce((acc, tx) => acc + tx.amount, 0)
                             - adminTransactionsInPeriod.filter(tx => tx.type === 'AssetAcquisition').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
@@ -225,10 +237,11 @@ export default function ReportsPage() {
                 totalAssets,
             },
             liabilities: {
-                totalInvestorCapital,
+                investorLiability,
+                unearnedInvestorShare,
             },
             equity: {
-                totalPlatformEquity,
+                platformEquity: totalPlatformEquity,
             },
             totalLiabilitiesAndEquity,
             discrepancy: totalAssets - totalLiabilitiesAndEquity,
@@ -332,8 +345,9 @@ export default function ReportsPage() {
                         <Card>
                             <CardHeader><CardTitle>Liabilities & Equity</CardTitle></CardHeader>
                             <CardContent className="space-y-2">
-                                <MobileReportRow label="Investor Capital" value={financialData?.balanceSheet.liabilities.totalInvestorCapital || 0} />
-                                <MobileReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.totalPlatformEquity || 0} />
+                                <MobileReportRow label="Net Investor Liability" value={financialData?.balanceSheet.liabilities.investorLiability || 0} />
+                                <MobileReportRow label="Payable to Investors (Unearned)" value={financialData?.balanceSheet.liabilities.unearnedInvestorShare || 0} />
+                                <MobileReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.platformEquity || 0} />
                                 <Separator className="my-2" />
                                 <MobileReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
                             </CardContent>
@@ -350,13 +364,14 @@ export default function ReportsPage() {
                                 <TableBody>
                                     <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Assets</TableCell></TableRow>
                                     <ReportRow label="Cash & Equivalents (Admin)" value={financialData?.balanceSheet.assets.cashAndEquivalents || 0} isSub />
-                                    <ReportRow label="Gross Financing Portfolio (Active Deals)" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
+                                    <ReportRow label="Gross Financing Portfolio (Receivable)" value={financialData?.balanceSheet.assets.grossFinancingPortfolio || 0} isSub />
                                     <ReportRow label="Held Asset Value" value={financialData?.balanceSheet.assets.totalAssetValue || 0} isSub />
                                     <ReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
                                     
                                     <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Liabilities & Equity</TableCell></TableRow>
-                                    <ReportRow label="Total Investor Capital (Liability)" value={financialData?.balanceSheet.liabilities.totalInvestorCapital || 0} isSub />
-                                    <ReportRow label="Total Platform Equity" value={financialData?.balanceSheet.equity.totalPlatformEquity || 0} isSub />
+                                    <ReportRow label="Net Investor Liability" value={financialData?.balanceSheet.liabilities.investorLiability || 0} isSub />
+                                    <ReportRow label="Payable to Investors (Unearned Profit)" value={financialData?.balanceSheet.liabilities.unearnedInvestorShare || 0} isSub />
+                                    <ReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.platformEquity || 0} isSub />
                                     <ReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
                                 </TableBody>
                             </Table>
@@ -523,3 +538,4 @@ export default function ReportsPage() {
     </div>
   );
 }
+
