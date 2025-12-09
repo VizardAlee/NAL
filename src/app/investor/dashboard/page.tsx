@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -6,9 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle, MessageSquare, Copy } from "lucide-react";
-import { useMemo, useState, useTransition, useEffect } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useCollection, useDoc } from '@/firebase';
-import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useFirestore, useUser, type User } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, differenceInDays, addDays } from 'date-fns';
@@ -49,6 +50,7 @@ type FundBatch = DocumentData & {
     createdAt: Timestamp;
     tenureValue: number;
     tenureUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
+    details?: string;
 };
 
 type UserProfile = DocumentData & {
@@ -183,6 +185,7 @@ export default function InvestorDashboard() {
   const isMobile = useIsMobile();
   const { toast } = useToast();
   const [isChatPending, startChatTransition] = useTransition();
+  const [isReinvestPending, startReinvestTransition] = useTransition();
 
   const userProfileRef = useMemo(() => {
     if (!firestore || !user?.uid) return null;
@@ -238,37 +241,40 @@ export default function InvestorDashboard() {
 
   const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || firstDepositLoading;
 
-  const { longTermProfits, withdrawableBalance } = useMemo(() => {
-      if (!allTransactions || !fundBatches) {
-          return { longTermProfits: 0, withdrawableBalance: 0 };
-      }
-      
-      const profitTransactions = allTransactions.filter(tx => tx.type === 'ProfitDistribution');
-      const totalWithdrawnFromProfits = allTransactions
-        .filter(tx => tx.type === 'Withdrawal') // Zakat is not from profits
-        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-      
-      let totalLongTermProfit = 0;
-      let totalShortTermProfit = 0;
+    const { longTermProfits, withdrawableBalance, returnedPrincipal } = useMemo(() => {
+        if (!allTransactions || !fundBatches) {
+            return { longTermProfits: 0, withdrawableBalance: 0, returnedPrincipal: 0 };
+        }
+        
+        const profitTransactions = allTransactions.filter(tx => tx.type === 'ProfitDistribution');
+        const totalWithdrawnFromProfits = allTransactions
+            .filter(tx => tx.type === 'Withdrawal')
+            .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+        
+        let totalLongTermProfit = 0;
+        let totalShortTermProfit = 0;
 
-      // This is a simplified attribution. A more robust system might tag profits at creation.
-      const hasLongTermCapital = fundBatches.some(batch => {
-          const tenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
-          return tenureInDays >= EIGHTEEN_MONTHS_IN_DAYS;
-      });
+        const hasLongTermCapital = fundBatches.some(batch => {
+            const tenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
+            return tenureInDays >= EIGHTEEN_MONTHS_IN_DAYS;
+        });
 
-      if (hasLongTermCapital) {
-          // Simplification: Assume all profits are long-term if any long-term capital exists.
-          totalLongTermProfit = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-      } else {
-          totalShortTermProfit = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-      }
+        if (hasLongTermCapital) {
+            totalLongTermProfit = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+        } else {
+            totalShortTermProfit = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+        }
+        
+        const _returnedPrincipal = fundBatches
+            .filter(batch => batch.details?.startsWith('Returned principal'))
+            .reduce((sum, batch) => sum + batch.remainingAmount, 0);
 
-      return {
-          longTermProfits: totalLongTermProfit,
-          withdrawableBalance: totalShortTermProfit - totalWithdrawnFromProfits, // Only short-term profits are withdrawable now
-      };
-  }, [allTransactions, fundBatches]);
+        return {
+            longTermProfits: totalLongTermProfit,
+            withdrawableBalance: totalShortTermProfit - totalWithdrawnFromProfits,
+            returnedPrincipal: _returnedPrincipal
+        };
+    }, [allTransactions, fundBatches]);
 
 
   const financialMetrics = useMemo(() => {
@@ -290,7 +296,8 @@ export default function InvestorDashboard() {
     const portfolioValue = (totalCapital + totalProfit) - totalWithdrawn;
     const simpleROI = totalCapital > 0 ? (totalProfit / totalCapital) * 100 : 0;
     
-    const investableBalance = fundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
+    const investableBalance = fundBatches?.filter(b => !b.details?.startsWith('Returned principal')).reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
+
 
     return { totalCapital, portfolioValue, investableBalance, simpleROI };
   }, [allTransactions, fundBatches]);
@@ -335,13 +342,43 @@ export default function InvestorDashboard() {
 
   }, [allTransactions]);
 
-  const handleWithdrawalSuccess = async () => {
-    setWithdrawOpen(false);
-    if(firestore && user) {
-        const userRef = doc(firestore, 'users', user.uid);
-        await updateDoc(userRef, { lastWithdrawalDate: Timestamp.now() });
+    const handleWithdrawalSuccess = async () => {
+        setWithdrawOpen(false);
+        if(firestore && user) {
+            const userRef = doc(firestore, 'users', user.uid);
+            await updateDoc(userRef, { lastWithdrawalDate: Timestamp.now() });
+        }
+    };
+
+    const handleReinvestReturnedPrincipal = () => {
+        if (!user) return;
+        startReinvestTransition(async () => {
+            if (!firestore) return;
+            const batch = writeBatch(firestore);
+
+            const returnedBatches = fundBatches?.filter(b => b.details?.startsWith('Returned principal')) || [];
+            
+            for (const batchDoc of returnedBatches) {
+                batch.update(doc(firestore, 'fundBatches', batchDoc.id), {
+                    details: 'Reinvested returned principal'
+                });
+            }
+
+            try {
+                await batch.commit();
+                toast({
+                    title: "Success",
+                    description: "Returned principal has been moved to your investible balance."
+                });
+            } catch (error) {
+                toast({
+                    variant: "destructive",
+                    title: "Error",
+                    description: "Failed to reinvest returned principal."
+                });
+            }
+        });
     }
-  };
 
 
   const formatDate = (timestamp: Timestamp | Date | undefined) => {
@@ -463,6 +500,22 @@ export default function InvestorDashboard() {
           </CardContent>
         </Card>
       </div>
+
+        {returnedPrincipal > 0 && (
+            <Card className="mt-8 bg-secondary">
+                <CardHeader>
+                    <CardTitle>Returned Principal</CardTitle>
+                    <CardDescription>This is principal returned from completed or terminated deals. It must be re-invested to be used in new deals.</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="text-3xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(returnedPrincipal)}</div>
+                    <Button onClick={handleReinvestReturnedPrincipal} disabled={isReinvestPending}>
+                         {isReinvestPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+                        Re-invest Returned Principal
+                    </Button>
+                </CardContent>
+            </Card>
+        )}
 
        <Card className="mt-8">
         <CardHeader>

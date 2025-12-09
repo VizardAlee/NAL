@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { PageHeader } from '@/components/page-header';
@@ -292,24 +293,40 @@ export default function RepaymentsPage() {
                 if (investmentsForDeal.length === 0) throw new Error("No investors found for this deal.");
 
                 const totalInvested = investmentsForDeal.reduce((sum, inv) => sum + inv.amount, 0);
+                const now = Timestamp.now();
 
-                // 1. Distribute profit to investors
+                // 1. Distribute profit and principal to investors
                 for (const investment of investmentsForDeal) {
                     const investorProportion = investment.amount / totalInvested;
                     const investorProfit = totalInterestForPeriod * investorProportion * 0.40; // 40% of their proportional interest share
+                    const principalReturned = principalRepaid * investorProportion;
 
+                    // Create profit transaction
                     const profitTxRef = doc(collection(firestore, 'transactions'));
                     transaction.set(profitTxRef, {
                         userId: investment.investorId,
                         dealId: repayment.dealId,
                         type: 'ProfitDistribution',
                         amount: investorProfit,
-                        createdAt: Timestamp.now(),
+                        createdAt: now,
                         dealName: repayment.dealName,
                     });
+
+                    // Create new fund batch for returned principal
+                    if (principalReturned > 0) {
+                        const newBatchRef = doc(collection(firestore, 'fundBatches'));
+                        transaction.set(newBatchRef, {
+                            sourceId: investment.investorId,
+                            amount: principalReturned,
+                            remainingAmount: principalReturned,
+                            createdAt: now,
+                            tenureValue: 0, // Mark as immediately available, or could use original tenure
+                            tenureUnit: 'Days',
+                            details: `Returned principal from ${repayment.dealName}`
+                        });
+                    }
                 }
                 
-                const now = Timestamp.now();
                 // 2. Log platform earning and batch it
                 const platformProfit = totalInterestForPeriod * 0.60;
 
@@ -356,7 +373,7 @@ export default function RepaymentsPage() {
 
             toast({
                 title: "Repayment Approved",
-                description: `Profit from ${repayment.dealName} has been distributed.`,
+                description: `Profit and principal from ${repayment.dealName} has been distributed.`,
             });
         } catch (error) {
             console.error("Approval Error: ", error);
