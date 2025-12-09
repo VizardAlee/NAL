@@ -166,9 +166,10 @@ export default function ReportsPage() {
     
     // --- BALANCE SHEET (POINT-IN-TIME SNAPSHOT) ---
     // ASSETS
-    const administrativeBalance = adminTransactionsUpToDate.reduce((acc, tx) => acc + tx.amount, 0);
     const totalInvestiblePool = fundBatchesUpToDate.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
-    const cashAndEquivalents = administrativeBalance + totalInvestiblePool;
+    const administrativeBalance = adminTransactionsUpToDate.reduce((acc, tx) => acc + tx.amount, 0);
+    const cashAndEquivalents = totalInvestiblePool + administrativeBalance;
+    
     const heldAssetValue = heldAssets.reduce((sum, asset) => sum + asset.acquisitionCost, 0);
 
     let grossFinancingPortfolio = 0;
@@ -182,34 +183,24 @@ export default function ReportsPage() {
         const paidInstallmentNumbers = approvedRepayments.map(r => r.installmentNumber).filter(n => n !== undefined);
         const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
         
-        const remainingPrincipal = remainingInstallments.reduce((sum, inst) => sum + inst.principal, 0);
-        const remainingMarkup = remainingInstallments.reduce((sum, inst) => sum + inst.interest, 0);
-        
-        grossFinancingPortfolio += (remainingPrincipal + remainingMarkup);
-        unearnedMarkupRevenue += remainingMarkup;
+        grossFinancingPortfolio += remainingInstallments.reduce((sum, inst) => sum + inst.payment, 0);
+        unearnedMarkupRevenue += remainingInstallments.reduce((sum, inst) => sum + inst.interest, 0);
     }
     const totalAssets = cashAndEquivalents + grossFinancingPortfolio + heldAssetValue;
 
     // LIABILITIES & EQUITY
     const investorFundBatches = fundBatchesUpToDate.filter(b => b.sourceId !== 'platform');
-    const investorDeposits = transactionsUpToDate.filter(t => t.type === 'Deposit' && investorFundBatches.some(b => b.sourceId === t.userId)).reduce((sum, tx) => sum + tx.amount, 0);
-    const investorProfits = transactionsUpToDate.filter(t => t.type === 'ProfitDistribution' && investorFundBatches.some(b => b.sourceId === t.userId)).reduce((sum, tx) => sum + tx.amount, 0);
-    const investorWithdrawals = transactionsUpToDate.filter(t => t.type === 'Withdrawal' && investorFundBatches.some(b => b.sourceId === t.userId)).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    const investorZakat = transactionsUpToDate.filter(t => t.type === 'Zakat' && investorFundBatches.some(b => b.sourceId === t.userId)).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    const investorInvestments = transactionsUpToDate.filter(t => t.type === 'Investment' && investorFundBatches.some(b => b.sourceId === t.userId)).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const investorLiability = investorFundBatches.reduce((sum, batch) => sum + batch.amount, 0);
+    
+    const platformFundBatches = fundBatchesUpToDate.filter(b => b.sourceId === 'platform');
+    const platformCapital = platformFundBatches.reduce((sum, batch) => sum + batch.amount, 0);
 
-    const investorLiability = (investorDeposits + investorProfits) - (investorWithdrawals + investorZakat + investorInvestments);
-    
-    const platformEarnings = transactionsUpToDate.filter(t => t.type === 'PlatformEarning').reduce((sum, tx) => sum + tx.amount, 0);
-    const managementFees = adminTransactionsUpToDate.filter(t => t.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0);
-    const platformExpenses = adminTransactionsUpToDate.filter(tx => tx.type === 'Expense').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    const retainedEarnings = platformEarnings + managementFees - platformExpenses;
-    
-    const platformCapitalContributions = fundBatchesUpToDate.filter(b => b.sourceId === 'platform').reduce((sum, b) => sum + b.amount, 0);
-    const platformInvestments = transactionsUpToDate.filter(t => t.type === 'Investment' && t.userId === 'platform').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    
-    const platformEquity = retainedEarnings + platformCapitalContributions - platformInvestments;
+    const retainedEarnings = allTransactions.filter(t => t.type === 'PlatformEarning').reduce((sum, tx) => sum + tx.amount, 0)
+     + allAdminTransactions.filter(t => t.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0)
+     - allAdminTransactions.filter(tx => tx.type === 'Expense').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
+    const platformEquity = platformCapital + retainedEarnings;
+    
     const totalLiabilitiesAndEquity = investorLiability + unearnedMarkupRevenue + platformEquity;
     
     const discrepancy = totalAssets - totalLiabilitiesAndEquity;
@@ -545,5 +536,6 @@ export default function ReportsPage() {
     </div>
   );
 }
+
 
 
