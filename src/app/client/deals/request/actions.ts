@@ -34,16 +34,26 @@ export async function requestDealAction(input: z.infer<typeof requestDealSchema>
         };
         await adminDb.collection('dealRequests').add(dealRequestData);
 
-        // Create a notification for the admin
-        await adminDb.collection('notifications').add({
-            title: 'New Deal Request',
-            message: `${validated.data.clientName} has requested a new deal: "${validated.data.dealName}"`,
-            link: '/admin/approvals/deal-requests',
-            read: false,
-            createdAt: Timestamp.now(),
-        });
+        // Create a notification for all admins
+        const adminQuery = await adminDb.collection('users').where('role', '==', 'Admin').get();
+        const adminIds = adminQuery.docs.map(doc => doc.id);
+
+        const batch = adminDb.batch();
+        for (const adminId of adminIds) {
+            const notificationRef = adminDb.collection('notifications').doc();
+            batch.set(notificationRef, {
+                recipientId: adminId,
+                title: 'New Deal Request',
+                message: `${validated.data.clientName} has requested a new deal: "${validated.data.dealName}"`,
+                link: '/admin/approvals/deal-requests',
+                read: false,
+                createdAt: Timestamp.now(),
+            });
+        }
+        await batch.commit();
         
         revalidatePath('/client/dashboard');
+        revalidatePath('/admin/approvals/deal-requests');
 
         return { success: true, message: 'Your deal request has been submitted for review.' };
 
