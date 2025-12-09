@@ -173,26 +173,12 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
     });
   }, [schedule, allRepayments]);
   
-  const upcomingSchedule = useMemo(() => {
-      // Show all non-paid/non-cancelled items
-      return enhancedSchedule.filter(p => p.status !== 'Paid' && p.status !== 'Cancelled');
-  }, [enhancedSchedule]);
-
-  const finalSchedule = useMemo(() => {
-    // Sort to show 'Due' items first, then by due date
-    return upcomingSchedule.sort((a, b) => {
-        if (a.status === 'Due' && b.status !== 'Due') return -1;
-        if (a.status !== 'Due' && b.status === 'Due') return 1;
-        return a.installment - b.installment;
-    });
-  }, [upcomingSchedule]);
-
   const paginatedSchedule = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return finalSchedule.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [finalSchedule, currentPage]);
+    return enhancedSchedule.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [enhancedSchedule, currentPage]);
 
-  const totalPages = Math.ceil(finalSchedule.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(enhancedSchedule.length / ITEMS_PER_PAGE);
 
   const StatusBadge = ({ status }: { status: RepaymentStatus }) => {
     const variantMap: { [key in RepaymentStatus]: 'default' | 'secondary' | 'outline' | 'destructive' } = {
@@ -268,7 +254,7 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
                                     <div className="flex justify-between"><span className="text-muted-foreground">Markup:</span> <span>{formatCurrency(item.interest)}</span></div>
                                     <div className="flex justify-between"><span className="text-muted-foreground">Balance:</span> <span>{formatCurrency(item.balance)}</span></div>
                                 </div>
-                                {(item.isActionable && user) && (
+                                {(item.isActionable && user && item.status !== 'Pending') && (
                                     <div className="pt-3 border-t">
                                         <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
                                     </div>
@@ -300,7 +286,7 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
                             <TableCell data-label="Balance">{formatCurrency(item.balance)}</TableCell>
                             <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
                             <TableCell data-label="Action" className="text-right w-40">
-                            {(item.isActionable && user) && (
+                            {(item.isActionable && user && item.status !== 'Pending') && (
                                 <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
                             )}
                             </TableCell>
