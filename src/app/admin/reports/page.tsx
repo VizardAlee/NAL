@@ -68,6 +68,14 @@ type Deal = DocumentData & {
     repaymentFrequency: 'Daily' | 'Weekly' | 'Fortnightly' | 'Monthly';
 };
 
+type Investment = DocumentData & {
+    id: string;
+    investorId: string;
+    dealId: string;
+    amount: number;
+    createdAt: Timestamp;
+};
+
 type Asset = DocumentData & {
     id: string;
     description: string;
@@ -123,6 +131,7 @@ export default function ReportsPage() {
   const fundBatchesQuery = useMemo(() => firestore ? query(collection(firestore, 'fundBatches')) : null, [firestore]);
   const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals')) : null, [firestore]);
   const assetsQuery = useMemo(() => firestore ? query(collection(firestore, 'assets')) : null, [firestore]);
+  const investmentsQuery = useMemo(() => firestore ? query(collection(firestore, 'investments')) : null, [firestore]);
 
 
   const { data: allTransactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
@@ -130,11 +139,12 @@ export default function ReportsPage() {
   const { data: allFundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
   const { data: allDeals, loading: allDealsLoading } = useCollection<Deal>(dealsQuery);
   const { data: allAssets, loading: assetsLoading } = useCollection<Asset>(assetsQuery);
+  const { data: allInvestments, loading: investmentsLoading } = useCollection<Investment>(investmentsQuery);
   
-  const isLoading = transactionsLoading || adminTransactionsLoading || fundBatchesLoading || allDealsLoading || assetsLoading;
+  const isLoading = transactionsLoading || adminTransactionsLoading || fundBatchesLoading || allDealsLoading || assetsLoading || investmentsLoading;
 
   const financialData = useMemo(() => {
-    if (isLoading || !allTransactions || !allAdminTransactions || !allFundBatches || !allDeals || !allAssets) {
+    if (isLoading || !allTransactions || !allAdminTransactions || !allFundBatches || !allDeals || !allAssets || !allInvestments) {
         return null;
     }
 
@@ -159,9 +169,10 @@ export default function ReportsPage() {
 
     const activeDeals = allDeals.filter(d => d.status === 'Active' && filterUpToDate(d));
     const heldAssets = allAssets.filter(a => a.status === 'Held' && filterUpToDate(a));
-    const transactionsUpToDate = allTransactions.filter(filterUpToDate);
     const adminTransactionsUpToDate = allAdminTransactions.filter(filterUpToDate);
     const fundBatchesUpToDate = allFundBatches.filter(filterUpToDate);
+    const transactionsUpToDate = allTransactions.filter(filterUpToDate);
+
     
     // --- BALANCE SHEET (POINT-IN-TIME SNAPSHOT) ---
     // ASSETS
@@ -192,18 +203,47 @@ export default function ReportsPage() {
     // LIABILITIES & EQUITY
     const investorFundBatches = fundBatchesUpToDate.filter(b => b.sourceId !== 'platform');
     const investorCashLiability = investorFundBatches.reduce((sum, batch) => sum + batch.remainingAmount, 0);
-    
-    const principalPayable = outstandingPrincipal;
 
+    const investmentsByInvestors = allInvestments.filter(inv => inv.sourceId !== 'platform');
+    const totalInvestedByInvestors = investmentsByInvestors.reduce((sum, inv) => sum + inv.amount, 0);
+    
+    // Total principal is divided based on initial investment proportions
+    let principalPayableToInvestors = 0;
+    let principalPayableToPlatform = 0;
+    for (const deal of activeDeals) {
+        const investmentsForDeal = allInvestments.filter(inv => inv.dealId === deal.id);
+        const totalInvestedInDeal = investmentsForDeal.reduce((sum, inv) => sum + inv.amount, 0);
+        if(totalInvestedInDeal === 0) continue;
+
+        const schedule = generateAmortizationSchedule(deal);
+        const approvedRepayments = transactionsUpToDate.filter(t => t.dealId === deal.id && t.type === 'Repayment' && t.status === 'Approved');
+        const paidInstallmentNumbers = approvedRepayments.map(r => r.installmentNumber).filter(n => n !== undefined);
+        const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
+        const outstandingPrincipalForDeal = remainingInstallments.reduce((sum, inst) => sum + inst.principal, 0);
+
+        for (const investment of investmentsForDeal) {
+            const proportion = investment.amount / totalInvestedInDeal;
+            if (investment.investorId === 'platform') {
+                principalPayableToPlatform += outstandingPrincipalForDeal * proportion;
+            } else {
+                principalPayableToInvestors += outstandingPrincipalForDeal * proportion;
+            }
+        }
+    }
+
+    const unearnedMarkupPayableToInvestors = unearnedMarkupRevenue * 0.40;
+    const unearnedPlatformMarkup = unearnedMarkupRevenue * 0.60;
+    
     const platformFundBatches = fundBatchesUpToDate.filter(b => b.sourceId === 'platform');
-    const platformCapital = platformFundBatches.reduce((sum, batch) => sum + batch.remainingAmount, 0);
+    const platformCash = platformFundBatches.reduce((sum, batch) => sum + batch.remainingAmount, 0);
+    
     const retainedEarnings = adminTransactionsUpToDate.filter(t => t.type === 'ManagementFee' || t.type === 'AssetSale').reduce((sum, tx) => sum + tx.amount, 0)
                            + transactionsUpToDate.filter(t => t.type === 'PlatformEarning').reduce((sum, tx) => sum + tx.amount, 0)
                            - adminTransactionsUpToDate.filter(t => t.type === 'Expense' || t.type === 'AssetAcquisition').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
-    const platformEquity = platformCapital + retainedEarnings;
+    const platformEquity = platformCash + principalPayableToPlatform + unearnedPlatformMarkup + retainedEarnings;
     
-    const totalLiabilitiesAndEquity = investorCashLiability + principalPayable + unearnedMarkupRevenue + platformEquity;
+    const totalLiabilitiesAndEquity = investorCashLiability + principalPayableToInvestors + unearnedMarkupPayableToInvestors + platformEquity;
     
     const discrepancy = totalAssets - totalLiabilitiesAndEquity;
 
@@ -238,8 +278,8 @@ export default function ReportsPage() {
             },
             liabilities: {
                 investorCashLiability,
-                principalPayable,
-                unearnedMarkup: unearnedMarkupRevenue,
+                principalPayableToInvestors,
+                markupPayableToInvestors: unearnedMarkupPayableToInvestors,
             },
             equity: {
                 platformEquity,
@@ -262,7 +302,7 @@ export default function ReportsPage() {
             netCashFlow
         }
     };
-  }, [allTransactions, allAdminTransactions, allFundBatches, allDeals, allAssets, isLoading, dateRange]);
+  }, [allTransactions, allAdminTransactions, allFundBatches, allDeals, allAssets, allInvestments, isLoading, dateRange]);
 
   const chartData = useMemo(() => {
     if (!financialData) return null;
@@ -346,9 +386,9 @@ export default function ReportsPage() {
                         <Card>
                             <CardHeader><CardTitle>Liabilities & Equity</CardTitle></CardHeader>
                             <CardContent className="space-y-2">
-                                <MobileReportRow label="Investor Cash Liability" value={financialData?.balanceSheet.liabilities.investorCashLiability || 0} />
-                                <MobileReportRow label="Principal Payable" value={financialData?.balanceSheet.liabilities.principalPayable || 0} />
-                                <MobileReportRow label="Unearned Markup Revenue" value={financialData?.balanceSheet.liabilities.unearnedMarkup || 0} />
+                                <MobileReportRow label="Investor Uninvested Capital" value={financialData?.balanceSheet.liabilities.investorCashLiability || 0} />
+                                <MobileReportRow label="Principal Payable to Investors" value={financialData?.balanceSheet.liabilities.principalPayableToInvestors || 0} />
+                                <MobileReportRow label="Markup Payable to Investors" value={financialData?.balanceSheet.liabilities.markupPayableToInvestors || 0} />
                                 <MobileReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.platformEquity || 0} />
                                 <Separator className="my-2" />
                                 <MobileReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
@@ -371,9 +411,9 @@ export default function ReportsPage() {
                                     <ReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
                                     
                                     <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Liabilities & Equity</TableCell></TableRow>
-                                    <ReportRow label="Investor Cash Liability" value={financialData?.balanceSheet.liabilities.investorCashLiability || 0} isSub />
-                                    <ReportRow label="Principal Payable" value={financialData?.balanceSheet.liabilities.principalPayable || 0} isSub />
-                                    <ReportRow label="Unearned Markup Revenue" value={financialData?.balanceSheet.liabilities.unearnedMarkup || 0} isSub />
+                                    <ReportRow label="Investor Capital (Uninvested)" value={financialData?.balanceSheet.liabilities.investorCashLiability || 0} isSub />
+                                    <ReportRow label="Principal Payable to Investors" value={financialData?.balanceSheet.liabilities.principalPayableToInvestors || 0} isSub />
+                                    <ReportRow label="Markup Payable to Investors" value={financialData?.balanceSheet.liabilities.markupPayableToInvestors || 0} isSub />
                                     <ReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.platformEquity || 0} isSub />
                                     <ReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
                                 </TableBody>
