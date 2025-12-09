@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign } from "lucide-react";
+import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign, Info } from "lucide-react";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy, updateDoc } from 'firebase/firestore';
 import { useFirestore } from "@/firebase";
@@ -57,7 +57,7 @@ type GenericTransaction = DocumentData & {
 
 type AdministrativeTransaction = DocumentData & {
   id:string;
-  type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible' | 'AssetAcquisition' | 'AssetSale';
+  type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible' | 'AssetAcquisition' | 'AssetSale' | 'ManagementFee';
   amount: number;
   description: string;
   createdAt: Timestamp;
@@ -513,6 +513,7 @@ export default function PlatformFundsPage() {
     const isMobile = useIsMobile();
     const [isDialogOpen, setDialogOpen] = useState<{ [key: string]: boolean }>({});
     const [currentPage, setCurrentPage] = useState(1);
+    const [selectedTx, setSelectedTx] = useState<AdministrativeTransaction | null>(null);
 
     const openDialog = (key: string) => setDialogOpen(prev => ({ ...prev, [key]: true }));
     const closeDialog = (key: string) => setDialogOpen(prev => ({ ...prev, [key]: false }));
@@ -552,6 +553,10 @@ export default function PlatformFundsPage() {
 
     const totalPages = useMemo(() => adminTransactions ? Math.ceil(adminTransactions.length / ITEMS_PER_PAGE) : 0, [adminTransactions]);
 
+    const handleRowClick = (tx: AdministrativeTransaction) => {
+        setSelectedTx(tx);
+    };
+
     return (
         <div>
             <PageHeader
@@ -567,6 +572,38 @@ export default function PlatformFundsPage() {
                  <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Administrative Balance</CardTitle><Wallet className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.administrativeBalance)}</div>}<p className="text-xs text-muted-foreground">Operational funds for expenses.</p></CardContent></Card>
             </div>
             
+            <Dialog open={!!selectedTx} onOpenChange={(isOpen) => !isOpen && setSelectedTx(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Transaction Details</DialogTitle>
+                    </DialogHeader>
+                    {selectedTx && (
+                        <div className="space-y-4 pt-4">
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Type:</span>
+                                <Badge variant={selectedTx.amount > 0 ? 'secondary' : 'outline'}>{selectedTx.type}</Badge>
+                            </div>
+                             <div className="flex justify-between">
+                                <span className="text-muted-foreground">Amount:</span>
+                                <span className={`font-medium ${selectedTx.amount > 0 ? 'text-primary' : ''}`}>{formatCurrency(selectedTx.amount)}</span>
+                            </div>
+                             <div className="flex justify-between">
+                                <span className="text-muted-foreground">Date:</span>
+                                <span>{formatDate(selectedTx.createdAt)}</span>
+                            </div>
+                            <div>
+                                <p className="text-muted-foreground">Description:</p>
+                                <p>{selectedTx.description}</p>
+                            </div>
+                             <div>
+                                <p className="text-muted-foreground">Transaction ID:</p>
+                                <p className="text-xs break-all">{selectedTx.id}</p>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
             <Tabs defaultValue="activity" className="mt-8">
                 <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="activity">Administrative Activity</TabsTrigger>
@@ -590,13 +627,13 @@ export default function PlatformFundsPage() {
                            isMobile ? (
                             <div className="p-4 space-y-3 border-t">
                                 {paginatedAdminTransactions.map(tx => (
-                                    <Card key={tx.id}>
+                                    <Card key={tx.id} onClick={() => handleRowClick(tx)}>
                                         <CardContent className="p-4 space-y-2">
                                             <div className="flex justify-between items-start">
                                                 <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
                                                 <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</p>
                                             </div>
-                                            <p className="text-sm">{tx.description}</p>
+                                            <p className="text-sm truncate">{tx.description}</p>
                                             <p className="text-xs text-muted-foreground">{formatDate(tx.createdAt)}</p>
                                         </CardContent>
                                     </Card>
@@ -607,7 +644,12 @@ export default function PlatformFundsPage() {
                                 <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
                                 <TableBody>
                                 {paginatedAdminTransactions?.map(tx => (
-                                    <TableRow key={tx.id}><TableCell>{formatDate(tx.createdAt)}</TableCell><TableCell><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell><TableCell>{tx.description}</TableCell><TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell></TableRow>
+                                    <TableRow key={tx.id} onClick={() => handleRowClick(tx)} className="cursor-pointer">
+                                        <TableCell>{formatDate(tx.createdAt)}</TableCell>
+                                        <TableCell><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell>
+                                        <TableCell className="max-w-xs truncate">{tx.description}</TableCell>
+                                        <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell>
+                                    </TableRow>
                                 ))}
                                 </TableBody>
                             </Table>
@@ -665,3 +707,4 @@ export default function PlatformFundsPage() {
         </div>
     );
 }
+
