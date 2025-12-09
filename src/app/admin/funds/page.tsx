@@ -555,14 +555,16 @@ export default function PlatformFundsPage() {
         const totalAssetValue = assets?.filter(a => a.status === 'Held').reduce((sum, asset) => sum + asset.acquisitionCost, 0) || 0;
 
         let totalClientDebt = 0;
-        let totalInvested = 0; // This is the currently active principal
+        let totalInvested = 0;
         if (deals && repayments) {
             const activeDeals = deals.filter(d => d.status === 'Active');
             for (const deal of activeDeals) {
                 const schedule = generateAmortizationSchedule(deal);
                 const approvedRepaymentsForDeal = repayments.filter(r => r.dealId === deal.id);
                 const paidInstallmentNumbers = approvedRepaymentsForDeal.map(r => r.installmentNumber);
+                
                 const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
+                
                 totalClientDebt += remainingInstallments.reduce((sum, inst) => sum + inst.payment, 0);
                 totalInvested += remainingInstallments.reduce((sum, inst) => sum + inst.principal, 0);
             }
