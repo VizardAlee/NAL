@@ -237,7 +237,7 @@ export default function RepaymentsPage() {
     // Queries for each tab
     const pendingRepaymentsQuery = useMemo(() => firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Pending'), orderBy('lodgedAt', 'asc')) : null, [firestore]);
     const confirmedRepaymentsQuery = useMemo(() => firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Approved'), orderBy('approvedAt', 'desc')) : null, [firestore]);
-    const overdueRepaymentsQuery = useMemo(() => firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Pending'), where('dueDate', '<', Timestamp.now())) : null, [firestore]);
+    const overdueRepaymentsQuery = useMemo(() => firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Pending'), where('dueDate', '!=', null), where('dueDate', '<', Timestamp.now())) : null, [firestore]);
     
     // We need deals and users to enrich the repayment data for all tabs
     const dealsQuery = useMemo(() => firestore ? collection(firestore, 'deals') : null, [firestore]);
