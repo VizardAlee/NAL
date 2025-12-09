@@ -32,7 +32,7 @@ import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 type Transaction = DocumentData & {
-  type: 'PlatformEarning' | 'Zakat' | 'Penalty' | 'Investment' | 'Deposit' | 'Withdrawal' | 'ProfitDistribution';
+  type: 'PlatformEarning' | 'Zakat' | 'Penalty' | 'Investment' | 'Deposit' | 'Withdrawal' | 'ProfitDistribution' | 'Repayment';
   amount: number;
   createdAt: Timestamp;
 };
@@ -152,10 +152,14 @@ export default function ReportsPage() {
     const heldAssets = allAssets.filter(a => a.status === 'Held' && filterUpToDate(a));
     const allTimeAdminTransactions = allAdminTransactions.filter(filterUpToDate);
     const allTimeTransactions = allTransactions.filter(filterUpToDate);
-
+    
     // --- Balance Sheet Calculations (Point-in-time, uses filterUpToDate) ---
     const cashAndEquivalents = allTimeAdminTransactions.reduce((acc, tx) => acc + tx.amount, 0);
-    const grossFinancingPortfolio = activeDeals.reduce((acc, deal) => acc + deal.principal, 0);
+
+    const initialFinancingPortfolio = activeDeals.reduce((acc, deal) => acc + deal.principal, 0);
+    const principalRepaid = allTimeTransactions.filter(t => t.type === 'Repayment').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+    const grossFinancingPortfolio = initialFinancingPortfolio - principalRepaid;
+    
     const totalInvestibleCapital = fundBatches.reduce((acc, batch) => acc + batch.remainingAmount, 0);
     const totalAssetValue = heldAssets.reduce((sum, asset) => sum + asset.acquisitionCost, 0);
     const totalAssets = cashAndEquivalents + grossFinancingPortfolio + totalInvestibleCapital + totalAssetValue;
@@ -502,4 +506,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-

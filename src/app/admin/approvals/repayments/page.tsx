@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, Clock, CalendarCheck, AlertTriangle } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData, Timestamp, runTransaction, doc, writeBatch, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp, runTransaction, doc, writeBatch, orderBy, getDocs, addDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
@@ -43,6 +43,7 @@ type Repayment = DocumentData & {
   lodgedAt: Timestamp;
   approvedAt?: Timestamp;
   dueDate: Timestamp;
+  installmentNumber: number;
 };
 
 type User = {
@@ -284,6 +285,7 @@ export default function RepaymentsPage() {
                 if (!currentInstallment) throw new Error("Could not find matching installment in amortization schedule.");
                 
                 const totalInterestForPeriod = currentInstallment.interest;
+                const principalRepaid = currentInstallment.principal;
 
                 const investmentsForDeal = investments?.filter(inv => inv.dealId === repayment.dealId) || [];
 
@@ -307,9 +309,9 @@ export default function RepaymentsPage() {
                     });
                 }
                 
+                const now = Timestamp.now();
                 // 2. Log platform earning and batch it
                 const platformProfit = totalInterestForPeriod * 0.60;
-                const now = Timestamp.now();
 
                 const platformTxRef = doc(collection(firestore, 'transactions'));
                 transaction.set(platformTxRef, {
@@ -332,7 +334,19 @@ export default function RepaymentsPage() {
                     details: `Profit from ${repayment.dealName}`
                 });
 
-                // 3. Update repayment status
+                // 3. Log principal repayment transaction for record keeping
+                const repaymentTxRef = doc(collection(firestore, 'transactions'));
+                transaction.set(repaymentTxRef, {
+                    userId: repayment.clientId,
+                    dealId: repayment.dealId,
+                    type: 'Repayment',
+                    amount: -principalRepaid,
+                    createdAt: now,
+                    dealName: repayment.dealName
+                });
+
+
+                // 4. Update repayment status
                 const repaymentRef = doc(firestore, 'repayments', repayment.id);
                 transaction.update(repaymentRef, {
                     status: 'Approved',

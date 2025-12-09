@@ -8,6 +8,8 @@ import { z } from 'zod';
 
 async function createNotification(firestore: FirebaseFirestore.Firestore, title: string, message: string, link: string) {
     const adminQuery = await firestore.collection('users').where('role', '==', 'Admin').get();
+    if (adminQuery.empty) return;
+
     const adminIds = adminQuery.docs.map(doc => doc.id);
 
     const batch = firestore.batch();
@@ -79,6 +81,22 @@ export async function lodgePaymentAction(
     const lodgedAt = Timestamp.now();
     const dueDateTimestamp = Timestamp.fromDate(new Date(dueDate));
     
+    // Check if a payment for this installment is already pending or approved
+    const existingRepaymentQuery = await firestore.collection('repayments')
+        .where('dealId', '==', dealId)
+        .where('installmentNumber', '==', installmentNumber)
+        .where('status', 'in', ['Pending', 'Approved'])
+        .limit(1)
+        .get();
+
+    if (!existingRepaymentQuery.empty) {
+        return {
+            success: false,
+            message: 'A payment for this installment is already pending or has been approved.',
+            repayment: null
+        };
+    }
+
     const newRepaymentRef = await firestore.collection('repayments').add({
       dealId,
       clientId: userId,
