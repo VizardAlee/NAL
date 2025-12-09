@@ -119,7 +119,7 @@ export default function ReportsPage() {
 
   const transactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions')) : null, [firestore]);
   const adminTransactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'administrativeTransactions')) : null, [firestore]);
-  const fundBatchesQuery = useMemo(() => firestore ? query(collection(firestore, 'fundBatches')) : null, [firestore]);
+  const allFundBatchesQuery = useMemo(() => firestore ? query(collection(firestore, 'fundBatches')) : null, [firestore]);
   const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals')) : null, [firestore]);
   const assetsQuery = useMemo(() => firestore ? query(collection(firestore, 'assets')) : null, [firestore]);
 
@@ -171,7 +171,6 @@ export default function ReportsPage() {
     const heldAssetValue = heldAssets.reduce((sum, asset) => sum + asset.acquisitionCost, 0);
 
     let grossFinancingReceivable = 0;
-    let totalUnearnedMarkup = 0;
     for (const deal of activeDeals) {
         const schedule = generateAmortizationSchedule(deal);
         const approvedRepayments = transactionsUpToDate.filter(
@@ -182,16 +181,26 @@ export default function ReportsPage() {
         const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
         
         grossFinancingReceivable += remainingInstallments.reduce((sum, inst) => sum + inst.principal, 0);
-        totalUnearnedMarkup += remainingInstallments.reduce((sum, inst) => sum + inst.interest, 0);
     }
     const totalAssets = cashAndEquivalents + grossFinancingReceivable + heldAssetValue;
 
     // LIABILITIES & EQUITY
-    const investorCapital = allTransactions
-        .filter(filterUpToDate)
-        .filter(t => t.userId !== 'platform' && ['Deposit', 'Withdrawal', 'ProfitDistribution', 'Zakat', 'Investment'].includes(t.type))
-        .reduce((sum, tx) => sum + tx.amount, 0);
-    
+    const investorLiability = allTransactions
+      .filter(filterUpToDate)
+      .filter(t => t.userId !== 'platform' && ['Deposit', 'Withdrawal', 'ProfitDistribution', 'Zakat', 'Investment'].includes(t.type))
+      .reduce((sum, tx) => sum + tx.amount, 0);
+
+    let totalUnearnedMarkup = 0;
+    for (const deal of activeDeals) {
+        const schedule = generateAmortizationSchedule(deal);
+        const approvedRepayments = transactionsUpToDate.filter(
+            t => t.dealId === deal.id && t.type === 'Repayment' && t.status === 'Approved'
+        );
+        const paidInstallmentNumbers = approvedRepayments.map(r => r.installmentNumber).filter(n => n !== undefined);
+        const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
+        totalUnearnedMarkup += remainingInstallments.reduce((sum, inst) => sum + inst.interest, 0);
+    }
+
     const unearnedMarkup = totalUnearnedMarkup;
 
     const platformCapitalContributions = allFundBatches
@@ -218,7 +227,7 @@ export default function ReportsPage() {
     
     const platformEquity = retainedEarnings + platformCapitalContributions + platformCapitalInvested;
 
-    const totalLiabilitiesAndEquity = investorCapital + unearnedMarkup + platformEquity;
+    const totalLiabilitiesAndEquity = investorLiability + unearnedMarkup + platformEquity;
     
     const discrepancy = totalAssets - totalLiabilitiesAndEquity;
 
@@ -251,7 +260,7 @@ export default function ReportsPage() {
                 totalAssets,
             },
             liabilities: {
-                investorLiability: investorCapital,
+                investorLiability: investorLiability,
                 unearnedMarkup,
             },
             equity: {
@@ -359,7 +368,7 @@ export default function ReportsPage() {
                         <Card>
                             <CardHeader><CardTitle>Liabilities & Equity</CardTitle></CardHeader>
                             <CardContent className="space-y-2">
-                                <MobileReportRow label="Net Investor Liability" value={financialData?.balanceSheet.liabilities.investorLiability || 0} />
+                                <MobileReportRow label="Investor Liability" value={financialData?.balanceSheet.liabilities.investorLiability || 0} />
                                 <MobileReportRow label="Unearned Markup Revenue" value={financialData?.balanceSheet.liabilities.unearnedMarkup || 0} />
                                 <MobileReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.platformEquity || 0} />
                                 <Separator className="my-2" />
@@ -383,7 +392,7 @@ export default function ReportsPage() {
                                     <ReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
                                     
                                     <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Liabilities & Equity</TableCell></TableRow>
-                                    <ReportRow label="Net Investor Liability" value={financialData?.balanceSheet.liabilities.investorLiability || 0} isSub />
+                                    <ReportRow label="Investor Liability" value={financialData?.balanceSheet.liabilities.investorLiability || 0} isSub />
                                     <ReportRow label="Unearned Markup Revenue" value={financialData?.balanceSheet.liabilities.unearnedMarkup || 0} isSub />
                                     <ReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.platformEquity || 0} isSub />
                                     <ReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
