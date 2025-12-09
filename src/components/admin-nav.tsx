@@ -49,7 +49,7 @@ const menuItems = [
     subItems: [
       { href: "/admin/approvals/deal-requests", label: "Deal Requests", icon: FilePlus, notificationCollection: 'dealRequests' },
       { href: "/admin/approvals/deposits", label: "Deposits", icon: Wallet, notificationCollection: 'depositRequests' },
-      { href: "/admin/approvals/withdrawals", label: "Withdrawals", notificationCollection: 'withdrawalRequests' },
+      { href: "/admin/approvals/withdrawals", label: "Withdrawals", icon: HandCoins, notificationCollection: 'withdrawalRequests' },
       { href: "/admin/approvals/reinvestments", label: "Reinvestments", icon: RefreshCcw, notificationCollection: 'reinvestmentRequests' },
       { href: "/admin/approvals/repayments", label: "Repayments", icon: HandCoins, notificationCollection: 'repayments' },
       { href: "/admin/approvals/terminations", label: "Terminations", icon: ShieldAlert, notificationCollection: 'terminationRequests' },
