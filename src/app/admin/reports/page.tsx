@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -35,10 +34,12 @@ type Transaction = DocumentData & {
   type: 'PlatformEarning' | 'Zakat' | 'Penalty' | 'Investment' | 'Deposit' | 'Withdrawal' | 'ProfitDistribution' | 'Repayment';
   amount: number;
   createdAt: Timestamp;
+  dealId?: string;
+  status?: 'Approved' | 'Pending'; // for repayments
 };
 
 type AdministrativeTransaction = DocumentData & {
-  type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible' | 'AssetSale' | 'AssetAcquisition';
+  type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible' | 'AssetSale' | 'AssetAcquisition' | 'ManagementFee';
   amount: number;
   createdAt: Timestamp;
 };
@@ -50,8 +51,9 @@ type FundBatch = DocumentData & {
 };
 
 type Deal = DocumentData & {
+    id: string;
     principal: number;
-    status: 'Active';
+    status: 'Active' | 'Pending' | 'Completed' | 'Terminated';
     createdAt: Timestamp;
 };
 
@@ -108,17 +110,17 @@ export default function ReportsPage() {
   const transactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions')) : null, [firestore]);
   const adminTransactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'administrativeTransactions')) : null, [firestore]);
   const fundBatchesQuery = useMemo(() => firestore ? query(collection(firestore, 'fundBatches')) : null, [firestore]);
-  const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals'), where('status', '==', 'Active')) : null, [firestore]);
+  const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals')) : null, [firestore]);
   const assetsQuery = useMemo(() => firestore ? query(collection(firestore, 'assets')) : null, [firestore]);
 
 
   const { data: allTransactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
   const { data: allAdminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
   const { data: allFundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
-  const { data: allDeals, loading: activeDealsLoading } = useCollection<Deal>(dealsQuery);
+  const { data: allDeals, loading: allDealsLoading } = useCollection<Deal>(dealsQuery);
   const { data: allAssets, loading: assetsLoading } = useCollection<Asset>(assetsQuery);
   
-  const isLoading = transactionsLoading || adminTransactionsLoading || fundBatchesLoading || activeDealsLoading || assetsLoading;
+  const isLoading = transactionsLoading || adminTransactionsLoading || fundBatchesLoading || allDealsLoading || assetsLoading;
 
   const financialData = useMemo(() => {
     if (isLoading || !allTransactions || !allAdminTransactions || !allFundBatches || !allDeals || !allAssets) {
@@ -147,8 +149,9 @@ export default function ReportsPage() {
         return itemDate <= to;
     }
 
-    const fundBatches = allFundBatches.filter(filterUpToDate); 
-    const activeDeals = allDeals.filter(filterUpToDate);
+    const fundBatches = allFundBatches.filter(filterUpToDate);
+    const activeDeals = allDeals.filter(d => d.status === 'Active' && filterUpToDate(d));
+    const activeDealIds = activeDeals.map(d => d.id);
     const heldAssets = allAssets.filter(a => a.status === 'Held' && filterUpToDate(a));
     const allTimeAdminTransactions = allAdminTransactions.filter(filterUpToDate);
     const allTimeTransactions = allTransactions.filter(filterUpToDate);
@@ -157,8 +160,10 @@ export default function ReportsPage() {
     const cashAndEquivalents = allTimeAdminTransactions.reduce((acc, tx) => acc + tx.amount, 0);
 
     const initialFinancingPortfolio = activeDeals.reduce((acc, deal) => acc + deal.principal, 0);
-    const principalRepaid = allTimeTransactions.filter(t => t.type === 'Repayment').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
-    const grossFinancingPortfolio = initialFinancingPortfolio - principalRepaid;
+    const principalRepaidOnActiveDeals = allTimeTransactions
+        .filter(t => t.type === 'Repayment' && activeDealIds.includes(t.dealId) && t.status === 'Approved')
+        .reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+    const grossFinancingPortfolio = initialFinancingPortfolio - principalRepaidOnActiveDeals;
     
     const totalInvestibleCapital = fundBatches.reduce((acc, batch) => acc + batch.remainingAmount, 0);
     const totalAssetValue = heldAssets.reduce((sum, asset) => sum + asset.acquisitionCost, 0);
@@ -176,23 +181,27 @@ export default function ReportsPage() {
     
     // --- Income Statement Calculations (Flow, uses date filter) ---
     const financingRevenue = transactionsInPeriod.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
+    const managementFeeRevenue = adminTransactionsInPeriod.filter(t => t.type === 'ManagementFee').reduce((acc, tx) => acc + tx.amount, 0);
     const soldAssetsInPeriod = allAssets.filter(a => a.status === 'Sold' && filterByDate(a));
     const gainOnAssetSale = soldAssetsInPeriod.reduce((acc, asset) => acc + ((asset.salePrice || 0) - asset.acquisitionCost), 0);
-    const totalRevenue = financingRevenue + gainOnAssetSale;
+    const totalRevenue = financingRevenue + managementFeeRevenue + gainOnAssetSale;
 
     const totalExpenses = adminTransactionsInPeriod.filter(t => t.type === 'Expense').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
     const netIncome = totalRevenue - totalExpenses;
 
-
     // --- Cash Flow Calculations (Flow, uses date filter) ---
     const netCashFromOperations = netIncome; // Simplified for now
+
     const cashFromInvesting = adminTransactionsInPeriod.filter(tx => tx.type === 'AssetSale').reduce((acc, tx) => acc + tx.amount, 0)
                             - adminTransactionsInPeriod.filter(tx => tx.type === 'AssetAcquisition').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
                             - transactionsInPeriod.filter(tx => tx.type === 'Investment').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
                             
     const cashFromFinancing = transactionsInPeriod.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0)
                             - transactionsInPeriod.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
-                            + adminTransactionsInPeriod.filter(tx => tx.type === 'AdminDeposit').reduce((acc, tx) => acc + tx.amount, 0);
+                            + adminTransactionsInPeriod.filter(tx => tx.type === 'AdminDeposit').reduce((acc, tx) => acc + tx.amount, 0)
+                            + adminTransactionsInPeriod.filter(tx => tx.type === 'TransferFromInvestible').reduce((acc, tx) => acc + tx.amount, 0)
+                            - adminTransactionsInPeriod.filter(tx => tx.type === 'TransferToInvestible').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+
 
     const netCashFlow = netCashFromOperations + cashFromInvesting + cashFromFinancing;
 
@@ -218,6 +227,7 @@ export default function ReportsPage() {
         },
         incomeStatement: {
             financingRevenue,
+            managementFeeRevenue,
             gainOnAssetSale,
             totalRevenue,
             totalExpenses,
@@ -392,12 +402,13 @@ export default function ReportsPage() {
                         </CardHeader>
                         <CardContent className="space-y-2">
                             <MobileReportRow label="Financing Revenue" value={financialData?.incomeStatement.financingRevenue || 0} />
+                            <MobileReportRow label="Management Fee Revenue" value={financialData?.incomeStatement.managementFeeRevenue || 0} />
                             <MobileReportRow label="Gain on Asset Sale" value={financialData?.incomeStatement.gainOnAssetSale || 0} />
                             <Separator className="my-2" />
                             <MobileReportRow label="Total Revenue" value={financialData?.incomeStatement.totalRevenue || 0} isTotal />
                             <MobileReportRow label="Operational Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isNegative />
                              <Separator className="my-2" />
-                            <MobileReportRow label="Net Income" value={financialData?.incomeStatement.netIncome || 0} isTotal isNegative={financialData?.incomeStatement.netIncome < 0}/>
+                            <MobileReportRow label="Net Income" value={financialData?.incomeStatement.netIncome || 0} isTotal isNegative={(financialData?.incomeStatement.netIncome || 0) < 0}/>
                         </CardContent>
                     </Card>
                 ) : (
@@ -409,14 +420,15 @@ export default function ReportsPage() {
                         <CardContent>
                             <Table>
                                 <TableBody>
-                                    <ReportRow label="Financing Revenue" value={financialData?.incomeStatement.financingRevenue || 0} />
+                                    <ReportRow label="Financing Revenue (Platform Share)" value={financialData?.incomeStatement.financingRevenue || 0} />
+                                    <ReportRow label="Management Fee Revenue" value={financialData?.incomeStatement.managementFeeRevenue || 0} />
                                     <ReportRow label="Gain on Asset Sale" value={financialData?.incomeStatement.gainOnAssetSale || 0} />
                                     <ReportRow label="Total Revenue" value={financialData?.incomeStatement.totalRevenue || 0} isTotal />
                                     <TableRow><TableCell colSpan={2}>&nbsp;</TableCell></TableRow>
                                     <ReportRow label="Operational Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isNegative />
                                     <ReportRow label="Total Expenses" value={financialData?.incomeStatement.totalExpenses || 0} isTotal isNegative />
                                     <TableRow><TableCell colSpan={2}><Separator /></TableCell></TableRow>
-                                    <ReportRow label="Net Income" value={financialData?.incomeStatement.netIncome || 0} isTotal />
+                                    <ReportRow label="Net Income" value={financialData?.incomeStatement.netIncome || 0} isTotal isNegative={(financialData?.incomeStatement.netIncome || 0) < 0} />
                                 </TableBody>
                             </Table>
                         </CardContent>
@@ -453,11 +465,11 @@ export default function ReportsPage() {
                             <CardDescription>Simplified view of cash movements.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-2">
-                           <MobileReportRow label="Net Cash from Operations" value={financialData?.cashFlow.netCashFromOperations || 0} isNegative={financialData?.cashFlow.netCashFromOperations < 0} />
-                           <MobileReportRow label="Net Cash from Investing" value={financialData?.cashFlow.cashFromInvesting || 0} isNegative={financialData?.cashFlow.cashFromInvesting < 0} />
-                           <MobileReportRow label="Net Cash from Financing" value={financialData?.cashFlow.cashFromFinancing || 0} isNegative={financialData?.cashFlow.cashFromFinancing < 0} />
+                           <MobileReportRow label="Net Cash from Operations" value={financialData?.cashFlow.netCashFromOperations || 0} isNegative={(financialData?.cashFlow.netCashFromOperations || 0) < 0} />
+                           <MobileReportRow label="Net Cash from Investing" value={financialData?.cashFlow.cashFromInvesting || 0} isNegative={(financialData?.cashFlow.cashFromInvesting || 0) < 0} />
+                           <MobileReportRow label="Net Cash from Financing" value={financialData?.cashFlow.cashFromFinancing || 0} isNegative={(financialData?.cashFlow.cashFromFinancing || 0) < 0} />
                            <Separator className="my-2" />
-                           <MobileReportRow label="Net Change in Cash" value={financialData?.cashFlow.netCashFlow || 0} isTotal isNegative={financialData?.cashFlow.netCashFlow < 0} />
+                           <MobileReportRow label="Net Change in Cash" value={financialData?.cashFlow.netCashFlow || 0} isTotal isNegative={(financialData?.cashFlow.netCashFlow || 0) < 0} />
                         </CardContent>
                     </Card>
                 ) : (
@@ -469,10 +481,10 @@ export default function ReportsPage() {
                         <CardContent>
                             <Table>
                                 <TableBody>
-                                    <ReportRow label="Net Cash from Operations" value={financialData?.cashFlow.netCashFromOperations || 0} />
-                                    <ReportRow label="Net Cash from Investing" value={financialData?.cashFlow.cashFromInvesting || 0} />
-                                    <ReportRow label="Net Cash from Financing" value={financialData?.cashFlow.cashFromFinancing || 0} />
-                                    <ReportRow label="Net Change in Cash" value={financialData?.cashFlow.netCashFlow || 0} isTotal />
+                                    <ReportRow label="Net Cash from Operations" value={financialData?.cashFlow.netCashFromOperations || 0} isNegative={(financialData?.cashFlow.netCashFromOperations || 0) < 0} />
+                                    <ReportRow label="Net Cash from Investing" value={financialData?.cashFlow.cashFromInvesting || 0} isNegative={(financialData?.cashFlow.cashFromInvesting || 0) < 0} />
+                                    <ReportRow label="Net Cash from Financing" value={financialData?.cashFlow.cashFromFinancing || 0} isNegative={(financialData?.cashFlow.cashFromFinancing || 0) < 0} />
+                                    <ReportRow label="Net Change in Cash" value={financialData?.cashFlow.netCashFlow || 0} isTotal isNegative={(financialData?.cashFlow.netCashFlow || 0) < 0} />
                                 </TableBody>
                             </Table>
                         </CardContent>
@@ -506,3 +518,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    
