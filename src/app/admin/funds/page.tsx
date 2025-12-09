@@ -526,47 +526,47 @@ export default function PlatformFundsPage() {
     const platformFundBatchesQuery = useMemo(() => firestore ? query(collection(firestore, 'fundBatches'), where('sourceId', '==', 'platform')) : null, [firestore]);
     const adminTransactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'administrativeTransactions'), orderBy('createdAt', 'desc')) : null, [firestore]);
     const zakatTransactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions'), where('type', 'in', ['Zakat', 'Penalty'])) : null, [firestore]);
-    const allInvestmentsQuery = useMemo(() => firestore ? collection(firestore, 'investments') : null, [firestore]);
     const allFundBatchesQuery = useMemo(() => firestore ? collection(firestore, 'fundBatches') : null, [firestore]);
     const assetsQuery = useMemo(() => firestore ? query(collection(firestore, 'assets'), orderBy('acquisitionDate', 'desc')) : null, [firestore]);
-    const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals'), where('status', '==', 'Active')) : null, [firestore]);
+    const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals')) : null, [firestore]);
     const repaymentsQuery = useMemo(() => firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Approved')) : null, [firestore]);
 
 
     const { data: platformFundBatches, loading: platformBatchesLoading } = useCollection<PlatformFundBatch>(platformFundBatchesQuery);
     const { data: adminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
     const { data: zakatTransactions, loading: zakatLoading } = useCollection<GenericTransaction>(zakatTransactionsQuery);
-    const { data: allInvestments, loading: allInvestmentsLoading } = useCollection<Investment>(allInvestmentsQuery);
     const { data: allFundBatches, loading: allFundBatchesLoading } = useCollection<FundBatch>(allFundBatchesQuery);
     const { data: assets, loading: assetsLoading } = useCollection<Asset>(assetsQuery);
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
     const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery);
 
 
-    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allInvestmentsLoading || allFundBatchesLoading || assetsLoading || dealsLoading || repaymentsLoading;
+    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allFundBatchesLoading || assetsLoading || dealsLoading || repaymentsLoading;
 
     const metrics = useMemo(() => {
         const investibleCapital = platformFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
         const administrativeBalance = adminTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
         const zakatPool = zakatTransactions?.reduce((sum, tx) => sum + Math.abs(tx.amount), 0) || 0;
-        const totalInvested = allInvestments?.reduce((sum, inv) => sum + inv.amount, 0) || 0;
         const totalInvestiblePool = allFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
         const totalAssetValue = assets?.filter(a => a.status === 'Held').reduce((sum, asset) => sum + asset.acquisitionCost, 0) || 0;
 
         let totalClientDebt = 0;
+        let totalInvested = 0; // This is the currently active principal
         if (deals && repayments) {
-            for (const deal of deals) {
+            const activeDeals = deals.filter(d => d.status === 'Active');
+            for (const deal of activeDeals) {
                 const schedule = generateAmortizationSchedule(deal);
                 const approvedRepaymentsForDeal = repayments.filter(r => r.dealId === deal.id);
                 const paidInstallmentNumbers = approvedRepaymentsForDeal.map(r => r.installmentNumber);
                 const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
                 totalClientDebt += remainingInstallments.reduce((sum, inst) => sum + inst.payment, 0);
+                totalInvested += remainingInstallments.reduce((sum, inst) => sum + inst.principal, 0);
             }
         }
 
 
         return { investibleCapital, administrativeBalance, zakatPool, totalInvested, totalInvestiblePool, totalAssetValue, totalClientDebt };
-    }, [platformFundBatches, adminTransactions, zakatTransactions, allInvestments, allFundBatches, assets, deals, repayments]);
+    }, [platformFundBatches, adminTransactions, zakatTransactions, allFundBatches, assets, deals, repayments]);
 
     const paginatedAdminTransactions = useMemo(() => {
         if (!adminTransactions) return [];
@@ -590,7 +590,7 @@ export default function PlatformFundsPage() {
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                  <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Investible Pool</CardTitle><Library className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalInvestiblePool)}</div>}<p className="text-xs text-muted-foreground">Total available capital from all sources.</p></CardContent></Card>
-                 <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Capital Invested</CardTitle><Landmark className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalInvested)}</div>}<p className="text-xs text-muted-foreground">Total amount invested in active deals.</p></CardContent></Card>
+                 <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Capital Invested</CardTitle><Landmark className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalInvested)}</div>}<p className="text-xs text-muted-foreground">Total outstanding principal in active deals.</p></CardContent></Card>
                  <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Client Debt</CardTitle><FileText className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalClientDebt)}</div>}<p className="text-xs text-muted-foreground">Total outstanding on active deals.</p></CardContent></Card>
                  <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Administrative Balance</CardTitle><Wallet className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.administrativeBalance)}</div>}<p className="text-xs text-muted-foreground">Operational funds for expenses.</p></CardContent></Card>
             </div>
