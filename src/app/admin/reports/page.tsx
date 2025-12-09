@@ -166,12 +166,12 @@ export default function ReportsPage() {
 
     const transactionsInPeriod = allTransactions.filter(filterByDateRange);
     const adminTransactionsInPeriod = allAdminTransactions.filter(filterByDateRange);
+    const transactionsUpToDate = allTransactions.filter(filterUpToDate);
 
     const activeDeals = allDeals.filter(d => d.status === 'Active' && filterUpToDate(d));
     const heldAssets = allAssets.filter(a => a.status === 'Held' && filterUpToDate(a));
     const adminTransactionsUpToDate = allAdminTransactions.filter(filterUpToDate);
     const fundBatchesUpToDate = allFundBatches.filter(filterUpToDate);
-    const transactionsUpToDate = allTransactions.filter(filterUpToDate);
 
     
     // --- BALANCE SHEET (POINT-IN-TIME SNAPSHOT) ---
@@ -202,12 +202,8 @@ export default function ReportsPage() {
 
     // LIABILITIES & EQUITY
     const investorFundBatches = fundBatchesUpToDate.filter(b => b.sourceId !== 'platform');
-    const investorCashLiability = investorFundBatches.reduce((sum, batch) => sum + batch.remainingAmount, 0);
+    const investorUninvestedCapital = investorFundBatches.reduce((sum, batch) => sum + batch.remainingAmount, 0);
 
-    const investmentsByInvestors = allInvestments.filter(inv => inv.sourceId !== 'platform');
-    const totalInvestedByInvestors = investmentsByInvestors.reduce((sum, inv) => sum + inv.amount, 0);
-    
-    // Total principal is divided based on initial investment proportions
     let principalPayableToInvestors = 0;
     let principalPayableToPlatform = 0;
     for (const deal of activeDeals) {
@@ -231,19 +227,19 @@ export default function ReportsPage() {
         }
     }
 
-    const unearnedMarkupPayableToInvestors = unearnedMarkupRevenue * 0.40;
+    const markupPayableToInvestors = unearnedMarkupRevenue * 0.40;
     const unearnedPlatformMarkup = unearnedMarkupRevenue * 0.60;
     
     const platformFundBatches = fundBatchesUpToDate.filter(b => b.sourceId === 'platform');
-    const platformCash = platformFundBatches.reduce((sum, batch) => sum + batch.remainingAmount, 0);
+    const platformUninvestedCapital = platformFundBatches.reduce((sum, batch) => sum + batch.remainingAmount, 0);
     
     const retainedEarnings = adminTransactionsUpToDate.filter(t => t.type === 'ManagementFee' || t.type === 'AssetSale').reduce((sum, tx) => sum + tx.amount, 0)
                            + transactionsUpToDate.filter(t => t.type === 'PlatformEarning').reduce((sum, tx) => sum + tx.amount, 0)
                            - adminTransactionsUpToDate.filter(t => t.type === 'Expense' || t.type === 'AssetAcquisition').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
-    const platformEquity = platformCash + principalPayableToPlatform + unearnedPlatformMarkup + retainedEarnings;
     
-    const totalLiabilitiesAndEquity = investorCashLiability + principalPayableToInvestors + unearnedMarkupPayableToInvestors + platformEquity;
+    const totalLiabilitiesAndEquity = investorUninvestedCapital + principalPayableToInvestors + markupPayableToInvestors
+                                    + platformUninvestedCapital + principalPayableToPlatform + unearnedPlatformMarkup + retainedEarnings;
     
     const discrepancy = totalAssets - totalLiabilitiesAndEquity;
 
@@ -277,12 +273,15 @@ export default function ReportsPage() {
                 totalAssets,
             },
             liabilities: {
-                investorCashLiability,
+                investorUninvestedCapital,
                 principalPayableToInvestors,
-                markupPayableToInvestors: unearnedMarkupPayableToInvestors,
+                markupPayableToInvestors,
             },
             equity: {
-                platformEquity,
+                platformUninvestedCapital,
+                principalPayableToPlatform,
+                unearnedPlatformMarkup,
+                retainedEarnings,
             },
             totalLiabilitiesAndEquity,
             discrepancy,
@@ -386,10 +385,16 @@ export default function ReportsPage() {
                         <Card>
                             <CardHeader><CardTitle>Liabilities & Equity</CardTitle></CardHeader>
                             <CardContent className="space-y-2">
-                                <MobileReportRow label="Investor Uninvested Capital" value={financialData?.balanceSheet.liabilities.investorCashLiability || 0} />
-                                <MobileReportRow label="Principal Payable to Investors" value={financialData?.balanceSheet.liabilities.principalPayableToInvestors || 0} />
-                                <MobileReportRow label="Markup Payable to Investors" value={financialData?.balanceSheet.liabilities.markupPayableToInvestors || 0} />
-                                <MobileReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.platformEquity || 0} />
+                                <p className="font-medium text-sm">Investor Liabilities</p>
+                                <MobileReportRow label="Uninvested Capital" value={financialData?.balanceSheet.liabilities.investorUninvestedCapital || 0} />
+                                <MobileReportRow label="Principal Payable" value={financialData?.balanceSheet.liabilities.principalPayableToInvestors || 0} />
+                                <MobileReportRow label="Markup Payable" value={financialData?.balanceSheet.liabilities.markupPayableToInvestors || 0} />
+                                <Separator className="my-2"/>
+                                <p className="font-medium text-sm">Platform Equity</p>
+                                <MobileReportRow label="Uninvested Capital" value={financialData?.balanceSheet.equity.platformUninvestedCapital || 0} />
+                                <MobileReportRow label="Principal in Deals" value={financialData?.balanceSheet.equity.principalPayableToPlatform || 0} />
+                                <MobileReportRow label="Unearned Markup" value={financialData?.balanceSheet.equity.unearnedPlatformMarkup || 0} />
+                                <MobileReportRow label="Retained Earnings" value={financialData?.balanceSheet.equity.retainedEarnings || 0} />
                                 <Separator className="my-2" />
                                 <MobileReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
                             </CardContent>
@@ -411,10 +416,17 @@ export default function ReportsPage() {
                                     <ReportRow label="Total Assets" value={financialData?.balanceSheet.assets.totalAssets || 0} isTotal />
                                     
                                     <TableRow className="font-semibold text-lg bg-muted/50"><TableCell colSpan={2}>Liabilities & Equity</TableCell></TableRow>
-                                    <ReportRow label="Investor Capital (Uninvested)" value={financialData?.balanceSheet.liabilities.investorCashLiability || 0} isSub />
-                                    <ReportRow label="Principal Payable to Investors" value={financialData?.balanceSheet.liabilities.principalPayableToInvestors || 0} isSub />
-                                    <ReportRow label="Markup Payable to Investors" value={financialData?.balanceSheet.liabilities.markupPayableToInvestors || 0} isSub />
-                                    <ReportRow label="Platform Equity" value={financialData?.balanceSheet.equity.platformEquity || 0} isSub />
+                                    <TableRow className="font-medium text-base"><TableCell colSpan={2}>Investor Liabilities</TableCell></TableRow>
+                                    <ReportRow label="Uninvested Capital" value={financialData?.balanceSheet.liabilities.investorUninvestedCapital || 0} isSub />
+                                    <ReportRow label="Principal Payable" value={financialData?.balanceSheet.liabilities.principalPayableToInvestors || 0} isSub />
+                                    <ReportRow label="Markup Payable" value={financialData?.balanceSheet.liabilities.markupPayableToInvestors || 0} isSub />
+                                    
+                                    <TableRow className="font-medium text-base"><TableCell colSpan={2}>Platform Equity</TableCell></TableRow>
+                                    <ReportRow label="Uninvested Capital" value={financialData?.balanceSheet.equity.platformUninvestedCapital || 0} isSub />
+                                    <ReportRow label="Principal in Deals" value={financialData?.balanceSheet.equity.principalPayableToPlatform || 0} isSub />
+                                    <ReportRow label="Unearned Markup" value={financialData?.balanceSheet.equity.unearnedPlatformMarkup || 0} isSub />
+                                    <ReportRow label="Retained Earnings" value={financialData?.balanceSheet.equity.retainedEarnings || 0} isSub />
+
                                     <ReportRow label="Total Liabilities & Equity" value={financialData?.balanceSheet.totalLiabilitiesAndEquity || 0} isTotal />
                                 </TableBody>
                             </Table>
