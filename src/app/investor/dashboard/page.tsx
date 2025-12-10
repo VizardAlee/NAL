@@ -316,7 +316,7 @@ export default function InvestorDashboard() {
   const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || firstDepositLoading;
 
   const { longTermProfits, withdrawableBalance, returnedPrincipal } = useMemo(() => {
-    if (!allTransactions || !investments || !deals) {
+    if (!allTransactions || !deals) {
         return { longTermProfits: 0, withdrawableBalance: 0, returnedPrincipal: 0 };
     }
 
@@ -348,7 +348,7 @@ export default function InvestorDashboard() {
         withdrawableBalance: totalShortTermProfit - totalWithdrawnFromProfits,
         returnedPrincipal: _returnedPrincipal
     };
-}, [allTransactions, investments, deals, fundBatches]);
+}, [allTransactions, deals, fundBatches]);
 
 
   const financialMetrics = useMemo(() => {
@@ -525,7 +525,7 @@ export default function InvestorDashboard() {
                     variant="outline" 
                     size="sm" 
                     className="w-full mt-1" 
-                    disabled={withdrawalRules.isLocked || withdrawalRules.cooldownActive || withdrawalRules.maxWithdrawal <= 0}
+                    disabled={withdrawableBalance <= 0}
                 >
                   <Download className="mr-2 h-4 w-4"/>
                   Withdraw Profits
@@ -535,10 +535,10 @@ export default function InvestorDashboard() {
                 <DialogHeader>
                   <DialogTitle>Request Fund Withdrawal</DialogTitle>
                 </DialogHeader>
-                <WithdrawForm portfolioValue={withdrawalRules.maxWithdrawal} onWithdrawalRequested={handleWithdrawalSuccess} />
+                <WithdrawForm portfolioValue={withdrawableBalance} onWithdrawalRequested={handleWithdrawalSuccess} />
               </DialogContent>
             </Dialog>
-            {user && longTermProfits <= 0 && <ReinvestButton balance={withdrawableBalance} user={user} />}
+            {user && <ReinvestButton balance={withdrawableBalance} user={user} />}
              {withdrawalRules.isLocked && <p className="text-xs text-destructive mt-1">Long-term profits are locked for 1 year.</p>}
              {withdrawalRules.cooldownActive && <p className="text-xs text-destructive mt-1">Next withdrawal available in {90 - differenceInDays(new Date(), userProfile!.lastWithdrawalDate!.toDate())} days.</p>}
           </CardContent>
@@ -773,3 +773,5 @@ export default function InvestorDashboard() {
     </div>
   );
 }
+
+    
