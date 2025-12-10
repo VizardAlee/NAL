@@ -133,7 +133,12 @@ export default function InvestorLayout({
                 </Link>
                 <div className="flex-1" />
                 <nav className="flex items-center gap-2 text-sm font-medium">
-                    {/* Analyzer link removed */}
+                    <Button variant="ghost" asChild>
+                        <Link href="/app/analyzer">
+                            <FlaskConical className="h-4 w-4 mr-2" />
+                            Analyzer
+                        </Link>
+                    </Button>
                 </nav>
                 <ThemeToggle />
                 <MessagesLink basePath="/investor" />
