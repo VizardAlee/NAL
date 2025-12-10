@@ -38,7 +38,8 @@ service cloud.firestore {
       allow create: if request.auth != null;
 
       // Only the user themself or an Admin can update a user document.
-      allow update: if isOwner(userId) || isAdmin();
+      // FCM tokens can be written by the owner of the document.
+      allow update: if (isOwner(userId) && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phoneNumber']))) || isAdmin();
 
       // Only admins can delete users.
       allow delete: if isAdmin();
@@ -205,5 +206,3 @@ service cloud.firestore {
     }
   }
 }
-
-    

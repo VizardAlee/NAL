@@ -8,6 +8,7 @@ import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import React, { useEffect } from 'react';
 import { CompanyLogoProvider, useCompanyLogo } from '@/components/company-logo-provider';
+import { NotificationProvider } from '@/components/notification-provider';
 
 
 // Metadata cannot be exported from a client component,
@@ -55,8 +56,10 @@ export default function RootLayout({
         >
           <FirebaseClientProvider>
             <CompanyLogoProvider>
-              <Favicon />
-              {children}
+              <NotificationProvider>
+                <Favicon />
+                {children}
+              </NotificationProvider>
             </CompanyLogoProvider>
           </FirebaseClientProvider>
           <Toaster />

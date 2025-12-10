@@ -16,21 +16,49 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { Loader2 } from 'lucide-react';
 import { addDoc, collection, serverTimestamp, writeBatch, doc, getDocs, query, where } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { FirebaseError } from 'firebase/app';
+import { notifyAdmins } from '@/app/common/actions/notification-actions';
 
 type WithdrawFormProps = {
   portfolioValue: number;
   onWithdrawalRequested: () => void;
 };
 
+// This server action should be in a separate file, but for simplicity here.
+async function requestWithdrawalAction(userId: string, userName: string, amount: number) {
+    'use server';
+    try {
+        const firestore = (await import('@/firebase/admin-app')).adminDb;
+        
+        await firestore.collection('withdrawalRequests').add({
+            investorId: userId,
+            investorName: userName,
+            amount,
+            status: 'Pending',
+            requestedAt: serverTimestamp(),
+        });
+        
+        const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+        await notifyAdmins(
+            'Withdrawal Request',
+            `${userName} requested a withdrawal of ${formattedAmount}.`,
+            '/admin/approvals/withdrawals'
+        );
+        
+        return { success: true, message: `Your request to withdraw ${formattedAmount} has been submitted.` };
+    } catch(error) {
+        return { success: false, message: "Failed to submit withdrawal request." };
+    }
+}
+
+
 export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: WithdrawFormProps) {
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
-  const firestore = useFirestore();
+  const [isPending, startTransition] = useTransition();
   const { user } = useUser();
 
   const formSchema = z.object({
@@ -48,62 +76,28 @@ export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: Withdraw
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    setIsLoading(true);
-    if (!firestore || !user) {
+    
+    if (!user || !user.displayName) {
       toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in.' });
-      setIsLoading(false);
       return;
     }
-
-    try {
-      const batch = writeBatch(firestore);
-
-      const withdrawalRequestsCollection = collection(firestore, 'withdrawalRequests');
-      const withdrawalRef = doc(withdrawalRequestsCollection);
-      batch.set(withdrawalRef, {
-        investorId: user.uid,
-        investorName: user.displayName || 'Unknown Investor',
-        amount: values.amount,
-        status: 'Pending',
-        requestedAt: serverTimestamp(),
-      });
-
-      const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(values.amount);
-      
-      const adminQuery = await getDocs(query(collection(firestore, 'users'), where('role', '==', 'Admin')));
-      adminQuery.forEach(adminDoc => {
-          const notificationRef = doc(collection(firestore, 'notifications'));
-          batch.set(notificationRef, {
-              recipientId: adminDoc.id,
-              title: "Withdrawal Request",
-              message: `${user.displayName || 'An investor'} requested a withdrawal of ${formattedAmount}.`,
-              link: "/admin/approvals/withdrawals",
-              read: false,
-              createdAt: serverTimestamp()
-          });
-      });
-
-
-      await batch.commit();
-
-
-      toast({
-        title: 'Withdrawal Request Submitted',
-        description: `Your request to withdraw ${formattedAmount} has been submitted for approval.`,
-      });
-      onWithdrawalRequested();
-    } catch (error) {
-      console.error('Withdrawal Request Error:', error);
-      let errorMessage = 'An unknown error occurred.';
-      if (error instanceof FirebaseError) {
-        errorMessage = `An unexpected Firebase error occurred: ${error.message}`;
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-      toast({ variant: 'destructive', title: 'Request Failed', description: errorMessage });
-    } finally {
-      setIsLoading(false);
-    }
+    
+    startTransition(async () => {
+        const result = await requestWithdrawalAction(user.uid, user.displayName!, values.amount);
+        if (result.success) {
+            toast({
+                title: 'Withdrawal Request Submitted',
+                description: result.message,
+            });
+            onWithdrawalRequested();
+        } else {
+             toast({
+                variant: 'destructive',
+                title: 'Request Failed',
+                description: result.message,
+            });
+        }
+    });
   }
 
   return (
@@ -128,8 +122,8 @@ export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: Withdraw
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full" disabled={isLoading || portfolioValue <= 0}>
-          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button type="submit" className="w-full" disabled={isPending || portfolioValue <= 0}>
+          {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Request Withdrawal
         </Button>
       </form>

@@ -28,6 +28,11 @@
           "type": "string",
           "format": "date-time",
           "description": "The timestamp of the user's last Zakat payment."
+        },
+        "fcmTokens": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Array of Firebase Cloud Messaging tokens for push notifications."
         }
       },
       "required": ["name", "email", "role"]

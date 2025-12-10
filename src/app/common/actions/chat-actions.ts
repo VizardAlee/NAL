@@ -5,6 +5,8 @@ import { adminDb } from '@/firebase/admin-app';
 import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { notifyAdmins, notifyUser } from './notification-actions';
+
 
 const requestChatSchema = z.object({
   userId: z.string().min(1),
@@ -37,23 +39,11 @@ export async function requestChatWithAdmin(input: z.infer<typeof requestChatSche
       requestedAt: Timestamp.now(),
     });
 
-    const adminQuery = await adminDb.collection('users').where('role', '==', 'Admin').get();
-    const adminIds = adminQuery.docs.map(doc => doc.id);
-    const batch = adminDb.batch();
-
-    for (const adminId of adminIds) {
-        const notificationRef = adminDb.collection('notifications').doc();
-        batch.set(notificationRef, {
-            recipientId: adminId,
-            title: 'New Chat Request',
-            message: `${userName} (${userRole}) has requested a chat.`,
-            link: '/admin/approvals/chat-requests',
-            read: false,
-            createdAt: Timestamp.now(),
-        });
-    }
-    await batch.commit();
-
+    await notifyAdmins(
+        'New Chat Request',
+        `${userName} (${userRole}) has requested a chat.`,
+        '/admin/approvals/chat-requests'
+    );
 
     revalidatePath('/admin/approvals/chat-requests');
 
@@ -128,15 +118,13 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
       readBy: [senderId],
     });
 
-    // 3. Create a notification for the recipient(s)
+    await batch.commit();
+
+    // 3. Create a notification for the recipient(s) - This runs after the batch commit
     const senderDoc = await firestore.collection('users').doc(senderId).get();
     const senderName = senderDoc.data()?.name || 'A user';
     
-    const participantIds = Array.isArray(conversationData.participantIds) 
-      ? conversationData.participantIds 
-      : [];
-    
-    const recipients = [...new Set(participantIds.filter(id => id !== senderId))];
+    const recipients = conversationData.participantIds.filter((id: string) => id !== senderId);
     
     for (const recipientId of recipients) {
         const recipientDoc = await firestore.collection('users').doc(recipientId).get();
@@ -151,18 +139,13 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
             link = `/client/messages/${conversationId}`;
         }
 
-        const notificationRef = firestore.collection('notifications').doc();
-        batch.set(notificationRef, {
-            title: `New Message from ${senderName}`,
-            message: lastMessage,
-            link,
-            recipientId, 
-            read: false,
-            createdAt: FieldValue.serverTimestamp(),
-        });
+        await notifyUser(
+            recipientId,
+            `New Message from ${senderName}`,
+            lastMessage,
+            link
+        );
     }
-
-    await batch.commit();
 
     return { success: true, message: 'Message sent.' };
   } catch (error: any) {

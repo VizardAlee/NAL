@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Settings, Image as ImageIcon, Loader2, HandCoins, Landmark } from "lucide-react";
+import { Settings, Image as ImageIcon, Loader2, HandCoins, Landmark, Bell } from "lucide-react";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { setLogoAction } from "./logo-actions";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { UpdateProfileForm } from "@/components/update-profile-form";
 import { setBankDetailsAction } from './bank-details-actions';
+import { useNotification } from "@/components/notification-provider";
 
 function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoading: boolean }) {
     const { toast } = useToast();
@@ -205,6 +206,32 @@ function CompanyLogoForm() {
     )
 }
 
+function NotificationSettingsCard() {
+    const { permission, requestPermission, isSubscribing } = useNotification();
+
+    return (
+         <Card>
+            <CardHeader>
+                <CardTitle>Browser Notifications</CardTitle>
+                <CardDescription>Receive push notifications for important events directly in your browser.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {permission === 'granted' ? (
+                    <p className="text-sm text-green-600">You have enabled browser notifications.</p>
+                ) : (
+                    <Button onClick={requestPermission} disabled={isSubscribing || permission === 'denied'}>
+                        {isSubscribing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Bell className="mr-2 h-4 w-4" />}
+                        {permission === 'denied' ? 'Notifications Blocked' : 'Enable Notifications'}
+                    </Button>
+                )}
+                 {permission === 'denied' && (
+                    <p className="text-xs text-muted-foreground mt-2">You have blocked notifications. To enable them, you need to go to your browser's site settings.</p>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
+
 export default function SettingsPage() {
   const firestore = useFirestore();
   
@@ -223,6 +250,7 @@ export default function SettingsPage() {
         />
         <div className="space-y-6">
             <UpdateProfileForm />
+            <NotificationSettingsCard />
             <CompanyLogoForm />
             <BankDetailsForm currentDetails={bankDetails} isLoading={bankDetailsLoading} />
             <NisabForm currentNisab={zakatSettings?.nisab || 0} isLoading={zakatLoading} />

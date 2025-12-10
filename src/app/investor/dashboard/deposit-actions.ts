@@ -5,25 +5,7 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { initializeFirebase } from '@/firebase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-
-async function createNotification(firestore: FirebaseFirestore.Firestore, title: string, message: string, link: string) {
-    const adminQuery = await firestore.collection('users').where('role', '==', 'Admin').get();
-    const adminIds = adminQuery.docs.map(doc => doc.id);
-
-    const batch = firestore.batch();
-    for (const adminId of adminIds) {
-        const notificationRef = firestore.collection('notifications').doc();
-        batch.set(notificationRef, {
-            recipientId: adminId,
-            title,
-            message,
-            link,
-            read: false,
-            createdAt: Timestamp.now(),
-        });
-    }
-    await batch.commit();
-}
+import { notifyAdmins } from '@/app/common/actions/notification-actions';
 
 const depositSchema = z.object({
   amount: z.coerce.number().positive("Amount must be a positive number."),
@@ -56,8 +38,7 @@ export async function requestDepositAction(input: { amount: number; userId: stri
     });
 
     const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
-    await createNotification(
-        firestore,
+    await notifyAdmins(
         'Deposit Request',
         `${userName} requested to deposit ${formattedAmount}.`,
         '/admin/approvals/deposits'

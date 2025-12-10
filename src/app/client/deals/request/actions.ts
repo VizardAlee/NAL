@@ -5,6 +5,7 @@ import { adminDb } from '@/firebase/admin-app';
 import { Timestamp } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { notifyAdmins } from '@/app/common/actions/notification-actions';
 
 const requestDealSchema = z.object({
   dealName: z.string().min(3),
@@ -34,23 +35,11 @@ export async function requestDealAction(input: z.infer<typeof requestDealSchema>
         };
         await adminDb.collection('dealRequests').add(dealRequestData);
 
-        // Create a notification for all admins
-        const adminQuery = await adminDb.collection('users').where('role', '==', 'Admin').get();
-        const adminIds = adminQuery.docs.map(doc => doc.id);
-
-        const batch = adminDb.batch();
-        for (const adminId of adminIds) {
-            const notificationRef = adminDb.collection('notifications').doc();
-            batch.set(notificationRef, {
-                recipientId: adminId,
-                title: 'New Deal Request',
-                message: `${validated.data.clientName} has requested a new deal: "${validated.data.dealName}"`,
-                link: '/admin/approvals/deal-requests',
-                read: false,
-                createdAt: Timestamp.now(),
-            });
-        }
-        await batch.commit();
+        await notifyAdmins(
+            'New Deal Request',
+            `${validated.data.clientName} has requested a new deal: "${validated.data.dealName}"`,
+            '/admin/approvals/deal-requests'
+        );
         
         revalidatePath('/client/dashboard');
         revalidatePath('/admin/approvals/deal-requests');
