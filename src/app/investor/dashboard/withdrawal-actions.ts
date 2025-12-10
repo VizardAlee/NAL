@@ -3,7 +3,7 @@
 
 import { notifyAdmins } from '@/app/common/actions/notification-actions';
 import { adminDb } from '@/firebase/admin-app';
-import { serverTimestamp } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
@@ -33,7 +33,7 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
             investorName: userName,
             amount,
             status: 'Pending',
-            requestedAt: serverTimestamp(),
+            requestedAt: FieldValue.serverTimestamp(),
         });
         
         const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
@@ -81,7 +81,7 @@ export async function reinvestAction(input: { amount: number; userId: string, us
       investorName: userName,
       amount: amount,
       status: 'Pending',
-      requestedAt: serverTimestamp(),
+      requestedAt: FieldValue.serverTimestamp(),
     });
 
     const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
