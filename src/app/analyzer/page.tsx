@@ -1,4 +1,3 @@
-
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -7,28 +6,23 @@ import { AnalyzerForm } from "./analyzer-form";
 import { ViewPageNav } from "@/components/view-page-nav";
 import { Suspense } from 'react';
 import { useUser } from '@/firebase';
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 function DynamicNav() {
+  const router = useRouter();
   const { user } = useUser();
   if (!user) return null;
 
-  // Since this is the public analyzer, we determine the correct home path based on role.
-  let homePath = '/';
-  if (user) {
-    switch ((user as any).role) {
-      case 'Admin':
-        homePath = '/admin/dashboard';
-        break;
-      case 'Investor':
-        homePath = '/investor/dashboard';
-        break;
-      case 'Client':
-        homePath = '/client/dashboard';
-        break;
-    }
-  }
-  
-  return <ViewPageNav homePath={homePath} />;
+  // Since we can't reliably get the role on the client,
+  // a simple "Back" button is more robust for this shared page.
+  return (
+    <Button variant="outline" size="sm" onClick={() => router.back()}>
+      <ArrowLeft className="mr-2 h-4 w-4" />
+      Back
+    </Button>
+  );
 }
 
 
