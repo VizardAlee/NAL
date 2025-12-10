@@ -18,43 +18,13 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useTransition } from 'react';
 import { Loader2 } from 'lucide-react';
-import { addDoc, collection, serverTimestamp, writeBatch, doc, getDocs, query, where } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
-import { FirebaseError } from 'firebase/app';
-import { notifyAdmins } from '@/app/common/actions/notification-actions';
+import { useUser } from '@/firebase';
+import { requestWithdrawalAction } from './withdrawal-actions';
 
 type WithdrawFormProps = {
   portfolioValue: number;
   onWithdrawalRequested: () => void;
 };
-
-// This server action should be in a separate file, but for simplicity here.
-async function requestWithdrawalAction(userId: string, userName: string, amount: number) {
-    'use server';
-    try {
-        const firestore = (await import('@/firebase/admin-app')).adminDb;
-        
-        await firestore.collection('withdrawalRequests').add({
-            investorId: userId,
-            investorName: userName,
-            amount,
-            status: 'Pending',
-            requestedAt: serverTimestamp(),
-        });
-        
-        const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
-        await notifyAdmins(
-            'Withdrawal Request',
-            `${userName} requested a withdrawal of ${formattedAmount}.`,
-            '/admin/approvals/withdrawals'
-        );
-        
-        return { success: true, message: `Your request to withdraw ${formattedAmount} has been submitted.` };
-    } catch(error) {
-        return { success: false, message: "Failed to submit withdrawal request." };
-    }
-}
-
 
 export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: WithdrawFormProps) {
   const { toast } = useToast();
