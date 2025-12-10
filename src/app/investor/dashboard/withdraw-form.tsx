@@ -2,7 +2,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, useFormState } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { useEffect, useActionState } from 'react';
+import { useEffect, useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { Loader2 } from 'lucide-react';
 import { useUser } from '@/firebase';
@@ -48,6 +48,9 @@ export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: Wit
   const { toast } = useToast();
   const { user } = useUser();
   const [state, formAction] = useActionState(requestWithdrawalAction, { success: false, message: '' });
+  const [toastShown, setToastShown] = useState(false);
+  const { pending } = useFormStatus();
+
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema.refine(data => data.amount <= withdrawableBalance, {
@@ -60,7 +63,7 @@ export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: Wit
   });
 
   useEffect(() => {
-    if (state.message) {
+    if (state.message && !toastShown) {
       if (state.success) {
         toast({
           title: 'Withdrawal Request Submitted',
@@ -74,8 +77,15 @@ export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: Wit
           description: state.message,
         });
       }
+      setToastShown(true);
     }
-  }, [state, toast, onWithdrawalRequested]);
+  }, [state, toast, onWithdrawalRequested, toastShown]);
+  
+  useEffect(() => {
+    if (!pending) {
+      setToastShown(false);
+    }
+  }, [pending]);
 
   return (
     <Form {...form}>
