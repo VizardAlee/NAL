@@ -4,9 +4,9 @@
 import { PageHeader } from "@/components/page-header";
 import { FlaskConical } from "lucide-react";
 import { AnalyzerForm } from "./analyzer-form";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function AnalyzerPage() {
   const router = useRouter();
