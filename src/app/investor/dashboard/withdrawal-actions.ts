@@ -47,7 +47,7 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
         
         return { success: true, message: `Your request to withdraw ${formattedAmount} has been submitted.` };
     } catch(error) {
-        console.error("WITHDRAWAL REQUEST ACTION ERROR", error);
+        console.error("WITHDRAWAL REQUEST ACTION ERROR:", error);
         return { success: false, message: "Failed to submit withdrawal request." };
     }
 }
