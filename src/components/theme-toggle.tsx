@@ -13,7 +13,22 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export function ThemeToggle() {
+  const [mounted, setMounted] = React.useState(false)
   const { setTheme } = useTheme()
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    // Render a placeholder or nothing on the server
+    // and during the initial client mount.
+    return (
+        <Button variant="ghost" size="icon" className="rounded-full h-8 w-8" disabled>
+            <Sun className="h-[1.2rem] w-[1.2rem]" />
+        </Button>
+    )
+  }
 
   return (
     <DropdownMenu>
