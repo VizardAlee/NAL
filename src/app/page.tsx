@@ -58,8 +58,10 @@ export default function Home() {
                     Get Started
                   </Link>
                 </Button>
-                <Button size="lg" variant="outline">
-                  Learn More
+                <Button size="lg" variant="outline" asChild>
+                  <Link href="/#features">
+                    Learn More
+                  </Link>
                 </Button>
               </div>
             </div>
