@@ -71,10 +71,12 @@ export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: Wit
         });
         onWithdrawalRequested();
       } else {
+        // Log the detailed error to the console instead of a toast
+        console.error("Withdrawal Request Failed:", state.message);
         toast({
           variant: 'destructive',
           title: 'Request Failed',
-          description: state.message,
+          description: 'An error occurred. Please check the console for details.',
         });
       }
       setToastShown(true);
