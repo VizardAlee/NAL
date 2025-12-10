@@ -2,7 +2,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useFormState } from 'react-hook-form';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,7 +16,8 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useTransition } from 'react';
+import { useEffect, useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { Loader2 } from 'lucide-react';
 import { useUser } from '@/firebase';
 import { requestWithdrawalAction } from './withdrawal-actions';
@@ -26,53 +27,61 @@ type WithdrawFormProps = {
   onWithdrawalRequested: () => void;
 };
 
+const formSchema = z.object({
+  amount: z.coerce
+    .number()
+    .positive({ message: 'Amount must be a positive number.' })
+    .min(1, { message: 'Withdrawal amount must be greater than zero.' }),
+});
+
+function SubmitButton({ balance }: { balance: number }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" className="w-full" disabled={pending || balance <= 0}>
+      {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+      Request Withdrawal
+    </Button>
+  );
+}
+
 export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: WithdrawFormProps) {
   const { toast } = useToast();
-  const [isPending, startTransition] = useTransition();
   const { user } = useUser();
-
-  const formSchema = z.object({
-    amount: z.coerce
-      .number()
-      .positive({ message: 'Amount must be a positive number.' })
-      .max(withdrawableBalance, { message: 'Withdrawal amount cannot exceed your withdrawable balance.' }),
-  });
+  const [state, formAction] = useActionState(requestWithdrawalAction, { success: false, message: '' });
 
   const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchema.refine(data => data.amount <= withdrawableBalance, {
+      message: 'Withdrawal amount cannot exceed your withdrawable balance.',
+      path: ['amount'],
+    })),
     defaultValues: {
       amount: Math.min(10000, withdrawableBalance),
     },
   });
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    
-    if (!user || !user.displayName) {
-      toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in.' });
-      return;
+  useEffect(() => {
+    if (state.message) {
+      if (state.success) {
+        toast({
+          title: 'Withdrawal Request Submitted',
+          description: state.message,
+        });
+        onWithdrawalRequested();
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Request Failed',
+          description: state.message,
+        });
+      }
     }
-    
-    startTransition(async () => {
-        const result = await requestWithdrawalAction(user.uid, user.displayName!, values.amount);
-        if (result.success) {
-            toast({
-                title: 'Withdrawal Request Submitted',
-                description: result.message,
-            });
-            onWithdrawalRequested();
-        } else {
-             toast({
-                variant: 'destructive',
-                title: 'Request Failed',
-                description: result.message,
-            });
-        }
-    });
-  }
+  }, [state, toast, onWithdrawalRequested]);
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+      <form action={formAction} className="space-y-4 pt-4">
+        <input type="hidden" name="userId" value={user?.uid || ''} />
+        <input type="hidden" name="userName" value={user?.displayName || ''} />
         <FormField
           control={form.control}
           name="amount"
@@ -92,13 +101,8 @@ export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: Wit
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full" disabled={isPending || withdrawableBalance <= 0}>
-          {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Request Withdrawal
-        </Button>
+        <SubmitButton balance={withdrawableBalance} />
       </form>
     </Form>
   );
 }
-
-    

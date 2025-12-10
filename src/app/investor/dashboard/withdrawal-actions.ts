@@ -8,8 +8,25 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 // --- Withdrawal Action ---
+const withdrawalSchema = z.object({
+    amount: z.coerce.number().positive("Amount must be a positive number."),
+    userId: z.string().min(1, "User ID is required."),
+    userName: z.string().min(1, "User name is required."),
+});
 
-export async function requestWithdrawalAction(userId: string, userName: string, amount: number) {
+export async function requestWithdrawalAction(prevState: any, formData: FormData) {
+    const validatedFields = withdrawalSchema.safeParse({
+        amount: formData.get('amount'),
+        userId: formData.get('userId'),
+        userName: formData.get('userName'),
+    });
+    
+    if (!validatedFields.success) {
+        return { success: false, message: 'Invalid form data.' };
+    }
+
+    const { userId, userName, amount } = validatedFields.data;
+
     try {
         await adminDb.collection('withdrawalRequests').add({
             investorId: userId,
