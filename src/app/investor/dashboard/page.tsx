@@ -39,9 +39,11 @@ type Transaction = DocumentData & {
 };
 
 type Investment = DocumentData & {
+  id: string;
   investorId: string;
   dealId: string;
   amount: number;
+  createdAt: Timestamp;
 };
 
 type FundBatch = DocumentData & {
@@ -300,7 +302,8 @@ export default function InvestorDashboard() {
 
 
   const investedDealIds = useMemo(() => {
-      return investments?.map(inv => inv.dealId) || [];
+      if (!investments) return [];
+      return [...new Set(investments.map(inv => inv.dealId))];
   }, [investments]);
   
   const dealsQuery = useMemo(() => {
@@ -312,40 +315,40 @@ export default function InvestorDashboard() {
 
   const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || firstDepositLoading;
 
-    const { longTermProfits, withdrawableBalance, returnedPrincipal } = useMemo(() => {
-        if (!allTransactions || !fundBatches) {
-            return { longTermProfits: 0, withdrawableBalance: 0, returnedPrincipal: 0 };
-        }
-        
-        const profitTransactions = allTransactions.filter(tx => tx.type === 'ProfitDistribution');
-        const totalWithdrawnFromProfits = allTransactions
-            .filter(tx => tx.type === 'Withdrawal')
-            .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-        
-        let totalLongTermProfit = 0;
-        let totalShortTermProfit = 0;
+  const { longTermProfits, withdrawableBalance, returnedPrincipal } = useMemo(() => {
+    if (!allTransactions || !investments || !deals) {
+        return { longTermProfits: 0, withdrawableBalance: 0, returnedPrincipal: 0 };
+    }
 
-        const hasLongTermCapital = fundBatches.some(batch => {
-            const tenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
-            return tenureInDays >= EIGHTEEN_MONTHS_IN_DAYS;
-        });
+    const profitTransactions = allTransactions.filter(tx => tx.type === 'ProfitDistribution');
+    const totalWithdrawnFromProfits = allTransactions
+        .filter(tx => tx.type === 'Withdrawal')
+        .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
-        if (hasLongTermCapital) {
-            totalLongTermProfit = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+    let totalLongTermProfit = 0;
+    let totalShortTermProfit = 0;
+
+    for (const profitTx of profitTransactions) {
+        const deal = deals.find(d => d.id === profitTx.dealId);
+        if (!deal) continue;
+
+        const dealDurationInDays = convertToDays(deal.durationValue, deal.durationUnit);
+        
+        if (dealDurationInDays >= EIGHTEEN_MONTHS_IN_DAYS) {
+            totalLongTermProfit += profitTx.amount;
         } else {
-            totalShortTermProfit = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+            totalShortTermProfit += profitTx.amount;
         }
-        
-        const _returnedPrincipal = fundBatches
-            .filter(batch => batch.details?.startsWith('Returned principal'))
-            .reduce((sum, batch) => sum + batch.remainingAmount, 0);
+    }
 
-        return {
-            longTermProfits: totalLongTermProfit,
-            withdrawableBalance: totalShortTermProfit - totalWithdrawnFromProfits,
-            returnedPrincipal: _returnedPrincipal
-        };
-    }, [allTransactions, fundBatches]);
+    const _returnedPrincipal = fundBatches?.filter(b => b.details?.startsWith('Returned principal')).reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
+
+    return {
+        longTermProfits: totalLongTermProfit,
+        withdrawableBalance: totalShortTermProfit - totalWithdrawnFromProfits,
+        returnedPrincipal: _returnedPrincipal
+    };
+}, [allTransactions, investments, deals, fundBatches]);
 
 
   const financialMetrics = useMemo(() => {
