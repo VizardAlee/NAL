@@ -22,11 +22,11 @@ import { useUser } from '@/firebase';
 import { requestWithdrawalAction } from './withdrawal-actions';
 
 type WithdrawFormProps = {
-  portfolioValue: number;
+  withdrawableBalance: number;
   onWithdrawalRequested: () => void;
 };
 
-export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: WithdrawFormProps) {
+export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: WithdrawFormProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const { user } = useUser();
@@ -35,13 +35,13 @@ export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: Withdraw
     amount: z.coerce
       .number()
       .positive({ message: 'Amount must be a positive number.' })
-      .max(portfolioValue, { message: 'Withdrawal amount cannot exceed your withdrawable balance.' }),
+      .max(withdrawableBalance, { message: 'Withdrawal amount cannot exceed your withdrawable balance.' }),
   });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      amount: Math.min(10000, portfolioValue),
+      amount: Math.min(10000, withdrawableBalance),
     },
   });
 
@@ -86,13 +86,13 @@ export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: Withdraw
                 </div>
               </FormControl>
               <FormDescription>
-                Max available for withdrawal: {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(portfolioValue)}
+                Max available for withdrawal: {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(withdrawableBalance)}
               </FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full" disabled={isPending || portfolioValue <= 0}>
+        <Button type="submit" className="w-full" disabled={isPending || withdrawableBalance <= 0}>
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Request Withdrawal
         </Button>
@@ -100,3 +100,5 @@ export function WithdrawForm({ portfolioValue, onWithdrawalRequested }: Withdraw
     </Form>
   );
 }
+
+    

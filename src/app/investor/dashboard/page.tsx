@@ -535,7 +535,7 @@ export default function InvestorDashboard() {
                 <DialogHeader>
                   <DialogTitle>Request Fund Withdrawal</DialogTitle>
                 </DialogHeader>
-                <WithdrawForm portfolioValue={withdrawableBalance} onWithdrawalRequested={handleWithdrawalSuccess} />
+                <WithdrawForm withdrawableBalance={withdrawableBalance} onWithdrawalRequested={handleWithdrawalSuccess} />
               </DialogContent>
             </Dialog>
             {user && <ReinvestButton balance={withdrawableBalance} user={user} />}
@@ -773,5 +773,7 @@ export default function InvestorDashboard() {
     </div>
   );
 }
+
+    
 
     
