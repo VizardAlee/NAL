@@ -28,13 +28,26 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
     const { userId, userName, amount } = validatedFields.data;
 
     try {
-        await adminDb.collection('withdrawalRequests').add({
+        const batch = adminDb.batch();
+        const now = FieldValue.serverTimestamp();
+
+        // 1. Create the withdrawal request
+        const requestRef = adminDb.collection('withdrawalRequests').doc();
+        batch.set(requestRef, {
             investorId: userId,
             investorName: userName,
             amount,
             status: 'Pending',
-            requestedAt: FieldValue.serverTimestamp(),
+            requestedAt: now,
         });
+
+        // 2. Update the user's last withdrawal date
+        const userRef = adminDb.collection('users').doc(userId);
+        batch.update(userRef, {
+            lastWithdrawalDate: now,
+        });
+        
+        await batch.commit();
         
         const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
         await notifyAdmins(
@@ -44,6 +57,7 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
         );
 
         revalidatePath('/admin/approvals/withdrawals');
+        revalidatePath('/investor/dashboard');
         
         return { success: true, message: `Your request to withdraw ${formattedAmount} has been submitted.` };
     } catch(error) {

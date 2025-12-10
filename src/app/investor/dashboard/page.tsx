@@ -416,12 +416,8 @@ export default function InvestorDashboard() {
 
   }, [allTransactions]);
 
-    const handleWithdrawalSuccess = async () => {
+    const handleWithdrawalSuccess = () => {
         setWithdrawOpen(false);
-        if(firestore && user) {
-            const userRef = doc(firestore, 'users', user.uid);
-            await updateDoc(userRef, { lastWithdrawalDate: Timestamp.now() });
-        }
     };
 
     const handleReinvestReturnedPrincipal = () => {
@@ -773,7 +769,3 @@ export default function InvestorDashboard() {
     </div>
   );
 }
-
-    
-
-    
