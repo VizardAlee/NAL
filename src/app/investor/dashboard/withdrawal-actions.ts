@@ -4,6 +4,10 @@
 import { notifyAdmins } from '@/app/common/actions/notification-actions';
 import { adminDb } from '@/firebase/admin-app';
 import { serverTimestamp } from 'firebase-admin/firestore';
+import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
+
+// --- Withdrawal Action ---
 
 export async function requestWithdrawalAction(userId: string, userName: string, amount: number) {
     try {
@@ -21,10 +25,68 @@ export async function requestWithdrawalAction(userId: string, userName: string, 
             `${userName} requested a withdrawal of ${formattedAmount}.`,
             '/admin/approvals/withdrawals'
         );
+
+        revalidatePath('/admin/approvals/withdrawals');
         
         return { success: true, message: `Your request to withdraw ${formattedAmount} has been submitted.` };
     } catch(error) {
         console.error("WITHDRAWAL REQUEST ACTION ERROR", error);
         return { success: false, message: "Failed to submit withdrawal request." };
     }
+}
+
+
+// --- Reinvestment Action ---
+
+const reinvestSchema = z.object({
+  amount: z.coerce.number().positive("Amount must be a positive number."),
+  userId: z.string().min(1, "User ID is required."),
+  userName: z.string().min(1, "User name is required."),
+});
+
+export async function reinvestAction(input: { amount: number; userId: string, userName: string }): Promise<{ success: boolean; message: string; }> {
+
+  const validatedFields = reinvestSchema.safeParse(input);
+
+  if (!validatedFields.success) {
+    return {
+      success: false,
+      message: 'Invalid input. Please try again.',
+    };
+  }
+
+  const { amount, userId, userName } = validatedFields.data;
+
+  try {
+    
+    await adminDb.collection('reinvestmentRequests').add({
+      investorId: userId,
+      investorName: userName,
+      amount: amount,
+      status: 'Pending',
+      requestedAt: serverTimestamp(),
+    });
+
+    const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+    await notifyAdmins(
+        'Reinvestment Request',
+        `${userName} requested to reinvest ${formattedAmount}.`,
+        '/admin/approvals/reinvestments'
+    );
+
+    revalidatePath('/investor/dashboard');
+    revalidatePath('/admin/approvals/reinvestments');
+
+    return {
+      success: true,
+      message: `Successfully requested to reinvest ${formattedAmount}. An admin will approve it shortly.`,
+    };
+  } catch (error) {
+    console.error('REINVESTMENT REQUEST ERROR:', error);
+    const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+    return {
+      success: false,
+      message: `Failed to request reinvestment: ${message}`,
+    };
+  }
 }
