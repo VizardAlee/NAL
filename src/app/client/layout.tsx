@@ -124,7 +124,7 @@ export default function ClientLayout({
                 <div className="flex-1" />
                 <nav className="flex items-center gap-2 text-sm font-medium">
                     <Button variant="ghost" asChild>
-                        <Link href="/app/analyzer">
+                        <Link href="/client/analyzer">
                             <FlaskConical className="h-4 w-4 mr-2" />
                             Analyzer
                         </Link>

@@ -3,7 +3,7 @@
 
 import { useActionState, useEffect } from "react";
 import { useFormStatus } from "react-dom";
-import { getAnalysis } from "./actions";
+import { getAnalysis } from "@/app/admin/analyzer/actions";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
