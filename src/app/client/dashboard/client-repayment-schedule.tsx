@@ -334,8 +334,9 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
                                             <StatusBadge status={item.status} />
                                         </div>
                                         <div className="text-xs space-y-1 pt-2 border-t">
-                                            <div className="flex justify-between"><span className="text-muted-foreground">Paid:</span> <span>{formatCurrency(item.amountPaid)}</span></div>
-                                            <div className="flex justify-between text-primary"><span className="font-medium">Remaining:</span> <span className="font-bold">{formatCurrency(item.amountRemaining)}</span></div>
+                                            <div className="flex justify-between"><span className="text-muted-foreground">Principal:</span> <span>{formatCurrency(item.principal)}</span></div>
+                                            <div className="flex justify-between"><span className="text-muted-foreground">Markup:</span> <span>{formatCurrency(item.interest)}</span></div>
+                                            <div className="flex justify-between"><span className="text-muted-foreground">Balance:</span> <span>{formatCurrency(item.balance)}</span></div>
                                         </div>
                                         {(item.isActionable && item.status !== 'Paid' && user) && (
                                             <div className="pt-3 border-t">
