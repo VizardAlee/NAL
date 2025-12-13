@@ -79,6 +79,7 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
     resolver: zodResolver(formSchema),
     defaultValues: {
       ...deal,
+      managementFeeRate: deal.managementFeeRate || 0,
       startDate: deal.startDate?.toDate(),
     },
   });
@@ -317,4 +318,3 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
   );
 }
 
-    
