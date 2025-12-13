@@ -15,7 +15,7 @@ import { CheckCircle, Loader2, XCircle, Hourglass, History, Wallet } from 'lucid
 import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -39,32 +39,38 @@ type DepositRequest = DocumentData & {
 function useClearNotificationsByPath() {
     const firestore = useFirestore();
     const pathname = usePathname();
+    const { user } = useUser();
 
     useEffect(() => {
-        if (!firestore || !pathname) return;
+        if (!firestore || !pathname || !user) return;
 
         const clearNotifications = async () => {
-            const notificationsToClearQuery = query(
-                collection(firestore, 'notifications'),
-                where('link', '==', pathname),
-                where('read', '==', false)
-            );
-            
-            const snapshot = await getDocs(notificationsToClearQuery);
-            if (snapshot.empty) return;
+            try {
+                const notificationsToClearQuery = query(
+                    collection(firestore, 'notifications'),
+                    where('recipientId', '==', user.uid),
+                    where('link', '==', pathname),
+                    where('read', '==', false)
+                );
+                
+                const snapshot = await getDocs(notificationsToClearQuery);
+                if (snapshot.empty) return;
 
-            const batch = writeBatch(firestore);
-            snapshot.docs.forEach(doc => {
-                batch.update(doc.ref, { read: true });
-            });
-            
-            await batch.commit();
+                const batch = writeBatch(firestore);
+                snapshot.docs.forEach(doc => {
+                    batch.update(doc.ref, { read: true });
+                });
+                
+                await batch.commit();
+            } catch (error) {
+                console.error("Failed to clear notifications:", error);
+            }
         };
 
         const timer = setTimeout(clearNotifications, 500);
         return () => clearTimeout(timer);
 
-    }, [firestore, pathname]);
+    }, [firestore, pathname, user]);
 }
 
 
@@ -326,4 +332,3 @@ export default function DepositsPage() {
         </div>
     );
 }
-

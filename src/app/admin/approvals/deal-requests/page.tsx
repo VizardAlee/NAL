@@ -15,7 +15,7 @@ import { CheckCircle, Loader2, XCircle, FilePlus, Hourglass, History, FileText, 
 import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs, addDoc, orderBy } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -57,14 +57,16 @@ type DealRequest = DocumentData & {
 function useClearNotificationsByPath() {
     const firestore = useFirestore();
     const pathname = usePathname();
+    const { user } = useUser();
 
     useEffect(() => {
-        if (!firestore || !pathname) return;
+        if (!firestore || !pathname || !user) return;
 
         const clearNotifications = async () => {
             try {
                 const notificationsToClearQuery = query(
                     collection(firestore, 'notifications'),
+                    where('recipientId', '==', user.uid),
                     where('link', '==', pathname),
                     where('read', '==', false)
                 );
@@ -79,14 +81,14 @@ function useClearNotificationsByPath() {
                 
                 await batch.commit();
             } catch (error) {
-                console.error("Failed to clear notifications due to a permission error. Full error details:", error);
+                console.error("Failed to clear notifications:", error);
             }
         };
 
         const timer = setTimeout(clearNotifications, 500);
         return () => clearTimeout(timer);
 
-    }, [firestore, pathname]);
+    }, [firestore, pathname, user]);
 }
 
 
