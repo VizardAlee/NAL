@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState, useEffect, useCallback, useActionState, useRef } from 'react';
+import { useMemo, useState, useEffect, useCallback, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import {
   Table,
@@ -44,8 +44,6 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-
 
 const ITEMS_PER_PAGE = 5;
 
@@ -56,6 +54,7 @@ interface ScheduledPayment extends ScheduleInstallment {
   isActionable?: boolean;
   amountPaid: number;
   amountRemaining: number;
+  paymentHistory: Repayment[];
 }
 
 function SubmitLodgePaymentButton() {
@@ -147,10 +146,60 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
     );
 }
 
+const formatCurrency = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+
+function InstallmentDetailsDialog({ installment }: { installment: ScheduledPayment }) {
+    return (
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Details for Installment #{installment.installment}</DialogTitle>
+                <DialogDescription>Due on {format(installment.dueDate, 'PPP')}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+                <div className="rounded-lg border p-4 space-y-2">
+                    <div className="flex justify-between text-sm"><span className="text-muted-foreground">Total Due:</span> <span>{formatCurrency(installment.payment)}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-muted-foreground">Amount Paid:</span> <span>{formatCurrency(installment.amountPaid)}</span></div>
+                    <div className="flex justify-between font-bold text-base"><span >Amount Remaining:</span> <span className="text-primary">{formatCurrency(installment.amountRemaining)}</span></div>
+                </div>
+
+                <h4 className="font-medium">Payment History for this Installment</h4>
+                {installment.paymentHistory.length > 0 ? (
+                    <div className="rounded-md border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Date Lodged</TableHead>
+                                    <TableHead>Amount</TableHead>
+                                    <TableHead>Status</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {installment.paymentHistory.map(p => (
+                                    <TableRow key={p.id}>
+                                        <TableCell>{format(p.lodgedAt.toDate(), 'PPP')}</TableCell>
+                                        <TableCell>{formatCurrency(p.amount)}</TableCell>
+                                        <TableCell><Badge variant={p.status === 'Approved' ? 'default' : 'secondary'}>{p.status}</Badge></TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">No payments lodged for this installment yet.</p>
+                )}
+            </div>
+            <DialogFooter>
+                <DialogClose asChild><Button>Close</Button></DialogClose>
+            </DialogFooter>
+        </DialogContent>
+    );
+}
+
 export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoading }: { deal: Deal, initialRepayments: Repayment[] | null, repaymentsLoading: boolean }) {
   const [currentPage, setCurrentPage] = useState(1);
   const { user } = useUser();
   const [allRepayments, setAllRepayments] = useState<Repayment[] | null>(initialRepayments);
+  const [selectedInstallment, setSelectedInstallment] = useState<ScheduledPayment | null>(null);
   const isMobile = useIsMobile();
   
   useEffect(() => {
@@ -168,9 +217,7 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
   
   const enhancedSchedule = useMemo((): ScheduledPayment[] => {
     if (!schedule) return [];
-    const today = startOfToday();
     
-    let firstActionableFound = false;
     return schedule.map(installment => {
       const relatedRepayments = allRepayments?.filter(r => 
           r.installmentNumber === installment.installment
@@ -182,7 +229,7 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
       const amountRemaining = Math.max(0, installment.payment - totalAmountPaid);
 
       let status: RepaymentStatus = 'Upcoming';
-      if (totalAmountPaid >= installment.payment) {
+      if (totalAmountPaid >= installment.payment - 0.01) { // Tolerance for float precision
           status = 'Paid';
       } else if (pendingAmount > 0) {
           status = 'Pending';
@@ -193,12 +240,17 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
       }
 
       let isActionable = false;
-      if (!firstActionableFound && (status === 'Due' || status === 'Upcoming' || status === 'Partially Paid')) {
+      const firstActionableInstallment = schedule.find(inst => {
+          const payments = allRepayments?.filter(r => r.installmentNumber === inst.installment) || [];
+          const paid = payments.reduce((sum, p) => sum + p.amount, 0) >= inst.payment - 0.01;
+          return !paid;
+      });
+
+      if (firstActionableInstallment && firstActionableInstallment.installment === installment.installment) {
         isActionable = true;
-        firstActionableFound = true;
       }
       
-      return { ...installment, status, isActionable, amountPaid: totalAmountPaid, amountRemaining };
+      return { ...installment, status, isActionable, amountPaid: totalAmountPaid, amountRemaining, paymentHistory: relatedRepayments };
     });
   }, [schedule, allRepayments]);
   
@@ -231,7 +283,6 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
     return <Badge variant={variantMap[status]} className="flex items-center gap-1.5"><Icon className="h-3 w-3" /> {status}</Badge>;
   };
 
-  const formatCurrency = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
 
   if (repaymentsLoading) {
       return (
@@ -266,109 +317,88 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
   }
 
   return (
-    <div className="flex flex-col h-full">
-        <div className="p-4 pt-2 flex-grow">
-            {isMobile ? (
-                <div className="space-y-3">
-                    {paginatedSchedule.map(item => (
-                        <Card key={`${item.installment}-${item.status}`} className={item.isActionable ? 'border-primary' : ''}>
-                            <CardContent className="p-4 space-y-3">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <p className="font-bold">{formatCurrency(item.payment)}</p>
-                                            <Popover>
-                                                <PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-5 w-5"><Info className="h-3 w-3 text-muted-foreground" /></Button></PopoverTrigger>
-                                                <PopoverContent className="text-xs space-y-1 w-56">
-                                                     <div className="flex justify-between"><span>Total Due:</span> <span className="font-medium">{formatCurrency(item.payment)}</span></div>
-                                                    <div className="flex justify-between"><span>Paid:</span> <span className="font-medium">{formatCurrency(item.amountPaid)}</span></div>
-                                                    <div className="flex justify-between font-bold"><span>Remaining:</span> <span>{formatCurrency(item.amountRemaining)}</span></div>
-                                                </PopoverContent>
-                                            </Popover>
+    <Dialog onOpenChange={(isOpen) => !isOpen && setSelectedInstallment(null)}>
+        <div className="flex flex-col h-full">
+            <div className="p-4 pt-2 flex-grow">
+                {isMobile ? (
+                    <div className="space-y-3">
+                        {paginatedSchedule.map(item => (
+                            <DialogTrigger key={`${item.installment}-${item.status}`} asChild>
+                                <Card onClick={() => setSelectedInstallment(item)} className={item.isActionable ? 'border-primary' : ''}>
+                                    <CardContent className="p-4 space-y-3">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-bold">{formatCurrency(item.payment)}</p>
+                                                <p className="text-xs text-muted-foreground">Due: {format(item.dueDate, 'PPP')}</p>
+                                            </div>
+                                            <StatusBadge status={item.status} />
                                         </div>
-                                        <p className="text-xs text-muted-foreground">Due: {format(item.dueDate, 'PPP')}</p>
-                                    </div>
-                                    <StatusBadge status={item.status} />
-                                </div>
-                                <div className="text-xs space-y-1 pt-2 border-t">
-                                    <div className="flex justify-between"><span className="text-muted-foreground">Principal:</span> <span>{formatCurrency(item.principal)}</span></div>
-                                    <div className="flex justify-between"><span className="text-muted-foreground">Markup:</span> <span>{formatCurrency(item.interest)}</span></div>
-                                    <div className="flex justify-between"><span className="text-muted-foreground">Balance:</span> <span>{formatCurrency(item.balance)}</span></div>
-                                </div>
-                                {(item.isActionable && item.status !== 'Paid' && user) && (
-                                    <div className="pt-3 border-t">
-                                        <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            ) : (
-                <Table>
-                    <TableHeader>
-                    <TableRow>
-                        <TableHead>Due Date</TableHead>
-                        <TableHead>Principal</TableHead>
-                        <TableHead>Markup</TableHead>
-                        <TableHead>Total Payment</TableHead>
-                        <TableHead>Balance</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Action</TableHead>
-                    </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                    {paginatedSchedule.map(item => (
-                        <TableRow key={`${item.installment}-${item.status}`} className={item.isActionable ? 'bg-muted/50' : ''}>
-                            <TableCell data-label="Due Date">{format(item.dueDate, 'PPP')}</TableCell>
-                            <TableCell data-label="Principal">{formatCurrency(item.principal)}</TableCell>
-                            <TableCell data-label="Markup">{formatCurrency(item.interest)}</TableCell>
-                            <TableCell data-label="Total Payment" className="font-bold">
-                                <div className="flex items-center gap-2">
-                                    <span>{formatCurrency(item.payment)}</span>
-                                    <Popover>
-                                        <PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6"><Info className="h-4 w-4 text-muted-foreground" /></Button></PopoverTrigger>
-                                        <PopoverContent className="text-sm space-y-1 w-56">
-                                            <div className="flex justify-between"><span>Total Due:</span> <span className="font-medium">{formatCurrency(item.payment)}</span></div>
-                                            <div className="flex justify-between"><span>Paid:</span> <span className="font-medium">{formatCurrency(item.amountPaid)}</span></div>
-                                            <div className="flex justify-between font-bold"><span>Remaining:</span> <span>{formatCurrency(item.amountRemaining)}</span></div>
-                                        </PopoverContent>
-                                    </Popover>
-                                </div>
-                            </TableCell>
-                            <TableCell data-label="Balance">{formatCurrency(item.balance)}</TableCell>
-                            <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
-                            <TableCell data-label="Action" className="text-right w-40">
-                            {(item.isActionable && item.status !== 'Paid' && user) && (
-                                <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
-                            )}
-                            </TableCell>
+                                        <div className="text-xs space-y-1 pt-2 border-t">
+                                            <div className="flex justify-between"><span className="text-muted-foreground">Paid:</span> <span>{formatCurrency(item.amountPaid)}</span></div>
+                                            <div className="flex justify-between text-primary"><span className="font-medium">Remaining:</span> <span className="font-bold">{formatCurrency(item.amountRemaining)}</span></div>
+                                        </div>
+                                        {(item.isActionable && item.status !== 'Paid' && user) && (
+                                            <div className="pt-3 border-t">
+                                                <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </DialogTrigger>
+                        ))}
+                    </div>
+                ) : (
+                    <Table>
+                        <TableHeader>
+                        <TableRow>
+                            <TableHead>Due Date</TableHead>
+                            <TableHead>Total Due</TableHead>
+                            <TableHead>Remaining</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Action</TableHead>
                         </TableRow>
-                    ))}
-                    </TableBody>
-                </Table>
+                        </TableHeader>
+                        <TableBody>
+                        {paginatedSchedule.map(item => (
+                             <DialogTrigger key={`${item.installment}-${item.status}`} asChild>
+                                <TableRow onClick={() => setSelectedInstallment(item)} className={`cursor-pointer ${item.isActionable ? 'bg-muted/50' : ''}`}>
+                                    <TableCell data-label="Due Date">{format(item.dueDate, 'PPP')}</TableCell>
+                                    <TableCell data-label="Total Due" className="font-medium">{formatCurrency(item.payment)}</TableCell>
+                                    <TableCell data-label="Remaining" className="font-bold text-primary">{formatCurrency(item.amountRemaining)}</TableCell>
+                                    <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
+                                    <TableCell data-label="Action" className="text-right w-40">
+                                    {(item.isActionable && item.status !== 'Paid' && user) && (
+                                        <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
+                                    )}
+                                    </TableCell>
+                                </TableRow>
+                            </DialogTrigger>
+                        ))}
+                        </TableBody>
+                    </Table>
+                )}
+            </div>
+            {totalPages > 1 && (
+                <div className="p-4 border-t">
+                    <Pagination>
+                        <PaginationContent>
+                            <PaginationItem>
+                                <PaginationPrevious href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1))}} aria-disabled={currentPage === 1}/>
+                            </PaginationItem>
+                            {[...Array(totalPages)].map((_, i) => (
+                                <PaginationItem key={i}>
+                                    <PaginationLink href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(i + 1)}} isActive={currentPage === i+1}>{i+1}</PaginationLink>
+                                </PaginationItem>
+                            ))}
+                            <PaginationItem>
+                                <PaginationNext href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1))}} aria-disabled={currentPage === totalPages} />
+                            </PaginationItem>
+                        </PaginationContent>
+                    </Pagination>
+                </div>
             )}
         </div>
-        {totalPages > 1 && (
-            <div className="p-4 border-t">
-                <Pagination>
-                    <PaginationContent>
-                        <PaginationItem>
-                            <PaginationPrevious href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1))}} aria-disabled={currentPage === 1}/>
-                        </PaginationItem>
-                        {[...Array(totalPages)].map((_, i) => (
-                             <PaginationItem key={i}>
-                                <PaginationLink href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(i + 1)}} isActive={currentPage === i+1}>{i+1}</PaginationLink>
-                             </PaginationItem>
-                        ))}
-                        <PaginationItem>
-                            <PaginationNext href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1))}} aria-disabled={currentPage === totalPages} />
-                        </PaginationItem>
-                    </PaginationContent>
-                </Pagination>
-            </div>
-        )}
-    </div>
+        {selectedInstallment && <InstallmentDetailsDialog installment={selectedInstallment} />}
+    </Dialog>
   );
 }
-
