@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { CalendarIcon, Loader2 } from 'lucide-react';
 import { addDoc, collection, query, where, Timestamp } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -33,6 +33,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { isDurationShort } from '@/lib/duration-helpers';
 
 
 const formSchema = z.object({
@@ -85,6 +86,16 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
       repaymentFrequency: 'Monthly',
     },
   });
+
+  const durationValue = form.watch('durationValue');
+  const durationUnit = form.watch('durationUnit');
+  const isShortDeal = isDurationShort(durationValue, durationUnit);
+
+  useEffect(() => {
+    if (!isShortDeal && form.getValues('repaymentType') === 'Balloon Payment') {
+      form.setValue('repaymentType', 'Equal Installments');
+    }
+  }, [isShortDeal, form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
@@ -249,15 +260,16 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Repayment Type</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                 <FormControl>
                   <SelectTrigger><SelectValue placeholder="Select repayment type" /></SelectTrigger>
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="Equal Installments">Equal Installments</SelectItem>
-                  <SelectItem value="Balloon Payment">Balloon Payment</SelectItem>
+                  {isShortDeal && <SelectItem value="Balloon Payment">Balloon Payment</SelectItem>}
                 </SelectContent>
               </Select>
+              <FormDescription>Balloon Payment is only available for deals 3 months or shorter.</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -375,5 +387,3 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
     </Form>
   );
 }
-
-    

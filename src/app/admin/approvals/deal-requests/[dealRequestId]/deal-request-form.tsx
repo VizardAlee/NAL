@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -22,11 +23,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { approveDealAction, rejectDealAction } from './actions';
 import { useRouter } from 'next/navigation';
+import { isDurationShort } from '@/lib/duration-helpers';
 
 const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
@@ -60,6 +62,16 @@ export function DealRequestForm({ dealRequest }: DealRequestFormProps) {
       repaymentFrequency: dealRequest.repaymentFrequency,
     },
   });
+
+  const durationValue = form.watch('durationValue');
+  const durationUnit = form.watch('durationUnit');
+  const isShortDeal = isDurationShort(durationValue, durationUnit);
+
+  useEffect(() => {
+    if (!isShortDeal && form.getValues('repaymentType') === 'Balloon Payment') {
+      form.setValue('repaymentType', 'Equal Installments');
+    }
+  }, [isShortDeal, form]);
 
   async function onApprove(values: z.infer<typeof formSchema>) {
     startApproveTransition(async () => {
@@ -163,23 +175,24 @@ export function DealRequestForm({ dealRequest }: DealRequestFormProps) {
                 />
                 </div>
                 <FormField
-                control={form.control}
-                name="repaymentType"
-                render={({ field }) => (
+                  control={form.control}
+                  name="repaymentType"
+                  render={({ field }) => (
                     <FormItem>
-                    <FormLabel>Repayment Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormLabel>Repayment Type</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                         <FormControl>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectTrigger><SelectValue placeholder="Select repayment type" /></SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                        <SelectItem value="Equal Installments">Equal Installments</SelectItem>
-                        <SelectItem value="Balloon Payment">Balloon Payment</SelectItem>
+                          <SelectItem value="Equal Installments">Equal Installments</SelectItem>
+                          {isShortDeal && <SelectItem value="Balloon Payment">Balloon Payment</SelectItem>}
                         </SelectContent>
-                    </Select>
-                    <FormMessage />
+                      </Select>
+                      <FormDescription>Balloon Payment is only available for deals 3 months or shorter.</FormDescription>
+                      <FormMessage />
                     </FormItem>
-                )}
+                  )}
                 />
                 <FormField
                 control={form.control}

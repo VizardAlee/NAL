@@ -23,12 +23,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { Loader2, Paperclip } from 'lucide-react';
 import { useUser } from '@/firebase';
 import { requestDealAction } from './actions';
 import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
+import { isDurationShort } from '@/lib/duration-helpers';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const ACCEPTED_FILE_TYPES = ["application/pdf"];
@@ -78,6 +79,16 @@ export function CreateDealRequestForm() {
       proposalDetails: '',
     },
   });
+
+  const durationValue = form.watch('durationValue');
+  const durationUnit = form.watch('durationUnit');
+  const isShortDeal = isDurationShort(durationValue, durationUnit);
+
+  useEffect(() => {
+    if (!isShortDeal && form.getValues('repaymentType') === 'Balloon Payment') {
+      form.setValue('repaymentType', 'Equal Installments');
+    }
+  }, [isShortDeal, form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user || !user.displayName) {
@@ -202,15 +213,16 @@ export function CreateDealRequestForm() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Repayment Type</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                 <FormControl>
                   <SelectTrigger><SelectValue placeholder="Select repayment type" /></SelectTrigger>
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="Equal Installments">Equal Installments</SelectItem>
-                  <SelectItem value="Balloon Payment">Balloon Payment</SelectItem>
+                  {isShortDeal && <SelectItem value="Balloon Payment">Balloon Payment</SelectItem>}
                 </SelectContent>
               </Select>
+              <FormDescription>Balloon Payment is only available for deals 3 months or shorter.</FormDescription>
               <FormMessage />
             </FormItem>
           )}
