@@ -530,7 +530,7 @@ export default function PlatformFundsPage() {
     const platformFundBatchesQuery = useMemo(() => firestore ? query(collection(firestore, 'fundBatches'), where('sourceId', '==', 'platform')) : null, [firestore]);
     const adminTransactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'administrativeTransactions'), orderBy('createdAt', 'desc')) : null, [firestore]);
     const zakatTransactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions'), where('type', 'in', ['Zakat', 'Penalty'])) : null, [firestore]);
-    const allFundBatchesQuery = useMemo(() => firestore ? collection(firestore, 'fundBatches') : null, [firestore]);
+    const allFundBatchesQuery = useMemo(() => firestore ? query(collection(firestore, 'fundBatches')) : null, [firestore]);
     const assetsQuery = useMemo(() => firestore ? query(collection(firestore, 'assets'), orderBy('acquisitionDate', 'desc')) : null, [firestore]);
     const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals')) : null, [firestore]);
     const repaymentsQuery = useMemo(() => firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Approved')) : null, [firestore]);
@@ -742,3 +742,5 @@ export default function PlatformFundsPage() {
         </div>
     );
 }
+
+    

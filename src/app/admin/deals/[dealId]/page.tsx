@@ -23,7 +23,7 @@ import { ViewPageNav } from '@/components/view-page-nav';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RepaymentSchedule, RepaymentHistory } from '@/components/deals/page';
-import { approveManagementFeeAction } from './actions';
+import { approveManagementFeeAction } from '../actions';
 
 type User = {
     id: string;
@@ -240,7 +240,7 @@ export default function DealDetailPage() {
         <PageHeader title={deal.dealName} icon={FileText}>
           <div className="flex items-center gap-4">
            <Badge variant={statusVariant[deal.status] || 'secondary'} className="text-base px-4 py-2">{deal.status}</Badge>
-           <ViewPageNav homePath="/admin/dashboard" />
+           <ViewPageNav homePath="/admin/deals" />
           </div>
         </PageHeader>
         <div className="grid gap-6 lg:grid-cols-3">
@@ -416,3 +416,5 @@ export default function DealDetailPage() {
     </div>
   );
 }
+
+    
