@@ -160,7 +160,8 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                                         <div className="text-xs space-y-1 pt-2 border-t">
                                             <div className="flex justify-between"><span className="text-muted-foreground">Principal:</span> <span>{formatCurrency(item.principal)}</span></div>
                                             <div className="flex justify-between"><span className="text-muted-foreground">Markup:</span> <span>{formatCurrency(item.interest)}</span></div>
-                                            <div className="flex justify-between"><span className="text-muted-foreground">Remaining:</span> <span className="font-bold text-primary">{formatCurrency(item.amountRemaining)}</span></div>
+                                            <div className="flex justify-between"><span className="text-muted-foreground">Balance:</span> <span>{formatCurrency(item.balance)}</span></div>
+                                            <div className="flex justify-between pt-1 border-t mt-1"><span className="text-muted-foreground">Remaining:</span> <span className="font-bold text-primary">{formatCurrency(item.amountRemaining)}</span></div>
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -173,6 +174,9 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                         <TableRow>
                             <TableHead>Due Date</TableHead>
                             <TableHead>Total Due</TableHead>
+                            <TableHead>Principal</TableHead>
+                            <TableHead>Markup</TableHead>
+                            <TableHead>Balance</TableHead>
                             <TableHead>Remaining</TableHead>
                             <TableHead>Status</TableHead>
                         </TableRow>
@@ -183,6 +187,9 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                                 <TableRow onClick={() => setSelectedInstallment(item)} className="cursor-pointer">
                                     <TableCell data-label="Due Date">{format(item.dueDate, 'PPP')}</TableCell>
                                     <TableCell data-label="Total Due" className="font-medium">{formatCurrency(item.payment)}</TableCell>
+                                    <TableCell data-label="Principal">{formatCurrency(item.principal)}</TableCell>
+                                    <TableCell data-label="Markup">{formatCurrency(item.interest)}</TableCell>
+                                    <TableCell data-label="Balance">{formatCurrency(item.balance)}</TableCell>
                                     <TableCell data-label="Remaining" className="font-bold text-primary">{formatCurrency(item.amountRemaining)}</TableCell>
                                     <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
                                 </TableRow>
