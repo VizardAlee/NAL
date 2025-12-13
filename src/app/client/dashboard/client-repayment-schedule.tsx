@@ -13,10 +13,10 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { HandCoins, CheckCircle, Hourglass, Loader2, Ban } from 'lucide-react';
+import { HandCoins, CheckCircle, Hourglass, Loader2, Ban, Info, AlertTriangle } from 'lucide-react';
 import { generateAmortizationSchedule, ScheduleInstallment } from '@/lib/amortization';
 import { Deal, Repayment } from '@/lib/types';
-import { format, isSameDay, startOfToday } from 'date-fns';
+import { format, isSameDay, startOfToday, isPast } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Pagination,
@@ -33,33 +33,38 @@ import { Timestamp } from 'firebase/firestore';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Card, CardContent } from '@/components/ui/card';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose
+} from "@/components/ui/dialog"
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
 
 const ITEMS_PER_PAGE = 5;
 
-type RepaymentStatus = 'Paid' | 'Pending' | 'Due' | 'Upcoming' | 'Cancelled';
+type RepaymentStatus = 'Paid' | 'Partially Paid' | 'Pending' | 'Due' | 'Upcoming' | 'Cancelled';
 
 interface ScheduledPayment extends ScheduleInstallment {
   status: RepaymentStatus;
   isActionable?: boolean;
+  amountPaid: number;
+  amountRemaining: number;
 }
 
 function SubmitLodgePaymentButton() {
     const { pending } = useFormStatus();
     return (
-        <AlertDialogAction type="submit" disabled={pending} className="w-full">
+        <Button type="submit" disabled={pending} className="w-full">
             {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <HandCoins className="mr-2 h-4 w-4" />}
             Confirm Payment
-        </AlertDialogAction>
+        </Button>
     )
 }
 
@@ -67,60 +72,78 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
     const [state, formAction] = useActionState(lodgePaymentAction, { success: false, message: '', repayment: null });
     const { toast } = useToast();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [amountToPay, setAmountToPay] = useState(installment.amountRemaining);
 
     useEffect(() => {
-        if (state.message) {
-            if (state.success && state.repayment) {
-                toast({
-                    title: 'Success',
-                    description: state.message,
-                });
-                const newRepayment = {
-                    ...state.repayment,
-                    lodgedAt: new Timestamp(state.repayment.lodgedAt._seconds, state.repayment.lodgedAt._nanoseconds),
-                    dueDate: new Timestamp(state.repayment.dueDate._seconds, state.repayment.dueDate._nanoseconds)
-                };
-                onPaymentLodged(newRepayment);
-                setIsDialogOpen(false); // Close dialog on success
-            } else if (!state.success) {
-                toast({
-                    title: 'Error',
-                    description: state.message,
-                    variant: 'destructive',
-                });
-            }
+        if (state.message && state.success === false) {
+             toast({
+                title: 'Error',
+                description: state.message,
+                variant: 'destructive',
+            });
+        }
+        else if (state.success && state.repayment) {
+            toast({
+                title: 'Success',
+                description: state.message,
+            });
+            const newRepayment = {
+                ...state.repayment,
+                lodgedAt: new Timestamp(state.repayment.lodgedAt._seconds, state.repayment.lodgedAt._nanoseconds),
+                dueDate: new Timestamp(state.repayment.dueDate._seconds, state.repayment.dueDate._nanoseconds)
+            };
+            onPaymentLodged(newRepayment);
+            setIsDialogOpen(false); // Close dialog on success
         }
     }, [state, toast, onPaymentLodged]);
     
+    // Reset amount when dialog opens
+    useEffect(() => {
+        if(isDialogOpen) {
+            setAmountToPay(installment.amountRemaining);
+        }
+    }, [isDialogOpen, installment.amountRemaining]);
+    
     return (
-        <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <AlertDialogTrigger asChild>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
                 <Button size="sm" className="w-full">
                     <HandCoins className="mr-2 h-4 w-4" />
                     Lodge Payment
                 </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-                <form action={formAction}>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Confirm Payment Lodging</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            You are about to lodge a payment of <span className="font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(installment.payment)}</span> for installment #{installment.installment}.
-                            Please ensure you have made the payment to the platform's bank account. This action cannot be undone.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Lodge a Payment</DialogTitle>
+                    <DialogDescription>
+                        Lodge a full or partial payment for installment #{installment.installment}.
+                        Ensure you have made the payment to the platform's bank account first.
+                    </DialogDescription>
+                </DialogHeader>
+                <form action={formAction} className="space-y-4 pt-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="amount">Amount to Pay</Label>
+                        <Input
+                            id="amount"
+                            name="amount"
+                            type="number"
+                            value={amountToPay}
+                            onChange={(e) => setAmountToPay(parseFloat(e.target.value) || 0)}
+                            max={installment.amountRemaining}
+                            min={1}
+                        />
+                    </div>
                     <input type="hidden" name="dealId" value={dealId} />
-                    <input type="hidden" name="amount" value={installment.payment} />
                     <input type="hidden" name="userId" value={userId} />
                     <input type="hidden" name="dueDate" value={installment.dueDate.toISOString()} />
                     <input type="hidden" name="installmentNumber" value={installment.installment} />
-                    <AlertDialogFooter className="mt-4">
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <DialogFooter>
+                         <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
                         <SubmitLodgePaymentButton />
-                    </AlertDialogFooter>
+                    </DialogFooter>
                 </form>
-            </AlertDialogContent>
-        </AlertDialog>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -147,29 +170,35 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
     if (!schedule) return [];
     const today = startOfToday();
     
-    // First, map the schedule to their statuses
     let firstActionableFound = false;
     return schedule.map(installment => {
-      const matchingRepayment = allRepayments?.find(r => 
-          r.dueDate && isSameDay(r.dueDate.toDate(), installment.dueDate)
-      );
+      const relatedRepayments = allRepayments?.filter(r => 
+          r.installmentNumber === installment.installment
+      ) || [];
+
+      const approvedAmountPaid = relatedRepayments.filter(r => r.status === 'Approved').reduce((sum, r) => sum + r.amount, 0);
+      const pendingAmount = relatedRepayments.filter(r => r.status === 'Pending').reduce((sum, r) => sum + r.amount, 0);
+      const totalAmountPaid = approvedAmountPaid + pendingAmount;
+      const amountRemaining = Math.max(0, installment.payment - totalAmountPaid);
 
       let status: RepaymentStatus = 'Upcoming';
-      if (matchingRepayment) {
-        status = matchingRepayment.status === 'Approved' ? 'Paid' 
-                : matchingRepayment.status === 'Cancelled' ? 'Cancelled'
-                : 'Pending';
-      } else if (installment.dueDate < today) {
-        status = 'Due';
+      if (totalAmountPaid >= installment.payment) {
+          status = 'Paid';
+      } else if (pendingAmount > 0) {
+          status = 'Pending';
+      } else if (totalAmountPaid > 0) {
+          status = 'Partially Paid';
+      } else if (isPast(installment.dueDate)) {
+          status = 'Due';
       }
 
       let isActionable = false;
-      if (!firstActionableFound && (status === 'Due' || status === 'Upcoming')) {
+      if (!firstActionableFound && (status === 'Due' || status === 'Upcoming' || status === 'Partially Paid')) {
         isActionable = true;
         firstActionableFound = true;
       }
       
-      return { ...installment, status, isActionable };
+      return { ...installment, status, isActionable, amountPaid: totalAmountPaid, amountRemaining };
     });
   }, [schedule, allRepayments]);
   
@@ -183,6 +212,7 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
   const StatusBadge = ({ status }: { status: RepaymentStatus }) => {
     const variantMap: { [key in RepaymentStatus]: 'default' | 'secondary' | 'outline' | 'destructive' } = {
       Paid: 'default',
+      'Partially Paid': 'outline',
       Pending: 'outline',
       Upcoming: 'secondary',
       Due: 'destructive',
@@ -190,9 +220,10 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
     };
     const IconMap: { [key in RepaymentStatus]: React.ElementType } = {
         Paid: CheckCircle,
+        'Partially Paid': Hourglass,
         Pending: Hourglass,
         Upcoming: Hourglass,
-        Due: HandCoins,
+        Due: AlertTriangle,
         Cancelled: Ban
     }
     const Icon = IconMap[status];
@@ -244,7 +275,17 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
                             <CardContent className="p-4 space-y-3">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <p className="font-bold">{formatCurrency(item.payment)}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-bold">{formatCurrency(item.payment)}</p>
+                                            <Popover>
+                                                <PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-5 w-5"><Info className="h-3 w-3 text-muted-foreground" /></Button></PopoverTrigger>
+                                                <PopoverContent className="text-xs space-y-1 w-56">
+                                                     <div className="flex justify-between"><span>Total Due:</span> <span className="font-medium">{formatCurrency(item.payment)}</span></div>
+                                                    <div className="flex justify-between"><span>Paid:</span> <span className="font-medium">{formatCurrency(item.amountPaid)}</span></div>
+                                                    <div className="flex justify-between font-bold"><span>Remaining:</span> <span>{formatCurrency(item.amountRemaining)}</span></div>
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
                                         <p className="text-xs text-muted-foreground">Due: {format(item.dueDate, 'PPP')}</p>
                                     </div>
                                     <StatusBadge status={item.status} />
@@ -254,7 +295,7 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
                                     <div className="flex justify-between"><span className="text-muted-foreground">Markup:</span> <span>{formatCurrency(item.interest)}</span></div>
                                     <div className="flex justify-between"><span className="text-muted-foreground">Balance:</span> <span>{formatCurrency(item.balance)}</span></div>
                                 </div>
-                                {(item.isActionable && user && item.status !== 'Pending') && (
+                                {(item.isActionable && item.status !== 'Paid' && user) && (
                                     <div className="pt-3 border-t">
                                         <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
                                     </div>
@@ -282,11 +323,23 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
                             <TableCell data-label="Due Date">{format(item.dueDate, 'PPP')}</TableCell>
                             <TableCell data-label="Principal">{formatCurrency(item.principal)}</TableCell>
                             <TableCell data-label="Markup">{formatCurrency(item.interest)}</TableCell>
-                            <TableCell data-label="Total Payment" className="font-bold">{formatCurrency(item.payment)}</TableCell>
+                            <TableCell data-label="Total Payment" className="font-bold">
+                                <div className="flex items-center gap-2">
+                                    <span>{formatCurrency(item.payment)}</span>
+                                    <Popover>
+                                        <PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6"><Info className="h-4 w-4 text-muted-foreground" /></Button></PopoverTrigger>
+                                        <PopoverContent className="text-sm space-y-1 w-56">
+                                            <div className="flex justify-between"><span>Total Due:</span> <span className="font-medium">{formatCurrency(item.payment)}</span></div>
+                                            <div className="flex justify-between"><span>Paid:</span> <span className="font-medium">{formatCurrency(item.amountPaid)}</span></div>
+                                            <div className="flex justify-between font-bold"><span>Remaining:</span> <span>{formatCurrency(item.amountRemaining)}</span></div>
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+                            </TableCell>
                             <TableCell data-label="Balance">{formatCurrency(item.balance)}</TableCell>
                             <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
                             <TableCell data-label="Action" className="text-right w-40">
-                            {(item.isActionable && user && item.status !== 'Pending') && (
+                            {(item.isActionable && item.status !== 'Paid' && user) && (
                                 <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
                             )}
                             </TableCell>
@@ -318,3 +371,4 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
     </div>
   );
 }
+

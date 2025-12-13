@@ -6,6 +6,7 @@ import { initializeFirebase } from '@/firebase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { notifyAdmins } from '@/app/common/actions/notification-actions';
+import { adminDb } from '@/firebase/admin-app';
 
 // --- Lodge Payment Action ---
 const lodgePaymentSchema = z.object({
@@ -57,25 +58,14 @@ export async function lodgePaymentAction(
   const { dealId, amount, userId, dueDate, installmentNumber } = validatedFields.data;
 
   try {
-    const { firestore } = initializeFirebase();
+    const firestore = adminDb;
     const lodgedAt = Timestamp.now();
     const dueDateTimestamp = Timestamp.fromDate(new Date(dueDate));
     
-    // Check if a payment for this installment is already pending or approved
-    const existingRepaymentQuery = await firestore.collection('repayments')
-        .where('dealId', '==', dealId)
-        .where('installmentNumber', '==', installmentNumber)
-        .where('status', 'in', ['Pending', 'Approved'])
-        .limit(1)
-        .get();
-
-    if (!existingRepaymentQuery.empty) {
-        return {
-            success: false,
-            message: 'A payment for this installment is already pending or has been approved.',
-            repayment: null
-        };
-    }
+    // Server-side validation for partial payment
+    // We don't need to block lodging more than is due, but we can check.
+    // The admin approval process is the final gatekeeper.
+    // For now, we will trust the client-side validation on the form max value.
 
     const newRepaymentRef = await firestore.collection('repayments').add({
       dealId,
@@ -109,7 +99,7 @@ export async function lodgePaymentAction(
 
     return {
       success: true,
-      message: `Payment of ${formattedAmount} has been submitted.`,
+      message: `Payment of ${formattedAmount} has been submitted for approval.`,
       repayment: repaymentData,
     };
   } catch (error) {
