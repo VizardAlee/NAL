@@ -11,10 +11,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { HandCoins, CheckCircle, Hourglass, Ban } from 'lucide-react';
+import { HandCoins, CheckCircle, Hourglass, Ban, AlertTriangle } from 'lucide-react';
 import { generateAmortizationSchedule, ScheduleInstallment } from '@/lib/amortization';
 import { Deal, Repayment } from '@/lib/types';
-import { format, isSameDay, startOfToday } from 'date-fns';
+import { format, isPast } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Pagination,
@@ -26,67 +26,69 @@ import {
 } from "@/components/ui/pagination"
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogTrigger } from '@/components/ui/dialog';
+import { InstallmentDetailsDialog } from './installment-details-dialog';
 
 const ITEMS_PER_PAGE = 5;
 
-type RepaymentStatus = 'Paid' | 'Pending' | 'Due' | 'Upcoming' | 'Cancelled';
+type RepaymentStatus = 'Paid' | 'Partially Paid' | 'Pending' | 'Due' | 'Upcoming' | 'Cancelled';
 
 interface ScheduledPayment extends ScheduleInstallment {
   status: RepaymentStatus;
+  amountPaid: number;
+  amountRemaining: number;
+  paymentHistory: Repayment[];
 }
 
+const formatCurrency = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
 
 export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }: { deal: Deal, initialRepayments: Repayment[] | null, repaymentsLoading: boolean }) {
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedInstallment, setSelectedInstallment] = useState<ScheduledPayment | null>(null);
   const isMobile = useIsMobile();
   
   const schedule = useMemo(() => generateAmortizationSchedule(deal), [deal]);
   
   const enhancedSchedule = useMemo((): ScheduledPayment[] => {
     if (!schedule) return [];
-    const today = startOfToday();
     
     return schedule.map(installment => {
-      const matchingRepayment = initialRepayments?.find(r => 
-          r.dueDate && isSameDay(r.dueDate.toDate(), installment.dueDate)
-      );
+      const relatedRepayments = initialRepayments?.filter(r => 
+          r.installmentNumber === installment.installment
+      ) || [];
+
+      const approvedAmountPaid = relatedRepayments.filter(r => r.status === 'Approved').reduce((sum, r) => sum + r.amount, 0);
+      const pendingAmount = relatedRepayments.filter(r => r.status === 'Pending').reduce((sum, r) => sum + r.amount, 0);
+      const totalAmountPaid = approvedAmountPaid + pendingAmount;
+      const amountRemaining = Math.max(0, installment.payment - totalAmountPaid);
 
       let status: RepaymentStatus = 'Upcoming';
-      if (matchingRepayment) {
-        status = matchingRepayment.status === 'Approved' ? 'Paid' 
-                : matchingRepayment.status === 'Cancelled' ? 'Cancelled'
-                : 'Pending';
-      } else if (installment.dueDate < today) {
-        status = 'Due';
+      if (amountRemaining <= 0.01) { // Tolerance for float precision
+          status = 'Paid';
+      } else if (pendingAmount > 0) {
+          status = 'Pending';
+      } else if (approvedAmountPaid > 0) {
+          status = 'Partially Paid';
+      } else if (isPast(installment.dueDate)) {
+          status = 'Due';
       }
       
-      return { ...installment, status };
+      return { ...installment, status, amountPaid: totalAmountPaid, amountRemaining, paymentHistory: relatedRepayments };
     });
   }, [schedule, initialRepayments]);
   
-  const upcomingSchedule = useMemo(() => {
-      return enhancedSchedule.filter(p => p.status === 'Due' || p.status === 'Upcoming');
-  }, [enhancedSchedule]);
-
-  const finalSchedule = useMemo(() => {
-    // Sort to show 'Due' items first, then by due date
-    return upcomingSchedule.sort((a, b) => {
-        if (a.status === 'Due' && b.status !== 'Due') return -1;
-        if (a.status !== 'Due' && b.status === 'Due') return 1;
-        return a.installment - b.installment;
-    });
-  }, [upcomingSchedule]);
 
   const paginatedSchedule = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return finalSchedule.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [finalSchedule, currentPage]);
+    return enhancedSchedule.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [enhancedSchedule, currentPage]);
 
-  const totalPages = Math.ceil(finalSchedule.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(enhancedSchedule.length / ITEMS_PER_PAGE);
 
   const StatusBadge = ({ status }: { status: RepaymentStatus }) => {
     const variantMap: { [key in RepaymentStatus]: 'default' | 'secondary' | 'outline' | 'destructive' } = {
       Paid: 'default',
+      'Partially Paid': 'outline',
       Pending: 'outline',
       Upcoming: 'secondary',
       Due: 'destructive',
@@ -94,9 +96,10 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
     };
     const IconMap: { [key in RepaymentStatus]: React.ElementType } = {
         Paid: CheckCircle,
+        'Partially Paid': Hourglass,
         Pending: Hourglass,
         Upcoming: Hourglass,
-        Due: HandCoins,
+        Due: AlertTriangle,
         Cancelled: Ban
     }
     const Icon = IconMap[status];
@@ -104,7 +107,6 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
     return <Badge variant={variantMap[status]} className="flex items-center gap-1.5"><Icon className="h-3 w-3" /> {status}</Badge>;
   };
 
-  const formatCurrency = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
 
   if (repaymentsLoading) {
       return (
@@ -114,7 +116,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
       )
   }
 
-  if (deal.status !== 'Active') {
+  if (deal.status !== 'Active' && deal.status !== 'Completed' && deal.status !== 'Terminated') {
       return (
           <div className="p-6 text-sm text-muted-foreground text-center">
               {deal.status === 'Terminated' ? 'This deal has been terminated.' : 'Repayment schedule will be available once the deal is active.'}
@@ -133,81 +135,84 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
   if (paginatedSchedule.length === 0) {
      return (
       <div className="p-6 text-sm text-muted-foreground text-center">
-        No upcoming payments due.
+        No payments found in this view.
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
-        <div className="p-4 pt-2 flex-grow">
-            {isMobile ? (
-                <div className="space-y-3">
-                    {paginatedSchedule.map(item => (
-                        <Card key={`${item.installment}-${item.status}`}>
-                            <CardContent className="p-4 space-y-3">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="font-bold">{formatCurrency(item.payment)}</p>
-                                        <p className="text-xs text-muted-foreground">Due: {format(item.dueDate, 'PPP')}</p>
-                                    </div>
-                                    <StatusBadge status={item.status} />
-                                </div>
-                                <div className="text-xs space-y-1 pt-2 border-t">
-                                    <div className="flex justify-between"><span className="text-muted-foreground">Principal:</span> <span>{formatCurrency(item.principal)}</span></div>
-                                    <div className="flex justify-between"><span className="text-muted-foreground">Markup:</span> <span>{formatCurrency(item.interest)}</span></div>
-                                    <div className="flex justify-between"><span className="text-muted-foreground">Balance:</span> <span>{formatCurrency(item.balance)}</span></div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            ) : (
-                <Table>
-                    <TableHeader>
-                    <TableRow>
-                        <TableHead>Due Date</TableHead>
-                        <TableHead>Principal</TableHead>
-                        <TableHead>Markup</TableHead>
-                        <TableHead>Total Payment</TableHead>
-                        <TableHead>Balance</TableHead>
-                        <TableHead>Status</TableHead>
-                    </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                    {paginatedSchedule.map(item => (
-                        <TableRow key={`${item.installment}-${item.status}`}>
-                            <TableCell data-label="Due Date">{format(item.dueDate, 'PPP')}</TableCell>
-                            <TableCell data-label="Principal">{formatCurrency(item.principal)}</TableCell>
-                            <TableCell data-label="Markup">{formatCurrency(item.interest)}</TableCell>
-                            <TableCell data-label="Total Payment" className="font-bold">{formatCurrency(item.payment)}</TableCell>
-                            <TableCell data-label="Balance">{formatCurrency(item.balance)}</TableCell>
-                            <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
+    <Dialog onOpenChange={(isOpen) => !isOpen && setSelectedInstallment(null)}>
+        <div className="flex flex-col h-full">
+            <div className="p-4 pt-2 flex-grow">
+                {isMobile ? (
+                    <div className="space-y-3">
+                        {paginatedSchedule.map(item => (
+                            <DialogTrigger key={`${item.installment}-${item.status}`} asChild>
+                                <Card onClick={() => setSelectedInstallment(item)}>
+                                    <CardContent className="p-4 space-y-3">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-bold">{formatCurrency(item.payment)}</p>
+                                                <p className="text-xs text-muted-foreground">Due: {format(item.dueDate, 'PPP')}</p>
+                                            </div>
+                                            <StatusBadge status={item.status} />
+                                        </div>
+                                        <div className="text-xs space-y-1 pt-2 border-t">
+                                            <div className="flex justify-between"><span className="text-muted-foreground">Principal:</span> <span>{formatCurrency(item.principal)}</span></div>
+                                            <div className="flex justify-between"><span className="text-muted-foreground">Markup:</span> <span>{formatCurrency(item.interest)}</span></div>
+                                            <div className="flex justify-between"><span className="text-muted-foreground">Remaining:</span> <span className="font-bold text-primary">{formatCurrency(item.amountRemaining)}</span></div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </DialogTrigger>
+                        ))}
+                    </div>
+                ) : (
+                    <Table>
+                        <TableHeader>
+                        <TableRow>
+                            <TableHead>Due Date</TableHead>
+                            <TableHead>Total Due</TableHead>
+                            <TableHead>Remaining</TableHead>
+                            <TableHead>Status</TableHead>
                         </TableRow>
-                    ))}
-                    </TableBody>
-                </Table>
+                        </TableHeader>
+                        <TableBody>
+                        {paginatedSchedule.map(item => (
+                            <DialogTrigger key={`${item.installment}-${item.status}`} asChild>
+                                <TableRow onClick={() => setSelectedInstallment(item)} className="cursor-pointer">
+                                    <TableCell data-label="Due Date">{format(item.dueDate, 'PPP')}</TableCell>
+                                    <TableCell data-label="Total Due" className="font-medium">{formatCurrency(item.payment)}</TableCell>
+                                    <TableCell data-label="Remaining" className="font-bold text-primary">{formatCurrency(item.amountRemaining)}</TableCell>
+                                    <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
+                                </TableRow>
+                            </DialogTrigger>
+                        ))}
+                        </TableBody>
+                    </Table>
+                )}
+            </div>
+            {totalPages > 1 && (
+                <div className="p-4 border-t">
+                    <Pagination>
+                        <PaginationContent>
+                            <PaginationItem>
+                                <PaginationPrevious href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1))}} aria-disabled={currentPage === 1}/>
+                            </PaginationItem>
+                            {[...Array(totalPages)].map((_, i) => (
+                                <PaginationItem key={i}>
+                                    <PaginationLink href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(i + 1)}} isActive={currentPage === i+1}>{i+1}</PaginationLink>
+                                </PaginationItem>
+                            ))}
+                            <PaginationItem>
+                                <PaginationNext href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1))}} aria-disabled={currentPage === totalPages} />
+                            </PaginationItem>
+                        </PaginationContent>
+                    </Pagination>
+                </div>
             )}
         </div>
-        {totalPages > 1 && (
-            <div className="p-4 border-t">
-                <Pagination>
-                    <PaginationContent>
-                        <PaginationItem>
-                            <PaginationPrevious href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1))}} aria-disabled={currentPage === 1}/>
-                        </PaginationItem>
-                        {[...Array(totalPages)].map((_, i) => (
-                             <PaginationItem key={i}>
-                                <PaginationLink href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(i + 1)}} isActive={currentPage === i+1}>{i+1}</PaginationLink>
-                             </PaginationItem>
-                        ))}
-                        <PaginationItem>
-                            <PaginationNext href="#" onClick={(e) => {e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1))}} aria-disabled={currentPage === totalPages} />
-                        </PaginationItem>
-                    </PaginationContent>
-                </Pagination>
-            </div>
-        )}
-    </div>
+        {selectedInstallment && <InstallmentDetailsDialog installment={selectedInstallment} />}
+    </Dialog>
   );
 }
