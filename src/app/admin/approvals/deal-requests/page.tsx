@@ -11,19 +11,18 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Loader2, XCircle, FilePlus, Hourglass, History, FileText, Download } from 'lucide-react';
+import { FilePlus, Hourglass, History, FileText, Download, ArrowRight } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs, addDoc, orderBy } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
-import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -33,7 +32,6 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import Link from 'next/link';
 
 type DealRequest = DocumentData & {
   id: string;
@@ -53,7 +51,7 @@ type DealRequest = DocumentData & {
   processedAt?: Timestamp;
 };
 
-// New hook to clear notifications when a page is visited
+// Hook to clear notifications when a page is visited
 function useClearNotificationsByPath() {
     const firestore = useFirestore();
     const pathname = usePathname();
@@ -95,21 +93,21 @@ function useClearNotificationsByPath() {
 function DealRequestsTable({
     requests,
     isLoading,
-    showActionButtons,
-    onProcessRequest
+    isPendingTab,
 }: {
     requests: DealRequest[],
     isLoading: boolean,
-    showActionButtons: boolean,
-    onProcessRequest?: (request: DealRequest, newStatus: 'Approved' | 'Rejected') => void
+    isPendingTab: boolean,
 }) {
-    const [processingId, setProcessingId] = useState<string | null>(null);
     const isMobile = useIsMobile();
+    const router = useRouter();
 
-    const handleProcessClick = (request: DealRequest, newStatus: 'Approved' | 'Rejected') => {
-        setProcessingId(request.id);
-        onProcessRequest?.(request, newStatus);
+    const handleRowClick = (requestId: string) => {
+        if(isPendingTab) {
+            router.push(`/admin/approvals/deal-requests/${requestId}`);
+        }
     };
+
 
     if (isLoading) {
         if (isMobile) {
@@ -159,7 +157,7 @@ function DealRequestsTable({
         return (
             <div className="space-y-3">
                 {requests.map((request) => (
-                    <Card key={request.id}>
+                    <Card key={request.id} onClick={() => handleRowClick(request.id)} className={isPendingTab ? 'cursor-pointer' : ''}>
                         <CardContent className="p-4 space-y-3">
                             <div className="flex justify-between items-start">
                                 <div>
@@ -168,55 +166,13 @@ function DealRequestsTable({
                                     <p className="text-sm text-muted-foreground font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.principal)}</p>
                                     <p className="text-xs text-muted-foreground">{format(request.requestedAt.toDate(), 'PPP')}</p>
                                 </div>
-                                {!showActionButtons && <Badge variant={request.status === 'Approved' ? 'default' : 'destructive'}>{request.status}</Badge>}
+                                <Badge variant={request.status === 'Approved' ? 'default' : request.status === 'Rejected' ? 'destructive' : 'secondary'}>{request.status}</Badge>
                             </div>
-                            <div className="flex justify-between items-center pt-2 border-t flex-wrap gap-2">
-                                <div className="flex gap-2">
-                                    {request.proposalDetails && (
-                                        <Dialog>
-                                            <DialogTrigger asChild>
-                                                <Button variant="outline" size="sm"><FileText className="mr-2 h-4 w-4" />View Summary</Button>
-                                            </DialogTrigger>
-                                            <DialogContent className="max-w-2xl">
-                                                <DialogHeader>
-                                                    <DialogTitle>{request.dealName} - Deal Proposal Summary</DialogTitle>
-                                                    <DialogDescription>Submitted by {request.clientName}</DialogDescription>
-                                                </DialogHeader>
-                                                <ScrollArea className="h-96">
-                                                    <p className="whitespace-pre-wrap p-4">{request.proposalDetails}</p>
-                                                </ScrollArea>
-                                            </DialogContent>
-                                        </Dialog>
-                                    )}
-                                     {request.proposalPdf && (
-                                        <Button variant="outline" size="sm" asChild>
-                                            <a href={request.proposalPdf} target="_blank" rel="noopener noreferrer" download={`${request.dealName}-proposal.pdf`}>
-                                                <Download className="mr-2 h-4 w-4" />
-                                                View PDF
-                                            </a>
-                                        </Button>
-                                    )}
-                                </div>
-                                {showActionButtons && (
-                                    <div className="flex justify-end gap-2 flex-1">
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleProcessClick(request, 'Rejected')}
-                                            disabled={processingId === request.id}
-                                        >
-                                            {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
-                                            Reject
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            onClick={() => handleProcessClick(request, 'Approved')}
-                                            disabled={processingId === request.id}
-                                        >
-                                            {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
-                                            Approve
-                                        </Button>
-                                    </div>
+                            <div className="flex justify-end items-center pt-2 border-t">
+                                {isPendingTab ? (
+                                    <Button variant="outline" size="sm">View Request <ArrowRight className="ml-2 h-4 w-4"/></Button>
+                                ) : (
+                                    <span className="text-xs text-muted-foreground">Processed on {request.processedAt ? format(request.processedAt.toDate(), 'PPP') : 'N/A'}</span>
                                 )}
                             </div>
                         </CardContent>
@@ -236,71 +192,23 @@ function DealRequestsTable({
                             <TableHead>Deal Name</TableHead>
                             <TableHead>Principal</TableHead>
                             <TableHead>Date Requested</TableHead>
-                            <TableHead>Deal Proposal</TableHead>
-                            {showActionButtons ? <TableHead className="text-right">Actions</TableHead> : <TableHead>Status</TableHead>}
+                            <TableHead>Status</TableHead>
+                            {isPendingTab && <TableHead className="text-right">Action</TableHead>}
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {requests.map((request) => (
-                            <TableRow key={request.id}>
+                            <TableRow key={request.id} onClick={() => handleRowClick(request.id)} className={isPendingTab ? 'cursor-pointer' : ''}>
                                 <TableCell data-label="Client" className="font-medium">{request.clientName}</TableCell>
                                 <TableCell data-label="Deal Name">{request.dealName}</TableCell>
                                 <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.principal)}</TableCell>
                                 <TableCell data-label="Date Requested">{format(request.requestedAt.toDate(), 'PPP')}</TableCell>
-                                <TableCell>
-                                    <div className="flex gap-2">
-                                        {request.proposalDetails ? (
-                                            <Dialog>
-                                                <DialogTrigger asChild>
-                                                    <Button variant="outline" size="sm"><FileText className="mr-2 h-4 w-4" />Summary</Button>
-                                                </DialogTrigger>
-                                                <DialogContent className="max-w-2xl">
-                                                    <DialogHeader>
-                                                        <DialogTitle>{request.dealName} - Deal Proposal Summary</DialogTitle>
-                                                        <DialogDescription>Submitted by {request.clientName}</DialogDescription>
-                                                    </DialogHeader>
-                                                    <ScrollArea className="h-96">
-                                                        <p className="whitespace-pre-wrap p-4">{request.proposalDetails}</p>
-                                                    </ScrollArea>
-                                                </DialogContent>
-                                            </Dialog>
-                                        ) : null}
-                                        {request.proposalPdf && (
-                                            <Button variant="outline" size="sm" asChild>
-                                                <a href={request.proposalPdf} target="_blank" rel="noopener noreferrer" download={`${request.dealName}-proposal.pdf`}>
-                                                    <Download className="mr-2 h-4 w-4" />
-                                                    PDF
-                                                </a>
-                                            </Button>
-                                        )}
-                                        {!request.proposalDetails && !request.proposalPdf && (
-                                             <span className="text-muted-foreground text-xs">N/A</span>
-                                        )}
-                                    </div>
+                                <TableCell data-label="Status">
+                                    <Badge variant={request.status === 'Approved' ? 'default' : request.status === 'Rejected' ? 'destructive' : 'secondary'}>{request.status}</Badge>
                                 </TableCell>
-                                {showActionButtons ? (
-                                    <TableCell data-label="Actions" className="text-right space-x-2">
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleProcessClick(request, 'Rejected')}
-                                            disabled={processingId === request.id}
-                                        >
-                                            {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
-                                            Reject
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            onClick={() => handleProcessClick(request, 'Approved')}
-                                            disabled={processingId === request.id}
-                                        >
-                                            {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
-                                            Approve
-                                        </Button>
-                                    </TableCell>
-                                ) : (
-                                    <TableCell data-label="Status">
-                                        <Badge variant={request.status === 'Approved' ? 'default' : 'destructive'}>{request.status}</Badge>
+                                {isPendingTab && (
+                                    <TableCell data-label="Actions" className="text-right">
+                                        <Button variant="outline" size="sm">Review <ArrowRight className="ml-2 h-4 w-4"/></Button>
                                     </TableCell>
                                 )}
                             </TableRow>
@@ -313,70 +221,14 @@ function DealRequestsTable({
 }
 
 export default function DealRequestsPage() {
-    const firestore = useFirestore();
-    const { toast } = useToast();
-    const [processingId, setProcessingId] = useState<string | null>(null);
-
     useClearNotificationsByPath();
 
+    const firestore = useFirestore();
     const pendingQuery = useMemo(() => firestore ? query(collection(firestore, 'dealRequests'), where('status', '==', 'Pending'), orderBy('requestedAt', 'asc')) : null, [firestore]);
     const processedQuery = useMemo(() => firestore ? query(collection(firestore, 'dealRequests'), where('status', 'in', ['Approved', 'Rejected']), orderBy('processedAt', 'desc')) : null, [firestore]);
 
     const { data: pendingRequests, loading: pendingLoading } = useCollection<DealRequest>(pendingQuery);
     const { data: processedRequests, loading: processedLoading } = useCollection<DealRequest>(processedQuery);
-    
-    const isLoading = pendingLoading || processedLoading;
-
-    const handleProcessRequest = async (request: DealRequest, newStatus: 'Approved' | 'Rejected') => {
-        if (!firestore) return;
-        setProcessingId(request.id);
-        
-        try {
-            const batch = writeBatch(firestore);
-            const requestRef = doc(firestore, 'dealRequests', request.id);
-
-            batch.update(requestRef, {
-                status: newStatus,
-                processedAt: Timestamp.now()
-            });
-            
-            if (newStatus === 'Approved') {
-                const newDealData = {
-                    dealName: request.dealName,
-                    clientId: request.clientId,
-                    clientName: request.clientName,
-                    principal: request.principal,
-                    profitRate: request.profitRate,
-                    durationValue: request.durationValue,
-                    durationUnit: request.durationUnit,
-                    repaymentType: request.repaymentType,
-                    repaymentFrequency: request.repaymentFrequency,
-                    status: 'Pending', // New deals start as 'Pending' until funded
-                    createdAt: Timestamp.now(),
-                    startDate: Timestamp.now(),
-                };
-                const newDealRef = doc(collection(firestore, 'deals'));
-                batch.set(newDealRef, newDealData);
-            }
-
-            await batch.commit();
-
-            toast({
-                title: `Request ${newStatus}`,
-                description: `Deal request "${request.dealName}" has been ${newStatus.toLowerCase()}.`
-            });
-
-        } catch (error) {
-            console.error("Processing Error: ", error);
-            toast({
-                variant: 'destructive',
-                title: "Processing Failed",
-                description: error instanceof Error ? error.message : "An unknown error occurred.",
-            });
-        } finally {
-            setProcessingId(null);
-        }
-    };
 
     return (
         <div>
@@ -394,15 +246,14 @@ export default function DealRequestsPage() {
                     <DealRequestsTable
                         requests={pendingRequests || []}
                         isLoading={pendingLoading}
-                        showActionButtons={true}
-                        onProcessRequest={handleProcessRequest}
+                        isPendingTab={true}
                     />
                 </TabsContent>
                 <TabsContent value="processed" className="mt-4">
                     <DealRequestsTable
                         requests={processedRequests || []}
                         isLoading={processedLoading}
-                        showActionButtons={false}
+                        isPendingTab={false}
                     />
                 </TabsContent>
             </Tabs>
