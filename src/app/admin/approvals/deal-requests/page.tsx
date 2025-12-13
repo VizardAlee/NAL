@@ -62,21 +62,25 @@ function useClearNotificationsByPath() {
         if (!firestore || !pathname) return;
 
         const clearNotifications = async () => {
-            const notificationsToClearQuery = query(
-                collection(firestore, 'notifications'),
-                where('link', '==', pathname),
-                where('read', '==', false)
-            );
-            
-            const snapshot = await getDocs(notificationsToClearQuery);
-            if (snapshot.empty) return;
+            try {
+                const notificationsToClearQuery = query(
+                    collection(firestore, 'notifications'),
+                    where('link', '==', pathname),
+                    where('read', '==', false)
+                );
+                
+                const snapshot = await getDocs(notificationsToClearQuery);
+                if (snapshot.empty) return;
 
-            const batch = writeBatch(firestore);
-            snapshot.docs.forEach(doc => {
-                batch.update(doc.ref, { read: true });
-            });
-            
-            await batch.commit();
+                const batch = writeBatch(firestore);
+                snapshot.docs.forEach(doc => {
+                    batch.update(doc.ref, { read: true });
+                });
+                
+                await batch.commit();
+            } catch (error) {
+                console.error("Failed to clear notifications due to a permission error. Full error details:", error);
+            }
         };
 
         const timer = setTimeout(clearNotifications, 500);
