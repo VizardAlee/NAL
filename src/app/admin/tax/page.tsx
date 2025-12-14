@@ -9,7 +9,6 @@ import { useFirestore } from "@/firebase";
 import { collection, query, where, DocumentData, Timestamp } from "firebase/firestore";
 import { Landmark, Loader2, CalendarIcon } from "lucide-react";
 import { useMemo, useState } from "react";
-import { DateRange } from "react-day-picker";
 import { startOfDay, endOfDay, format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -82,44 +81,33 @@ export default function TaxPage() {
         
         const grossProfit = platformEarnings + managementFees;
         
-        // Personal Income Tax (PIT) for Enterprises
-        // 1. Calculate Consolidated Relief Allowance (CRA)
         const cra = Math.max(200000, grossProfit * 0.01) + (grossProfit * 0.20);
-        
-        // 2. Determine Chargeable Income
         const chargeableIncome = Math.max(0, grossProfit - cra);
         
-        // 3. Apply Progressive Tax Rates
         let personalIncomeTax = 0;
         let incomeLeft = chargeableIncome;
+        const taxBreakdown = [];
         
-        if (incomeLeft > 0) {
-            const firstBracket = Math.min(incomeLeft, 300000);
-            personalIncomeTax += firstBracket * 0.07;
-            incomeLeft -= firstBracket;
-        }
-        if (incomeLeft > 0) {
-            const secondBracket = Math.min(incomeLeft, 300000);
-            personalIncomeTax += secondBracket * 0.11;
-            incomeLeft -= secondBracket;
-        }
-        if (incomeLeft > 0) {
-            const thirdBracket = Math.min(incomeLeft, 500000);
-            personalIncomeTax += thirdBracket * 0.15;
-            incomeLeft -= thirdBracket;
-        }
-        if (incomeLeft > 0) {
-            const fourthBracket = Math.min(incomeLeft, 500000);
-            personalIncomeTax += fourthBracket * 0.19;
-            incomeLeft -= fourthBracket;
-        }
-        if (incomeLeft > 0) {
-            const fifthBracket = Math.min(incomeLeft, 1600000);
-            personalIncomeTax += fifthBracket * 0.21;
-            incomeLeft -= fifthBracket;
-        }
-        if (incomeLeft > 0) {
-            personalIncomeTax += incomeLeft * 0.24;
+        const brackets = [
+            { limit: 300000, rate: 0.07 },
+            { limit: 300000, rate: 0.11 },
+            { limit: 500000, rate: 0.15 },
+            { limit: 500000, rate: 0.19 },
+            { limit: 1600000, rate: 0.21 },
+            { limit: Infinity, rate: 0.24 },
+        ];
+
+        for (const bracket of brackets) {
+            if (incomeLeft <= 0) break;
+            const taxableInBracket = Math.min(incomeLeft, bracket.limit);
+            const taxForBracket = taxableInBracket * bracket.rate;
+            personalIncomeTax += taxForBracket;
+            taxBreakdown.push({
+                rate: bracket.rate * 100,
+                amount: taxableInBracket,
+                tax: taxForBracket
+            });
+            incomeLeft -= taxableInBracket;
         }
 
         const profitAfterTax = grossProfit - personalIncomeTax;
@@ -130,6 +118,7 @@ export default function TaxPage() {
             chargeableIncome,
             personalIncomeTax,
             profitAfterTax,
+            taxBreakdown,
         };
 
     }, [earningsTransactions, feeTransactions]);
@@ -214,7 +203,7 @@ export default function TaxPage() {
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
                     <Card className="lg:col-span-2">
                         <CardHeader>
-                            <CardTitle>Personal Income Tax (PIT) Estimation</CardTitle>
+                            <CardTitle>Personal Income Tax (PIT) Summary</CardTitle>
                             <CardDescription>Based on Nigerian PITA rates for enterprise businesses.</CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -236,10 +225,43 @@ export default function TaxPage() {
                             </Table>
                         </CardContent>
                     </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Tax Breakdown</CardTitle>
+                             <CardDescription>Progressive tax rates applied to chargeable income.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Rate</TableHead>
+                                        <TableHead>Taxable Amount</TableHead>
+                                        <TableHead className="text-right">Tax</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {taxCalculations.taxBreakdown.map((bracket, index) => (
+                                        <TableRow key={index}>
+                                            <TableCell>{bracket.rate}%</TableCell>
+                                            <TableCell>{formatCurrency(bracket.amount)}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(bracket.tax)}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {taxCalculations.taxBreakdown.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={3} className="text-center h-24">No chargeable income.</TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+
                      <TaxMetricCard 
                         title="Estimated Personal Income Tax (PIT)"
                         value={taxCalculations.personalIncomeTax}
-                        description="Calculated based on progressive rates"
+                        description="Total tax from all brackets"
                         isLoading={isLoading}
                     />
                     <TaxMetricCard 
