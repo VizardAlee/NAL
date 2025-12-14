@@ -60,6 +60,7 @@ type Transaction = DocumentData & {
   type: string;
   amount: number;
   createdAt: Timestamp;
+  dealName?: string;
 };
 
 const DURATION_IN_DAYS = {
@@ -586,76 +587,160 @@ export default function UserDetailPage() {
                     </>
                 )}
                  {userProfile.role === 'Client' && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <FileText className="h-5 w-5" />
-                                <span>Client Deals</span>
-                            </CardTitle>
-                            <CardDescription>
-                                A list of all financing deals associated with this client.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {isMobile ? (
-                                <div className="space-y-3">
-                                    {clientDeals && clientDeals.length > 0 ? clientDeals.map(deal => (
-                                        <Card key={deal.id} className="p-4" onClick={() => router.push(`/admin/deals/${deal.id}`)}>
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <p className="font-medium">{deal.dealName}</p>
-                                                     <p className="text-sm font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</p>
-                                                </div>
-                                                <Badge variant={statusVariant[deal.status as keyof typeof statusVariant] || 'secondary'}>
-                                                    {deal.status}
-                                                </Badge>
-                                            </div>
-                                        </Card>
-                                    )) : (
-                                        <div className="text-center text-sm text-muted-foreground py-10">This client has no deals.</div>
-                                    )}
-                                </div>
-                            ) : (
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Deal Name</TableHead>
-                                            <TableHead>Principal</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead className="text-right">Action</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
+                    <>
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <FileText className="h-5 w-5" />
+                                    <span>Client Deals</span>
+                                </CardTitle>
+                                <CardDescription>
+                                    A list of all financing deals associated with this client.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {isMobile ? (
+                                    <div className="space-y-3">
                                         {clientDeals && clientDeals.length > 0 ? clientDeals.map(deal => (
-                                            <TableRow key={deal.id} className="cursor-pointer" onClick={() => router.push(`/admin/deals/${deal.id}`)}>
-                                                <TableCell className="font-medium">{deal.dealName}</TableCell>
-                                                <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
-                                                <TableCell>
+                                            <Card key={deal.id} className="p-4" onClick={() => router.push(`/admin/deals/${deal.id}`)}>
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <p className="font-medium">{deal.dealName}</p>
+                                                        <p className="text-sm font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</p>
+                                                    </div>
                                                     <Badge variant={statusVariant[deal.status as keyof typeof statusVariant] || 'secondary'}>
                                                         {deal.status}
                                                     </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button variant="outline" size="sm">
-                                                        View Deal <ArrowRight className="ml-2 h-4 w-4" />
-                                                    </Button>
+                                                </div>
+                                            </Card>
+                                        )) : (
+                                            <div className="text-center text-sm text-muted-foreground py-10">This client has no deals.</div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Deal Name</TableHead>
+                                                <TableHead>Principal</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead className="text-right">Action</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {clientDeals && clientDeals.length > 0 ? clientDeals.map(deal => (
+                                                <TableRow key={deal.id} className="cursor-pointer" onClick={() => router.push(`/admin/deals/${deal.id}`)}>
+                                                    <TableCell className="font-medium">{deal.dealName}</TableCell>
+                                                    <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
+                                                    <TableCell>
+                                                        <Badge variant={statusVariant[deal.status as keyof typeof statusVariant] || 'secondary'}>
+                                                            {deal.status}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button variant="outline" size="sm">
+                                                            View Deal <ArrowRight className="ml-2 h-4 w-4" />
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            )) : (
+                                                <TableRow>
+                                                    <TableCell colSpan={4} className="h-24 text-center">
+                                                        This client has no deals.
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <History className="h-5 w-5" />
+                                    <span>Transaction History</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                            {isMobile ? (
+                                    <div className="space-y-3">
+                                        {paginatedTransactions?.length > 0 ? paginatedTransactions.map(tx => (
+                                            <Card key={tx.id} className="p-4">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
+                                                        <p className="text-xs text-muted-foreground mt-1">{formatDate(tx.createdAt)}</p>
+                                                    </div>
+                                                     <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : 'text-destructive'}`}>
+                                                        {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                                    </p>
+                                                </div>
+                                                <p className="text-sm text-muted-foreground pt-2 border-t mt-2">Deal: {tx.dealName || 'N/A'}</p>
+                                            </Card>
+                                        )) : (
+                                            <p className="text-sm text-muted-foreground text-center py-4">No transactions found.</p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Date</TableHead>
+                                            <TableHead>Type</TableHead>
+                                            <TableHead>Deal</TableHead>
+                                            <TableHead className="text-right">Amount</TableHead>
+                                        </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                        {paginatedTransactions?.map(tx => (
+                                            <TableRow key={tx.id}>
+                                                <TableCell>{formatDate(tx.createdAt)}</TableCell>
+                                                <TableCell><Badge variant={tx.amount > 0 ? 'default' : 'secondary'}>{tx.type}</Badge></TableCell>
+                                                <TableCell>{tx.dealName || 'N/A'}</TableCell>
+                                                <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : 'text-destructive'}`}>
+                                                    {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
                                                 </TableCell>
                                             </TableRow>
-                                        )) : (
+                                        ))}
+                                        {!paginatedTransactions?.length && (
                                             <TableRow>
                                                 <TableCell colSpan={4} className="h-24 text-center">
-                                                    This client has no deals.
+                                                    No transactions found.
                                                 </TableCell>
                                             </TableRow>
                                         )}
-                                    </TableBody>
-                                </Table>
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </CardContent>
+                            {totalPages > 1 && (
+                                <div className="p-4 border-t">
+                                    <Pagination>
+                                        <PaginationContent>
+                                            <PaginationItem>
+                                                <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} />
+                                            </PaginationItem>
+                                            {[...Array(totalPages)].map((_, i) => (
+                                                <PaginationItem key={i}>
+                                                    <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>
+                                                        {i + 1}
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            ))}
+                                            <PaginationItem>
+                                                <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} />
+                                            </PaginationItem>
+                                        </PaginationContent>
+                                    </Pagination>
+                                </div>
                             )}
-                        </CardContent>
-                    </Card>
+                        </Card>
+                    </>
                 )}
             </div>
         </div>
     </div>
   );
 }
+
