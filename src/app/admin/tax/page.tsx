@@ -17,8 +17,8 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin, { DateClickArg } from '@fullcalendar/interaction';
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 
 type Transaction = DocumentData & {
@@ -82,9 +82,10 @@ export default function TaxPage() {
         const platformEarnings = earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
         const managementFees = adminTransactions?.filter(tx => tx.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0) || 0;
         
-        const annualRent = adminTransactions
-            ?.filter(tx => tx.type === 'Expense' && tx.description.toLowerCase().includes('rent'))
-            .reduce((sum, tx) => sum + Math.abs(tx.amount), 0) || 0;
+        const rentTransaction = adminTransactions
+            ?.find(tx => tx.type === 'Expense' && tx.description.toLowerCase().includes('rent'));
+        
+        const annualRent = rentTransaction ? Math.abs(rentTransaction.amount) : 0;
 
         const grossProfit = platformEarnings + managementFees;
         const rentRelief = Math.min(annualRent * 0.20, 500000);
@@ -223,9 +224,10 @@ export default function TaxPage() {
                                 <Input 
                                     type="text"
                                     value={formatCurrency(taxCalculations.annualRent)}
-                                    disabled
+                                    readOnly
+                                    className="font-medium"
                                 />
-                                <p className="text-xs text-muted-foreground">This value is automatically calculated from administrative expenses with "rent" in the description.</p>
+                                <p className="text-xs text-muted-foreground">This value is automatically calculated from the first administrative expense with "rent" in the description for the selected period.</p>
                             </div>
                             <Table>
                                 <TableBody>
@@ -234,7 +236,7 @@ export default function TaxPage() {
                                         <TableCell className="text-right">{formatCurrency(taxCalculations.grossProfit)}</TableCell>
                                     </TableRow>
                                     <TableRow>
-                                        <TableCell>Rent Relief Allowance</TableCell>
+                                        <TableCell>Rent Relief Allowance (20% of rent, capped at ₦500k)</TableCell>
                                         <TableCell className="text-right text-destructive">- {formatCurrency(taxCalculations.rentRelief)}</TableCell>
                                     </TableRow>
                                     <TableRow className="font-medium bg-muted/50">
