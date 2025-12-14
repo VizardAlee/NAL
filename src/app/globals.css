@@ -1,7 +1,4 @@
 
-@import "@fullcalendar/common/main.css";
-@import "@fullcalendar/daygrid/main.css";
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -120,8 +117,15 @@ body {
     }
   }
 
-  .rdp-head_cell {
-    width: 2.25rem; /* 36px, matching the day cell width */
+  .rdp-table { 
+    width: 100%;
+  }
+  .rdp-head_row, .rdp-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+  }
+  .rdp-cell {
+    width: auto;
   }
 }
 
