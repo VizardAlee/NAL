@@ -117,3 +117,36 @@ body {
     }
   }
 }
+
+/* FullCalendar Customizations */
+.fc {
+  --fc-border-color: transparent;
+  --fc-today-bg-color: hsla(var(--accent) / 0.1);
+  --fc-highlight-color: hsla(var(--primary) / 0.1);
+  font-size: 0.8rem;
+}
+.fc .fc-toolbar-title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.fc .fc-button {
+  background-color: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  border: 1px solid hsl(var(--border));
+  box-shadow: none;
+  text-transform: capitalize;
+}
+.fc .fc-button:hover {
+    background-color: hsl(var(--muted));
+}
+.fc .fc-button-primary:not(:disabled).fc-button-active, 
+.fc .fc-button-primary:not(:disabled):active {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+}
+.fc .fc-daygrid-day-number {
+  padding: 4px;
+}
+.fc .fc-daygrid-day:hover {
+    background-color: hsla(var(--accent) / 0.05);
+}
