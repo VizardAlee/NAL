@@ -10,6 +10,7 @@ import { Logo } from "@/components/icons";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
+import { StatsCounter } from "@/components/stats-counter";
 
 const featureImages = PlaceHolderImages.filter(img => ['feature-investor', 'feature-client', 'feature-admin'].includes(img.id));
 const heroImage = PlaceHolderImages.find(img => img.id === 'hero-image');
@@ -79,6 +80,8 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        <StatsCounter />
 
         <section id="features" className="w-full bg-card py-12 md:py-24 lg:py-32">
           <div className="container">
