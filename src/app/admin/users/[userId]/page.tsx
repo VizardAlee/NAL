@@ -26,6 +26,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ViewPageNav } from '@/components/view-page-nav';
 import { payZakatAction } from './actions';
 import { useToast } from '@/hooks/use-toast';
@@ -462,13 +463,25 @@ export default function UserDetailPage() {
                     <CardContent>
                         {userProfile.legalDocumentUrl ? (
                             <div>
-                                {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
-                                    <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={500} height={700} className="rounded-md border object-contain" />
-                                ) : (
-                                    <embed src={userProfile.legalDocumentUrl} type="application/pdf" width="100%" height="500px" className="rounded-md border" />
-                                )}
+                                <Sheet>
+                                    <SheetTrigger asChild>
+                                        <Button variant="outline"><Gavel className="mr-2 h-4 w-4" /> View Legal Document</Button>
+                                    </SheetTrigger>
+                                    <SheetContent className="w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl flex flex-col">
+                                        <SheetHeader>
+                                            <SheetTitle>Signed Legal Document</SheetTitle>
+                                        </SheetHeader>
+                                        <div className="py-4 flex-1 bg-white overflow-y-auto">
+                                            {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
+                                                <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={800} height={1100} className="rounded-md object-contain mx-auto" />
+                                            ) : (
+                                                <embed src={userProfile.legalDocumentUrl} type="application/pdf" width="100%" height="100%" className="rounded-md" />
+                                            )}
+                                        </div>
+                                    </SheetContent>
+                                </Sheet>
                                 {isAdmin && (
-                                  <div className='mt-4'>
+                                  <div className='mt-4 border-t pt-4'>
                                       <h3 className="font-medium mb-2">Replace Document:</h3>
                                       <LegalDocumentUploader userId={userId} />
                                   </div>
@@ -786,5 +799,3 @@ export default function UserDetailPage() {
     </div>
   );
 }
-
-    

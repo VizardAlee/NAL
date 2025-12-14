@@ -5,7 +5,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2, HandCoins } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, HandCoins, Gavel } from "lucide-react";
 import { useMemo, useTransition } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, doc } from 'firebase/firestore';
@@ -20,7 +20,13 @@ import { useToast } from "@/hooks/use-toast";
 import { requestTerminationAction } from "../../dashboard/actions";
 import { notFound, useParams } from "next/navigation";
 import { ViewPageNav } from "@/components/view-page-nav";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import Image from "next/image";
 
+type UserProfile = DocumentData & {
+    id: string;
+    legalDocumentUrl?: string;
+};
 
 const statusVariant = {
     Pending: 'secondary',
@@ -63,7 +69,14 @@ export default function ClientDealDetailPage() {
         return doc(firestore, 'deals', dealId);
     }, [firestore, dealId]);
 
+    const userProfileRef = useMemo(() => {
+        if (!firestore || !user?.uid) return null;
+        return doc(firestore, 'users', user.uid);
+    }, [firestore, user?.uid]);
+
+
     const { data: deal, loading: dealLoading } = useDoc<Deal>(dealRef as any);
+    const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userProfileRef);
 
     const repaymentsQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
@@ -101,7 +114,7 @@ export default function ClientDealDetailPage() {
         });
     }
 
-    if (dealLoading) {
+    if (dealLoading || profileLoading) {
         return <DealDetailSkeleton />;
     }
 
@@ -114,73 +127,102 @@ export default function ClientDealDetailPage() {
             <PageHeader title={deal.dealName} icon={FileText}>
                 <ViewPageNav homePath="/client/dashboard" />
             </PageHeader>
-            <Card className="flex flex-col">
-                <CardHeader>
-                    <div className="flex items-start justify-between">
-                        <CardTitle className="font-headline text-xl">{deal.dealName}</CardTitle>
-                        <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
+            <div className="grid gap-6 md:grid-cols-3">
+                <Card className="flex flex-col md:col-span-2">
+                    <CardHeader>
+                        <div className="flex items-start justify-between">
+                            <CardTitle className="font-headline text-xl">{deal.dealName}</CardTitle>
+                            <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
+                        </div>
+                        <CardDescription>{deal.clientName}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-4">
+                    <div className="flex items-center justify-between p-3 rounded-md bg-muted/50">
+                            <span className="text-sm text-muted-foreground">Principal Amount</span>
+                            <span className="font-bold">
+                                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}
+                            </span>
                     </div>
-                    <CardDescription>{deal.clientName}</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                <div className="flex items-center justify-between p-3 rounded-md bg-muted/50">
-                        <span className="text-sm text-muted-foreground">Principal Amount</span>
-                        <span className="font-bold">
-                            {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}
-                        </span>
-                </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                            <p className="text-muted-foreground">Profit Rate</p>
-                            <p className="font-medium">{deal.profitRate}%</p>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p className="text-muted-foreground">Profit Rate</p>
+                                <p className="font-medium">{deal.profitRate}%</p>
+                            </div>
+                            <div>
+                                <p className="text-muted-foreground">Duration</p>
+                                <p className="font-medium">{deal.durationValue} {deal.durationUnit}</p>
+                            </div>
+                            <div>
+                                <p className="text-muted-foreground">Repayment</p>
+                                <p className="font-medium">{deal.repaymentType}</p>
+                            </div>
+                            <div>
+                                <p className="text-muted-foreground">Frequency</p>
+                                <p className="font-medium">{deal.repaymentFrequency}</p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-muted-foreground">Duration</p>
-                            <p className="font-medium">{deal.durationValue} {deal.durationUnit}</p>
+                        <div className="flex items-center justify-between p-3 rounded-md border text-sm">
+                            <div className="flex items-center gap-2">
+                                <HandCoins className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-muted-foreground">Management Fee</span>
+                            </div>
+                            <span className="font-medium">
+                                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)}
+                                <span className="text-xs text-muted-foreground"> ({deal.managementFeeRate || 0}%)</span>
+                            </span>
                         </div>
-                        <div>
-                            <p className="text-muted-foreground">Repayment</p>
-                            <p className="font-medium">{deal.repaymentType}</p>
-                        </div>
-                        <div>
-                            <p className="text-muted-foreground">Frequency</p>
-                            <p className="font-medium">{deal.repaymentFrequency}</p>
-                        </div>
-                    </div>
-                     <div className="flex items-center justify-between p-3 rounded-md border text-sm">
-                        <div className="flex items-center gap-2">
-                            <HandCoins className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-muted-foreground">Management Fee</span>
-                        </div>
-                        <span className="font-medium">
-                            {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)}
-                            <span className="text-xs text-muted-foreground"> ({deal.managementFeeRate || 0}%)</span>
-                        </span>
-                    </div>
-                    {deal.status === 'Active' && (
-                        <Button variant="destructive" size="sm" onClick={handleTerminationRequest} disabled={isPendingTermination}>
-                            {isPendingTermination ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldAlert className="mr-2 h-4 w-4" />}
-                            Request Termination
-                        </Button>
-                    )}
-                </CardContent>
-                <div className="mt-auto flex-grow">
-                    <Tabs defaultValue="schedule" className="w-full">
-                        <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="schedule">Upcoming Schedule</TabsTrigger>
-                            <TabsTrigger value="history">Repayment History</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="schedule">
-                            <ClientRepaymentSchedule deal={deal} initialRepayments={repayments} repaymentsLoading={repaymentsLoading} />
-                        </TabsContent>
-                        <TabsContent value="history">
-                            <RepaymentHistory repayments={lodgedRepayments} loading={repaymentsLoading} />
-                        </TabsContent>
-                    </Tabs>
-                </div>
-            </Card>
+                        {deal.status === 'Active' && (
+                            <Button variant="destructive" size="sm" onClick={handleTerminationRequest} disabled={isPendingTermination}>
+                                {isPendingTermination ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldAlert className="mr-2 h-4 w-4" />}
+                                Request Termination
+                            </Button>
+                        )}
+                    </CardContent>
+                </Card>
+                {userProfile?.legalDocumentUrl && (
+                     <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2"><Gavel /> Legal Document</CardTitle>
+                            <CardDescription>Your signed legal agreement with the platform.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Sheet>
+                                <SheetTrigger asChild>
+                                    <Button variant="outline">
+                                        <Gavel className="mr-2 h-4 w-4" /> View Legal Document
+                                    </Button>
+                                </SheetTrigger>
+                                <SheetContent className="w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl flex flex-col">
+                                    <SheetHeader>
+                                        <SheetTitle>Signed Legal Document</SheetTitle>
+                                    </SheetHeader>
+                                    <div className="py-4 flex-1 bg-white overflow-y-auto">
+                                        {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
+                                            <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={800} height={1100} className="rounded-md object-contain mx-auto" />
+                                        ) : (
+                                            <embed src={userProfile.legalDocumentUrl} type="application/pdf" width="100%" height="100%" className="rounded-md" />
+                                        )}
+                                    </div>
+                                </SheetContent>
+                            </Sheet>
+                        </CardContent>
+                    </Card>
+                )}
+            </div>
+            <div className="mt-8">
+                 <Tabs defaultValue="schedule" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="schedule">Upcoming Schedule</TabsTrigger>
+                        <TabsTrigger value="history">Repayment History</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="schedule">
+                        <ClientRepaymentSchedule deal={deal} initialRepayments={repayments} repaymentsLoading={repaymentsLoading} />
+                    </TabsContent>
+                    <TabsContent value="history">
+                        <RepaymentHistory repayments={lodgedRepayments} loading={repaymentsLoading} />
+                    </TabsContent>
+                </Tabs>
+            </div>
         </div>
     )
 }
-
-    
