@@ -38,6 +38,7 @@ interface ScheduledPayment extends ScheduleInstallment {
   amountPaid: number;
   amountRemaining: number;
   paymentHistory: Repayment[];
+  openingBalance: number;
 }
 
 const formatCurrency = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
@@ -52,7 +53,9 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
   const enhancedSchedule = useMemo((): ScheduledPayment[] => {
     if (!schedule) return [];
     
-    return schedule.map(installment => {
+    return schedule.map((installment, index) => {
+      const openingBalance = index === 0 ? deal.principal : schedule[index - 1].balance;
+        
       const relatedRepayments = initialRepayments?.filter(r => 
           r.installmentNumber === installment.installment
       ) || [];
@@ -73,9 +76,9 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
           status = 'Due';
       }
       
-      return { ...installment, status, amountPaid: totalAmountPaid, amountRemaining, paymentHistory: relatedRepayments };
+      return { ...installment, status, amountPaid: totalAmountPaid, amountRemaining, paymentHistory: relatedRepayments, openingBalance };
     });
-  }, [schedule, initialRepayments]);
+  }, [schedule, initialRepayments, deal.principal]);
   
 
   const paginatedSchedule = useMemo(() => {
@@ -171,27 +174,29 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                 ) : (
                     <Table>
                         <TableHeader>
-                        <TableRow>
-                            <TableHead>Due Date</TableHead>
-                            <TableHead>Total Due</TableHead>
-                            <TableHead>Principal</TableHead>
-                            <TableHead>Markup</TableHead>
-                            <TableHead>Balance</TableHead>
-                            <TableHead>Remaining</TableHead>
-                            <TableHead>Status</TableHead>
-                        </TableRow>
+                            <TableRow>
+                                <TableHead>S/N</TableHead>
+                                <TableHead>Installment Date</TableHead>
+                                <TableHead>Opening Balance</TableHead>
+                                <TableHead>Principal Repayment</TableHead>
+                                <TableHead>Profit Payment</TableHead>
+                                <TableHead>Periodic Installment</TableHead>
+                                <TableHead>Closing Balance</TableHead>
+                                <TableHead>Status</TableHead>
+                            </TableRow>
                         </TableHeader>
                         <TableBody>
                         {paginatedSchedule.map(item => (
                             <DialogTrigger key={`${item.installment}-${item.status}`} asChild>
                                 <TableRow onClick={() => setSelectedInstallment(item)} className="cursor-pointer">
-                                    <TableCell data-label="Due Date">{format(item.dueDate, 'PPP')}</TableCell>
-                                    <TableCell data-label="Total Due" className="font-medium">{formatCurrency(item.payment)}</TableCell>
-                                    <TableCell data-label="Principal">{formatCurrency(item.principal)}</TableCell>
-                                    <TableCell data-label="Markup">{formatCurrency(item.interest)}</TableCell>
-                                    <TableCell data-label="Balance">{formatCurrency(item.balance)}</TableCell>
-                                    <TableCell data-label="Remaining" className="font-bold text-primary">{formatCurrency(item.amountRemaining)}</TableCell>
-                                    <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
+                                    <TableCell>{item.installment}</TableCell>
+                                    <TableCell>{format(item.dueDate, 'PPP')}</TableCell>
+                                    <TableCell>{formatCurrency(item.openingBalance)}</TableCell>
+                                    <TableCell>{formatCurrency(item.principal)}</TableCell>
+                                    <TableCell>{formatCurrency(item.interest)}</TableCell>
+                                    <TableCell className="font-medium">{formatCurrency(item.payment)}</TableCell>
+                                    <TableCell>{formatCurrency(item.balance)}</TableCell>
+                                    <TableCell><StatusBadge status={item.status} /></TableCell>
                                 </TableRow>
                             </DialogTrigger>
                         ))}

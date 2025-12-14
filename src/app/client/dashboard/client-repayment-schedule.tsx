@@ -55,6 +55,7 @@ interface ScheduledPayment extends ScheduleInstallment {
   amountPaid: number;
   amountRemaining: number;
   paymentHistory: Repayment[];
+  openingBalance: number;
 }
 
 function SubmitLodgePaymentButton() {
@@ -218,7 +219,9 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
   const enhancedSchedule = useMemo((): ScheduledPayment[] => {
     if (!schedule) return [];
     
-    return schedule.map(installment => {
+    return schedule.map((installment, index) => {
+      const openingBalance = index === 0 ? deal.principal : schedule[index - 1].balance;
+
       const relatedRepayments = allRepayments?.filter(r => 
           r.installmentNumber === installment.installment
       ) || [];
@@ -250,9 +253,9 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
         isActionable = true;
       }
       
-      return { ...installment, status, isActionable, amountPaid: totalAmountPaid, amountRemaining, paymentHistory: relatedRepayments };
+      return { ...installment, status, isActionable, amountPaid: totalAmountPaid, amountRemaining, paymentHistory: relatedRepayments, openingBalance };
     });
-  }, [schedule, allRepayments]);
+  }, [schedule, allRepayments, deal.principal]);
   
   const paginatedSchedule = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -334,9 +337,9 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
                                             <StatusBadge status={item.status} />
                                         </div>
                                         <div className="text-xs space-y-1 pt-2 border-t">
-                                            <div className="flex justify-between"><span className="text-muted-foreground">Principal:</span> <span>{formatCurrency(item.principal)}</span></div>
-                                            <div className="flex justify-between"><span className="text-muted-foreground">Markup:</span> <span>{formatCurrency(item.interest)}</span></div>
-                                            <div className="flex justify-between"><span className="text-muted-foreground">Balance:</span> <span>{formatCurrency(item.balance)}</span></div>
+                                            <div className="flex justify-between"><span className="text-muted-foreground">Principal Repayment:</span> <span>{formatCurrency(item.principal)}</span></div>
+                                            <div className="flex justify-between"><span className="text-muted-foreground">Profit Payment:</span> <span>{formatCurrency(item.interest)}</span></div>
+                                            <div className="flex justify-between"><span className="text-muted-foreground">Closing Balance:</span> <span>{formatCurrency(item.balance)}</span></div>
                                         </div>
                                         {(item.isActionable && item.status !== 'Paid' && user) && (
                                             <div className="pt-3 border-t">
@@ -351,23 +354,31 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
                 ) : (
                     <Table>
                         <TableHeader>
-                        <TableRow>
-                            <TableHead>Due Date</TableHead>
-                            <TableHead>Total Due</TableHead>
-                            <TableHead>Remaining</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Action</TableHead>
-                        </TableRow>
+                            <TableRow>
+                                <TableHead>S/N</TableHead>
+                                <TableHead>Installment Date</TableHead>
+                                <TableHead>Opening Balance</TableHead>
+                                <TableHead>Principal Repayment</TableHead>
+                                <TableHead>Profit Payment</TableHead>
+                                <TableHead>Periodic Installment</TableHead>
+                                <TableHead>Closing Balance</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
                         </TableHeader>
                         <TableBody>
                         {paginatedSchedule.map(item => (
                              <DialogTrigger key={`${item.installment}-${item.status}`} asChild>
                                 <TableRow onClick={() => setSelectedInstallment(item)} className={`cursor-pointer ${item.isActionable ? 'bg-muted/50' : ''}`}>
-                                    <TableCell data-label="Due Date">{format(item.dueDate, 'PPP')}</TableCell>
-                                    <TableCell data-label="Total Due" className="font-medium">{formatCurrency(item.payment)}</TableCell>
-                                    <TableCell data-label="Remaining" className="font-bold text-primary">{formatCurrency(item.amountRemaining)}</TableCell>
-                                    <TableCell data-label="Status"><StatusBadge status={item.status} /></TableCell>
-                                    <TableCell data-label="Action" className="text-right w-40">
+                                    <TableCell>{item.installment}</TableCell>
+                                    <TableCell>{format(item.dueDate, 'PPP')}</TableCell>
+                                    <TableCell>{formatCurrency(item.openingBalance)}</TableCell>
+                                    <TableCell>{formatCurrency(item.principal)}</TableCell>
+                                    <TableCell>{formatCurrency(item.interest)}</TableCell>
+                                    <TableCell className="font-medium">{formatCurrency(item.payment)}</TableCell>
+                                    <TableCell>{formatCurrency(item.balance)}</TableCell>
+                                    <TableCell><StatusBadge status={item.status} /></TableCell>
+                                    <TableCell className="text-right w-40">
                                     {(item.isActionable && item.status !== 'Paid' && user) && (
                                         <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
                                     )}
