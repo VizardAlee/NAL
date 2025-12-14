@@ -10,13 +10,13 @@ import { doc, collection, query, where, DocumentData, Timestamp, orderBy, limit 
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone, MessageSquare } from 'lucide-react';
+import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone, MessageSquare, Star } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { AddFundForm } from './add-fund-form';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { format, formatDistanceStrict } from 'date-fns';
+import { format, formatDistanceStrict, isBefore, isEqual } from 'date-fns';
 import { Naira } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,8 +31,9 @@ import { payZakatAction } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Deal } from '@/lib/types';
+import { Deal, Repayment } from '@/lib/types';
 import { getOrCreateConversation } from '@/app/common/actions/chat-actions';
+import { Progress } from '@/components/ui/progress';
 
 
 type UserProfile = DocumentData & {
@@ -168,6 +169,11 @@ export default function UserDetailPage() {
     if (!firestore || !userId) return null;
     return query(collection(firestore, 'deals'), where('clientId', '==', userId), orderBy('createdAt', 'desc'));
   }, [firestore, userId]);
+  
+  const clientRepaymentsQuery = useMemo(() => {
+    if (!firestore || !userId) return null;
+    return query(collection(firestore, 'repayments'), where('clientId', '==', userId), where('status', '==', 'Approved'));
+  }, [firestore, userId]);
 
   const allTransactionsQuery = useMemo(() => {
     if (!firestore || !userId) return null;
@@ -187,11 +193,12 @@ export default function UserDetailPage() {
   const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userRef);
   const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
   const { data: clientDeals, loading: clientDealsLoading } = useCollection<Deal>(clientDealsQuery);
+  const { data: clientRepayments, loading: clientRepaymentsLoading } = useCollection<Repayment>(clientRepaymentsQuery);
   const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(allTransactionsQuery);
   const { data: firstDeposit, loading: firstDepositLoading } = useCollection<Transaction>(firstDepositQuery);
   const { data: zakatSettings, loading: zakatLoading } = useDoc<{nisab: number}>(zakatSettingsRef);
 
-  const isLoading = userLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading || clientDealsLoading;
+  const isLoading = userLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading || clientDealsLoading || clientRepaymentsLoading;
 
   const handleInitiateChat = () => {
     if (!adminUser || !userProfile) return;
@@ -214,6 +221,32 @@ export default function UserDetailPage() {
       }
     });
   };
+
+  const clientPerformanceMetrics = useMemo(() => {
+    if (!clientRepayments || !clientDeals) return null;
+
+    const totalDealsValue = clientDeals.reduce((sum, deal) => sum + deal.principal, 0);
+    const totalAmountRepaid = clientRepayments.reduce((sum, repayment) => sum + repayment.amount, 0);
+    
+    let onTimePayments = 0;
+    let totalDuePayments = 0;
+    
+    clientRepayments.forEach(repayment => {
+        if (repayment.dueDate) {
+            totalDuePayments++;
+            const dueDate = repayment.dueDate.toDate();
+            const lodgedAt = repayment.lodgedAt.toDate();
+            if (isBefore(lodgedAt, dueDate) || isEqual(lodgedAt, dueDate)) {
+                onTimePayments++;
+            }
+        }
+    });
+
+    const onTimePaymentScore = totalDuePayments > 0 ? (onTimePayments / totalDuePayments) * 100 : 100;
+    
+    return { totalDealsValue, totalAmountRepaid, onTimePaymentScore };
+
+  }, [clientRepayments, clientDeals]);
 
   const financialMetrics = useMemo(() => {
       if (!transactions) return { portfolioValue: 0, investibleBalance: 0 };
@@ -315,6 +348,27 @@ export default function UserDetailPage() {
                         </div>
                     </CardHeader>
                 </Card>
+
+                {userProfile.role === 'Client' && clientPerformanceMetrics && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2"><Star className="h-5 w-5" /> Client Performance</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div>
+                                <div className="flex justify-between items-center mb-1">
+                                    <h3 className="text-sm font-medium">On-Time Payment Score</h3>
+                                    <span className="font-bold text-lg">{clientPerformanceMetrics.onTimePaymentScore.toFixed(0)}%</span>
+                                </div>
+                                <Progress value={clientPerformanceMetrics.onTimePaymentScore} />
+                            </div>
+                             <div className="text-sm space-y-2 pt-2 border-t">
+                                <div className="flex justify-between"><span className="text-muted-foreground">Total Deals Value:</span> <span className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(clientPerformanceMetrics.totalDealsValue)}</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">Total Amount Repaid:</span> <span className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(clientPerformanceMetrics.totalAmountRepaid)}</span></div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {userProfile.role === 'Investor' && (
                      <Card>
@@ -605,3 +659,4 @@ export default function UserDetailPage() {
     </div>
   );
 }
+
