@@ -14,6 +14,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
+import { useRouter } from "next/navigation";
+
 
 type Repayment = DocumentData & {
   id: string;
@@ -40,6 +42,7 @@ type Deal = DocumentData & {
 export default function LegalDashboardPage() {
     const firestore = useFirestore();
     const isMobile = useIsMobile();
+    const router = useRouter();
     const [searchTerm, setSearchTerm] = useState('');
 
     const overdueRepaymentsQuery = useMemo(() => {
@@ -106,6 +109,10 @@ export default function LegalDashboardPage() {
             user.email.toLowerCase().includes(searchTerm.toLowerCase())
         );
     }, [users, searchTerm]);
+
+    const handleUserClick = (userId: string) => {
+        router.push(`/admin/users/${userId}`);
+    };
 
     return (
         <div>
@@ -179,7 +186,7 @@ export default function LegalDashboardPage() {
                      isMobile ? (
                         <div className="space-y-3">
                             {filteredUsers.map(user => (
-                                <Card key={user.id}>
+                                <Card key={user.id} onClick={() => handleUserClick(user.id)} className="cursor-pointer hover:bg-muted/50">
                                     <CardContent className="p-4 space-y-2">
                                         <div className="flex items-center gap-4">
                                             <Avatar>
@@ -211,7 +218,7 @@ export default function LegalDashboardPage() {
                             </TableHeader>
                             <TableBody>
                                 {filteredUsers.map(user => (
-                                    <TableRow key={user.id}>
+                                    <TableRow key={user.id} onClick={() => handleUserClick(user.id)} className="cursor-pointer hover:bg-muted/50">
                                         <TableCell className="font-medium">{user.name}</TableCell>
                                         <TableCell>{user.email}</TableCell>
                                         <TableCell>{user.phoneNumber || 'N/A'}</TableCell>
@@ -227,5 +234,3 @@ export default function LegalDashboardPage() {
         </div>
     );
 }
-
-    
