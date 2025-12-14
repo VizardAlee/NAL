@@ -3,7 +3,7 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Library, AlertTriangle, Loader2 } from "lucide-react";
+import { Library, AlertTriangle, Loader2, CalendarIcon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, where, DocumentData, Timestamp } from "firebase/firestore";
@@ -12,10 +12,16 @@ import { useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import { DateRange } from "react-day-picker";
-import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import FullCalendar from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import interactionPlugin, { DateClickArg } from '@fullcalendar/interaction';
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { startOfDay, endOfDay } from "date-fns";
+import { startOfDay, endOfDay, format } from "date-fns";
 import {
   PieChart,
   Pie,
@@ -124,7 +130,8 @@ function MobileReportRow({ label, value, isTotal = false, isNegative = false }: 
 
 export default function ReportsPage() {
   const firestore = useFirestore();
-  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
   const isMobile = useIsMobile();
 
   const transactionsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions')) : null, [firestore]);
@@ -149,8 +156,8 @@ export default function ReportsPage() {
         return null;
     }
 
-    const to = dateRange?.to ? endOfDay(dateRange.to) : new Date();
-    const from = dateRange?.from ? startOfDay(dateRange.from) : null;
+    const to = endDate ? endOfDay(endDate) : new Date();
+    const from = startDate ? startOfDay(startDate) : null;
 
     const filterUpToDate = <T extends { createdAt?: Timestamp; acquisitionDate?: Timestamp }>(item: T) => {
         const itemDate = (item.acquisitionDate || item.createdAt)?.toDate();
@@ -303,7 +310,7 @@ export default function ReportsPage() {
             netCashFlow
         }
     };
-  }, [allTransactions, allAdminTransactions, allFundBatches, allDeals, allAssets, allInvestments, isLoading, dateRange]);
+  }, [allTransactions, allAdminTransactions, allFundBatches, allDeals, allAssets, allInvestments, isLoading, startDate, endDate]);
 
   const chartData = useMemo(() => {
     if (!financialData) return null;
@@ -324,6 +331,9 @@ export default function ReportsPage() {
     };
   }, [financialData]);
 
+  const formatDateDisplay = (dateValue: Date | null) => {
+    return dateValue ? format(dateValue, "LLL dd, y") : <span>Pick a date</span>;
+  }
 
   if (isLoading || isMobile === undefined) {
       return (
@@ -347,7 +357,65 @@ export default function ReportsPage() {
         description="A real-time overview of the platform's financial health."
         icon={Library}
       >
-        <DatePickerWithRange onDateChange={setDateRange} />
+        <div className="flex items-center gap-2">
+            <Popover>
+                <PopoverTrigger asChild>
+                <Button
+                    variant={"outline"}
+                    className={cn("w-[140px] justify-start text-left font-normal", !startDate && "text-muted-foreground")}
+                >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formatDateDisplay(startDate)}
+                </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-2" align="start">
+                    <FullCalendar
+                        plugins={[dayGridPlugin, interactionPlugin]}
+                        initialView="dayGridMonth"
+                        selectable={true}
+                        headerToolbar={{
+                            left: 'prev',
+                            center: 'title',
+                            right: 'next'
+                        }}
+                        dateClick={(arg: DateClickArg) => {
+                            setStartDate(arg.date);
+                            if (endDate && arg.date > endDate) {
+                                setEndDate(arg.date);
+                            }
+                        }}
+                    />
+                </PopoverContent>
+            </Popover>
+            <span className="text-muted-foreground">-</span>
+            <Popover>
+                <PopoverTrigger asChild>
+                <Button
+                    variant={"outline"}
+                    className={cn("w-[140px] justify-start text-left font-normal", !endDate && "text-muted-foreground")}
+                >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formatDateDisplay(endDate)}
+                </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-2" align="end">
+                    <FullCalendar
+                        plugins={[dayGridPlugin, interactionPlugin]}
+                        initialView="dayGridMonth"
+                        selectable={true}
+                        validRange={startDate ? { start: startDate } : undefined}
+                        headerToolbar={{
+                            left: 'prev',
+                            center: 'title',
+                            right: 'next'
+                        }}
+                        dateClick={(arg: DateClickArg) => {
+                            setEndDate(arg.date);
+                        }}
+                    />
+                </PopoverContent>
+            </Popover>
+        </div>
       </PageHeader>
 
       {financialData?.balanceSheet.discrepancy && Math.abs(financialData.balanceSheet.discrepancy) > 1 && (
@@ -406,7 +474,9 @@ export default function ReportsPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Balance Sheet</CardTitle>
-                            <CardDescription>As of {dateRange?.to ? dateRange.to.toLocaleDateString() : 'today'}.</CardDescription>
+                            <CardDescription>
+                                {endDate ? `As of ${format(endDate, "PPP")}` : 'As of today'}
+                            </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <Table>
@@ -443,7 +513,9 @@ export default function ReportsPage() {
                     <Card>
                          <CardHeader>
                             <CardTitle>Income Statement</CardTitle>
-                            <CardDescription>Performance over the selected period.</CardDescription>
+                            <CardDescription>
+                                {startDate && endDate ? `For the period ${format(startDate, "PPP")} to ${format(endDate, "PPP")}` : 'For the current period'}
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-2">
                             <MobileReportRow label="Financing Revenue" value={financialData?.incomeStatement.financingRevenue || 0} />
@@ -460,7 +532,9 @@ export default function ReportsPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Income Statement</CardTitle>
-                            <CardDescription>Performance over the selected period.</CardDescription>
+                            <CardDescription>
+                                {startDate && endDate ? `For the period ${format(startDate, "PPP")} to ${format(endDate, "PPP")}` : 'For the current period'}
+                            </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <Table>
@@ -507,7 +581,9 @@ export default function ReportsPage() {
                     <Card>
                          <CardHeader>
                             <CardTitle>Cash Flow Statement</CardTitle>
-                            <CardDescription>Simplified view of cash movements.</CardDescription>
+                            <CardDescription>
+                                {startDate && endDate ? `For the period ${format(startDate, "PPP")} to ${format(endDate, "PPP")}` : 'For the current period'}
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-2">
                            <MobileReportRow label="Net Cash from Operations" value={financialData?.cashFlow.netCashFromOperations || 0} isNegative={(financialData?.cashFlow.netCashFromOperations || 0) < 0} />
@@ -521,7 +597,9 @@ export default function ReportsPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Cash Flow Statement</CardTitle>
-                            <CardDescription>Simplified view of cash movements for the selected period.</CardDescription>
+                            <CardDescription>
+                               {startDate && endDate ? `For the period ${format(startDate, "PPP")} to ${format(endDate, "PPP")}` : 'For the current period'}
+                            </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <Table>
