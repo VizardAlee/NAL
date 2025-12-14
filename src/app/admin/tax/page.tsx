@@ -81,72 +81,49 @@ export default function TaxPage() {
     const taxCalculations = useMemo(() => {
         const platformEarnings = earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
         const managementFees = feeTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
-        
         const grossProfit = platformEarnings + managementFees;
-        
-        // New Tax Reform: Rent Relief
         const rentRelief = Math.min(annualRent * 0.20, 500000);
-        
         const chargeableIncome = Math.max(0, grossProfit - rentRelief);
-        
-        let personalIncomeTax = 0;
-        let incomeLeft = chargeableIncome;
-        const taxBreakdown = [];
-        
-        // Proposed New Tax Brackets for Enterprise (PIT)
+
+        let totalTax = 0;
+        let incomeToTax = chargeableIncome;
+        const breakdown = [];
+
         const brackets = [
-            { limit: 800000, rate: 0.00 },   // 0% on first 800k
-            { limit: 2000000, rate: 0.10 },  // 10% on the next 2m
-            { limit: 5000000, rate: 0.15 },  // 15% on the next 5m
-            { limit: 10000000, rate: 0.20 }, // 20% on the next 10m
-            { limit: Infinity, rate: 0.25 }, // 25% on the remainder
+            { description: "First ₦800,000", limit: 800000, rate: 0.00 },
+            { description: "Next ₦2,000,000", limit: 2000000, rate: 0.10 },
+            { description: "Next ₦5,000,000", limit: 5000000, rate: 0.15 },
+            { description: "Next ₦10,000,000", limit: 10000000, rate: 0.20 },
+            { description: "Above ₦17,800,000", limit: Infinity, rate: 0.25 },
         ];
 
-        let accumulatedAmount = 0;
-
         for (const bracket of brackets) {
-            if (incomeLeft <= 0) break;
+            if (incomeToTax <= 0) break;
             
-            const taxableAmountInBracket = Math.min(incomeLeft, bracket.limit);
+            const taxableInBracket = Math.min(incomeToTax, bracket.limit);
+            const taxForBracket = taxableInBracket * bracket.rate;
+            totalTax += taxForBracket;
             
-            if (accumulatedAmount + taxableAmountInBracket > chargeableIncome) {
-                const adjustedTaxableAmount = chargeableIncome - accumulatedAmount;
-                const taxForBracket = adjustedTaxableAmount * bracket.rate;
-                personalIncomeTax += taxForBracket;
-                if (taxForBracket > 0 || adjustedTaxableAmount > 0) {
-                    taxBreakdown.push({
-                        rate: bracket.rate * 100,
-                        amount: adjustedTaxableAmount,
-                        tax: taxForBracket
-                    });
-                }
-                break;
-            }
-            
-            const taxForBracket = taxableAmountInBracket * bracket.rate;
-            personalIncomeTax += taxForBracket;
-
-            if (taxForBracket > 0 || taxableAmountInBracket > 0) {
-                 taxBreakdown.push({
-                    rate: bracket.rate * 100,
-                    amount: taxableAmountInBracket,
-                    tax: taxForBracket
+            if (taxableInBracket > 0) {
+                 breakdown.push({
+                    description: `${bracket.description} @ ${bracket.rate * 100}%`,
+                    taxableAmount: taxableInBracket,
+                    taxDue: taxForBracket,
                 });
             }
            
-            incomeLeft -= taxableAmountInBracket;
-            accumulatedAmount += taxableAmountInBracket;
+            incomeToTax -= taxableInBracket;
         }
 
-        const profitAfterTax = grossProfit - personalIncomeTax;
+        const profitAfterTax = grossProfit - totalTax;
 
         return {
             grossProfit,
             rentRelief,
             chargeableIncome,
-            personalIncomeTax,
+            personalIncomeTax: totalTax,
             profitAfterTax,
-            taxBreakdown,
+            taxBreakdown: breakdown,
         };
 
     }, [earningsTransactions, feeTransactions, annualRent]);
@@ -274,17 +251,17 @@ export default function TaxPage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Rate</TableHead>
+                                        <TableHead>Tax Bracket</TableHead>
                                         <TableHead>Taxable Amount</TableHead>
-                                        <TableHead className="text-right">Tax</TableHead>
+                                        <TableHead className="text-right">Tax Due</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {taxCalculations.taxBreakdown.map((bracket, index) => (
                                         <TableRow key={index}>
-                                            <TableCell>{bracket.rate}%</TableCell>
-                                            <TableCell>{formatCurrency(bracket.amount)}</TableCell>
-                                            <TableCell className="text-right">{formatCurrency(bracket.tax)}</TableCell>
+                                            <TableCell>{bracket.description}</TableCell>
+                                            <TableCell>{formatCurrency(bracket.taxableAmount)}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(bracket.taxDue)}</TableCell>
                                         </TableRow>
                                     ))}
                                     {taxCalculations.taxBreakdown.length === 0 && (
@@ -314,5 +291,3 @@ export default function TaxPage() {
         </div>
     );
 }
-
-    
