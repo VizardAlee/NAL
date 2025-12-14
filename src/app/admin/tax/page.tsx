@@ -17,6 +17,8 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin, { DateClickArg } from '@fullcalendar/interaction';
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 
 type Transaction = DocumentData & {
@@ -53,6 +55,7 @@ export default function TaxPage() {
     const firestore = useFirestore();
     const [startDate, setStartDate] = useState<Date | null>(null);
     const [endDate, setEndDate] = useState<Date | null>(null);
+    const [annualRent, setAnnualRent] = useState<number>(0);
 
     const transactionsQuery = useMemo(() => {
         if (!firestore) return null;
@@ -81,46 +84,72 @@ export default function TaxPage() {
         
         const grossProfit = platformEarnings + managementFees;
         
-        // Consolidated Relief Allowance (CRA)
-        const cra = Math.max(200000, grossProfit * 0.01) + (grossProfit * 0.20);
-        const chargeableIncome = Math.max(0, grossProfit - cra);
+        // New Tax Reform: Rent Relief
+        const rentRelief = Math.min(annualRent * 0.20, 500000);
+        
+        const chargeableIncome = Math.max(0, grossProfit - rentRelief);
         
         let personalIncomeTax = 0;
         let incomeLeft = chargeableIncome;
         const taxBreakdown = [];
         
-        // New Proposed Tax Brackets
+        // Proposed New Tax Brackets for Enterprise (PIT)
         const brackets = [
-            { limit: 2000000, rate: 0.10 }, // 10% on the first 2m
-            { limit: 2000000, rate: 0.20 }, // 20% on the next 2m
-            { limit: Infinity, rate: 0.30 },  // 30% on the remainder
+            { limit: 800000, rate: 0.00 },   // 0% on first 800k
+            { limit: 2000000, rate: 0.10 },  // 10% on the next 2m
+            { limit: 5000000, rate: 0.15 },  // 15% on the next 5m
+            { limit: 10000000, rate: 0.20 }, // 20% on the next 10m
+            { limit: Infinity, rate: 0.25 }, // 25% on the remainder
         ];
+
+        let accumulatedAmount = 0;
 
         for (const bracket of brackets) {
             if (incomeLeft <= 0) break;
-            const taxableInBracket = Math.min(incomeLeft, bracket.limit);
-            const taxForBracket = taxableInBracket * bracket.rate;
+            
+            const taxableAmountInBracket = Math.min(incomeLeft, bracket.limit);
+            
+            if (accumulatedAmount + taxableAmountInBracket > chargeableIncome) {
+                const adjustedTaxableAmount = chargeableIncome - accumulatedAmount;
+                const taxForBracket = adjustedTaxableAmount * bracket.rate;
+                personalIncomeTax += taxForBracket;
+                if (taxForBracket > 0 || adjustedTaxableAmount > 0) {
+                    taxBreakdown.push({
+                        rate: bracket.rate * 100,
+                        amount: adjustedTaxableAmount,
+                        tax: taxForBracket
+                    });
+                }
+                break;
+            }
+            
+            const taxForBracket = taxableAmountInBracket * bracket.rate;
             personalIncomeTax += taxForBracket;
-            taxBreakdown.push({
-                rate: bracket.rate * 100,
-                amount: taxableInBracket,
-                tax: taxForBracket
-            });
-            incomeLeft -= taxableInBracket;
+
+            if (taxForBracket > 0 || taxableAmountInBracket > 0) {
+                 taxBreakdown.push({
+                    rate: bracket.rate * 100,
+                    amount: taxableAmountInBracket,
+                    tax: taxForBracket
+                });
+            }
+           
+            incomeLeft -= taxableAmountInBracket;
+            accumulatedAmount += taxableAmountInBracket;
         }
 
         const profitAfterTax = grossProfit - personalIncomeTax;
 
         return {
             grossProfit,
-            cra,
+            rentRelief,
             chargeableIncome,
             personalIncomeTax,
             profitAfterTax,
             taxBreakdown,
         };
 
-    }, [earningsTransactions, feeTransactions]);
+    }, [earningsTransactions, feeTransactions, annualRent]);
     
     const formatDateDisplay = (dateValue: Date | null) => {
         return dateValue ? format(dateValue, "LLL dd, y") : <span>Pick a date</span>;
@@ -130,10 +159,10 @@ export default function TaxPage() {
         <div>
             <PageHeader
                 title="Tax Calculation (Enterprise)"
-                description="Estimate Personal Income Tax (PIT) based on the proposed tax reform bill."
+                description="Estimate Personal Income Tax (PIT) based on the proposed 2025 tax reform bill."
                 icon={Landmark}
             >
-                 <div className="flex items-center gap-2">
+                 <div className="flex flex-col sm:flex-row gap-2">
                     <Popover>
                         <PopoverTrigger asChild>
                         <Button
@@ -163,7 +192,7 @@ export default function TaxPage() {
                             />
                         </PopoverContent>
                     </Popover>
-                    <span className="text-muted-foreground">-</span>
+                    <span className="text-muted-foreground hidden sm:inline">-</span>
                     <Popover>
                         <PopoverTrigger asChild>
                         <Button
@@ -203,9 +232,20 @@ export default function TaxPage() {
                     <Card className="lg:col-span-2">
                         <CardHeader>
                             <CardTitle>Personal Income Tax (PIT) Summary</CardTitle>
-                            <CardDescription>Based on proposed Nigerian PITA rates for enterprise businesses.</CardDescription>
+                            <CardDescription>Based on proposed 2025 Nigerian PITA rates for enterprise businesses.</CardDescription>
                         </CardHeader>
                         <CardContent>
+                             <div className="max-w-xs space-y-2 mb-6">
+                                <Label htmlFor="annualRent">Annual Rent Paid</Label>
+                                <Input 
+                                    id="annualRent"
+                                    type="number"
+                                    value={annualRent}
+                                    onChange={(e) => setAnnualRent(Number(e.target.value))}
+                                    placeholder="Enter total annual rent"
+                                />
+                                <p className="text-xs text-muted-foreground">Used to calculate Rent Relief (20% of rent, capped at ₦500,000).</p>
+                            </div>
                             <Table>
                                 <TableBody>
                                     <TableRow>
@@ -213,8 +253,8 @@ export default function TaxPage() {
                                         <TableCell className="text-right">{formatCurrency(taxCalculations.grossProfit)}</TableCell>
                                     </TableRow>
                                     <TableRow>
-                                        <TableCell>Consolidated Relief Allowance (CRA)</TableCell>
-                                        <TableCell className="text-right text-destructive">- {formatCurrency(taxCalculations.cra)}</TableCell>
+                                        <TableCell>Rent Relief Allowance</TableCell>
+                                        <TableCell className="text-right text-destructive">- {formatCurrency(taxCalculations.rentRelief)}</TableCell>
                                     </TableRow>
                                     <TableRow className="font-medium bg-muted/50">
                                         <TableCell>Chargeable Income</TableCell>
@@ -274,3 +314,5 @@ export default function TaxPage() {
         </div>
     );
 }
+
+    
