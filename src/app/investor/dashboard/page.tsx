@@ -1,11 +1,12 @@
 
+
 'use client';
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle, MessageSquare, Copy } from "lucide-react";
+import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle, MessageSquare, Copy, Gavel } from "lucide-react";
 import { useMemo, useState, useTransition } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc, updateDoc, writeBatch } from 'firebase/firestore';
@@ -26,6 +27,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { DepositForm } from "./deposit-form";
 import { getOrCreateConversation } from "@/app/common/actions/chat-actions";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { generateAmortizationSchedule } from "@/lib/amortization";
 
 
 type Transaction = DocumentData & {
@@ -61,6 +64,7 @@ type UserProfile = DocumentData & {
     lastWithdrawalDate?: Timestamp;
     name: string;
     role: 'Admin' | 'Client' | 'Investor';
+    legalDocumentUrl?: string;
 };
 
 
@@ -315,9 +319,9 @@ export default function InvestorDashboard() {
 
   const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || firstDepositLoading;
 
-  const { longTermProfits, withdrawableBalance } = useMemo(() => {
-    if (!allTransactions || !deals) {
-        return { longTermProfits: 0, withdrawableBalance: 0 };
+  const { longTermProfits, withdrawableBalance, expectedIncome } = useMemo(() => {
+    if (!allTransactions || !deals || !investments) {
+        return { longTermProfits: 0, withdrawableBalance: 0, expectedIncome: 0 };
     }
 
     const profitTransactions = allTransactions.filter(tx => tx.type === 'ProfitDistribution');
@@ -327,6 +331,7 @@ export default function InvestorDashboard() {
 
     let totalLongTermProfit = 0;
     let totalShortTermProfit = 0;
+    let totalExpectedIncome = 0;
 
     for (const profitTx of profitTransactions) {
         const deal = deals.find(d => d.id === profitTx.dealId);
@@ -340,12 +345,27 @@ export default function InvestorDashboard() {
             totalShortTermProfit += profitTx.amount;
         }
     }
+    
+    const activeDeals = deals.filter(d => d.status === 'Active');
+    for (const deal of activeDeals) {
+        const schedule = generateAmortizationSchedule(deal);
+        const investmentsForDeal = investments.filter(inv => inv.dealId === deal.id);
+        const totalInvestedInDeal = investmentsForDeal.reduce((s, i) => s + i.amount, 0);
+        const userInvestmentInDeal = investmentsForDeal.filter(inv => inv.investorId === user?.uid).reduce((s, i) => s + i.amount, 0);
+        
+        if (totalInvestedInDeal > 0 && userInvestmentInDeal > 0) {
+            const userOwnership = userInvestmentInDeal / totalInvestedInDeal;
+            const totalDealProfit = schedule.reduce((sum, inst) => sum + inst.interest, 0);
+            totalExpectedIncome += totalDealProfit * userOwnership * 0.4;
+        }
+    }
 
     return {
         longTermProfits: totalLongTermProfit,
         withdrawableBalance: totalShortTermProfit - totalWithdrawnFromProfits,
+        expectedIncome: totalExpectedIncome,
     };
-}, [allTransactions, deals]);
+}, [allTransactions, deals, investments, user]);
 
 
   const financialMetrics = useMemo(() => {
@@ -475,6 +495,24 @@ export default function InvestorDashboard() {
             <BankDetailsCard />
         </div>
 
+        {userProfile && userProfile.legalDocumentUrl && (
+             <div className="mb-8">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><Gavel /> Legal Document</CardTitle>
+                        <CardDescription>Your signed legal agreement with the platform.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
+                            <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={500} height={700} className="rounded-md border object-contain" />
+                        ) : (
+                            <embed src={userProfile.legalDocumentUrl} type="application/pdf" width="100%" height="500px" className="rounded-md border" />
+                        )}
+                    </CardContent>
+                </Card>
+             </div>
+        )}
+
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -498,12 +536,22 @@ export default function InvestorDashboard() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Expected Income</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(expectedIncome)}</div>}
+             <p className="text-xs text-muted-foreground">From active deals</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Withdrawable Balance</CardTitle>
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(withdrawableBalance)}</div>}
-             <Dialog open={isWithdrawOpen} onOpenChange={setWithdrawOpen}>
+            {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(withdrawableBalance)}</div>}
+            <Dialog open={isWithdrawOpen} onOpenChange={setWithdrawOpen}>
               <DialogTrigger asChild>
                 <Button 
                     variant="outline" 
@@ -525,16 +573,6 @@ export default function InvestorDashboard() {
             {user && <ReinvestButton balance={withdrawableBalance} user={user} />}
              {withdrawalRules.isLocked && <p className="text-xs text-destructive mt-1">Long-term profits are locked for 1 year.</p>}
              {withdrawalRules.cooldownActive && <p className="text-xs text-destructive mt-1">Next withdrawal available in {90 - differenceInDays(new Date(), userProfile!.lastWithdrawalDate!.toDate())} days.</p>}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Simple ROI</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-             {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{financialMetrics.simpleROI.toFixed(2)}%</div>}
-            <p className="text-xs text-muted-foreground">Based on total profit vs. total capital</p>
           </CardContent>
         </Card>
       </div>
@@ -740,4 +778,3 @@ export default function InvestorDashboard() {
     </div>
   );
 }
-

@@ -15,15 +15,28 @@
           "description": "The user's email address.",
           "format": "email"
         },
+        "phoneNumber": {
+          "type": "string",
+          "description": "The user's phone number (optional)."
+        },
         "role": {
           "type": "string",
           "description": "The role of the user.",
-          "enum": ["Admin", "Investor", "Client", null]
+          "enum": ["Admin", "Investor", "Client", "Legal", null]
         },
         "lastZakatPaymentDate": {
           "type": "string",
           "format": "date-time",
           "description": "The timestamp of the user's last Zakat payment."
+        },
+        "fcmTokens": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Array of Firebase Cloud Messaging tokens for push notifications."
+        },
+        "legalDocumentUrl": {
+            "type": "string",
+            "description": "A Base64-encoded Data URI of the user's signed legal document."
         }
       },
       "required": ["name", "email", "role"]
@@ -52,6 +65,18 @@
         "profitRate": {
           "type": "number",
           "description": "The annual profit rate for the deal."
+        },
+        "managementFeeRate": {
+            "type": "number",
+            "description": "The percentage of the principal to be charged as a management fee."
+        },
+        "managementFeeAmount": {
+            "type": "number",
+            "description": "The calculated management fee amount."
+        },
+        "managementFeePaid": {
+            "type": "boolean",
+            "description": "Whether the management fee has been paid and approved."
         },
         "durationValue": {
           "type": "number",
@@ -94,6 +119,9 @@
         "clientName",
         "principal",
         "profitRate",
+        "managementFeeRate",
+        "managementFeeAmount",
+        "managementFeePaid",
         "durationValue",
         "durationUnit",
         "repaymentType",
@@ -392,7 +420,7 @@
         "type": {
           "type": "string",
           "description": "The type of administrative transaction.",
-          "enum": ["AdminDeposit", "Expense", "TransferToInvestible", "TransferFromInvestible", "AssetAcquisition", "AssetSale"]
+          "enum": ["AdminDeposit", "Expense", "TransferToInvestible", "TransferFromInvestible", "AssetAcquisition", "AssetSale", "ManagementFee"]
         },
         "amount": {
           "type": "number",
@@ -406,7 +434,11 @@
           "type": "string",
           "format": "date-time",
           "description": "The timestamp of the transaction."
-        }
+        },
+        "dealId": { "type": "string", "description": "The ID of the associated deal (if applicable)." },
+        "dealName": { "type": "string", "description": "The name of the associated deal (if applicable)." },
+        "clientId": { "type": "string", "description": "The ID of the associated client (if applicable)." },
+        "clientName": { "type": "string", "description": "The name of the associated client (if applicable)." }
       },
       "required": ["type", "amount", "description", "createdAt"]
     },
@@ -465,6 +497,18 @@
         "logoUrl": {
           "type": "string",
           "description": "A base64 data URI of the company logo."
+        },
+        "bankName": {
+          "type": "string",
+          "description": "The platform's bank name."
+        },
+        "accountName": {
+          "type": "string",
+          "description": "The platform's bank account name."
+        },
+        "accountNumber": {
+          "type": "string",
+          "description": "The platform's bank account number."
         }
       }
     },
@@ -509,6 +553,21 @@
             "attachmentName": { "type": "string", "description": "The original name of the attached file." }
         },
         "required": ["conversationId", "senderId", "createdAt"]
+    },
+    "taxRecord": {
+      "title": "Tax Record",
+      "description": "A record of a tax calculation for a specific period.",
+      "type": "object",
+      "properties": {
+        "periodStart": { "type": "string", "format": "date-time", "description": "The start date of the calculation period." },
+        "periodEnd": { "type": "string", "format": "date-time", "description": "The end date of the calculation period." },
+        "grossProfit": { "type": "number", "description": "The gross profit for the period." },
+        "educationTax": { "type": "number", "description": "The calculated Tertiary Education Tax (EDT)." },
+        "companyIncomeTax": { "type": "number", "description": "The calculated Company Income Tax (CIT)." },
+        "profitAfterTax": { "type": "number", "description": "The final profit after all taxes." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When this record was generated." }
+      },
+      "required": ["periodStart", "periodEnd", "grossProfit", "educationTax", "companyIncomeTax", "createdAt"]
     }
   },
   "auth": {
@@ -619,6 +678,22 @@
       },
       "description": "Stores global platform settings, specifically the company branding."
     },
+    "/platformSettings/bankDetails": {
+      "schema": {
+        "properties": {
+          "bankName": {
+            "$ref": "#/entities/platformSetting/properties/bankName"
+          },
+          "accountName": {
+            "$ref": "#/entities/platformSetting/properties/accountName"
+          },
+          "accountNumber": {
+            "$ref": "#/entities/platformSetting/properties/accountNumber"
+          }
+        }
+      },
+      "description": "Stores the platform's main bank account details for user deposits."
+    },
     "/chatRequests/{chatRequestId}": {
         "schema": {
             "$ref": "#/entities/chatRequest"
@@ -636,6 +711,12 @@
             "$ref": "#/entities/message"
         },
         "description": "Sub-collection for messages within a conversation."
+    },
+    "/taxRecords/{taxRecordId}": {
+      "schema": {
+        "$ref": "#/entities/taxRecord"
+      },
+      "description": "Stores historical tax calculations for auditing."
     }
   }
 }

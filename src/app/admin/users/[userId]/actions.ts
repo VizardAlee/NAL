@@ -4,6 +4,8 @@
 import { adminDb } from '@/firebase/admin-app';
 import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
+import { revalidatePath } from 'next/cache';
+
 
 const payZakatSchema = z.object({
   userId: z.string().min(1),
@@ -84,4 +86,29 @@ export async function payZakatAction(input: z.infer<typeof payZakatSchema>) {
   }
 }
 
-    
+const uploadDocumentSchema = z.object({
+    userId: z.string().min(1),
+    documentUrl: z.string().startsWith('data:'),
+});
+
+export async function uploadLegalDocumentAction(input: z.infer<typeof uploadDocumentSchema>) {
+    const validated = uploadDocumentSchema.safeParse(input);
+    if (!validated.success) {
+        return { success: false, message: 'Invalid document data provided.' };
+    }
+
+    const { userId, documentUrl } = validated.data;
+    try {
+        const userRef = adminDb.collection('users').doc(userId);
+        await userRef.update({
+            legalDocumentUrl: documentUrl
+        });
+
+        revalidatePath(`/admin/users/${userId}`);
+
+        return { success: true, message: 'Legal document uploaded successfully.' };
+    } catch(error: any) {
+        console.error('Legal Document Upload Error:', error);
+        return { success: false, message: error.message || 'Failed to upload document.' };
+    }
+}

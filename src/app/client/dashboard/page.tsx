@@ -1,10 +1,11 @@
 
+
 'use client';
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy, HandCoins } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy, HandCoins, Gavel } from "lucide-react";
 import { useMemo, useTransition, useEffect, useState } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, doc } from 'firebase/firestore';
@@ -24,6 +25,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getOrCreateConversation } from "@/app/common/actions/chat-actions";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import Image from "next/image";
 
 
 const statusVariant = {
@@ -302,6 +304,13 @@ function DealsSkeleton() {
     )
 }
 
+type UserProfile = DocumentData & {
+    id: string;
+    name: string;
+    email: string;
+    role: 'Admin' | 'Investor' | 'Client';
+    legalDocumentUrl?: string;
+};
 
 export default function ClientDashboard() {
     const firestore = useFirestore();
@@ -314,7 +323,7 @@ export default function ClientDashboard() {
         return doc(firestore, 'users', user.uid);
     }, [firestore, user?.uid]);
 
-    const { data: userProfile, loading: profileLoading } = useDoc(userProfileRef);
+    const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userProfileRef);
     
     const dealsQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
@@ -390,6 +399,22 @@ export default function ClientDashboard() {
                     </Card>
 
                     <BankDetailsCard />
+
+                    {userProfile.legalDocumentUrl && (
+                        <Card>
+                             <CardHeader>
+                                <CardTitle className="flex items-center gap-2"><Gavel /> Legal Document</CardTitle>
+                                <CardDescription>Your signed legal agreement with the platform.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
+                                    <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={500} height={700} className="rounded-md border object-contain" />
+                                ) : (
+                                    <embed src={userProfile.legalDocumentUrl} type="application/pdf" width="100%" height="500px" className="rounded-md border" />
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {mainDeal ? (
                         <>
@@ -483,5 +508,3 @@ export default function ClientDashboard() {
         </div>
     );
 }
-
-    

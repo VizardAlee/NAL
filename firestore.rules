@@ -26,19 +26,25 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Investor';
     }
 
+    function isLegal() {
+      return request.auth != null 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Legal';
+    }
+
     // Rules for the 'users' collection
     match /users/{userId} {
-      // Admins can get any user. Owners can get their own data.
-      allow get: if isAdmin() || isOwner(userId);
-      // Admins can list all users.
-      allow list: if isAdmin();
+      // Admins can get any user. Owners can get their own data. Legal can read any user.
+      allow get: if isAdmin() || isOwner(userId) || isLegal();
+      // Admins and Legal can list all users.
+      allow list: if isAdmin() || isLegal();
       
       // Allow any authenticated user to create a new user document (e.g., during signup).
       // In a real app, you would likely restrict this to admins or specific backend processes.
       allow create: if request.auth != null;
 
       // Only the user themself or an Admin can update a user document.
-      allow update: if isOwner(userId) || isAdmin();
+      allow update: if isAdmin() || (isOwner(userId) && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phoneNumber'])));
 
       // Only admins can delete users.
       allow delete: if isAdmin();
@@ -46,10 +52,12 @@ service cloud.firestore {
 
     // Rules for the 'deals' collection
     match /deals/{dealId} {
-        // Admins can do anything.
-        // Clients can read deals they are associated with.
-        // Investors can read all deals (the client will filter to only show ones they've invested in).
-        allow read: if isAdmin() || (isClient() && resource.data.clientId == request.auth.uid) || isInvestor();
+        // Admins, Investors, and Legal can list all deals.
+        allow list: if isAdmin() || isInvestor() || isLegal();
+        
+        // Admins, Investors, Legal can get any single deal.
+        // Clients can only get deals they are associated with.
+        allow get: if isAdmin() || isInvestor() || isLegal() || (isClient() && resource.data.clientId == request.auth.uid);
         
         // Only Admins can create, update or delete deals
         allow create, update, delete: if isAdmin();
@@ -78,8 +86,8 @@ service cloud.firestore {
     match /investments/{investmentId} {
       // Admins can write.
       allow write: if isAdmin();
-      // Admins can read all. Investors can read their own investments.
-      allow read: if isAdmin() || (isInvestor() && resource.data.investorId == request.auth.uid);
+      // Admins can read all. Investors can read their own investments. Legal can read all.
+      allow read, list: if isAdmin() || (isInvestor() && resource.data.investorId == request.auth.uid) || isLegal();
     }
     
     // Rules for 'fundBatches' and 'transactions'
@@ -94,14 +102,15 @@ service cloud.firestore {
         // Admin can do anything
         allow write: if isAdmin();
         // Investor can read their own transactions, Admins can read all.
-        // Clients can read their own repayment transactions.
-        allow read: if isAdmin() || (isInvestor() && resource.data.userId == request.auth.uid) || (isClient() && resource.data.userId == request.auth.uid);
+        // Clients can read their own repayment transactions. Legal can read all.
+        allow read, list: if isAdmin() || (isInvestor() && resource.data.userId == request.auth.uid) || (isClient() && resource.data.userId == request.auth.uid) || isLegal();
     }
 
     // Rules for 'repayments'
     match /repayments/{repaymentId} {
-      // Admins can read and update all repayments.
-      allow get, list, update: if isAdmin();
+      // Admins can read and update all repayments. Legal can read all.
+      allow get, list: if isAdmin() || isLegal();
+      allow update: if isAdmin();
       // Clients can create their own repayments and read their own.
       allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
       allow read: if isClient() && resource.data.clientId == request.auth.uid;
@@ -154,11 +163,16 @@ service cloud.firestore {
 
     // Rules for 'notifications'
     match /notifications/{notificationId} {
-        // Any authenticated user can create a notification for an admin
-        allow create: if request.auth != null;
+        // Allow any authenticated user to create a notification, as long as it's for an Admin.
+        // This is secure because we check the role of the recipient.
+        allow create: if request.auth != null
+          && exists(/databases/$(database)/documents/users/$(request.resource.data.recipientId))
+          && get(/databases/$(database)/documents/users/$(request.resource.data.recipientId)).data.role == 'Admin';
+          
         // Users can only read/update notifications intended for them
         allow read, update: if request.auth != null && resource.data.recipientId == request.auth.uid;
-        // Admins can read all notifications
+
+        // Admins can list notifications (to see all, for debugging if needed, but UI filters by recipientId)
         allow list: if isAdmin();
     }
 
@@ -182,10 +196,10 @@ service cloud.firestore {
 
     // Rules for 'conversations' collection
     match /conversations/{conversationId} {
-        // Admins can create, get, list, and update. This covers the create-then-read problem.
+        // Admins can do everything.
         allow create, get, list, update: if isAdmin();
 
-        // Regular users can get, list, and update conversations they are a part of.
+        // Regular users can only read/list/update conversations they are a part of.
         allow get, list, update: if request.auth != null
             && 'participantIds' in resource.data
             && request.auth.uid in resource.data.participantIds;
@@ -193,8 +207,7 @@ service cloud.firestore {
     
     // Rules for 'messages' subcollection
     match /conversations/{conversationId}/messages/{messageId} {
-        // A user can create a message only if they are a participant of the conversation.
-        // This relies on the parent document existing and having the correct data.
+        // Users can read/create messages only if they are a participant in the parent conversation.
         allow read, create: if request.auth != null
             && exists(/databases/$(database)/documents/conversations/$(conversationId))
             && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;

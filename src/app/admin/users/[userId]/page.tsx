@@ -10,7 +10,7 @@ import { doc, collection, query, where, DocumentData, Timestamp, orderBy, limit 
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone, MessageSquare, Star } from 'lucide-react';
+import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone, MessageSquare, Star, Gavel } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -34,15 +34,17 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 import { Deal, Repayment } from '@/lib/types';
 import { getOrCreateConversation } from '@/app/common/actions/chat-actions';
 import { Progress } from '@/components/ui/progress';
-
+import { LegalDocumentUploader } from './legal-document-uploader';
+import Image from 'next/image';
 
 type UserProfile = DocumentData & {
     id: string;
     name: string;
     email: string;
     phoneNumber?: string;
-    role: 'Admin' | 'Investor' | 'Client';
+    role: 'Admin' | 'Investor' | 'Client' | 'Legal';
     lastZakatPaymentDate?: Timestamp;
+    legalDocumentUrl?: string;
 };
 
 type FundBatch = DocumentData & {
@@ -441,6 +443,32 @@ export default function UserDetailPage() {
             </div>
 
             <div className="lg:col-span-2 space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Gavel className="h-5 w-5" />
+                            <span>Legal Document</span>
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {userProfile.legalDocumentUrl ? (
+                            <div>
+                                {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
+                                    <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={500} height={700} className="rounded-md border object-contain" />
+                                ) : (
+                                    <embed src={userProfile.legalDocumentUrl} type="application/pdf" width="100%" height="500px" className="rounded-md border" />
+                                )}
+                                <div className='mt-4'>
+                                    <h3 className="font-medium mb-2">Replace Document:</h3>
+                                    <LegalDocumentUploader userId={userId} />
+                                </div>
+                            </div>
+                        ) : (
+                            <LegalDocumentUploader userId={userId} />
+                        )}
+                    </CardContent>
+                </Card>
+
                 {userProfile.role === 'Investor' && (
                     <>
                         <Card>
@@ -743,5 +771,3 @@ export default function UserDetailPage() {
     </div>
   );
 }
-
-
