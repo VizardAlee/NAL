@@ -352,17 +352,17 @@ export default function UserDetailPage() {
                 {userProfile.role === 'Client' && clientPerformanceMetrics && (
                     <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><Star className="h-5 w-5" /> Client Performance</CardTitle>
+                            <CardTitle className="flex items-center gap-2 text-base"><Star className="h-5 w-5 text-primary" /> Client Credit Score</CardTitle>
+                            <CardDescription>Based on on-time payment history.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div>
-                                <div className="flex justify-between items-center mb-1">
-                                    <h3 className="text-sm font-medium">On-Time Payment Score</h3>
-                                    <span className="font-bold text-lg">{clientPerformanceMetrics.onTimePaymentScore.toFixed(0)}%</span>
-                                </div>
-                                <Progress value={clientPerformanceMetrics.onTimePaymentScore} />
+                            <div className="text-center">
+                                <span className="text-5xl font-bold font-headline text-primary">{clientPerformanceMetrics.onTimePaymentScore.toFixed(0)}</span>
+                                <span className="text-2xl text-muted-foreground">%</span>
+                                <p className="text-xs text-muted-foreground">On-Time Payment Score</p>
                             </div>
-                             <div className="text-sm space-y-2 pt-2 border-t">
+                            <Progress value={clientPerformanceMetrics.onTimePaymentScore} className="h-2" />
+                            <div className="text-sm space-y-2 pt-2 border-t">
                                 <div className="flex justify-between"><span className="text-muted-foreground">Total Deals Value:</span> <span className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(clientPerformanceMetrics.totalDealsValue)}</span></div>
                                 <div className="flex justify-between"><span className="text-muted-foreground">Total Amount Repaid:</span> <span className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(clientPerformanceMetrics.totalAmountRepaid)}</span></div>
                             </div>
@@ -659,4 +659,3 @@ export default function UserDetailPage() {
     </div>
   );
 }
-
