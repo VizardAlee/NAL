@@ -315,9 +315,9 @@ export default function InvestorDashboard() {
 
   const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || firstDepositLoading;
 
-  const { longTermProfits, withdrawableBalance, returnedPrincipal } = useMemo(() => {
+  const { longTermProfits, withdrawableBalance } = useMemo(() => {
     if (!allTransactions || !deals) {
-        return { longTermProfits: 0, withdrawableBalance: 0, returnedPrincipal: 0 };
+        return { longTermProfits: 0, withdrawableBalance: 0 };
     }
 
     const profitTransactions = allTransactions.filter(tx => tx.type === 'ProfitDistribution');
@@ -341,14 +341,11 @@ export default function InvestorDashboard() {
         }
     }
 
-    const _returnedPrincipal = fundBatches?.filter(b => b.details?.startsWith('Returned principal')).reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
-
     return {
         longTermProfits: totalLongTermProfit,
         withdrawableBalance: totalShortTermProfit - totalWithdrawnFromProfits,
-        returnedPrincipal: _returnedPrincipal
     };
-}, [allTransactions, deals, fundBatches]);
+}, [allTransactions, deals]);
 
 
   const financialMetrics = useMemo(() => {
@@ -370,7 +367,8 @@ export default function InvestorDashboard() {
     const portfolioValue = (totalCapital + totalProfit) - totalWithdrawn;
     const simpleROI = totalCapital > 0 ? (totalProfit / totalCapital) * 100 : 0;
     
-    const investableBalance = fundBatches?.filter(b => !b.details?.startsWith('Returned principal')).reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
+    // Investable balance now includes all fund batches.
+    const investableBalance = fundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
 
 
     return { totalCapital, portfolioValue, investableBalance, simpleROI };
@@ -419,37 +417,6 @@ export default function InvestorDashboard() {
     const handleWithdrawalSuccess = () => {
         setWithdrawOpen(false);
     };
-
-    const handleReinvestReturnedPrincipal = () => {
-        if (!user) return;
-        startReinvestTransition(async () => {
-            if (!firestore) return;
-            const batch = writeBatch(firestore);
-
-            const returnedBatches = fundBatches?.filter(b => b.details?.startsWith('Returned principal')) || [];
-            
-            for (const batchDoc of returnedBatches) {
-                batch.update(doc(firestore, 'fundBatches', batchDoc.id), {
-                    details: 'Reinvested returned principal'
-                });
-            }
-
-            try {
-                await batch.commit();
-                toast({
-                    title: "Success",
-                    description: "Returned principal has been moved to your investible balance."
-                });
-            } catch (error) {
-                toast({
-                    variant: "destructive",
-                    title: "Error",
-                    description: "Failed to reinvest returned principal."
-                });
-            }
-        });
-    }
-
 
   const formatDate = (timestamp: Timestamp | Date | undefined) => {
     if (!timestamp) return 'N/A';
@@ -550,22 +517,6 @@ export default function InvestorDashboard() {
           </CardContent>
         </Card>
       </div>
-
-        {returnedPrincipal > 0 && (
-            <Card className="mt-8 bg-secondary">
-                <CardHeader>
-                    <CardTitle>Returned Principal</CardTitle>
-                    <CardDescription>This is principal returned from completed or terminated deals. It must be re-invested to be used in new deals.</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="text-3xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(returnedPrincipal)}</div>
-                    <Button onClick={handleReinvestReturnedPrincipal} disabled={isReinvestPending}>
-                         {isReinvestPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
-                        Re-invest Returned Principal
-                    </Button>
-                </CardContent>
-            </Card>
-        )}
 
        <Card className="mt-8">
         <CardHeader>
