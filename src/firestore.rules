@@ -53,11 +53,12 @@ service cloud.firestore {
 
     // Rules for the 'deals' collection
     match /deals/{dealId} {
-        // Admins can do anything.
-        // Clients can read deals they are associated with.
-        // Investors can read all deals (the client will filter to only show ones they've invested in).
-        // Legal can read all deals.
-        allow read: if isAdmin() || (isClient() && resource.data.clientId == request.auth.uid) || isInvestor() || isLegal();
+        // Admins, Investors, and Legal can list all deals.
+        allow list: if isAdmin() || isInvestor() || isLegal();
+        
+        // Admins, Investors, Legal can get any single deal.
+        // Clients can only get deals they are associated with.
+        allow get: if isAdmin() || isInvestor() || isLegal() || (isClient() && resource.data.clientId == request.auth.uid);
         
         // Only Admins can create, update or delete deals
         allow create, update, delete: if isAdmin();
@@ -103,7 +104,7 @@ service cloud.firestore {
         allow write: if isAdmin();
         // Investor can read their own transactions, Admins can read all.
         // Clients can read their own repayment transactions. Legal can read all.
-        allow read: if isAdmin() || (isInvestor() && resource.data.userId == request.auth.uid) || (isClient() && resource.data.userId == request.auth.uid) || isLegal();
+        allow read, list: if isAdmin() || (isInvestor() && resource.data.userId == request.auth.uid) || (isClient() && resource.data.userId == request.auth.uid) || isLegal();
     }
 
     // Rules for 'repayments'
@@ -214,5 +215,3 @@ service cloud.firestore {
     }
   }
 }
-
-    
