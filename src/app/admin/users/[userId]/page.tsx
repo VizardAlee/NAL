@@ -744,3 +744,4 @@ export default function UserDetailPage() {
   );
 }
 
+
