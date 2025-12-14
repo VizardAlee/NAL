@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -13,6 +12,7 @@ import { useMemo, useState } from "react";
 import { DateRange } from "react-day-picker";
 import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
 import { startOfDay, endOfDay } from "date-fns";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type Transaction = DocumentData & {
   type: 'PlatformEarning';
@@ -75,20 +75,53 @@ export default function TaxPage() {
         
         const grossProfit = platformEarnings + managementFees;
         
-        // Tertiary Education Tax (EDT) is 3% of assessable profit (using gross profit here)
-        const educationTax = grossProfit * 0.03;
+        // Personal Income Tax (PIT) for Enterprises
+        // 1. Calculate Consolidated Relief Allowance (CRA)
+        const cra = Math.max(200000, grossProfit * 0.01) + (grossProfit * 0.20);
         
-        const profitAfterEDT = grossProfit - educationTax;
+        // 2. Determine Chargeable Income
+        const chargeableIncome = Math.max(0, grossProfit - cra);
         
-        // Company Income Tax (CIT) is 30% of the remaining profit
-        const companyIncomeTax = profitAfterEDT * 0.30;
+        // 3. Apply Progressive Tax Rates
+        let personalIncomeTax = 0;
+        let incomeLeft = chargeableIncome;
         
-        const profitAfterTax = profitAfterEDT - companyIncomeTax;
+        if (incomeLeft > 0) {
+            const firstBracket = Math.min(incomeLeft, 300000);
+            personalIncomeTax += firstBracket * 0.07;
+            incomeLeft -= firstBracket;
+        }
+        if (incomeLeft > 0) {
+            const secondBracket = Math.min(incomeLeft, 300000);
+            personalIncomeTax += secondBracket * 0.11;
+            incomeLeft -= secondBracket;
+        }
+        if (incomeLeft > 0) {
+            const thirdBracket = Math.min(incomeLeft, 500000);
+            personalIncomeTax += thirdBracket * 0.15;
+            incomeLeft -= thirdBracket;
+        }
+        if (incomeLeft > 0) {
+            const fourthBracket = Math.min(incomeLeft, 500000);
+            personalIncomeTax += fourthBracket * 0.19;
+            incomeLeft -= fourthBracket;
+        }
+        if (incomeLeft > 0) {
+            const fifthBracket = Math.min(incomeLeft, 1600000);
+            personalIncomeTax += fifthBracket * 0.21;
+            incomeLeft -= fifthBracket;
+        }
+        if (incomeLeft > 0) {
+            personalIncomeTax += incomeLeft * 0.24;
+        }
+
+        const profitAfterTax = grossProfit - personalIncomeTax;
 
         return {
             grossProfit,
-            educationTax,
-            companyIncomeTax,
+            cra,
+            chargeableIncome,
+            personalIncomeTax,
             profitAfterTax,
         };
 
@@ -97,8 +130,8 @@ export default function TaxPage() {
     return (
         <div>
             <PageHeader
-                title="Tax Calculation"
-                description="Estimate corporate taxes based on platform earnings for a selected period."
+                title="Tax Calculation (Enterprise)"
+                description="Estimate Personal Income Tax (PIT) based on platform profits for a selected period."
                 icon={Landmark}
             >
                  <DatePickerWithRange onDateChange={setDateRange} />
@@ -109,23 +142,35 @@ export default function TaxPage() {
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
             ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                    <TaxMetricCard 
-                        title="Gross Profit"
-                        value={taxCalculations.grossProfit}
-                        description="Platform Earnings + Management Fees"
-                        isLoading={isLoading}
-                    />
-                    <TaxMetricCard 
-                        title="Education Tax (EDT)"
-                        value={taxCalculations.educationTax}
-                        description="3% of Gross Profit"
-                        isLoading={isLoading}
-                    />
-                    <TaxMetricCard 
-                        title="Company Income Tax (CIT)"
-                        value={taxCalculations.companyIncomeTax}
-                        description="30% of Profit after EDT"
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
+                    <Card className="lg:col-span-2">
+                        <CardHeader>
+                            <CardTitle>Personal Income Tax (PIT) Estimation</CardTitle>
+                            <CardDescription>Based on Nigerian PITA rates for enterprise businesses.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableBody>
+                                    <TableRow>
+                                        <TableCell>Gross Profit</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(taxCalculations.grossProfit)}</TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                        <TableCell>Consolidated Relief Allowance (CRA)</TableCell>
+                                        <TableCell className="text-right text-destructive">- {formatCurrency(taxCalculations.cra)}</TableCell>
+                                    </TableRow>
+                                    <TableRow className="font-medium bg-muted/50">
+                                        <TableCell>Chargeable Income</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(taxCalculations.chargeableIncome)}</TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                     <TaxMetricCard 
+                        title="Estimated Personal Income Tax (PIT)"
+                        value={taxCalculations.personalIncomeTax}
+                        description="Calculated based on progressive rates"
                         isLoading={isLoading}
                     />
                     <TaxMetricCard 
@@ -139,5 +184,3 @@ export default function TaxPage() {
         </div>
     );
 }
-
-    
