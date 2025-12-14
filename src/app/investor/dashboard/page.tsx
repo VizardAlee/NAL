@@ -536,6 +536,8 @@ export default function InvestorDashboard() {
                     margin={{
                         left: 12,
                         right: 12,
+                        top: 10,
+                        bottom: 10,
                     }}
                 >
                     <CartesianGrid vertical={false} />
@@ -546,12 +548,18 @@ export default function InvestorDashboard() {
                         tickMargin={8}
                     />
                     <YAxis
-                        tickFormatter={(value) => `₦${Number(value) / 1000}k`}
                         tickLine={false}
                         axisLine={false}
                         tickMargin={8}
+                        tickFormatter={(value) => {
+                            if (value >= 1000000) return `₦${Number(value) / 1000000}M`;
+                            return `₦${Number(value) / 1000}K`;
+                        }}
                     />
-                    <Tooltip content={<ChartTooltipContent indicator="dot" formatter={(value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(value))}/>} />
+                    <Tooltip 
+                        cursor={{ strokeDasharray: '3 3' }}
+                        content={<ChartTooltipContent indicator="dot" formatter={(value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(value))}/>} 
+                    />
                     <defs>
                         <linearGradient id="fillPortfolioValue" x1="0" y1="0" x2="0" y2="1">
                         <stop
@@ -572,7 +580,13 @@ export default function InvestorDashboard() {
                         fill="url(#fillPortfolioValue)"
                         fillOpacity={0.4}
                         stroke="var(--color-portfolioValue)"
-                        stackId="a"
+                        strokeWidth={2}
+                        dot={{
+                            r: 0,
+                        }}
+                        activeDot={{
+                            r: 6,
+                        }}
                     />
                 </AreaChart>
             </ChartContainer>
