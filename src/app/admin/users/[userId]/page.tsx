@@ -10,7 +10,7 @@ import { doc, collection, query, where, DocumentData, Timestamp, orderBy, limit 
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone, MessageSquare, Star, Gavel } from 'lucide-react';
+import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone, MessageSquare, Star, Gavel, Download } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -480,14 +480,19 @@ export default function UserDetailPage() {
                                         <Button variant="outline"><Gavel className="mr-2 h-4 w-4" /> View Legal Document</Button>
                                     </SheetTrigger>
                                     <SheetContent className="w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl flex flex-col">
-                                        <SheetHeader>
+                                        <SheetHeader className="flex-row items-center justify-between">
                                             <SheetTitle>Signed Legal Document</SheetTitle>
+                                            <Button variant="outline" asChild>
+                                                <a href={userProfile.legalDocumentUrl} download={`LegalDocument-${userProfile.name}.pdf`}>
+                                                    <Download className="mr-2 h-4 w-4" /> Download
+                                                </a>
+                                            </Button>
                                         </SheetHeader>
                                         <div className="py-4 flex-1 bg-white overflow-y-auto">
                                             {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
                                                 <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={800} height={1100} className="rounded-md object-contain mx-auto" />
                                             ) : (
-                                                <iframe src={userProfile.legalDocumentUrl} className="w-full h-full rounded-md border" />
+                                                <iframe src={`${userProfile.legalDocumentUrl}#toolbar=1`} className="w-full h-full rounded-md border" />
                                             )}
                                         </div>
                                     </SheetContent>
@@ -832,3 +837,4 @@ export default function UserDetailPage() {
     </div>
   );
 }
+

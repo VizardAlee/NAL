@@ -5,7 +5,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy, HandCoins, Gavel } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy, HandCoins, Gavel, Download } from "lucide-react";
 import { useMemo, useTransition, useEffect, useState } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, doc } from 'firebase/firestore';
@@ -414,14 +414,19 @@ export default function ClientDashboard() {
                                         </Button>
                                     </SheetTrigger>
                                     <SheetContent className="w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl flex flex-col">
-                                        <SheetHeader>
+                                        <SheetHeader className="flex-row items-center justify-between">
                                             <SheetTitle>Signed Legal Document</SheetTitle>
+                                            <Button variant="outline" asChild>
+                                                <a href={userProfile.legalDocumentUrl} download={`LegalDocument-${userProfile.name}.pdf`}>
+                                                    <Download className="mr-2 h-4 w-4" /> Download
+                                                </a>
+                                            </Button>
                                         </SheetHeader>
                                         <div className="py-4 flex-1 bg-white overflow-y-auto">
                                             {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
                                                 <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={800} height={1100} className="rounded-md border object-contain" />
                                             ) : (
-                                                <iframe src={userProfile.legalDocumentUrl} className="w-full h-full rounded-md border" />
+                                                <iframe src={`${userProfile.legalDocumentUrl}#toolbar=1`} className="w-full h-full rounded-md border" />
                                             )}
                                         </div>
                                     </SheetContent>
@@ -523,3 +528,4 @@ export default function ClientDashboard() {
         </div>
     );
 }
+
