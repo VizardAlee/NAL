@@ -120,15 +120,16 @@ body {
 
 /* FullCalendar Customizations */
 .fc {
-    --fc-border-color: hsl(var(--border));
+    --fc-border-color: transparent;
     --fc-today-bg-color: hsla(var(--accent) / 0.1);
     --fc-highlight-color: hsla(var(--accent) / 0.2);
+    font-size: 0.875rem;
 }
 .dark .fc {
      --fc-today-bg-color: hsla(var(--accent) / 0.15);
 }
 .fc .fc-daygrid-day-number {
-    @apply text-sm;
+    @apply text-xs p-2;
 }
 .fc .fc-toolbar-title {
     @apply text-lg font-medium;
@@ -142,6 +143,9 @@ body {
 .fc .fc-day-today {
     @apply bg-muted;
 }
-.fc .fc-day-selected, .fc .fc-day-range {
+.fc .fc-daygrid-day.fc-day-selected {
     @apply bg-primary/20;
+}
+.fc .fc-col-header-cell-cushion {
+  @apply text-muted-foreground;
 }
