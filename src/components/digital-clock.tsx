@@ -22,13 +22,13 @@ export function DigitalClock() {
   }, []); // Empty dependency array ensures this runs once on mount
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
   };
   
   if (!time) {
       return (
-          <div className="flex items-center justify-center rounded-md bg-muted px-4 py-2 h-8 w-[88px]">
-              <span className="font-mono text-sm text-muted-foreground opacity-50">--:--:--</span>
+          <div className="flex items-center justify-center rounded-md bg-muted px-4 py-2 h-8 w-[110px]">
+              <span className="font-mono text-sm text-muted-foreground opacity-50">--:--:-- --</span>
           </div>
       );
   }
