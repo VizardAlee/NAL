@@ -26,7 +26,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Pagination,
@@ -38,11 +38,7 @@ import {
 } from "@/components/ui/pagination";
 import { User } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin, { DateClickArg } from '@fullcalendar/interaction';
 
 type Transaction = DocumentData & {
   id: string;
@@ -73,8 +69,6 @@ export default function ActivityPage() {
     const isMobile = useIsMobile();
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedTypes, setSelectedTypes] = useState<TransactionTypeFilter[]>([]);
-    const [startDate, setStartDate] = useState<Date | null>(null);
-    const [endDate, setEndDate] = useState<Date | null>(null);
 
     const transactionsQuery = useMemo(() => {
         if (!firestore || !authUser) return null;
@@ -99,18 +93,9 @@ export default function ActivityPage() {
         if (selectedTypes.length > 0) {
             filtered = filtered.filter(tx => selectedTypes.includes(tx.type as TransactionTypeFilter));
         }
-        
-        if (startDate) {
-            const startTime = startDate.getTime();
-            filtered = filtered.filter(tx => tx.createdAt.toDate().getTime() >= startTime);
-        }
-        if (endDate) {
-            const endTime = new Date(endDate).setHours(23, 59, 59, 999);
-            filtered = filtered.filter(tx => tx.createdAt.toDate().getTime() <= endTime);
-        }
 
         return filtered;
-    }, [transactions, selectedTypes, startDate, endDate]);
+    }, [transactions, selectedTypes]);
 
     const paginatedTransactions = useMemo(() => {
         if (!filteredTransactions) return [];
@@ -131,10 +116,6 @@ export default function ActivityPage() {
         );
         setCurrentPage(1);
     };
-
-    const formatDateDisplay = (dateValue: Date | null) => {
-        return dateValue ? format(dateValue, "LLL dd, y") : <span>Pick a date</span>;
-    }
 
     const formatDateTimestamp = (timestamp: Timestamp | Date | undefined) => {
         if (!timestamp) return 'N/A';
@@ -265,65 +246,6 @@ export default function ActivityPage() {
                 icon={History}
             >
                 <div className="flex flex-col sm:flex-row gap-2">
-                     <div className="flex items-center gap-2">
-                        <Popover>
-                            <PopoverTrigger asChild>
-                            <Button
-                                variant={"outline"}
-                                className={cn("w-[140px] justify-start text-left font-normal", !startDate && "text-muted-foreground")}
-                            >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {formatDateDisplay(startDate)}
-                            </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-2" align="start">
-                                <FullCalendar
-                                    plugins={[dayGridPlugin, interactionPlugin]}
-                                    initialView="dayGridMonth"
-                                    selectable={true}
-                                    headerToolbar={{
-                                        left: 'prev',
-                                        center: 'title',
-                                        right: 'next'
-                                    }}
-                                    dateClick={(arg: DateClickArg) => {
-                                        setStartDate(arg.date);
-                                        if (endDate && arg.date > endDate) {
-                                            setEndDate(arg.date);
-                                        }
-                                    }}
-                                />
-                            </PopoverContent>
-                        </Popover>
-                        <span className="text-muted-foreground">-</span>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                            <Button
-                                variant={"outline"}
-                                className={cn("w-[140px] justify-start text-left font-normal", !endDate && "text-muted-foreground")}
-                            >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {formatDateDisplay(endDate)}
-                            </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-2" align="end">
-                                <FullCalendar
-                                    plugins={[dayGridPlugin, interactionPlugin]}
-                                    initialView="dayGridMonth"
-                                    selectable={true}
-                                    validRange={startDate ? { start: startDate } : undefined}
-                                    headerToolbar={{
-                                        left: 'prev',
-                                        center: 'title',
-                                        right: 'next'
-                                    }}
-                                    dateClick={(arg: DateClickArg) => {
-                                        setEndDate(arg.date);
-                                    }}
-                                />
-                            </PopoverContent>
-                        </Popover>
-                    </div>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" className="shrink-0">
@@ -384,5 +306,3 @@ export default function ActivityPage() {
         </div>
     );
 }
-
-    
