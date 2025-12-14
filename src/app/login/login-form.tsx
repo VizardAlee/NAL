@@ -93,6 +93,7 @@ export function LoginForm() {
           router.push("/client/dashboard");
           break;
         case 'Legal':
+        case 'legal':
           router.push("/legal/dashboard");
           break;
         default:
@@ -176,5 +177,3 @@ export function LoginForm() {
     </Card>
   );
 }
-
-    
