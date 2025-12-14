@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { WithdrawForm } from "./withdraw-form";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { reinvestAction } from "./withdrawal-actions";
 import { useToast } from "@/hooks/use-toast";
@@ -80,7 +80,7 @@ const EIGHTEEN_MONTHS_IN_DAYS = 18 * DURATION_IN_DAYS.Months;
 
 
 const chartConfig = {
-  portfolioValue: { label: "Portfolio Value", color: "hsl(var(--chart-1))" },
+  portfolioValue: { label: "Portfolio Value", color: "hsl(var(--primary))" },
 };
 
 function ReinvestButton({ balance, user }: { balance: number, user: User }) {
@@ -530,7 +530,7 @@ export default function InvestorDashboard() {
                 </div>
             ) : (
              <ChartContainer config={chartConfig} className="h-[250px] w-full">
-                <AreaChart
+                <LineChart
                     accessibilityLayer
                     data={chartData}
                     margin={{
@@ -560,35 +560,19 @@ export default function InvestorDashboard() {
                         cursor={{ strokeDasharray: '3 3' }}
                         content={<ChartTooltipContent indicator="dot" formatter={(value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(value))}/>} 
                     />
-                    <defs>
-                        <linearGradient id="fillPortfolioValue" x1="0" y1="0" x2="0" y2="1">
-                        <stop
-                            offset="5%"
-                            stopColor="var(--color-portfolioValue)"
-                            stopOpacity={0.8}
-                        />
-                        <stop
-                            offset="95%"
-                            stopColor="var(--color-portfolioValue)"
-                            stopOpacity={0.1}
-                        />
-                        </linearGradient>
-                    </defs>
-                    <Area
+                    <Line
                         dataKey="portfolioValue"
                         type="natural"
-                        fill="url(#fillPortfolioValue)"
-                        fillOpacity={0.4}
                         stroke="var(--color-portfolioValue)"
                         strokeWidth={2}
                         dot={{
-                            r: 0,
+                            r: 3,
                         }}
                         activeDot={{
                             r: 6,
                         }}
                     />
-                </AreaChart>
+                </LineChart>
             </ChartContainer>
             )}
         </CardContent>
@@ -734,3 +718,5 @@ export default function InvestorDashboard() {
     </div>
   );
 }
+
+    
