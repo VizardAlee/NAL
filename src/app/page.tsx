@@ -83,7 +83,7 @@ export default function Home() {
 
         <StatsCounter />
 
-        <section id="features" className="w-full bg-card py-12 md:py-24 lg:py-32">
+        <section id="features" className="w-full bg-background py-12 md:py-24 lg:py-32">
           <div className="container">
             <div className="flex flex-col items-center justify-center space-y-4 text-center">
               <div className="space-y-2">
@@ -117,8 +117,8 @@ export default function Home() {
           </div>
         </section>
         
-        <section className="container py-12 md:py-24 lg:py-32">
-          <div className="grid gap-10 md:grid-cols-2 md:gap-16">
+        <section className="bg-muted/50 py-12 md:py-24 lg:py-32">
+          <div className="container grid gap-10 md:grid-cols-2 md:gap-16">
             <div className="space-y-4">
               <div className="inline-block rounded-lg bg-secondary px-3 py-1 text-sm">Powered by AI</div>
               <h2 className="text-3xl font-bold tracking-tighter font-headline sm:text-4xl md:text-5xl">Smart Deal Analyzer</h2>
