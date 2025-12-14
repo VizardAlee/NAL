@@ -157,6 +157,7 @@ export default function UserDetailPage() {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [currentPage, setCurrentPage] = useState(1);
+  const [fundBatchesCurrentPage, setFundBatchesCurrentPage] = useState(1);
   const [isChatPending, startChatTransition] = useTransition();
 
   const userRef = useMemo(() => {
@@ -173,7 +174,7 @@ export default function UserDetailPage() {
 
   const fundBatchesQuery = useMemo(() => {
     if (!firestore || !userId) return null;
-    return query(collection(firestore, 'fundBatches'), where('sourceId', '==', userId), orderBy('createdAt', 'asc'));
+    return query(collection(firestore, 'fundBatches'), where('sourceId', '==', userId), orderBy('createdAt', 'desc'));
   }, [firestore, userId]);
   
   const clientDealsQuery = useMemo(() => {
@@ -293,6 +294,17 @@ export default function UserDetailPage() {
         return { ...batch, type };
     });
   }, [fundBatches]);
+
+  const paginatedFundBatches = useMemo(() => {
+    if (!processedFundBatches) return [];
+    const startIndex = (fundBatchesCurrentPage - 1) * ITEMS_PER_PAGE;
+    return processedFundBatches.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [processedFundBatches, fundBatchesCurrentPage]);
+
+  const totalFundBatchesPages = useMemo(() => {
+    if (!processedFundBatches) return 0;
+    return Math.ceil(processedFundBatches.length / ITEMS_PER_PAGE);
+  }, [processedFundBatches]);
 
   const paginatedTransactions = useMemo(() => {
     if (!transactions) return [];
@@ -512,7 +524,7 @@ export default function UserDetailPage() {
                             <CardContent>
                                 {isMobile ? (
                                     <div className="space-y-3">
-                                        {processedFundBatches.length > 0 ? processedFundBatches.map(batch => (
+                                        {paginatedFundBatches.length > 0 ? paginatedFundBatches.map(batch => (
                                             <Card key={batch.id} className="p-4">
                                                 <div className="flex justify-between items-start">
                                                     <div>
@@ -540,7 +552,7 @@ export default function UserDetailPage() {
                                         </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                        {processedFundBatches?.map(batch => (
+                                        {paginatedFundBatches?.map(batch => (
                                             <TableRow key={batch.id}>
                                                 <TableCell data-label="Date">{formatDate(batch.createdAt)}</TableCell>
                                                 <TableCell data-label="Type">
@@ -550,7 +562,7 @@ export default function UserDetailPage() {
                                                 <TableCell data-label="Investible Balance" className="text-right text-primary font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
                                             </TableRow>
                                         ))}
-                                        {!processedFundBatches?.length && (
+                                        {!paginatedFundBatches?.length && (
                                             <TableRow>
                                                 <TableCell colSpan={4} className="h-24 text-center">
                                                     No fund batches found.
@@ -561,6 +573,27 @@ export default function UserDetailPage() {
                                     </Table>
                                 )}
                             </CardContent>
+                             {totalFundBatchesPages > 1 && (
+                                <div className="p-4 border-t">
+                                    <Pagination>
+                                        <PaginationContent>
+                                            <PaginationItem>
+                                                <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setFundBatchesCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={fundBatchesCurrentPage === 1} />
+                                            </PaginationItem>
+                                            {[...Array(totalFundBatchesPages)].map((_, i) => (
+                                                <PaginationItem key={i}>
+                                                    <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setFundBatchesCurrentPage(i + 1); }} isActive={fundBatchesCurrentPage === i + 1}>
+                                                        {i + 1}
+                                                    </PaginationLink>
+                                                </PaginationItem>
+                                            ))}
+                                            <PaginationItem>
+                                                <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setFundBatchesCurrentPage(p => Math.min(totalFundBatchesPages, p + 1)) }} aria-disabled={fundBatchesCurrentPage === totalFundBatchesPages} />
+                                            </PaginationItem>
+                                        </PaginationContent>
+                                    </Pagination>
+                                </div>
+                            )}
                         </Card>
                          <Card>
                             <CardHeader>
