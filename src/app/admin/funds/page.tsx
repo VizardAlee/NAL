@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign, Info, FileText, Zap } from "lucide-react";
+import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign, Info, FileText, Zap, ListFilter } from "lucide-react";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy, updateDoc } from 'firebase/firestore';
 import { useFirestore } from "@/firebase";
@@ -37,6 +37,16 @@ import { cn } from "@/lib/utils";
 import { CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { generateAmortizationSchedule } from "@/lib/amortization";
+import { DateRange } from "react-day-picker";
+import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 
 type PlatformFundBatch = DocumentData & {
@@ -67,6 +77,18 @@ type AdministrativeTransaction = DocumentData & {
   clientId?: string;
   clientName?: string;
 };
+
+const adminTransactionTypes = [
+    'AdminDeposit', 
+    'Expense', 
+    'TransferToInvestible', 
+    'TransferFromInvestible', 
+    'AssetAcquisition', 
+    'AssetSale',
+    'ManagementFee'
+] as const;
+
+type AdminTransactionTypeFilter = typeof adminTransactionTypes[number];
 
 type Asset = DocumentData & {
     id: string;
@@ -523,6 +545,9 @@ export default function PlatformFundsPage() {
     const [isDialogOpen, setDialogOpen] = useState<{ [key: string]: boolean }>({});
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedTx, setSelectedTx] = useState<AdministrativeTransaction | null>(null);
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [selectedTypes, setSelectedTypes] = useState<AdminTransactionTypeFilter[]>([]);
+
 
     const openDialog = (key: string) => setDialogOpen(prev => ({ ...prev, [key]: true }));
     const closeDialog = (key: string) => setDialogOpen(prev => ({ ...prev, [key]: false }));
@@ -580,13 +605,45 @@ export default function PlatformFundsPage() {
         return { investibleCapital, administrativeBalance, zakatPool, totalInvested, totalInvestiblePool, totalAssetValue, totalClientDebt, platformEarnings };
     }, [platformFundBatches, adminTransactions, zakatTransactions, allFundBatches, assets, deals, repayments, earningsTransactions]);
 
-    const paginatedAdminTransactions = useMemo(() => {
+    const filteredAdminTransactions = useMemo(() => {
         if (!adminTransactions) return [];
-        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-        return adminTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-    }, [adminTransactions, currentPage]);
+        let filtered = adminTransactions;
 
-    const totalPages = useMemo(() => adminTransactions ? Math.ceil(adminTransactions.length / ITEMS_PER_PAGE) : 0, [adminTransactions]);
+        if (selectedTypes.length > 0) {
+            filtered = filtered.filter(tx => selectedTypes.includes(tx.type as AdminTransactionTypeFilter));
+        }
+
+        if (dateRange?.from && dateRange?.to) {
+            filtered = filtered.filter(tx => {
+                const txDate = tx.createdAt.toDate();
+                return txDate >= dateRange.from! && txDate <= dateRange.to!;
+            });
+        }
+        return filtered;
+    }, [adminTransactions, selectedTypes, dateRange]);
+
+    const paginatedAdminTransactions = useMemo(() => {
+        if (!filteredAdminTransactions) return [];
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+        return filteredAdminTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    }, [filteredAdminTransactions, currentPage]);
+
+    const totalPages = useMemo(() => filteredAdminTransactions ? Math.ceil(filteredAdminTransactions.length / ITEMS_PER_PAGE) : 0, [filteredAdminTransactions]);
+    
+    const handleFilterChange = (type: AdminTransactionTypeFilter) => {
+        setSelectedTypes(prev =>
+            prev.includes(type)
+                ? prev.filter(t => t !== type)
+                : [...prev, type]
+        );
+        setCurrentPage(1);
+    };
+
+    const handleDateChange = (range: DateRange | undefined) => {
+        setDateRange(range);
+        setCurrentPage(1);
+    };
+
 
     const handleRowClick = (tx: AdministrativeTransaction) => {
         setSelectedTx(tx);
@@ -656,6 +713,29 @@ export default function PlatformFundsPage() {
                             <CardTitle>Administrative Activity</CardTitle>
                             <CardDescription>Manage operational funds: deposits, expenses, and transfers.</CardDescription>
                             <div className="flex flex-wrap gap-2 pt-2">
+                                <DatePickerWithRange onDateChange={handleDateChange} />
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" className="shrink-0">
+                                            <ListFilter className="mr-2 h-4 w-4" />
+                                            Filter by Type
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuLabel>Transaction Type</DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        {adminTransactionTypes.map(type => (
+                                            <DropdownMenuCheckboxItem
+                                                key={type}
+                                                checked={selectedTypes.includes(type)}
+                                                onCheckedChange={() => handleFilterChange(type)}
+                                            >
+                                                {type}
+                                            </DropdownMenuCheckboxItem>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                <div className="flex-grow"/>
                                 <Dialog open={isDialogOpen['deposit']} onOpenChange={(isOpen) => isOpen ? openDialog('deposit') : closeDialog('deposit')}><DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2 h-4 w-4" />Add Funds</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Add Funds to Admin Account</DialogTitle></DialogHeader><AdminTransactionForm type="AdminDeposit" onTransactionComplete={() => closeDialog('deposit')} /></DialogContent></Dialog>
                                 <Dialog open={isDialogOpen['expense']} onOpenChange={(isOpen) => isOpen ? openDialog('expense') : closeDialog('expense')}><DialogTrigger asChild><Button size="sm" variant="outline"><MinusCircle className="mr-2 h-4 w-4" />Record Expense</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Record an Expense</DialogTitle></DialogHeader><AdminTransactionForm type="Expense" onTransactionComplete={() => closeDialog('expense')} /></DialogContent></Dialog>
                                 <Dialog open={isDialogOpen['transferToInvestible']} onOpenChange={(isOpen) => isOpen ? openDialog('transferToInvestible') : closeDialog('transferToInvestible')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Fund Investible</Button></DialogTrigger><DialogContent><TransferFundsForm direction="toInvestible" maxAmount={metrics.administrativeBalance} onTransferComplete={() => closeDialog('transferToInvestible')} /></DialogContent></Dialog>
@@ -664,7 +744,7 @@ export default function PlatformFundsPage() {
                         </CardHeader>
                         <CardContent className="p-0">
                            {isLoading ? <div className="p-4"><Skeleton className="h-40 w-full"/></div> : 
-                           !paginatedAdminTransactions || paginatedAdminTransactions.length === 0 ? <div className="p-4 py-12 text-center text-sm text-muted-foreground border-t">No administrative activities found.</div> :
+                           !paginatedAdminTransactions || paginatedAdminTransactions.length === 0 ? <div className="p-4 py-12 text-center text-sm text-muted-foreground border-t">No administrative activities found for the selected filters.</div> :
                            isMobile ? (
                             <div className="p-4 space-y-3 border-t">
                                 {paginatedAdminTransactions.map(tx => (
