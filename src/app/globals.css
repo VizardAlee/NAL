@@ -1,4 +1,6 @@
 
+@import '@fullcalendar/daygrid/main.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -118,34 +120,4 @@ body {
   }
 }
 
-/* FullCalendar Customizations */
-.fc {
-    --fc-border-color: transparent;
-    --fc-today-bg-color: hsla(var(--accent) / 0.1);
-    --fc-highlight-color: hsla(var(--accent) / 0.2);
-    font-size: 0.875rem;
-}
-.dark .fc {
-     --fc-today-bg-color: hsla(var(--accent) / 0.15);
-}
-.fc .fc-daygrid-day-number {
-    @apply text-xs p-2;
-}
-.fc .fc-toolbar-title {
-    @apply text-lg font-medium;
-}
-.fc .fc-button {
-    @apply bg-background text-foreground border border-input shadow-sm hover:bg-accent hover:text-accent-foreground;
-}
-.fc .fc-button-primary {
-    @apply bg-primary text-primary-foreground hover:bg-primary/90;
-}
-.fc .fc-day-today {
-    @apply bg-muted;
-}
-.fc .fc-daygrid-day.fc-day-selected {
-    @apply bg-primary/20;
-}
-.fc .fc-col-header-cell-cushion {
-  @apply text-muted-foreground;
-}
+    
