@@ -38,10 +38,12 @@ import {
 } from "@/components/ui/pagination";
 import { User } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { DateRange } from "react-day-picker";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { Calendar } from '@/components/ui/calendar';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import { DateRangeInput, DateRange } from '@fullcalendar/date-fns';
 
 
 type Transaction = DocumentData & {
@@ -99,10 +101,10 @@ export default function ActivityPage() {
             filtered = filtered.filter(tx => selectedTypes.includes(tx.type as TransactionTypeFilter));
         }
 
-        if (date?.from && date?.to) {
+        if (date?.start && date?.end) {
             filtered = filtered.filter(tx => {
                 const txDate = tx.createdAt.toDate();
-                return txDate >= date.from! && txDate <= date.to!;
+                return txDate >= date.start! && txDate <= date.end!;
             });
         }
 
@@ -129,8 +131,11 @@ export default function ActivityPage() {
         setCurrentPage(1); // Reset to first page on filter change
     };
     
-    const handleDateChange = (range: DateRange | undefined) => {
-        setDate(range);
+    const handleDateSelect = (selectInfo: any) => {
+        setDate({
+            start: selectInfo.start,
+            end: selectInfo.end,
+        });
         setCurrentPage(1);
     };
 
@@ -274,29 +279,27 @@ export default function ActivityPage() {
                             )}
                         >
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {date?.from ? (
-                            date.to ? (
+                            {date?.start ? (
+                            date.end ? (
                                 <>
-                                {format(date.from, "LLL dd, y")} -{" "}
-                                {format(date.to, "LLL dd, y")}
+                                {format(date.start, "LLL dd, y")} -{" "}
+                                {format(date.end, "LLL dd, y")}
                                 </>
                             ) : (
-                                format(date.from, "LLL dd, y")
+                                format(date.start, "LLL dd, y")
                             )
                             ) : (
                             <span>Pick a date</span>
                             )}
                         </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="end">
-                        <Calendar
-                            initialFocus
-                            mode="range"
-                            defaultMonth={date?.from}
-                            selected={date}
-                            onSelect={handleDateChange}
-                            numberOfMonths={2}
-                        />
+                        <PopoverContent className="w-auto p-4" align="end">
+                          <FullCalendar
+                            plugins={[ dayGridPlugin, interactionPlugin ]}
+                            initialView="dayGridMonth"
+                            selectable={true}
+                            select={handleDateSelect}
+                          />
                         </PopoverContent>
                     </Popover>
                     <DropdownMenu>
