@@ -22,27 +22,22 @@ interface DatePickerWithRangeProps extends React.HTMLAttributes<HTMLDivElement> 
 
 export function DatePickerWithRange({ className, onDateChange }: DatePickerWithRangeProps) {
   const [date, setDate] = React.useState<DateRange | undefined>()
-  const [isOpen, setIsOpen] = React.useState(false);
   const isMobile = useIsMobile();
 
   const handleSelect = (selectedDate: DateRange | undefined) => {
       setDate(selectedDate);
       onDateChange(selectedDate);
-      // Close the popover once a full range is selected
-      if (selectedDate?.from && selectedDate?.to) {
-          setIsOpen(false);
-      }
   }
 
   return (
     <div className={cn("grid gap-2", className)}>
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <Popover>
         <PopoverTrigger asChild>
           <Button
             id="date"
             variant={"outline"}
             className={cn(
-              "w-full sm:w-auto justify-start text-left font-normal",
+              "w-full sm:w-[260px] justify-start text-left font-normal",
               !date && "text-muted-foreground"
             )}
           >
@@ -61,7 +56,7 @@ export function DatePickerWithRange({ className, onDateChange }: DatePickerWithR
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
+        <PopoverContent className="w-auto p-0" align="end">
           <Calendar
             initialFocus
             mode="range"

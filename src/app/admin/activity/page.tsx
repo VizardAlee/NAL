@@ -20,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { History, ListFilter } from 'lucide-react';
+import { CalendarIcon, History, ListFilter } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
@@ -39,7 +39,9 @@ import {
 import { User } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { DateRange } from "react-day-picker";
-import { DatePickerWithRange } from '@/components/ui/date-picker-with-range';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+import { Calendar } from '@/components/ui/calendar';
 
 
 type Transaction = DocumentData & {
@@ -71,7 +73,7 @@ export default function ActivityPage() {
     const isMobile = useIsMobile();
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedTypes, setSelectedTypes] = useState<TransactionTypeFilter[]>([]);
-    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [date, setDate] = useState<DateRange | undefined>(undefined);
 
     const transactionsQuery = useMemo(() => {
         if (!firestore || !authUser) return null;
@@ -97,15 +99,15 @@ export default function ActivityPage() {
             filtered = filtered.filter(tx => selectedTypes.includes(tx.type as TransactionTypeFilter));
         }
 
-        if (dateRange?.from && dateRange?.to) {
+        if (date?.from && date?.to) {
             filtered = filtered.filter(tx => {
                 const txDate = tx.createdAt.toDate();
-                return txDate >= dateRange.from! && txDate <= dateRange.to!;
+                return txDate >= date.from! && txDate <= date.to!;
             });
         }
 
         return filtered;
-    }, [transactions, selectedTypes, dateRange]);
+    }, [transactions, selectedTypes, date]);
 
     const paginatedTransactions = useMemo(() => {
         if (!filteredTransactions) return [];
@@ -128,7 +130,7 @@ export default function ActivityPage() {
     };
     
     const handleDateChange = (range: DateRange | undefined) => {
-        setDateRange(range);
+        setDate(range);
         setCurrentPage(1);
     };
 
@@ -261,7 +263,42 @@ export default function ActivityPage() {
                 icon={History}
             >
                 <div className="flex flex-col sm:flex-row gap-2">
-                    <DatePickerWithRange onDateChange={handleDateChange} />
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button
+                            id="date"
+                            variant={"outline"}
+                            className={cn(
+                            "w-[300px] justify-start text-left font-normal",
+                            !date && "text-muted-foreground"
+                            )}
+                        >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {date?.from ? (
+                            date.to ? (
+                                <>
+                                {format(date.from, "LLL dd, y")} -{" "}
+                                {format(date.to, "LLL dd, y")}
+                                </>
+                            ) : (
+                                format(date.from, "LLL dd, y")
+                            )
+                            ) : (
+                            <span>Pick a date</span>
+                            )}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="end">
+                        <Calendar
+                            initialFocus
+                            mode="range"
+                            defaultMonth={date?.from}
+                            selected={date}
+                            onSelect={handleDateChange}
+                            numberOfMonths={2}
+                        />
+                        </PopoverContent>
+                    </Popover>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" className="shrink-0">
