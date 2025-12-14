@@ -92,6 +92,9 @@ export function LoginForm() {
         case 'Client':
           router.push("/client/dashboard");
           break;
+        case 'Legal':
+          router.push("/legal/dashboard");
+          break;
         default:
           router.push("/"); // Fallback to home page
       }
@@ -173,3 +176,5 @@ export function LoginForm() {
     </Card>
   );
 }
+
+    
