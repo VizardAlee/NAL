@@ -28,9 +28,10 @@ type Transaction = DocumentData & {
 };
 
 type AdministrativeTransaction = DocumentData & {
-  type: 'ManagementFee';
+  type: 'ManagementFee' | 'Expense';
   amount: number;
   createdAt: Timestamp;
+  description: string;
 };
 
 const formatCurrency = (value: number) => {
@@ -55,7 +56,6 @@ export default function TaxPage() {
     const firestore = useFirestore();
     const [startDate, setStartDate] = useState<Date | null>(null);
     const [endDate, setEndDate] = useState<Date | null>(null);
-    const [annualRent, setAnnualRent] = useState<number>(0);
 
     const transactionsQuery = useMemo(() => {
         if (!firestore) return null;
@@ -67,20 +67,25 @@ export default function TaxPage() {
 
     const adminTransactionsQuery = useMemo(() => {
         if (!firestore) return null;
-        let q = query(collection(firestore, 'administrativeTransactions'), where('type', '==', 'ManagementFee'));
+        let q = query(collection(firestore, 'administrativeTransactions'));
         if (startDate) q = query(q, where('createdAt', '>=', startOfDay(startDate)));
         if (endDate) q = query(q, where('createdAt', '<=', endOfDay(endDate)));
         return q;
     }, [firestore, startDate, endDate]);
 
     const { data: earningsTransactions, loading: earningsLoading } = useCollection<Transaction>(transactionsQuery);
-    const { data: feeTransactions, loading: feesLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
+    const { data: adminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
     
-    const isLoading = earningsLoading || feesLoading;
+    const isLoading = earningsLoading || adminTransactionsLoading;
     
     const taxCalculations = useMemo(() => {
         const platformEarnings = earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
-        const managementFees = feeTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
+        const managementFees = adminTransactions?.filter(tx => tx.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0) || 0;
+        
+        const annualRent = adminTransactions
+            ?.filter(tx => tx.type === 'Expense' && tx.description.toLowerCase().includes('rent'))
+            .reduce((sum, tx) => sum + Math.abs(tx.amount), 0) || 0;
+
         const grossProfit = platformEarnings + managementFees;
         const rentRelief = Math.min(annualRent * 0.20, 500000);
         const chargeableIncome = Math.max(0, grossProfit - rentRelief);
@@ -119,6 +124,7 @@ export default function TaxPage() {
 
         return {
             grossProfit,
+            annualRent,
             rentRelief,
             chargeableIncome,
             personalIncomeTax: totalTax,
@@ -126,7 +132,7 @@ export default function TaxPage() {
             taxBreakdown: breakdown,
         };
 
-    }, [earningsTransactions, feeTransactions, annualRent]);
+    }, [earningsTransactions, adminTransactions]);
     
     const formatDateDisplay = (dateValue: Date | null) => {
         return dateValue ? format(dateValue, "LLL dd, y") : <span>Pick a date</span>;
@@ -213,15 +219,13 @@ export default function TaxPage() {
                         </CardHeader>
                         <CardContent>
                              <div className="max-w-xs space-y-2 mb-6">
-                                <Label htmlFor="annualRent">Annual Rent Paid</Label>
+                                <Label>Annual Rent Paid</Label>
                                 <Input 
-                                    id="annualRent"
-                                    type="number"
-                                    value={annualRent}
-                                    onChange={(e) => setAnnualRent(Number(e.target.value))}
-                                    placeholder="Enter total annual rent"
+                                    type="text"
+                                    value={formatCurrency(taxCalculations.annualRent)}
+                                    disabled
                                 />
-                                <p className="text-xs text-muted-foreground">Used to calculate Rent Relief (20% of rent, capped at ₦500,000).</p>
+                                <p className="text-xs text-muted-foreground">This value is automatically calculated from administrative expenses with "rent" in the description.</p>
                             </div>
                             <Table>
                                 <TableBody>
