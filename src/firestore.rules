@@ -54,7 +54,7 @@ service cloud.firestore {
     // Rules for the 'deals' collection
     match /deals/{dealId} {
         // Admins, Investors, and Legal can list all deals.
-        allow list: if isAdmin() || isInvestor() || isLegal();
+        allow list: if isAdmin() || isInvestor() || (request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Legal');
         
         // Admins, Investors, Legal can get any single deal.
         // Clients can only get deals they are associated with.
