@@ -40,9 +40,7 @@ import { User } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
+import { Calendar } from '@/components/ui/calendar';
 import type { DateRange } from 'react-day-picker';
 
 
@@ -101,16 +99,21 @@ export default function ActivityPage() {
             filtered = filtered.filter(tx => selectedTypes.includes(tx.type as TransactionTypeFilter));
         }
 
-        if (date?.from && date?.to) {
+        if (date?.from) {
             const startTime = date.from.getTime();
+            filtered = filtered.filter(tx => {
+                const txTime = tx.createdAt.toDate().getTime();
+                return txTime >= startTime;
+            });
+        }
+        if (date?.to) {
             // Set end of day for the 'to' date
             const endTime = new Date(date.to).setHours(23, 59, 59, 999);
             filtered = filtered.filter(tx => {
                 const txTime = tx.createdAt.toDate().getTime();
-                return txTime >= startTime && txTime <= endTime;
+                return txTime <= endTime;
             });
         }
-
 
         return filtered;
     }, [transactions, selectedTypes, date]);
@@ -135,11 +138,6 @@ export default function ActivityPage() {
         setCurrentPage(1); // Reset to first page on filter change
     };
     
-    const handleDateSelect = (arg: { start: Date; end: Date; }) => {
-        setDate({ from: arg.start, to: subDays(arg.end, 1) });
-        setCurrentPage(1);
-    };
-
     const formatDateDisplay = (dateValue: Date | undefined) => {
         return dateValue ? format(dateValue, "LLL dd, y") : <span>Pick a date</span>;
     }
@@ -284,13 +282,13 @@ export default function ActivityPage() {
                                 {formatDateDisplay(date?.from)}
                             </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-4" align="start">
-                            <FullCalendar
-                                plugins={[ dayGridPlugin, interactionPlugin ]}
-                                initialView="dayGridMonth"
-                                selectable={true}
-                                select={(arg) => setDate(prev => ({...prev, from: arg.start, to: prev?.to && arg.start > prev.to ? arg.start : prev?.to }))}
-                                validRange={date?.to ? { end: date.to } : undefined}
+                            <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                                initialFocus
+                                mode="single"
+                                selected={date?.from}
+                                onSelect={(day) => setDate(prev => ({...prev, from: day, to: prev?.to && day && day > prev.to ? day : prev?.to }))}
+                                disabled={(d) => date?.to ? d > date.to : false}
                             />
                             </PopoverContent>
                         </Popover>
@@ -305,13 +303,13 @@ export default function ActivityPage() {
                                 {formatDateDisplay(date?.to)}
                             </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-4" align="end">
-                            <FullCalendar
-                                plugins={[ dayGridPlugin, interactionPlugin ]}
-                                initialView="dayGridMonth"
-                                selectable={true}
-                                select={(arg) => setDate(prev => ({...prev, to: arg.start }))}
-                                validRange={date?.from ? { start: date.from } : undefined}
+                            <PopoverContent className="w-auto p-0" align="end">
+                            <Calendar
+                                initialFocus
+                                mode="single"
+                                selected={date?.to}
+                                onSelect={(day) => setDate(prev => ({ ...prev, to: day }))}
+                                disabled={(d) => date?.from ? d < date.from : false}
                             />
                             </PopoverContent>
                         </Popover>
@@ -375,5 +373,4 @@ export default function ActivityPage() {
 
         </div>
     );
-
-    
+}
