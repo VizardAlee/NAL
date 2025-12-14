@@ -81,6 +81,7 @@ export default function TaxPage() {
         
         const grossProfit = platformEarnings + managementFees;
         
+        // Consolidated Relief Allowance (CRA)
         const cra = Math.max(200000, grossProfit * 0.01) + (grossProfit * 0.20);
         const chargeableIncome = Math.max(0, grossProfit - cra);
         
@@ -88,13 +89,11 @@ export default function TaxPage() {
         let incomeLeft = chargeableIncome;
         const taxBreakdown = [];
         
+        // New Proposed Tax Brackets
         const brackets = [
-            { limit: 300000, rate: 0.07 },
-            { limit: 300000, rate: 0.11 },
-            { limit: 500000, rate: 0.15 },
-            { limit: 500000, rate: 0.19 },
-            { limit: 1600000, rate: 0.21 },
-            { limit: Infinity, rate: 0.24 },
+            { limit: 2000000, rate: 0.10 }, // 10% on the first 2m
+            { limit: 2000000, rate: 0.20 }, // 20% on the next 2m
+            { limit: Infinity, rate: 0.30 },  // 30% on the remainder
         ];
 
         for (const bracket of brackets) {
@@ -131,7 +130,7 @@ export default function TaxPage() {
         <div>
             <PageHeader
                 title="Tax Calculation (Enterprise)"
-                description="Estimate Personal Income Tax (PIT) based on platform profits for a selected period."
+                description="Estimate Personal Income Tax (PIT) based on the proposed tax reform bill."
                 icon={Landmark}
             >
                  <div className="flex items-center gap-2">
@@ -145,7 +144,7 @@ export default function TaxPage() {
                             {formatDateDisplay(startDate)}
                         </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-2" align="start">
+                        <PopoverContent className="w-auto p-0" align="start">
                             <FullCalendar
                                 plugins={[dayGridPlugin, interactionPlugin]}
                                 initialView="dayGridMonth"
@@ -175,7 +174,7 @@ export default function TaxPage() {
                             {formatDateDisplay(endDate)}
                         </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-2" align="end">
+                        <PopoverContent className="w-auto p-0" align="end">
                             <FullCalendar
                                 plugins={[dayGridPlugin, interactionPlugin]}
                                 initialView="dayGridMonth"
@@ -204,7 +203,7 @@ export default function TaxPage() {
                     <Card className="lg:col-span-2">
                         <CardHeader>
                             <CardTitle>Personal Income Tax (PIT) Summary</CardTitle>
-                            <CardDescription>Based on Nigerian PITA rates for enterprise businesses.</CardDescription>
+                            <CardDescription>Based on proposed Nigerian PITA rates for enterprise businesses.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <Table>
