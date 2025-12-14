@@ -1,6 +1,4 @@
 
-@import '@fullcalendar/daygrid/main.css';
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -119,5 +117,3 @@ body {
     }
   }
 }
-
-    
