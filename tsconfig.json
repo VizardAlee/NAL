@@ -1,3 +1,4 @@
+
 {
   "compilerOptions": {
     "target": "ES2017",
@@ -16,6 +17,9 @@
     "plugins": [
       {
         "name": "next"
+      },
+      {
+        "name": "next-server-action-plugin"
       }
     ],
     "paths": {

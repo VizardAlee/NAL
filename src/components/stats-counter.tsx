@@ -3,10 +3,9 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useInView } from 'react-intersection-observer';
-import { useFirestore } from '@/firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
 import { Users, Briefcase, Banknote, Loader2 } from 'lucide-react';
 import { Skeleton } from './ui/skeleton';
+import { getPublicStats } from '@/app/actions';
 
 interface Stats {
   totalUsers: number;
@@ -71,7 +70,6 @@ const StatCard = ({ icon: Icon, value, label, inView, isCurrency = false }: { ic
 export function StatsCounter() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
-  const firestore = useFirestore();
   const { ref, inView } = useInView({
     triggerOnce: true,
     threshold: 0.5,
@@ -79,19 +77,10 @@ export function StatsCounter() {
 
   useEffect(() => {
     const fetchStats = async () => {
-      if (!firestore) return;
-
+      setLoading(true);
       try {
-        const usersSnapshot = await getDocs(collection(firestore, 'users'));
-        const fundBatchesSnapshot = await getDocs(collection(firestore, 'fundBatches'));
-        const dealsQuery = query(collection(firestore, 'deals'), where('status', 'in', ['Active', 'Completed', 'Terminated']));
-        const dealsSnapshot = await getDocs(dealsQuery);
-
-        const totalUsers = usersSnapshot.size;
-        const totalInvestments = fundBatchesSnapshot.docs.reduce((sum, doc) => sum + doc.data().amount, 0);
-        const totalDealsFunded = dealsSnapshot.docs.reduce((sum, doc) => sum + doc.data().principal, 0);
-
-        setStats({ totalUsers, totalInvestments, totalDealsFunded });
+        const fetchedStats = await getPublicStats();
+        setStats(fetchedStats);
       } catch (error) {
         console.error("Failed to fetch stats:", error);
       } finally {
@@ -100,7 +89,7 @@ export function StatsCounter() {
     };
 
     fetchStats();
-  }, [firestore]);
+  }, []);
 
   return (
     <section ref={ref} className="w-full py-12 md:py-24 bg-muted/50">
