@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -838,36 +839,74 @@ export default function PlatformFundsPage() {
                         </CardHeader>
                         <CardContent>
                             <h3 className="text-lg font-semibold mb-2">Currently Held Assets</h3>
-                            <div className="rounded-md border">
-                                <Table>
-                                    <TableHeader><TableRow><TableHead>Asset</TableHead><TableHead>Acquisition Date</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
-                                    <TableBody>
-                                        {isLoading ? (Array.from({length: 2}).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-5 w-32"/></TableCell><TableCell><Skeleton className="h-5 w-24"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell><TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto"/></TableCell></TableRow>))
-                                        : assets?.filter(a => a.status === 'Held').length > 0 ? assets?.filter(a => a.status === 'Held').map(asset => (
-                                            <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{asset.acquisitionDate ? format(asset.acquisitionDate.toDate(), 'PPP') : 'Pending...'}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell>
-                                            <TableCell className="text-right">
-                                                <Dialog open={isDialogOpen[`sell-${asset.id}`]} onOpenChange={(isOpen) => isOpen ? openDialog(`sell-${asset.id}`) : closeDialog(`sell-${asset.id}`)}>
-                                                    <DialogTrigger asChild><Button size="sm" variant="outline"><DollarSign className="mr-2 h-4 w-4"/>Sell</Button></DialogTrigger>
-                                                    <DialogContent><DialogHeader><DialogTitle>Record Sale of {asset.description}</DialogTitle></DialogHeader><SellAssetForm asset={asset} onAssetSold={() => closeDialog(`sell-${asset.id}`)} /></DialogContent>
+                            {isMobile ? (
+                                <div className="space-y-3">
+                                {assets?.filter(a => a.status === 'Held').map(asset => (
+                                    <Card key={asset.id}>
+                                        <CardContent className="p-4 space-y-3">
+                                            <p className="font-medium">{asset.description}</p>
+                                            <p className="text-sm text-muted-foreground">Cost: {formatCurrency(asset.acquisitionCost)}</p>
+                                            <p className="text-xs text-muted-foreground">Acquired: {asset.acquisitionDate ? format(asset.acquisitionDate.toDate(), 'PPP') : 'Pending...'}</p>
+                                            <div className="pt-2 border-t">
+                                                <Dialog open={isDialogOpen[`sell-mobile-${asset.id}`]} onOpenChange={(isOpen) => isOpen ? openDialog(`sell-mobile-${asset.id}`) : closeDialog(`sell-mobile-${asset.id}`)}>
+                                                    <DialogTrigger asChild><Button size="sm" variant="outline" className="w-full"><DollarSign className="mr-2 h-4 w-4"/>Sell</Button></DialogTrigger>
+                                                    <DialogContent><DialogHeader><DialogTitle>Record Sale of {asset.description}</DialogTitle></DialogHeader><SellAssetForm asset={asset} onAssetSold={() => closeDialog(`sell-mobile-${asset.id}`)} /></DialogContent>
                                                 </Dialog>
-                                            </TableCell>
-                                            </TableRow>
-                                        )) : <TableRow><TableCell colSpan={4} className="h-24 text-center">No assets are currently held.</TableCell></TableRow>}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                                {assets?.filter(a => a.status === 'Held').length === 0 && <p className="text-center text-sm text-muted-foreground py-4">No assets are currently held.</p>}
+                                </div>
+                            ) : (
+                                <div className="rounded-md border">
+                                    <Table>
+                                        <TableHeader><TableRow><TableHead>Asset</TableHead><TableHead>Acquisition Date</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                                        <TableBody>
+                                            {isLoading ? (Array.from({length: 2}).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-5 w-32"/></TableCell><TableCell><Skeleton className="h-5 w-24"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell><TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto"/></TableCell></TableRow>))
+                                            : assets?.filter(a => a.status === 'Held').length > 0 ? assets?.filter(a => a.status === 'Held').map(asset => (
+                                                <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{asset.acquisitionDate ? format(asset.acquisitionDate.toDate(), 'PPP') : 'Pending...'}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Dialog open={isDialogOpen[`sell-${asset.id}`]} onOpenChange={(isOpen) => isOpen ? openDialog(`sell-${asset.id}`) : closeDialog(`sell-${asset.id}`)}>
+                                                        <DialogTrigger asChild><Button size="sm" variant="outline"><DollarSign className="mr-2 h-4 w-4"/>Sell</Button></DialogTrigger>
+                                                        <DialogContent><DialogHeader><DialogTitle>Record Sale of {asset.description}</DialogTitle></DialogHeader><SellAssetForm asset={asset} onAssetSold={() => closeDialog(`sell-${asset.id}`)} /></DialogContent>
+                                                    </Dialog>
+                                                </TableCell>
+                                                </TableRow>
+                                            )) : <TableRow><TableCell colSpan={4} className="h-24 text-center">No assets are currently held.</TableCell></TableRow>}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            )}
+
                              <h3 className="text-lg font-semibold mt-6 mb-2">Sold Assets</h3>
-                             <div className="rounded-md border">
-                                <Table>
-                                    <TableHeader><TableRow><TableHead>Asset</TableHead><TableHead>Sale Date</TableHead><TableHead className="text-right">Sale Price</TableHead><TableHead className="text-right">Original Cost</TableHead></TableRow></TableHeader>
-                                    <TableBody>
-                                        {isLoading ? (Array.from({length: 1}).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-5 w-32"/></TableCell><TableCell><Skeleton className="h-5 w-24"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell></TableRow>))
-                                        : assets?.filter(a => a.status === 'Sold').length > 0 ? assets?.filter(a => a.status === 'Sold').map(asset => (
-                                            <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{asset.saleDate ? format(asset.saleDate.toDate(), 'PPP') : 'N/A'}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.salePrice)}</TableCell><TableCell className="text-right text-muted-foreground">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell></TableRow>
-                                        )) : <TableRow><TableCell colSpan={4} className="h-24 text-center">No assets have been sold.</TableCell></TableRow>}
-                                    </TableBody>
-                                </Table>
-                             </div>
+                             {isMobile ? (
+                                <div className="space-y-3">
+                                {assets?.filter(a => a.status === 'Sold').map(asset => (
+                                     <Card key={asset.id}>
+                                        <CardContent className="p-4 space-y-2">
+                                            <p className="font-medium">{asset.description}</p>
+                                            <div className="flex justify-between text-sm"><span className="text-muted-foreground">Sale Price:</span><span>{formatCurrency(asset.salePrice || 0)}</span></div>
+                                            <div className="flex justify-between text-sm"><span className="text-muted-foreground">Original Cost:</span><span>{formatCurrency(asset.acquisitionCost)}</span></div>
+                                            <p className="text-xs text-muted-foreground pt-1 border-t mt-2">Sold: {asset.saleDate ? format(asset.saleDate.toDate(), 'PPP') : 'N/A'}</p>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                                {assets?.filter(a => a.status === 'Sold').length === 0 && <p className="text-center text-sm text-muted-foreground py-4">No assets have been sold.</p>}
+                                </div>
+                             ) : (
+                                <div className="rounded-md border">
+                                    <Table>
+                                        <TableHeader><TableRow><TableHead>Asset</TableHead><TableHead>Sale Date</TableHead><TableHead className="text-right">Sale Price</TableHead><TableHead className="text-right">Original Cost</TableHead></TableRow></TableHeader>
+                                        <TableBody>
+                                            {isLoading ? (Array.from({length: 1}).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-5 w-32"/></TableCell><TableCell><Skeleton className="h-5 w-24"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell></TableRow>))
+                                            : assets?.filter(a => a.status === 'Sold').length > 0 ? assets?.filter(a => a.status === 'Sold').map(asset => (
+                                                <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{asset.saleDate ? format(asset.saleDate.toDate(), 'PPP') : 'N/A'}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.salePrice)}</TableCell><TableCell className="text-right text-muted-foreground">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell></TableRow>
+                                            )) : <TableRow><TableCell colSpan={4} className="h-24 text-center">No assets have been sold.</TableCell></TableRow>}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                             )}
                         </CardContent>
                     </Card>
                 </TabsContent>

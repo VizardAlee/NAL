@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -19,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 
 type Transaction = DocumentData & {
@@ -56,6 +58,7 @@ export default function TaxPage() {
     const firestore = useFirestore();
     const [startDate, setStartDate] = useState<Date | null>(null);
     const [endDate, setEndDate] = useState<Date | null>(null);
+    const isMobile = useIsMobile();
 
     const transactionsQuery = useMemo(() => {
         if (!firestore) return null;
@@ -229,22 +232,30 @@ export default function TaxPage() {
                                 />
                                 <p className="text-xs text-muted-foreground">This value is automatically calculated from the first administrative expense with "rent" in the description for the selected period.</p>
                             </div>
-                            <Table>
-                                <TableBody>
-                                    <TableRow>
-                                        <TableCell>Gross Profit</TableCell>
-                                        <TableCell className="text-right">{formatCurrency(taxCalculations.grossProfit)}</TableCell>
-                                    </TableRow>
-                                    <TableRow>
-                                        <TableCell>Rent Relief Allowance (20% of rent, capped at ₦500k)</TableCell>
-                                        <TableCell className="text-right text-destructive">- {formatCurrency(taxCalculations.rentRelief)}</TableCell>
-                                    </TableRow>
-                                    <TableRow className="font-medium bg-muted/50">
-                                        <TableCell>Chargeable Income</TableCell>
-                                        <TableCell className="text-right">{formatCurrency(taxCalculations.chargeableIncome)}</TableCell>
-                                    </TableRow>
-                                </TableBody>
-                            </Table>
+                            {isMobile ? (
+                                <div className="space-y-2">
+                                    <div className="flex justify-between text-sm"><span className="text-muted-foreground">Gross Profit:</span> <span>{formatCurrency(taxCalculations.grossProfit)}</span></div>
+                                    <div className="flex justify-between text-sm"><span className="text-muted-foreground">Rent Relief:</span> <span className="text-destructive">- {formatCurrency(taxCalculations.rentRelief)}</span></div>
+                                    <div className="flex justify-between font-bold text-base pt-2 border-t mt-2"><span >Chargeable Income:</span> <span>{formatCurrency(taxCalculations.chargeableIncome)}</span></div>
+                                </div>
+                            ) : (
+                                <Table>
+                                    <TableBody>
+                                        <TableRow>
+                                            <TableCell>Gross Profit</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(taxCalculations.grossProfit)}</TableCell>
+                                        </TableRow>
+                                        <TableRow>
+                                            <TableCell>Rent Relief Allowance (20% of rent, capped at ₦500k)</TableCell>
+                                            <TableCell className="text-right text-destructive">- {formatCurrency(taxCalculations.rentRelief)}</TableCell>
+                                        </TableRow>
+                                        <TableRow className="font-medium bg-muted/50">
+                                            <TableCell>Chargeable Income</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(taxCalculations.chargeableIncome)}</TableCell>
+                                        </TableRow>
+                                    </TableBody>
+                                </Table>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -254,29 +265,44 @@ export default function TaxPage() {
                              <CardDescription>Progressive tax rates applied to chargeable income.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Tax Bracket</TableHead>
-                                        <TableHead>Taxable Amount</TableHead>
-                                        <TableHead className="text-right">Tax Due</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
+                             {isMobile ? (
+                                <div className="space-y-3">
                                     {taxCalculations.taxBreakdown.map((bracket, index) => (
-                                        <TableRow key={index}>
-                                            <TableCell>{bracket.description}</TableCell>
-                                            <TableCell>{formatCurrency(bracket.taxableAmount)}</TableCell>
-                                            <TableCell className="text-right">{formatCurrency(bracket.taxDue)}</TableCell>
-                                        </TableRow>
+                                        <Card key={index} className="p-3">
+                                            <p className="font-medium text-sm">{bracket.description}</p>
+                                            <div className="flex justify-between text-xs mt-1"><span>Taxable:</span><span>{formatCurrency(bracket.taxableAmount)}</span></div>
+                                            <div className="flex justify-between text-xs font-bold"><span>Tax Due:</span><span>{formatCurrency(bracket.taxDue)}</span></div>
+                                        </Card>
                                     ))}
                                     {taxCalculations.taxBreakdown.length === 0 && (
-                                        <TableRow>
-                                            <TableCell colSpan={3} className="text-center h-24">No chargeable income.</TableCell>
-                                        </TableRow>
+                                        <p className="text-center text-sm text-muted-foreground py-4">No chargeable income.</p>
                                     )}
-                                </TableBody>
-                            </Table>
+                                </div>
+                             ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Tax Bracket</TableHead>
+                                            <TableHead>Taxable Amount</TableHead>
+                                            <TableHead className="text-right">Tax Due</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {taxCalculations.taxBreakdown.map((bracket, index) => (
+                                            <TableRow key={index}>
+                                                <TableCell>{bracket.description}</TableCell>
+                                                <TableCell>{formatCurrency(bracket.taxableAmount)}</TableCell>
+                                                <TableCell className="text-right">{formatCurrency(bracket.taxDue)}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {taxCalculations.taxBreakdown.length === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={3} className="text-center h-24">No chargeable income.</TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                             )}
                         </CardContent>
                     </Card>
 

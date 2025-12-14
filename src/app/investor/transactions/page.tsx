@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -14,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { ViewPageNav } from "@/components/view-page-nav";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 type Transaction = DocumentData & {
   id: string;
@@ -31,6 +33,7 @@ export default function TransactionsPage() {
   const firestore = useFirestore();
   const { user, loading: userLoading } = useUser();
   const [currentPage, setCurrentPage] = useState(1);
+  const isMobile = useIsMobile();
 
   const transactionsQuery = useMemo(() => {
     if (!firestore || !user?.uid) return null;
@@ -59,6 +62,78 @@ export default function TransactionsPage() {
     try { return format(date, 'PPP p'); } catch { return 'Invalid Date'; }
   };
 
+  const renderContent = () => {
+    if (isLoading) {
+        return (
+            <div className="space-y-4">
+                {Array.from({ length: ITEMS_PER_PAGE }).map((_, i) => (
+                    <Skeleton key={i} className="h-20 w-full" />
+                ))}
+            </div>
+        );
+    }
+    
+    if (!paginatedTransactions || paginatedTransactions.length === 0) {
+        return (
+            <div className="p-4 py-12 text-center text-sm text-muted-foreground border rounded-lg">
+                No transactions yet.
+            </div>
+        );
+    }
+
+    if(isMobile) {
+        return (
+            <div className="space-y-3">
+                {paginatedTransactions.map((tx) => (
+                    <Card key={tx.id}>
+                        <CardContent className="p-4 space-y-2">
+                             <div className="flex justify-between items-start">
+                                <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
+                                <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
+                                    {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                </p>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{tx.dealName || 'N/A'}</p>
+                            <p className="text-xs text-muted-foreground">{formatDate(tx.createdAt)}</p>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+        )
+    }
+
+    return (
+        <Card>
+            <CardContent className="p-0">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Details</TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {paginatedTransactions.map((tx) => (
+                            <TableRow key={tx.id}>
+                                <TableCell>{formatDate(tx.createdAt)}</TableCell>
+                                <TableCell>
+                                    <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
+                                </TableCell>
+                                <TableCell>{tx.dealName || 'N/A'}</TableCell>
+                                <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
+                                    {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+    )
+  }
+
   return (
     <div>
       <PageHeader
@@ -68,49 +143,9 @@ export default function TransactionsPage() {
       >
         <ViewPageNav homePath="/investor/dashboard" />
       </PageHeader>
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Details</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && Array.from({ length: ITEMS_PER_PAGE }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell data-label="Date"><Skeleton className="h-5 w-32" /></TableCell>
-                  <TableCell data-label="Type"><Skeleton className="h-5 w-24" /></TableCell>
-                  <TableCell data-label="Details"><Skeleton className="h-5 w-40" /></TableCell>
-                  <TableCell data-label="Amount" className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
-                </TableRow>
-              ))}
-              {!isLoading && paginatedTransactions.map((tx) => (
-                <TableRow key={tx.id}>
-                  <TableCell data-label="Date">{formatDate(tx.createdAt)}</TableCell>
-                  <TableCell data-label="Type">
-                    <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
-                  </TableCell>
-                  <TableCell data-label="Details">{tx.dealName || 'N/A'}</TableCell>
-                  <TableCell data-label="Amount" className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
-                    {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!isLoading && paginatedTransactions.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center">
-                    No transactions yet.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      
+      {renderContent()}
+
       {totalPages > 1 && (
         <div className="mt-6">
             <Pagination>
@@ -133,5 +168,3 @@ export default function TransactionsPage() {
     </div>
   );
 }
-
-    
