@@ -7,12 +7,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { useFirestore } from "@/firebase";
 import { collection, query, where, DocumentData, Timestamp } from "firebase/firestore";
-import { Landmark, Loader2 } from "lucide-react";
+import { Landmark, Loader2, CalendarIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DateRange } from "react-day-picker";
-import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
-import { startOfDay, endOfDay } from "date-fns";
+import { startOfDay, endOfDay, format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import FullCalendar from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import interactionPlugin, { DateClickArg } from '@fullcalendar/interaction';
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
 
 type Transaction = DocumentData & {
   type: 'PlatformEarning';
@@ -46,23 +52,24 @@ function TaxMetricCard({ title, value, description, isLoading }: { title: string
 
 export default function TaxPage() {
     const firestore = useFirestore();
-    const [dateRange, setDateRange] = useState<DateRange | undefined>();
+    const [startDate, setStartDate] = useState<Date | null>(null);
+    const [endDate, setEndDate] = useState<Date | null>(null);
 
     const transactionsQuery = useMemo(() => {
         if (!firestore) return null;
         let q = query(collection(firestore, 'transactions'), where('type', '==', 'PlatformEarning'));
-        if (dateRange?.from) q = query(q, where('createdAt', '>=', startOfDay(dateRange.from)));
-        if (dateRange?.to) q = query(q, where('createdAt', '<=', endOfDay(dateRange.to)));
+        if (startDate) q = query(q, where('createdAt', '>=', startOfDay(startDate)));
+        if (endDate) q = query(q, where('createdAt', '<=', endOfDay(endDate)));
         return q;
-    }, [firestore, dateRange]);
+    }, [firestore, startDate, endDate]);
 
     const adminTransactionsQuery = useMemo(() => {
         if (!firestore) return null;
         let q = query(collection(firestore, 'administrativeTransactions'), where('type', '==', 'ManagementFee'));
-        if (dateRange?.from) q = query(q, where('createdAt', '>=', startOfDay(dateRange.from)));
-        if (dateRange?.to) q = query(q, where('createdAt', '<=', endOfDay(dateRange.to)));
+        if (startDate) q = query(q, where('createdAt', '>=', startOfDay(startDate)));
+        if (endDate) q = query(q, where('createdAt', '<=', endOfDay(endDate)));
         return q;
-    }, [firestore, dateRange]);
+    }, [firestore, startDate, endDate]);
 
     const { data: earningsTransactions, loading: earningsLoading } = useCollection<Transaction>(transactionsQuery);
     const { data: feeTransactions, loading: feesLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
@@ -126,6 +133,10 @@ export default function TaxPage() {
         };
 
     }, [earningsTransactions, feeTransactions]);
+    
+    const formatDateDisplay = (dateValue: Date | null) => {
+        return dateValue ? format(dateValue, "LLL dd, y") : <span>Pick a date</span>;
+    }
 
     return (
         <div>
@@ -134,7 +145,65 @@ export default function TaxPage() {
                 description="Estimate Personal Income Tax (PIT) based on platform profits for a selected period."
                 icon={Landmark}
             >
-                 <DatePickerWithRange onDateChange={setDateRange} />
+                 <div className="flex items-center gap-2">
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button
+                            variant={"outline"}
+                            className={cn("w-[140px] justify-start text-left font-normal", !startDate && "text-muted-foreground")}
+                        >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formatDateDisplay(startDate)}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-2" align="start">
+                            <FullCalendar
+                                plugins={[dayGridPlugin, interactionPlugin]}
+                                initialView="dayGridMonth"
+                                selectable={true}
+                                headerToolbar={{
+                                    left: 'prev',
+                                    center: 'title',
+                                    right: 'next'
+                                }}
+                                dateClick={(arg: DateClickArg) => {
+                                    setStartDate(arg.date);
+                                    if (endDate && arg.date > endDate) {
+                                        setEndDate(arg.date);
+                                    }
+                                }}
+                            />
+                        </PopoverContent>
+                    </Popover>
+                    <span className="text-muted-foreground">-</span>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button
+                            variant={"outline"}
+                            className={cn("w-[140px] justify-start text-left font-normal", !endDate && "text-muted-foreground")}
+                        >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formatDateDisplay(endDate)}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-2" align="end">
+                            <FullCalendar
+                                plugins={[dayGridPlugin, interactionPlugin]}
+                                initialView="dayGridMonth"
+                                selectable={true}
+                                validRange={startDate ? { start: startDate } : undefined}
+                                headerToolbar={{
+                                    left: 'prev',
+                                    center: 'title',
+                                    right: 'next'
+                                }}
+                                dateClick={(arg: DateClickArg) => {
+                                    setEndDate(arg.date);
+                                }}
+                            />
+                        </PopoverContent>
+                    </Popover>
+                </div>
             </PageHeader>
             
             {isLoading ? (
