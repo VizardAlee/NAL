@@ -11,7 +11,7 @@ import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useFirestore, useUser, type User } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format, differenceInDays, addDays } from 'date-fns';
+import { format, differenceInDays, addDays, startOfWeek, subWeeks } from 'date-fns';
 import { Deal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -367,7 +367,6 @@ export default function InvestorDashboard() {
     const portfolioValue = (totalCapital + totalProfit) - totalWithdrawn;
     const simpleROI = totalCapital > 0 ? (totalProfit / totalCapital) * 100 : 0;
     
-    // Investable balance now includes all fund batches.
     const investableBalance = fundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
 
 
@@ -395,22 +394,44 @@ export default function InvestorDashboard() {
     let runningProfit = 0;
     let runningWithdrawn = 0;
 
-    const dataByMonth: { [month: string]: number } = {};
+    const dataByWeek: { [week: string]: number } = {};
+    const weekKeys: string[] = [];
 
     allTransactions.forEach(tx => {
-        const month = format(tx.createdAt.toDate(), 'yyyy-MM');
-        
-        if (tx.type === 'Deposit') runningCapital += tx.amount;
-        if (tx.type === 'Withdrawal' || tx.type === 'Zakat') runningWithdrawn += Math.abs(tx.amount);
-        if (tx.type === 'ProfitDistribution') runningProfit += tx.amount;
-        
-        dataByMonth[month] = (runningCapital + runningProfit) - runningWithdrawn;
+      const date = tx.createdAt.toDate();
+      // 'I' gives ISO week number, 'y' gives ISO week-numbering year
+      const weekKey = format(date, 'y-I'); 
+
+      if (!dataByWeek[weekKey]) {
+        weekKeys.push(weekKey);
+      }
+
+      if (tx.type === 'Deposit') runningCapital += tx.amount;
+      if (tx.type === 'Withdrawal' || tx.type === 'Zakat') runningWithdrawn += Math.abs(tx.amount);
+      if (tx.type === 'ProfitDistribution') runningProfit += tx.amount;
+
+      dataByWeek[weekKey] = (runningCapital + runningProfit) - runningWithdrawn;
     });
+
+    // Ensure consecutive weeks have the previous week's value if no new transactions
+    weekKeys.sort();
+    for (let i = 1; i < weekKeys.length; i++) {
+        const prevKey = weekKeys[i-1];
+        const currentKey = weekKeys[i];
+        if(!dataByWeek[currentKey]) {
+            dataByWeek[currentKey] = dataByWeek[prevKey];
+        }
+    }
     
-    return Object.keys(dataByMonth).map(month => ({
-        month: format(new Date(month + '-02'), 'MMM yy'), // Add day to avoid timezone issues
-        portfolioValue: dataByMonth[month]
-    })).sort((a,b) => new Date(a.month).getTime() - new Date(b.month).getTime());
+    const lastFourWeeksKeys = weekKeys.slice(-4);
+
+    return lastFourWeeksKeys.map(weekKey => {
+        const [year, weekNum] = weekKey.split('-');
+        return {
+            week: `Week ${weekNum} '${year.slice(2)}`,
+            portfolioValue: dataByWeek[weekKey],
+        };
+    });
 
   }, [allTransactions]);
 
@@ -521,7 +542,7 @@ export default function InvestorDashboard() {
        <Card className="mt-8">
         <CardHeader>
             <CardTitle>Financial Activity</CardTitle>
-            <CardDescription>The growth of your total portfolio value over time.</CardDescription>
+            <CardDescription>Your portfolio value over the last four weeks.</CardDescription>
         </CardHeader>
         <CardContent className="pl-2">
             {isLoading ? (
@@ -542,7 +563,7 @@ export default function InvestorDashboard() {
                 >
                     <CartesianGrid vertical={false} />
                     <XAxis
-                        dataKey="month"
+                        dataKey="week"
                         tickLine={false}
                         axisLine={false}
                         tickMargin={8}
@@ -553,7 +574,7 @@ export default function InvestorDashboard() {
                         tickMargin={8}
                         tickFormatter={(value) => {
                             if (value >= 1000000) return `₦${Number(value) / 1000000}M`;
-                            return `₦${Number(value) / 1000}K`;
+                            return `₦${Math.round(Number(value) / 1000)}K`;
                         }}
                     />
                     <Tooltip 
@@ -564,9 +585,10 @@ export default function InvestorDashboard() {
                         dataKey="portfolioValue"
                         type="natural"
                         stroke="var(--color-portfolioValue)"
-                        strokeWidth={2}
+                        strokeWidth={3}
                         dot={{
-                            r: 3,
+                            fill: "var(--color-portfolioValue)",
+                            r: 4,
                         }}
                         activeDot={{
                             r: 6,
@@ -719,4 +741,3 @@ export default function InvestorDashboard() {
   );
 }
 
-    
