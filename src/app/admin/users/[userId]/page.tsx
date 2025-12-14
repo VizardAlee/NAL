@@ -151,7 +151,7 @@ export default function UserDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const firestore = useFirestore();
   const router = useRouter();
-  const { user: adminUser, loading: userLoading } = useUser();
+  const { user: authUser, loading: authUserLoading } = useUser();
   const [isAddFundOpen, setAddFundOpen] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -162,6 +162,13 @@ export default function UserDetailPage() {
     if (!firestore || !userId) return null;
     return doc(firestore, 'users', userId);
   }, [firestore, userId]);
+
+  const adminProfileRef = useMemo(() => {
+    if (!firestore || !authUser) return null;
+    return doc(firestore, 'users', authUser.uid);
+  }, [firestore, authUser]);
+
+  const { data: adminProfile, loading: adminProfileLoading } = useDoc<UserProfile>(adminProfileRef);
 
   const fundBatchesQuery = useMemo(() => {
     if (!firestore || !userId) return null;
@@ -189,9 +196,9 @@ export default function UserDetailPage() {
   }, [firestore, userId]);
 
   const zakatSettingsRef = useMemo(() => {
-      if (!firestore || !adminUser) return null;
+      if (!firestore || !authUser) return null;
       return doc(firestore, 'platformSettings', 'zakat');
-  }, [firestore, adminUser]);
+  }, [firestore, authUser]);
 
   const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userRef);
   const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
@@ -201,14 +208,14 @@ export default function UserDetailPage() {
   const { data: firstDeposit, loading: firstDepositLoading } = useCollection<Transaction>(firstDepositQuery);
   const { data: zakatSettings, loading: zakatLoading } = useDoc<{nisab: number}>(zakatSettingsRef);
 
-  const isLoading = userLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading || clientDealsLoading || clientRepaymentsLoading;
+  const isLoading = authUserLoading || adminProfileLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading || clientDealsLoading || clientRepaymentsLoading;
 
   const handleInitiateChat = () => {
-    if (!adminUser || !userProfile) return;
+    if (!authUser || !userProfile) return;
     startChatTransition(async () => {
       const result = await getOrCreateConversation({
-        adminId: adminUser.uid,
-        adminName: adminUser.displayName || 'Admin',
+        adminId: authUser.uid,
+        adminName: authUser.displayName || 'Admin',
         userId: userProfile.id,
         userName: userProfile.name,
       });
@@ -312,6 +319,8 @@ export default function UserDetailPage() {
     Completed: 'outline',
     Terminated: 'destructive',
   } as const;
+
+  const isAdmin = adminProfile?.role === 'Admin';
 
   return (
     <div>
@@ -458,13 +467,19 @@ export default function UserDetailPage() {
                                 ) : (
                                     <embed src={userProfile.legalDocumentUrl} type="application/pdf" width="100%" height="500px" className="rounded-md border" />
                                 )}
-                                <div className='mt-4'>
-                                    <h3 className="font-medium mb-2">Replace Document:</h3>
-                                    <LegalDocumentUploader userId={userId} />
-                                </div>
+                                {isAdmin && (
+                                  <div className='mt-4'>
+                                      <h3 className="font-medium mb-2">Replace Document:</h3>
+                                      <LegalDocumentUploader userId={userId} />
+                                  </div>
+                                )}
                             </div>
-                        ) : (
+                        ) : isAdmin ? (
                             <LegalDocumentUploader userId={userId} />
+                        ) : (
+                           <div className="p-4 text-center text-sm text-muted-foreground border-dashed border rounded-md">
+                                No legal document has been uploaded for this user.
+                           </div>
                         )}
                     </CardContent>
                 </Card>
@@ -771,3 +786,5 @@ export default function UserDetailPage() {
     </div>
   );
 }
+
+    
