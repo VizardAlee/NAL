@@ -30,12 +30,14 @@ import { useFirestore } from '@/firebase';
 import { FirebaseError } from 'firebase/app';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Deal } from '@/lib/types';
 import { updateDealAction } from './actions';
 import { isDurationShort } from '@/lib/duration-helpers';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import interactionPlugin from '@fullcalendar/interaction';
 
 
 const formSchema = z.object({
@@ -293,11 +295,14 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
                     </FormControl>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      initialFocus
+                    <FullCalendar
+                        plugins={[dayGridPlugin, interactionPlugin]}
+                        initialView="dayGridMonth"
+                        selectable={true}
+                        headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
+                        dateClick={(arg) => {
+                            form.setValue('startDate', arg.date);
+                        }}
                     />
                   </PopoverContent>
                 </Popover>
@@ -317,4 +322,3 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
     </Form>
   );
 }
-

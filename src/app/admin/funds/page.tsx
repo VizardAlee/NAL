@@ -35,10 +35,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { CalendarIcon } from "lucide-react";
-import { Calendar } from "@/components/ui/calendar";
 import { generateAmortizationSchedule } from "@/lib/amortization";
 import { DateRange } from "react-day-picker";
-import { DatePickerWithRange } from "@/components/ui/date-picker-with-range";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -47,6 +45,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import interactionPlugin from '@fullcalendar/interaction';
 
 
 type PlatformFundBatch = DocumentData & {
@@ -309,14 +310,15 @@ function RecognizeAssetForm({ onAssetRecognized }: { onAssetRecognized: () => vo
                             </FormControl>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                                mode="single"
-                                selected={field.value}
-                                onSelect={field.onChange}
-                                disabled={(date) =>
-                                date > new Date() || date < new Date("1900-01-01")
-                                }
-                                initialFocus
+                            <FullCalendar
+                                plugins={[dayGridPlugin, interactionPlugin]}
+                                initialView="dayGridMonth"
+                                selectable={true}
+                                headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
+                                dateClick={(arg) => {
+                                    form.setValue('acquisitionDate', arg.date);
+                                }}
+                                disabledDays={{ after: new Date() }}
                             />
                             </PopoverContent>
                         </Popover>
@@ -545,7 +547,8 @@ export default function PlatformFundsPage() {
     const [isDialogOpen, setDialogOpen] = useState<{ [key: string]: boolean }>({});
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedTx, setSelectedTx] = useState<AdministrativeTransaction | null>(null);
-    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [startDate, setStartDate] = useState<Date | null>(null);
+    const [endDate, setEndDate] = useState<Date | null>(null);
     const [selectedTypes, setSelectedTypes] = useState<AdminTransactionTypeFilter[]>([]);
 
 
@@ -613,14 +616,16 @@ export default function PlatformFundsPage() {
             filtered = filtered.filter(tx => selectedTypes.includes(tx.type as AdminTransactionTypeFilter));
         }
 
-        if (dateRange?.from && dateRange?.to) {
-            filtered = filtered.filter(tx => {
-                const txDate = tx.createdAt.toDate();
-                return txDate >= dateRange.from! && txDate <= dateRange.to!;
-            });
+        if (startDate) {
+            const startTime = startDate.getTime();
+            filtered = filtered.filter(tx => tx.createdAt.toDate().getTime() >= startTime);
+        }
+        if (endDate) {
+            const endTime = new Date(endDate).setHours(23, 59, 59, 999);
+            filtered = filtered.filter(tx => tx.createdAt.toDate().getTime() <= endTime);
         }
         return filtered;
-    }, [adminTransactions, selectedTypes, dateRange]);
+    }, [adminTransactions, selectedTypes, startDate, endDate]);
 
     const paginatedAdminTransactions = useMemo(() => {
         if (!filteredAdminTransactions) return [];
@@ -639,15 +644,14 @@ export default function PlatformFundsPage() {
         setCurrentPage(1);
     };
 
-    const handleDateChange = (range: DateRange | undefined) => {
-        setDateRange(range);
-        setCurrentPage(1);
-    };
-
-
     const handleRowClick = (tx: AdministrativeTransaction) => {
         setSelectedTx(tx);
     };
+
+    const formatDateDisplay = (dateValue: Date | null) => {
+        return dateValue ? format(dateValue, "LLL dd, y") : <span>Pick a date</span>;
+    }
+
 
     return (
         <div>
@@ -713,7 +717,50 @@ export default function PlatformFundsPage() {
                             <CardTitle>Administrative Activity</CardTitle>
                             <CardDescription>Manage operational funds: deposits, expenses, and transfers.</CardDescription>
                             <div className="flex flex-wrap gap-2 pt-2">
-                                <DatePickerWithRange onDateChange={handleDateChange} />
+                                <div className="flex items-center gap-2">
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn("w-[140px] justify-start text-left font-normal", !startDate && "text-muted-foreground")}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {formatDateDisplay(startDate)}
+                                        </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-2" align="start">
+                                            <FullCalendar
+                                                plugins={[dayGridPlugin, interactionPlugin]}
+                                                initialView="dayGridMonth"
+                                                selectable={true}
+                                                headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
+                                                dateClick={(arg) => setStartDate(arg.date)}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                    <span className="text-muted-foreground">-</span>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn("w-[140px] justify-start text-left font-normal", !endDate && "text-muted-foreground")}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {formatDateDisplay(endDate)}
+                                        </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-2" align="end">
+                                            <FullCalendar
+                                                plugins={[dayGridPlugin, interactionPlugin]}
+                                                initialView="dayGridMonth"
+                                                selectable={true}
+                                                validRange={startDate ? { start: startDate } : undefined}
+                                                headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
+                                                dateClick={(arg) => setEndDate(arg.date)}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="outline" className="shrink-0">
