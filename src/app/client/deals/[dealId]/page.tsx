@@ -200,7 +200,7 @@ export default function ClientDealDetailPage() {
                                         {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
                                             <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={800} height={1100} className="rounded-md object-contain mx-auto" />
                                         ) : (
-                                            <embed src={userProfile.legalDocumentUrl} type="application/pdf" width="100%" height="100%" className="rounded-md" />
+                                            <iframe src={userProfile.legalDocumentUrl} className="w-full h-full rounded-md border" />
                                         )}
                                     </div>
                                 </SheetContent>
