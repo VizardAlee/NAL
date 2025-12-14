@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign, Info, FileText } from "lucide-react";
+import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign, Info, FileText, Zap } from "lucide-react";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy, updateDoc } from 'firebase/firestore';
 import { useFirestore } from "@/firebase";
@@ -534,6 +534,7 @@ export default function PlatformFundsPage() {
     const assetsQuery = useMemo(() => firestore ? query(collection(firestore, 'assets'), orderBy('acquisitionDate', 'desc')) : null, [firestore]);
     const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals')) : null, [firestore]);
     const repaymentsQuery = useMemo(() => firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Approved')) : null, [firestore]);
+    const earningsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions'), where('type', '==', 'PlatformEarning')) : null, [firestore]);
 
 
     const { data: platformFundBatches, loading: platformBatchesLoading } = useCollection<PlatformFundBatch>(platformFundBatchesQuery);
@@ -543,9 +544,10 @@ export default function PlatformFundsPage() {
     const { data: assets, loading: assetsLoading } = useCollection<Asset>(assetsQuery);
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
     const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery);
+    const { data: earningsTransactions, loading: earningsLoading } = useCollection<GenericTransaction>(earningsQuery);
 
 
-    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allFundBatchesLoading || assetsLoading || dealsLoading || repaymentsLoading;
+    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allFundBatchesLoading || assetsLoading || dealsLoading || repaymentsLoading || earningsLoading;
 
     const metrics = useMemo(() => {
         const investibleCapital = platformFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
@@ -569,10 +571,14 @@ export default function PlatformFundsPage() {
                 totalInvested += remainingInstallments.reduce((sum, inst) => sum + inst.principal, 0);
             }
         }
+        
+        const markupEarnings = earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
+        const managementFeeEarnings = adminTransactions?.filter(tx => tx.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0) || 0;
+        const platformEarnings = markupEarnings + managementFeeEarnings;
 
 
-        return { investibleCapital, administrativeBalance, zakatPool, totalInvested, totalInvestiblePool, totalAssetValue, totalClientDebt };
-    }, [platformFundBatches, adminTransactions, zakatTransactions, allFundBatches, assets, deals, repayments]);
+        return { investibleCapital, administrativeBalance, zakatPool, totalInvested, totalInvestiblePool, totalAssetValue, totalClientDebt, platformEarnings };
+    }, [platformFundBatches, adminTransactions, zakatTransactions, allFundBatches, assets, deals, repayments, earningsTransactions]);
 
     const paginatedAdminTransactions = useMemo(() => {
         if (!adminTransactions) return [];
@@ -598,7 +604,7 @@ export default function PlatformFundsPage() {
                  <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Investible Pool</CardTitle><Library className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalInvestiblePool)}</div>}<p className="text-xs text-muted-foreground">Total available capital from all sources.</p></CardContent></Card>
                  <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Capital Invested</CardTitle><Landmark className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalInvested)}</div>}<p className="text-xs text-muted-foreground">Total outstanding principal in active deals.</p></CardContent></Card>
                  <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Total Client Debt</CardTitle><FileText className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.totalClientDebt)}</div>}<p className="text-xs text-muted-foreground">Total outstanding on active deals.</p></CardContent></Card>
-                 <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Administrative Balance</CardTitle><Wallet className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.administrativeBalance)}</div>}<p className="text-xs text-muted-foreground">Operational funds for expenses.</p></CardContent></Card>
+                 <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Platform Earnings</CardTitle><Zap className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(metrics.platformEarnings)}</div>}<p className="text-xs text-muted-foreground">Total accumulated earnings.</p></CardContent></Card>
             </div>
             
             <Dialog open={!!selectedTx} onOpenChange={(isOpen) => !isOpen && setSelectedTx(null)}>
@@ -742,5 +748,3 @@ export default function PlatformFundsPage() {
         </div>
     );
 }
-
-    
