@@ -43,7 +43,6 @@ import { cn } from '@/lib/utils';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { DateRangeInput, DateRange } from '@fullcalendar/date-fns';
 
 
 type Transaction = DocumentData & {
@@ -75,7 +74,7 @@ export default function ActivityPage() {
     const isMobile = useIsMobile();
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedTypes, setSelectedTypes] = useState<TransactionTypeFilter[]>([]);
-    const [date, setDate] = useState<DateRange | undefined>(undefined);
+    const [date, setDate] = useState<{ start: Date, end: Date } | undefined>(undefined);
 
     const transactionsQuery = useMemo(() => {
         if (!firestore || !authUser) return null;
@@ -289,7 +288,7 @@ export default function ActivityPage() {
                                 format(date.start, "LLL dd, y")
                             )
                             ) : (
-                            <span>Pick a date</span>
+                            <span>Pick a date range</span>
                             )}
                         </Button>
                         </PopoverTrigger>

@@ -116,17 +116,6 @@ body {
       text-align: left;
     }
   }
-
-  .rdp-table { 
-    width: 100%;
-  }
-  .rdp-head_row, .rdp-row {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-  }
-  .rdp-cell {
-    width: auto;
-  }
 }
 
 /* FullCalendar Customizations */
@@ -155,4 +144,23 @@ body {
 }
 .fc .fc-day-selected, .fc .fc-day-range {
     @apply bg-primary/20;
+}
+
+.rdp {
+  --rdp-cell-size: 40px;
+}
+.rdp-table { 
+    display: table;
+    width: 100%;
+}
+.rdp-head_row, .rdp-row {
+    display: table-row;
+}
+.rdp-head_cell {
+    display: table-cell;
+    width: var(--rdp-cell-size);
+}
+.rdp-cell {
+    display: table-cell;
+    width: var(--rdp-cell-size);
 }
