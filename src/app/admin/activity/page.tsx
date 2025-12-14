@@ -43,6 +43,7 @@ import { cn } from '@/lib/utils';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import type { DateRange } from 'react-day-picker';
 
 
 type Transaction = DocumentData & {
@@ -74,7 +75,7 @@ export default function ActivityPage() {
     const isMobile = useIsMobile();
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedTypes, setSelectedTypes] = useState<TransactionTypeFilter[]>([]);
-    const [date, setDate] = useState<{ start: Date, end: Date } | undefined>(undefined);
+    const [date, setDate] = useState<DateRange | undefined>(undefined);
 
     const transactionsQuery = useMemo(() => {
         if (!firestore || !authUser) return null;
@@ -100,12 +101,16 @@ export default function ActivityPage() {
             filtered = filtered.filter(tx => selectedTypes.includes(tx.type as TransactionTypeFilter));
         }
 
-        if (date?.start && date?.end) {
+        if (date?.from && date?.to) {
+            const startTime = date.from.getTime();
+            // Set end of day for the 'to' date
+            const endTime = new Date(date.to).setHours(23, 59, 59, 999);
             filtered = filtered.filter(tx => {
-                const txDate = tx.createdAt.toDate();
-                return txDate >= date.start! && txDate <= date.end!;
+                const txTime = tx.createdAt.toDate().getTime();
+                return txTime >= startTime && txTime <= endTime;
             });
         }
+
 
         return filtered;
     }, [transactions, selectedTypes, date]);
@@ -130,16 +135,16 @@ export default function ActivityPage() {
         setCurrentPage(1); // Reset to first page on filter change
     };
     
-    const handleDateSelect = (selectInfo: any) => {
-        const endDate = subDays(selectInfo.end, 1);
-        setDate({
-            start: selectInfo.start,
-            end: endDate,
-        });
+    const handleDateSelect = (arg: { start: Date; end: Date; }) => {
+        setDate({ from: arg.start, to: subDays(arg.end, 1) });
         setCurrentPage(1);
     };
 
-    const formatDate = (timestamp: Timestamp | Date | undefined) => {
+    const formatDateDisplay = (dateValue: Date | undefined) => {
+        return dateValue ? format(dateValue, "LLL dd, y") : <span>Pick a date</span>;
+    }
+
+    const formatDateTimestamp = (timestamp: Timestamp | Date | undefined) => {
         if (!timestamp) return 'N/A';
         const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
         try { return format(date, 'PPP p'); } catch { return 'Invalid Date'; }
@@ -209,7 +214,7 @@ export default function ActivityPage() {
                                         <div>
                                             <p className="font-medium">{getUserName(tx.userId)}</p>
                                             <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'} className="mt-1">{tx.type}</Badge>
-                                            <p className="text-xs text-muted-foreground mt-1">{formatDate(tx.createdAt)}</p>
+                                            <p className="text-xs text-muted-foreground mt-1">{formatDateTimestamp(tx.createdAt)}</p>
                                         </div>
                                         <p className={`font-bold text-lg ${tx.amount > 0 && tx.type !== 'Withdrawal' ? 'text-primary' : 'text-foreground'}`}>
                                             {tx.amount > 0 && tx.type !== 'Withdrawal' ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
@@ -243,7 +248,7 @@ export default function ActivityPage() {
                 <TableBody>
                 {paginatedTransactions.map((tx) => (
                     <TableRow key={tx.id}>
-                        <TableCell className="text-xs text-muted-foreground">{formatDate(tx.createdAt)}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{formatDateTimestamp(tx.createdAt)}</TableCell>
                         <TableCell className="font-medium">{getUserName(tx.userId)}</TableCell>
                         <TableCell>
                             <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
@@ -268,40 +273,49 @@ export default function ActivityPage() {
                 icon={History}
             >
                 <div className="flex flex-col sm:flex-row gap-2">
-                    <Popover>
-                        <PopoverTrigger asChild>
-                        <Button
-                            id="date"
-                            variant={"outline"}
-                            className={cn(
-                            "w-[300px] justify-start text-left font-normal",
-                            !date && "text-muted-foreground"
-                            )}
-                        >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {date?.start ? (
-                            date.end ? (
-                                <>
-                                {format(date.start, "LLL dd, y")} -{" "}
-                                {format(date.end, "LLL dd, y")}
-                                </>
-                            ) : (
-                                format(date.start, "LLL dd, y")
-                            )
-                            ) : (
-                            <span>Pick a date range</span>
-                            )}
-                        </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-4" align="end">
-                          <FullCalendar
-                            plugins={[ dayGridPlugin, interactionPlugin ]}
-                            initialView="dayGridMonth"
-                            selectable={true}
-                            select={handleDateSelect}
-                          />
-                        </PopoverContent>
-                    </Popover>
+                     <div className="flex items-center gap-2">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                            <Button
+                                variant={"outline"}
+                                className={cn("w-[140px] justify-start text-left font-normal", !date?.from && "text-muted-foreground")}
+                            >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formatDateDisplay(date?.from)}
+                            </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-4" align="start">
+                            <FullCalendar
+                                plugins={[ dayGridPlugin, interactionPlugin ]}
+                                initialView="dayGridMonth"
+                                selectable={true}
+                                select={(arg) => setDate(prev => ({...prev, from: arg.start, to: prev?.to && arg.start > prev.to ? arg.start : prev?.to }))}
+                                validRange={date?.to ? { end: date.to } : undefined}
+                            />
+                            </PopoverContent>
+                        </Popover>
+                        <span className="text-muted-foreground">-</span>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                            <Button
+                                variant={"outline"}
+                                className={cn("w-[140px] justify-start text-left font-normal", !date?.to && "text-muted-foreground")}
+                            >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formatDateDisplay(date?.to)}
+                            </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-4" align="end">
+                            <FullCalendar
+                                plugins={[ dayGridPlugin, interactionPlugin ]}
+                                initialView="dayGridMonth"
+                                selectable={true}
+                                select={(arg) => setDate(prev => ({...prev, to: arg.start }))}
+                                validRange={date?.from ? { start: date.from } : undefined}
+                            />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" className="shrink-0">
@@ -361,4 +375,5 @@ export default function ActivityPage() {
 
         </div>
     );
-}
+
+    
