@@ -26,7 +26,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Pagination,
@@ -131,9 +131,10 @@ export default function ActivityPage() {
     };
     
     const handleDateSelect = (selectInfo: any) => {
+        const endDate = subDays(selectInfo.end, 1);
         setDate({
             start: selectInfo.start,
-            end: selectInfo.end,
+            end: endDate,
         });
         setCurrentPage(1);
     };
