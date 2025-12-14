@@ -23,6 +23,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { MessagesLink } from "@/components/messages-link";
 import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
+import { DigitalClock } from "@/components/digital-clock";
 
 function ClientSkeleton() {
     return (
@@ -130,6 +131,7 @@ export default function ClientLayout({
                         </Link>
                     </Button>
                 </nav>
+                <DigitalClock />
                 <ThemeToggle />
                 <MessagesLink basePath="/client" />
                 <AccountMenu />

@@ -37,6 +37,7 @@ import { useCompanyLogo } from "@/components/company-logo-provider";
 import { usePathname } from 'next/navigation';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
+import { DigitalClock } from "@/components/digital-clock";
 
 type Notification = {
     id: string;
@@ -347,6 +348,7 @@ export default function AdminLayout({
                 {/* Mobile sidebar trigger */}
                 <SidebarTrigger className="md:hidden" />
             </div>
+            <DigitalClock />
             <ThemeToggle />
             <MessagesLink />
             <NotificationBell />
