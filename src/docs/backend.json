@@ -22,7 +22,7 @@
         "role": {
           "type": "string",
           "description": "The role of the user.",
-          "enum": ["Admin", "Investor", "Client", "Legal", null]
+          "enum": ["Admin", "Investor", "Client", "Legal", "Recovery", null]
         },
         "lastZakatPaymentDate": {
           "type": "string",
@@ -33,6 +33,10 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Array of Firebase Cloud Messaging tokens for push notifications."
+        },
+        "legalDocumentUrl": {
+            "type": "string",
+            "description": "A Base64-encoded Data URI of the user's signed legal document."
         }
       },
       "required": ["name", "email", "role"]
@@ -564,6 +568,26 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "When this record was generated." }
       },
       "required": ["periodStart", "periodEnd", "grossProfit", "educationTax", "companyIncomeTax", "createdAt"]
+    },
+    "recoveryTask": {
+      "title": "Recovery Task",
+      "description": "A task assigned to the Recovery or Legal team for an upcoming or overdue payment.",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "clientPhoneNumber": { "type": "string" },
+        "dealId": { "type": "string" },
+        "dealName": { "type": "string" },
+        "repaymentId": { "type": "string" },
+        "amountDue": { "type": "number" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Due_Recovery", "Escalated_Legal"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "dealId", "repaymentId", "amountDue", "dueDate", "status", "createdAt", "updatedAt"]
     }
   },
   "auth": {
@@ -713,6 +737,12 @@
         "$ref": "#/entities/taxRecord"
       },
       "description": "Stores historical tax calculations for auditing."
+    },
+    "/recoveryTasks/{taskId}": {
+      "schema": {
+        "$ref": "#/entities/recoveryTask"
+      },
+      "description": "Stores automated tasks for the Recovery and Legal teams regarding upcoming or overdue payments."
     }
   }
 }

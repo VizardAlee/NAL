@@ -31,6 +31,12 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Legal';
     }
+    
+    function isRecovery() {
+       return request.auth != null 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Recovery';
+    }
 
     // Rules for the 'users' collection
     match /users/{userId} {
@@ -44,8 +50,7 @@ service cloud.firestore {
       allow create: if request.auth != null;
 
       // Only the user themself or an Admin can update a user document.
-      // FCM tokens can be written by the owner of the document.
-      allow update: if (isOwner(userId) && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phoneNumber']))) || isAdmin();
+      allow update: if isAdmin() || (isOwner(userId) && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phoneNumber']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['legalDocumentUrl'])));
 
       // Only admins can delete users.
       allow delete: if isAdmin();
@@ -54,7 +59,7 @@ service cloud.firestore {
     // Rules for the 'deals' collection
     match /deals/{dealId} {
         // Admins, Investors, and Legal can list all deals.
-        allow list: if isAdmin() || isInvestor() || (request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Legal');
+        allow list: if isAdmin() || isInvestor() || isLegal();
         
         // Admins, Investors, Legal can get any single deal.
         // Clients can only get deals they are associated with.
@@ -62,6 +67,14 @@ service cloud.firestore {
         
         // Only Admins can create, update or delete deals
         allow create, update, delete: if isAdmin();
+    }
+    
+    // Rules for the 'recoveryTasks' collection
+    match /recoveryTasks/{taskId} {
+      allow read, list: if isAdmin() 
+        || (isRecovery() && resource.data.status == 'Due_Recovery') 
+        || (isLegal() && resource.data.status == 'Escalated_Legal');
+      allow write: if isAdmin();
     }
 
     // Rules for the 'dealRequests' collection
@@ -215,3 +228,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
