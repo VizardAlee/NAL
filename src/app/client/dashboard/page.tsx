@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -449,7 +450,7 @@ export default function ClientDashboard() {
                                         {isMobile ? (
                                             <div className="space-y-3">
                                                 {olderDeals.map(deal => (
-                                                    <Card key={deal.id} className="p-4">
+                                                    <Card key={deal.id} className="p-4" onClick={() => router.push(`/client/deals/${deal.id}`)}>
                                                         <div className="flex justify-between items-start">
                                                             <div>
                                                                 <p className="font-medium">{deal.dealName}</p>
