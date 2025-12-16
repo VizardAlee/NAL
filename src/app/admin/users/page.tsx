@@ -37,7 +37,7 @@ type User = DocumentData & {
     id: string;
     name: string;
     email: string;
-    role: 'Admin' | 'Investor' | 'Client';
+    role: 'Admin' | 'Investor' | 'Client' | 'Legal' | 'Recovery';
 };
 
 function UsersTable({ users, loading }: { users: User[] | null, loading: boolean }) {
@@ -144,6 +144,8 @@ export default function UsersPage() {
       admin: users?.filter(u => u.role === 'Admin') || [],
       investor: users?.filter(u => u.role === 'Investor') || [],
       client: users?.filter(u => u.role === 'Client') || [],
+      legal: users?.filter(u => u.role === 'Legal') || [],
+      recovery: users?.filter(u => u.role === 'Recovery') || [],
     }
   }, [users]);
 
@@ -175,11 +177,13 @@ export default function UsersPage() {
       </PageHeader>
       
       <Tabs defaultValue="all" className="w-full">
-        <TabsList>
-          <TabsTrigger value="all">All Users</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6">
+          <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="admin">Admins</TabsTrigger>
           <TabsTrigger value="investor">Investors</TabsTrigger>
           <TabsTrigger value="client">Clients</TabsTrigger>
+          <TabsTrigger value="legal">Legal</TabsTrigger>
+          <TabsTrigger value="recovery">Recovery</TabsTrigger>
         </TabsList>
         <TabsContent value="all" className="mt-4">
            <UsersTable users={filteredUsers.all} loading={loading} />
@@ -193,11 +197,13 @@ export default function UsersPage() {
         <TabsContent value="client" className="mt-4">
             <UsersTable users={filteredUsers.client} loading={loading} />
         </TabsContent>
+        <TabsContent value="legal" className="mt-4">
+            <UsersTable users={filteredUsers.legal} loading={loading} />
+        </TabsContent>
+        <TabsContent value="recovery" className="mt-4">
+            <UsersTable users={filteredUsers.recovery} loading={loading} />
+        </TabsContent>
       </Tabs>
     </div>
   );
 }
-
-    
-
-    
