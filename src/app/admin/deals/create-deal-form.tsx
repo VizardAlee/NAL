@@ -41,6 +41,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
   clientId: z.string({ required_error: 'Please select a client.' }),
+  marketerId: z.string().optional(),
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
   managementFeeRate: z.coerce.number().min(0, { message: 'Management fee rate cannot be negative.' }),
@@ -63,6 +64,12 @@ type Client = {
   email: string;
 };
 
+type Marketer = {
+  id: string;
+  name: string;
+  role: 'Marketer';
+}
+
 export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -72,8 +79,14 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
     if (!firestore) return null;
     return query(collection(firestore, 'users'), where('role', '==', 'Client'));
   }, [firestore]);
+  
+  const marketersQuery = useMemo(() => {
+    if (!firestore) return null;
+    return query(collection(firestore, 'users'), where('role', '==', 'Marketer'));
+  }, [firestore]);
 
   const { data: clients, loading: clientsLoading } = useCollection<Client>(clientsQuery);
+  const { data: marketers, loading: marketersLoading } = useCollection<Marketer>(marketersQuery);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -182,6 +195,30 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
                   ))}
                 </SelectContent>
               </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="marketerId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Attributed Marketer (Optional)</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={marketersLoading}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder={marketersLoading ? "Loading marketers..." : "Select a marketer"} />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {marketers?.map(marketer => (
+                    <SelectItem key={marketer.id} value={marketer.id}>{marketer.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>If this deal was sourced by a marketer, select them here.</FormDescription>
               <FormMessage />
             </FormItem>
           )}

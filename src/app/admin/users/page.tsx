@@ -37,7 +37,7 @@ type User = DocumentData & {
     id: string;
     name: string;
     email: string;
-    role: 'Admin' | 'Investor' | 'Client' | 'Legal' | 'Recovery';
+    role: 'Admin' | 'Investor' | 'Client' | 'Legal' | 'Recovery' | 'Marketer';
 };
 
 function UsersTable({ users, loading }: { users: User[] | null, loading: boolean }) {
@@ -146,6 +146,7 @@ export default function UsersPage() {
       client: users?.filter(u => u.role === 'Client') || [],
       legal: users?.filter(u => u.role === 'Legal') || [],
       recovery: users?.filter(u => u.role === 'Recovery') || [],
+      marketer: users?.filter(u => u.role === 'Marketer') || [],
     }
   }, [users]);
 
@@ -157,7 +158,7 @@ export default function UsersPage() {
     <div>
       <PageHeader
         title="User Management"
-        description="Add, view, and manage investor and client profiles."
+        description="Add, view, and manage user profiles."
         icon={Users}
       >
         <Dialog open={isCreateUserOpen} onOpenChange={setCreateUserOpen}>
@@ -177,11 +178,12 @@ export default function UsersPage() {
       </PageHeader>
       
       <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-7">
           <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="admin">Admins</TabsTrigger>
           <TabsTrigger value="investor">Investors</TabsTrigger>
           <TabsTrigger value="client">Clients</TabsTrigger>
+          <TabsTrigger value="marketer">Marketers</TabsTrigger>
           <TabsTrigger value="legal">Legal</TabsTrigger>
           <TabsTrigger value="recovery">Recovery</TabsTrigger>
         </TabsList>
@@ -196,6 +198,9 @@ export default function UsersPage() {
         </TabsContent>
         <TabsContent value="client" className="mt-4">
             <UsersTable users={filteredUsers.client} loading={loading} />
+        </TabsContent>
+        <TabsContent value="marketer" className="mt-4">
+            <UsersTable users={filteredUsers.marketer} loading={loading} />
         </TabsContent>
         <TabsContent value="legal" className="mt-4">
             <UsersTable users={filteredUsers.legal} loading={loading} />

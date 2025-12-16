@@ -98,6 +98,9 @@ export function LoginForm() {
         case 'Recovery':
           router.push("/recovery/dashboard");
           break;
+        case 'Marketer':
+            router.push("/marketer/dashboard");
+            break;
         default:
           router.push("/"); // Fallback to home page
       }

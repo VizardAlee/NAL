@@ -13,6 +13,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -37,6 +38,7 @@ const formSchema = z.object({
   password: z.string().min(8, { message: 'Password must be at least 8 characters.' }),
   phoneNumber: z.string().optional(),
   role: z.enum(['Investor', 'Client'], { required_error: 'Please select a role.' }),
+  referralCode: z.string().optional(),
 });
 
 
@@ -53,6 +55,7 @@ export default function SignupPage() {
       email: '',
       password: '',
       phoneNumber: '',
+      referralCode: '',
     },
   });
 
@@ -163,6 +166,22 @@ export default function SignupPage() {
                                     </SelectContent>
                                 </Select>
                                 <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="referralCode"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Referral Code (Optional)</FormLabel>
+                            <FormControl>
+                                <Input placeholder="MARK-JDOE-123" {...field} />
+                            </FormControl>
+                             <FormDescription>
+                                If you were referred by a marketer, enter their code here.
+                            </FormDescription>
+                            <FormMessage />
                             </FormItem>
                         )}
                     />
