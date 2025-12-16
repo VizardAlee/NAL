@@ -100,16 +100,17 @@ export default function TaxPage() {
 
         const brackets = [
             { description: "First ₦800,000", limit: 800000, rate: 0.00 },
-            { description: "Next ₦2,000,000", limit: 2000000, rate: 0.10 },
-            { description: "Next ₦5,000,000", limit: 5000000, rate: 0.15 },
-            { description: "Next ₦10,000,000", limit: 10000000, rate: 0.20 },
-            { description: "Above ₦17,800,000", limit: Infinity, rate: 0.25 },
+            { description: "Next ₦2,200,000", limit: 2200000, rate: 0.15 },
+            { description: "Next ₦47,000,000", limit: 47000000, rate: 0.20 },
+            { description: "Above ₦50,000,000", limit: Infinity, rate: 0.25 },
         ];
+        
+        let remainingIncome = chargeableIncome;
 
         for (const bracket of brackets) {
-            if (incomeToTax <= 0) break;
+            if (remainingIncome <= 0) break;
             
-            const taxableInBracket = Math.min(incomeToTax, bracket.limit);
+            const taxableInBracket = Math.min(remainingIncome, bracket.limit);
             const taxForBracket = taxableInBracket * bracket.rate;
             totalTax += taxForBracket;
             
@@ -121,8 +122,9 @@ export default function TaxPage() {
                 });
             }
            
-            incomeToTax -= taxableInBracket;
+            remainingIncome -= taxableInBracket;
         }
+
 
         const profitAfterTax = grossProfit - totalTax;
 
