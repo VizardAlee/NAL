@@ -22,7 +22,7 @@
         "role": {
           "type": "string",
           "description": "The role of the user.",
-          "enum": ["Admin", "Investor", "Client", "Legal", null]
+          "enum": ["Admin", "Investor", "Client", "Legal", "Recovery", "Marketer", null]
         },
         "lastZakatPaymentDate": {
           "type": "string",
@@ -37,6 +37,18 @@
         "legalDocumentUrl": {
             "type": "string",
             "description": "A Base64-encoded Data URI of the user's signed legal document."
+        },
+        "referralCode": {
+            "type": "string",
+            "description": "The marketer's unique referral code."
+        },
+        "referredByCode": {
+            "type": "string",
+            "description": "The referral code of the marketer who referred this user."
+        },
+        "rating": {
+            "type": "number",
+            "description": "The marketer's calculated performance score."
         }
       },
       "required": ["name", "email", "role"]
@@ -111,6 +123,10 @@
             "type": "string",
             "format": "date-time",
             "description": "The official start date of the financing term, used for amortization calculations. Defaults to createdAt if not provided."
+        },
+        "marketerId": {
+          "type": "string",
+          "description": "The ID of the marketer who sourced this deal."
         }
       },
       "required": [
@@ -568,6 +584,41 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "When this record was generated." }
       },
       "required": ["periodStart", "periodEnd", "grossProfit", "educationTax", "companyIncomeTax", "createdAt"]
+    },
+    "recoveryTask": {
+      "title": "Recovery Task",
+      "description": "A task assigned to the Recovery or Legal team for an upcoming or overdue payment.",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "clientPhoneNumber": { "type": "string" },
+        "dealId": { "type": "string" },
+        "dealName": { "type": "string" },
+        "repaymentId": { "type": "string" },
+        "amountDue": { "type": "number" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Due_Recovery", "Escalated_Legal", "Resolved"] },
+        "lastLog": { "type": "string", "description": "A snippet of the most recent log entry for quick view."},
+        "assigneeId": { "type": "string", "description": "The ID of the team member this task is assigned to."},
+        "assigneeName": { "type": "string", "description": "The name of the assigned team member."},
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "dealId", "repaymentId", "amountDue", "dueDate", "status", "createdAt", "updatedAt"]
+    },
+    "log": {
+      "title": "Log Entry",
+      "description": "A log entry or note for a recovery task.",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string", "description": "The content of the log entry." },
+        "authorId": { "type": "string", "description": "The ID of the user who created the log." },
+        "authorName": { "type": "string", "description": "The name of the user who created the log." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["text", "authorId", "authorName", "createdAt"]
     }
   },
   "auth": {
@@ -717,6 +768,20 @@
         "$ref": "#/entities/taxRecord"
       },
       "description": "Stores historical tax calculations for auditing."
+    },
+    "/recoveryTasks/{taskId}": {
+      "schema": {
+        "$ref": "#/entities/recoveryTask"
+      },
+      "description": "Stores automated tasks for the Recovery and Legal teams regarding upcoming or overdue payments."
+    },
+     "/recoveryTasks/{taskId}/logs/{logId}": {
+      "schema": {
+        "$ref": "#/entities/log"
+      },
+      "description": "Stores log entries for a specific recovery task."
     }
   }
 }
+
+    

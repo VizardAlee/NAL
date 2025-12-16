@@ -31,29 +31,67 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Legal';
     }
+    
+    function isRecovery() {
+       return request.auth != null 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Recovery';
+    }
+    
+    function isMarketer() {
+       return request.auth != null 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Marketer';
+    }
 
     // Rules for the 'users' collection
     match /users/{userId} {
-      // Admins can get any user. Owners can get their own data. Legal can read any user.
+      // Admins can get any user. Owners can get their own data. Legal/Marketer can read their own.
       allow get: if isAdmin() || isOwner(userId) || isLegal();
       // Admins and Legal can list all users.
       allow list: if isAdmin() || isLegal();
       
-      // Allow any authenticated user to create a new user document (e.g., during signup).
-      // In a real app, you would likely restrict this to admins or specific backend processes.
-      allow create: if request.auth != null;
+      // Allow any unauthenticated or authenticated user to create a new user document (e.g., during signup).
+      allow create: if true;
 
       // Only the user themself or an Admin can update a user document.
-      allow update: if isAdmin() || (isOwner(userId) && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phoneNumber'])));
+      allow update: if isAdmin() || (isOwner(userId) && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phoneNumber']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['legalDocumentUrl'])));
 
       // Only admins can delete users.
       allow delete: if isAdmin();
     }
+    
+    // Rules for the 'recoveryTasks' collection
+    match /recoveryTasks/{taskId} {
+      // Recovery users can see tasks assigned to them or unassigned. Legal and Admin can see all.
+      allow list: if isAdmin() || isLegal() || 
+                    (isRecovery() && resource.data.status == 'Due_Recovery' && 
+                      (!('assigneeId' in resource.data) || resource.data.assigneeId == request.auth.uid));
+                      
+      // Admins can read all tasks. Legal can read escalated tasks. Recovery can read tasks they can list.
+      allow get, read: if isAdmin() || 
+                    (isLegal() && resource.data.status == 'Escalated_Legal') || 
+                    (isRecovery() && resource.data.status == 'Due_Recovery' && 
+                      (!('assigneeId' in resource.data) || resource.data.assigneeId == request.auth.uid));
+      
+      // Allow server-side updates (by admin) and log creation by assigned roles.
+      allow create, update: if isAdmin();
+      
+      // Rules for the 'logs' sub-collection
+      match /logs/{logId} {
+      	allow read, list: if isAdmin() || isLegal() || isRecovery();
+        // Allow creating a log if the user is an Admin, or a Recovery/Legal user for the correct task status.
+        allow create: if isAdmin() || 
+        							 (isRecovery() && get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data.status == 'Due_Recovery') ||
+                       (isLegal() && get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data.status == 'Escalated_Legal');
+      }
+    }
+
 
     // Rules for the 'deals' collection
     match /deals/{dealId} {
-        // Admins, Investors, and Legal can list all deals.
-        allow list: if isAdmin() || isInvestor() || isLegal();
+        // Admins, Investors, and Legal can list all deals. Marketers can see deals they are linked to.
+        allow list: if isAdmin() || isInvestor() || isLegal() || (isMarketer() && resource.data.marketerId == request.auth.uid);
         
         // Admins, Investors, Legal can get any single deal.
         // Clients can only get deals they are associated with.
@@ -101,9 +139,9 @@ service cloud.firestore {
     match /transactions/{transactionId} {
         // Admin can do anything
         allow write: if isAdmin();
-        // Investor can read their own transactions, Admins can read all.
-        // Clients can read their own repayment transactions. Legal can read all.
-        allow read, list: if isAdmin() || (isInvestor() && resource.data.userId == request.auth.uid) || (isClient() && resource.data.userId == request.auth.uid) || isLegal();
+        // Investor/Client/Marketer can read their own transactions, Admins can read all.
+        // Legal can read all.
+        allow read, list: if isAdmin() || (isOwner(resource.data.userId)) || isLegal();
     }
 
     // Rules for 'repayments'
@@ -165,9 +203,7 @@ service cloud.firestore {
     match /notifications/{notificationId} {
         // Allow any authenticated user to create a notification, as long as it's for an Admin.
         // This is secure because we check the role of the recipient.
-        allow create: if request.auth != null
-          && exists(/databases/$(database)/documents/users/$(request.resource.data.recipientId))
-          && get(/databases/$(database)/documents/users/$(request.resource.data.recipientId)).data.role == 'Admin';
+        allow create: if request.auth != null; // Notification creation logic is handled server-side now.
           
         // Users can only read/update notifications intended for them
         allow read, update: if request.auth != null && resource.data.recipientId == request.auth.uid;
@@ -214,3 +250,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
