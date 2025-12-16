@@ -5,6 +5,10 @@ import { adminDb } from '@/firebase/admin-app';
 import { collection, getDocs, query, where } from 'firebase-admin/firestore';
 
 export async function getMarketerStats(marketerId: string, referralCode: string) {
+  if (!referralCode) {
+    return { success: true, data: { referredClientCount: 0, referredInvestorCount: 0, totalInvestorCapital: 0, totalDealValue: 0, referredClients: [], referredInvestors: [], deals: [] } };
+  }
+
   try {
     // 1. Get all users referred by this marketer's code
     const referredUsersQuery = query(
@@ -13,7 +17,6 @@ export async function getMarketerStats(marketerId: string, referralCode: string)
     );
     const referredUsersSnapshot = await getDocs(referredUsersQuery);
 
-    const referredUserIds = referredUsersSnapshot.docs.map(doc => doc.id);
     const referredClients = referredUsersSnapshot.docs.filter(doc => doc.data().role === 'Client');
     const referredInvestors = referredUsersSnapshot.docs.filter(doc => doc.data().role === 'Investor');
 

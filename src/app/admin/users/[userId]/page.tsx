@@ -10,14 +10,13 @@ import { doc, collection, query, where, DocumentData, Timestamp, orderBy, limit 
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone, MessageSquare, Star, Gavel, Download } from 'lucide-react';
+import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone, MessageSquare, Star, Gavel, Download, UserPlus, Briefcase, Copy } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { AddFundForm } from './add-fund-form';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format, formatDistanceStrict, isBefore, isEqual } from 'date-fns';
-import { Naira } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -37,15 +36,18 @@ import { getOrCreateConversation } from '@/app/common/actions/chat-actions';
 import { Progress } from '@/components/ui/progress';
 import { LegalDocumentUploader } from './legal-document-uploader';
 import Image from 'next/image';
+import { getMarketerStats } from '@/app/marketer/dashboard/actions';
 
 type UserProfile = DocumentData & {
     id: string;
     name: string;
     email: string;
     phoneNumber?: string;
-    role: 'Admin' | 'Investor' | 'Client' | 'Legal';
+    role: 'Admin' | 'Investor' | 'Client' | 'Legal' | 'Recovery' | 'Marketer';
     lastZakatPaymentDate?: Timestamp;
     legalDocumentUrl?: string;
+    referralCode?: string;
+    rating?: number;
 };
 
 type FundBatch = DocumentData & {
@@ -65,6 +67,13 @@ type Transaction = DocumentData & {
   createdAt: Timestamp;
   dealName?: string;
 };
+
+type MarketerStats = {
+    referredClientCount: number;
+    referredInvestorCount: number;
+    totalInvestorCapital: number;
+    totalDealValue: number;
+}
 
 const DURATION_IN_DAYS = {
     Days: 1,
@@ -159,18 +168,29 @@ export default function UserDetailPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [fundBatchesCurrentPage, setFundBatchesCurrentPage] = useState(1);
   const [isChatPending, startChatTransition] = useTransition();
+  const [marketerStats, setMarketerStats] = useState<MarketerStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   const userRef = useMemo(() => {
     if (!firestore || !userId) return null;
     return doc(firestore, 'users', userId);
   }, [firestore, userId]);
 
-  const adminProfileRef = useMemo(() => {
-    if (!firestore || !authUser) return null;
-    return doc(firestore, 'users', authUser.uid);
-  }, [firestore, authUser]);
+  const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userRef);
 
-  const { data: adminProfile, loading: adminProfileLoading } = useDoc<UserProfile>(adminProfileRef);
+  useEffect(() => {
+    if (userProfile && userProfile.role === 'Marketer' && userProfile.referralCode) {
+        setStatsLoading(true);
+        getMarketerStats(userProfile.id, userProfile.referralCode).then(result => {
+            if (result.success) {
+                setMarketerStats(result.data as MarketerStats);
+            }
+            setStatsLoading(false);
+        });
+    } else if (userProfile && userProfile.role !== 'Marketer') {
+        setStatsLoading(false);
+    }
+  }, [userProfile]);
 
   const fundBatchesQuery = useMemo(() => {
     if (!firestore || !userId) return null;
@@ -178,14 +198,14 @@ export default function UserDetailPage() {
   }, [firestore, userId]);
   
   const clientDealsQuery = useMemo(() => {
-    if (!firestore || !userId) return null;
+    if (!firestore || !userId || userProfile?.role !== 'Client') return null;
     return query(collection(firestore, 'deals'), where('clientId', '==', userId), orderBy('createdAt', 'desc'));
-  }, [firestore, userId]);
+  }, [firestore, userId, userProfile?.role]);
   
   const clientRepaymentsQuery = useMemo(() => {
-    if (!firestore || !userId) return null;
+    if (!firestore || !userId || userProfile?.role !== 'Client') return null;
     return query(collection(firestore, 'repayments'), where('clientId', '==', userId), where('status', '==', 'Approved'));
-  }, [firestore, userId]);
+  }, [firestore, userId, userProfile?.role]);
 
   const allTransactionsQuery = useMemo(() => {
     if (!firestore || !userId) return null;
@@ -202,7 +222,7 @@ export default function UserDetailPage() {
       return doc(firestore, 'platformSettings', 'zakat');
   }, [firestore, authUser]);
 
-  const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userRef);
+  
   const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
   const { data: clientDeals, loading: clientDealsLoading } = useCollection<Deal>(clientDealsQuery);
   const { data: clientRepayments, loading: clientRepaymentsLoading } = useCollection<Repayment>(clientRepaymentsQuery);
@@ -210,7 +230,7 @@ export default function UserDetailPage() {
   const { data: firstDeposit, loading: firstDepositLoading } = useCollection<Transaction>(firstDepositQuery);
   const { data: zakatSettings, loading: zakatLoading } = useDoc<{nisab: number}>(zakatSettingsRef);
 
-  const isLoading = authUserLoading || adminProfileLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading || clientDealsLoading || clientRepaymentsLoading;
+  const isLoading = authUserLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading || clientDealsLoading || clientRepaymentsLoading || (userProfile?.role === 'Marketer' && statsLoading);
 
   const handleInitiateChat = () => {
     if (!authUser || !userProfile) return;
@@ -333,7 +353,12 @@ export default function UserDetailPage() {
     Terminated: 'destructive',
   } as const;
 
-  const isAdmin = adminProfile?.role === 'Admin';
+  const isAdmin = userProfile?.role === 'Admin';
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    toast({ title: "Copied!", description: "Referral code copied to clipboard." });
+  };
 
   return (
     <div>
@@ -373,6 +398,35 @@ export default function UserDetailPage() {
                         </div>
                     </CardHeader>
                 </Card>
+
+                {userProfile.role === 'Marketer' && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">Marketer Details</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div>
+                                <p className="text-sm text-muted-foreground">Referral Code</p>
+                                <div className="flex items-center gap-2">
+                                    <p className="font-mono font-medium text-lg">{userProfile.referralCode || 'N/A'}</p>
+                                    {userProfile.referralCode && (
+                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleCopyCode(userProfile.referralCode!)}>
+                                            <Copy className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                            <div>
+                                <p className="text-sm text-muted-foreground">Performance Rating</p>
+                                <div className="flex items-center gap-2">
+                                    <Star className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                                    <p className="font-bold text-lg">{(userProfile.rating || 0).toFixed(1)} / 5.0</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
 
                 {userProfile.role === 'Client' && clientPerformanceMetrics && (
                     <Card>
@@ -465,6 +519,38 @@ export default function UserDetailPage() {
             </div>
 
             <div className="lg:col-span-2 space-y-6">
+                 {userProfile.role === 'Marketer' && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Marketer Performance</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                        {statsLoading ? <Skeleton className="h-32 w-full" /> : marketerStats ? (
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-4 bg-muted rounded-md text-center">
+                                    <p className="text-sm text-muted-foreground">Referred Clients</p>
+                                    <p className="text-2xl font-bold">{marketerStats.referredClientCount}</p>
+                                </div>
+                                 <div className="p-4 bg-muted rounded-md text-center">
+                                    <p className="text-sm text-muted-foreground">Referred Investors</p>
+                                    <p className="text-2xl font-bold">{marketerStats.referredInvestorCount}</p>
+                                </div>
+                                <div className="p-4 bg-muted rounded-md text-center">
+                                    <p className="text-sm text-muted-foreground">Investor Capital</p>
+                                    <p className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', notation: 'compact' }).format(marketerStats.totalInvestorCapital)}</p>
+                                </div>
+                                <div className="p-4 bg-muted rounded-md text-center">
+                                    <p className="text-sm text-muted-foreground">Attributed Deal Value</p>
+                                    <p className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', notation: 'compact' }).format(marketerStats.totalDealValue)}</p>
+                                </div>
+                            </div>
+                        ): (
+                            <p className="text-sm text-center text-muted-foreground py-8">No performance data available.</p>
+                        )}
+                        </CardContent>
+                    </Card>
+                )}
+
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -497,14 +583,14 @@ export default function UserDetailPage() {
                                         </div>
                                     </SheetContent>
                                 </Sheet>
-                                {isAdmin && (
+                                {(userProfile.role !== 'Admin' || userProfile.id === authUser?.uid) && (
                                   <div className='mt-4 border-t pt-4'>
                                       <h3 className="font-medium mb-2">Replace Document:</h3>
                                       <LegalDocumentUploader userId={userId} />
                                   </div>
                                 )}
                             </div>
-                        ) : isAdmin ? (
+                        ) : (userProfile.role !== 'Admin' || userProfile.id === authUser?.uid) ? (
                             <LegalDocumentUploader userId={userId} />
                         ) : (
                            <div className="p-4 text-center text-sm text-muted-foreground border-dashed border rounded-md">
@@ -837,4 +923,5 @@ export default function UserDetailPage() {
     </div>
   );
 }
+
 
