@@ -1,8 +1,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/firebase/admin-app';
-import { FieldValue } from 'firebase-admin/firestore';
-import { addDays, differenceInDays, startOfDay } from 'date-fns';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { addDays, differenceInDays, startOfDay, isBefore, isEqual } from 'date-fns';
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -189,6 +189,75 @@ async function processRecoveryTasks() {
     return { tasksCreated, tasksEscalated, clientNotificationsSent, errors, details };
 }
 
+// --- Marketer Rating Automation Logic ---
+async function processMarketerRatings() {
+  let marketersProcessed = 0;
+  let errors = 0;
+  const details = [];
+
+  const marketersSnapshot = await adminDb.collection('users').where('role', '==', 'Marketer').get();
+  if (marketersSnapshot.empty) {
+    return { processed: 0, errors: 0, details: ['No marketers found.'] };
+  }
+
+  for (const marketerDoc of marketersSnapshot.docs) {
+    const marketer = marketerDoc.data();
+    const marketerId = marketerDoc.id;
+    let totalPayments = 0;
+    let onTimePayments = 0;
+    let totalDeals = 0;
+
+    try {
+      const referredClientsSnapshot = await adminDb.collection('users').where('referredByCode', '==', marketer.referralCode).where('role', '==', 'Client').get();
+      const referredClientIds = referredClientsSnapshot.docs.map(doc => doc.id);
+
+      const dealsToScore: Set<string> = new Set();
+      referredClientIds.forEach(id => dealsToScore.add(id));
+
+      if (dealsToScore.size > 0) {
+        const dealsSnapshot = await adminDb.collection('deals').where('clientId', 'in', Array.from(dealsToScore)).get();
+        totalDeals = dealsSnapshot.size;
+
+        for (const dealDoc of dealsSnapshot.docs) {
+          const repaymentsSnapshot = await adminDb.collection('repayments').where('dealId', '==', dealDoc.id).where('status', '==', 'Approved').get();
+          
+          repaymentsSnapshot.forEach(repaymentDoc => {
+            const repayment = repaymentDoc.data();
+            totalPayments++;
+            const dueDate = repayment.dueDate.toDate();
+            const lodgedAt = repayment.lodgedAt.toDate();
+            if (isEqual(lodgedAt, dueDate) || isBefore(lodgedAt, dueDate)) {
+              onTimePayments++;
+            }
+          });
+        }
+      }
+
+      // Calculate rating: 5-star scale based on on-time payment percentage.
+      // Starts at 5, degrades with poor performance. No deals = neutral 3.0.
+      let rating = 3.0;
+      if (totalPayments > 0) {
+        rating = (onTimePayments / totalPayments) * 5;
+      } else if (totalDeals > 0) {
+        // Has deals but no payments yet, neutral rating.
+        rating = 4.0;
+      }
+
+      await marketerDoc.ref.update({ rating: parseFloat(rating.toFixed(2)) });
+
+      marketersProcessed++;
+      details.push(`Updated rating for ${marketer.name} to ${rating.toFixed(2)}.`);
+    } catch (e) {
+      errors++;
+      details.push(`Error processing rating for ${marketer.name}: ${e instanceof Error ? e.message : 'Unknown'}`);
+      console.error(`Failed to process rating for marketer ${marketerId}:`, e);
+    }
+  }
+
+  return { processed: marketersProcessed, errors, details };
+}
+
+
 // --- Main Cron Job Handler ---
 export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization');
@@ -197,19 +266,23 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        const [zakatResult, recoveryResult] = await Promise.all([
+        const [zakatResult, recoveryResult, marketerResult] = await Promise.all([
             processZakat(),
-            processRecoveryTasks()
+            processRecoveryTasks(),
+            processMarketerRatings()
         ]);
 
         return NextResponse.json({
             success: true,
             message: 'Cron jobs executed successfully.',
             zakat: zakatResult,
-            recovery: recoveryResult
+            recovery: recoveryResult,
+            marketerRating: marketerResult,
         });
     } catch (error) {
         console.error('CRON JOB FAILED:', error);
         return NextResponse.json({ success: false, message: 'Cron job failed.', error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
     }
 }
+
+    
