@@ -3,7 +3,7 @@
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LayoutDashboard, Users, AlertTriangle, Activity, Briefcase, DollarSign, Zap, TrendingUp, HandCoins, ShieldOff, PiggyBank } from "lucide-react";
+import { LayoutDashboard, Users, AlertTriangle, Activity, Briefcase, DollarSign, Zap, TrendingUp, HandCoins, ShieldOff, PiggyBank, FilePlus, Wallet } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { useCollection } from "@/firebase/firestore/use-collection";
@@ -44,6 +44,36 @@ type Transaction = DocumentData & {
     dealName?: string;
 };
 
+type DealRequest = DocumentData & {
+    id: string;
+    dealName: string;
+    clientName: string;
+    clientId: string;
+    requestedAt: Timestamp;
+};
+
+type DepositRequest = DocumentData & {
+    id: string;
+    investorName: string;
+    investorId: string;
+    amount: number;
+    requestedAt: Timestamp;
+}
+type WithdrawalRequest = DocumentData & {
+    id: string;
+    investorName: string;
+    investorId: string;
+    amount: number;
+    requestedAt: Timestamp;
+}
+type ReinvestmentRequest = DocumentData & {
+    id: string;
+    investorName: string;
+    investorId: string;
+    amount: number;
+    requestedAt: Timestamp;
+}
+
 type TerminationRequest = DocumentData & {
     id: string;
     dealName: string;
@@ -71,11 +101,17 @@ const activityIcons: { [key: string]: React.ElementType } = {
     'Withdrawal': DollarSign,
     'Termination': ShieldOff,
     'FundBatchCreation': PiggyBank,
+    'DealRequest': FilePlus,
+    'DepositRequest': Wallet,
+    'WithdrawalRequest': Wallet,
+    'ReinvestmentRequest': TrendingUp,
     'default': Activity
 }
 
 export default function AdminDashboardPage() {
     const firestore = useFirestore();
+    const now = useMemo(() => new Date(), []);
+    const twoWeeksAgo = useMemo(() => subDays(now, 14), [now]);
 
     const fundBatchesQuery = useMemo(() => {
         if (!firestore) return null;
@@ -92,10 +128,51 @@ export default function AdminDashboardPage() {
       if (!firestore) return null;
       return query(
         collection(firestore, 'transactions'),
+        where('createdAt', '>=', Timestamp.fromDate(twoWeeksAgo)),
         orderBy('createdAt', 'desc'),
+        limit(15)
+      );
+    }, [firestore, twoWeeksAgo]);
+
+    const dealRequestsQuery = useMemo(() => {
+      if (!firestore) return null;
+      return query(
+        collection(firestore, 'dealRequests'),
+        where('requestedAt', '>=', Timestamp.fromDate(twoWeeksAgo)),
+        orderBy('requestedAt', 'desc'),
         limit(10)
       );
-    }, [firestore]);
+    }, [firestore, twoWeeksAgo]);
+
+    const depositRequestsQuery = useMemo(() => {
+      if (!firestore) return null;
+      return query(
+        collection(firestore, 'depositRequests'),
+        where('requestedAt', '>=', Timestamp.fromDate(twoWeeksAgo)),
+        orderBy('requestedAt', 'desc'),
+        limit(10)
+      );
+    }, [firestore, twoWeeksAgo]);
+    
+    const withdrawalRequestsQuery = useMemo(() => {
+      if (!firestore) return null;
+      return query(
+        collection(firestore, 'withdrawalRequests'),
+        where('requestedAt', '>=', Timestamp.fromDate(twoWeeksAgo)),
+        orderBy('requestedAt', 'desc'),
+        limit(10)
+      );
+    }, [firestore, twoWeeksAgo]);
+
+    const reinvestmentRequestsQuery = useMemo(() => {
+      if (!firestore) return null;
+      return query(
+        collection(firestore, 'reinvestmentRequests'),
+        where('requestedAt', '>=', Timestamp.fromDate(twoWeeksAgo)),
+        orderBy('requestedAt', 'desc'),
+        limit(10)
+      );
+    }, [firestore, twoWeeksAgo]);
     
     const terminationsQuery = useMemo(() => {
         if (!firestore) return null;
@@ -138,6 +215,10 @@ export default function AdminDashboardPage() {
     const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
     const { data: users, loading: usersLoading } = useCollection<User>(usersQuery);
     const { data: recentTransactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
+    const { data: dealRequests, loading: dealRequestsLoading } = useCollection<DealRequest>(dealRequestsQuery);
+    const { data: depositRequests, loading: depositRequestsLoading } = useCollection<DepositRequest>(depositRequestsQuery);
+    const { data: withdrawalRequests, loading: withdrawalRequestsLoading } = useCollection<WithdrawalRequest>(withdrawalRequestsQuery);
+    const { data: reinvestmentRequests, loading: reinvestmentRequestsLoading } = useCollection<ReinvestmentRequest>(reinvestmentRequestsQuery);
     const { data: recentTerminations, loading: terminationsLoading } = useCollection<TerminationRequest>(terminationsQuery);
     const { data: allRecentFundBatches, loading: recentBatchesLoading } = useCollection<FundBatch>(recentFundBatchesQuery);
     const { data: earningsTransactions, loading: earningsLoading } = useCollection<Transaction>(earningsQuery);
@@ -145,7 +226,7 @@ export default function AdminDashboardPage() {
     
     const allUsersResult = useCollection<User>(usersQuery); 
 
-    const isLoading = fundBatchesLoading || usersLoading || transactionsLoading || earningsLoading || overdueDealsLoading || allUsersResult.loading || terminationsLoading || recentBatchesLoading;
+    const isLoading = [fundBatchesLoading, usersLoading, transactionsLoading, dealRequestsLoading, depositRequestsLoading, withdrawalRequestsLoading, reinvestmentRequestsLoading, terminationsLoading, recentBatchesLoading, earningsLoading, overdueDealsLoading, allUsersResult.loading].some(Boolean);
 
     const chartData = useMemo(() => {
         const today = new Date();
@@ -186,18 +267,19 @@ export default function AdminDashboardPage() {
         const userMap = new Map(allUsersResult.data.map(u => [u.id, u.name]));
         
         const activities: MergedActivity[] = [];
+        
+        const formatAmount = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Math.abs(amount));
 
         recentTransactions?.forEach(tx => {
-            const amountFormatted = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Math.abs(tx.amount));
             let actionText = '';
             switch (tx.type) {
-                case 'Deposit': actionText = `deposited ${amountFormatted}.`; break;
-                case 'Withdrawal': actionText = `withdrew ${amountFormatted}.`; break;
-                case 'Investment': actionText = `invested ${amountFormatted} in "${tx.dealName}".`; break;
-                case 'ProfitDistribution': actionText = `earned ${amountFormatted} from "${tx.dealName}".`; break;
-                case 'Repayment': actionText = `repaid ${amountFormatted} for "${tx.dealName}".`; break;
-                case 'PlatformEarning': actionText = `earned ${amountFormatted} from "${tx.dealName}".`; break;
-                default: actionText = `${tx.type} of ${amountFormatted}`;
+                case 'Deposit': actionText = `deposited ${formatAmount(tx.amount)}.`; break;
+                case 'Withdrawal': actionText = `withdrew ${formatAmount(tx.amount)}.`; break;
+                case 'Investment': actionText = `invested ${formatAmount(tx.amount)} in "${tx.dealName}".`; break;
+                case 'ProfitDistribution': actionText = `earned ${formatAmount(tx.amount)} from "${tx.dealName}".`; break;
+                case 'Repayment': actionText = `repaid ${formatAmount(tx.amount)} for "${tx.dealName}".`; break;
+                case 'PlatformEarning': actionText = `earned ${formatAmount(tx.amount)} from "${tx.dealName}".`; break;
+                default: actionText = `${tx.type} of ${formatAmount(tx.amount)}`;
             }
             activities.push({
                 id: tx.id,
@@ -207,6 +289,54 @@ export default function AdminDashboardPage() {
                 createdAt: tx.createdAt.toDate(),
                 timestamp: formatDistanceToNow(tx.createdAt.toDate(), { addSuffix: true }),
                 type: tx.type,
+            });
+        });
+
+        dealRequests?.forEach(req => {
+            activities.push({
+                id: req.id,
+                user: req.clientName,
+                userId: req.clientId,
+                action: `requested a new deal: "${req.dealName}".`,
+                createdAt: req.requestedAt.toDate(),
+                timestamp: formatDistanceToNow(req.requestedAt.toDate(), { addSuffix: true }),
+                type: 'DealRequest',
+            });
+        });
+        
+        depositRequests?.forEach(req => {
+            activities.push({
+                id: req.id,
+                user: req.investorName,
+                userId: req.investorId,
+                action: `requested a deposit of ${formatAmount(req.amount)}.`,
+                createdAt: req.requestedAt.toDate(),
+                timestamp: formatDistanceToNow(req.requestedAt.toDate(), { addSuffix: true }),
+                type: 'DepositRequest',
+            });
+        });
+
+        withdrawalRequests?.forEach(req => {
+            activities.push({
+                id: req.id,
+                user: req.investorName,
+                userId: req.investorId,
+                action: `requested a withdrawal of ${formatAmount(req.amount)}.`,
+                createdAt: req.requestedAt.toDate(),
+                timestamp: formatDistanceToNow(req.requestedAt.toDate(), { addSuffix: true }),
+                type: 'WithdrawalRequest',
+            });
+        });
+
+        reinvestmentRequests?.forEach(req => {
+            activities.push({
+                id: req.id,
+                user: req.investorName,
+                userId: req.investorId,
+                action: `requested to reinvest ${formatAmount(req.amount)}.`,
+                createdAt: req.requestedAt.toDate(),
+                timestamp: formatDistanceToNow(req.requestedAt.toDate(), { addSuffix: true }),
+                type: 'ReinvestmentRequest',
             });
         });
 
@@ -224,12 +354,11 @@ export default function AdminDashboardPage() {
 
         allRecentFundBatches?.forEach(batch => {
             if (batch.details?.startsWith('Returned principal')) {
-                const amountFormatted = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount);
                 activities.push({
                     id: batch.id,
                     user: userMap.get(batch.sourceId) || (batch.sourceId === 'platform' ? 'Platform' : 'Unknown User'),
                     userId: batch.sourceId,
-                    action: `had ${amountFormatted} of principal returned to their investible balance.`,
+                    action: `had ${formatAmount(batch.amount)} of principal returned to their investible balance.`,
                     createdAt: batch.createdAt.toDate(),
                     timestamp: formatDistanceToNow(batch.createdAt.toDate(), { addSuffix: true }),
                     type: 'FundBatchCreation',
@@ -237,9 +366,18 @@ export default function AdminDashboardPage() {
             }
         });
 
-        return activities.sort((a,b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 7);
+        return activities.sort((a,b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 10);
 
-    }, [recentTransactions, allUsersResult.data, recentTerminations, allRecentFundBatches]);
+    }, [
+        recentTransactions,
+        dealRequests,
+        depositRequests,
+        withdrawalRequests,
+        reinvestmentRequests,
+        allUsersResult.data,
+        recentTerminations,
+        allRecentFundBatches,
+    ]);
 
   return (
     <div>
