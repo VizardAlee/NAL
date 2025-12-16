@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -38,6 +37,7 @@ import { usePathname } from 'next/navigation';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
 import { DigitalClock } from "@/components/digital-clock";
+import { MessagesLink } from "@/components/messages-link";
 
 type Notification = {
     id: string;
@@ -46,13 +46,6 @@ type Notification = {
     link: string;
     read: boolean;
     createdAt: Timestamp;
-};
-
-type Conversation = {
-  id: string;
-  participantIds: string[];
-  lastMessageSenderId: string;
-  readBy: string[];
 };
 
 // New hook to clear notifications when a page is visited
@@ -115,48 +108,6 @@ function AdminSkeleton() {
         </div>
       </div>
     );
-}
-
-function MessagesLink() {
-  const { user } = useUser();
-  const firestore = useFirestore();
-
-  const unreadQuery = useMemo(() => {
-    if (!firestore || !user?.uid) return null;
-    return query(
-      collection(firestore, 'conversations'),
-      where('participantIds', 'array-contains', user.uid)
-    );
-  }, [firestore, user]);
-
-  const { data: conversations } = useCollection<Conversation>(unreadQuery);
-
-  const hasUnread = useMemo(() => {
-    if (!conversations || !user) return false;
-    return conversations.some(convo => 
-      !convo.readBy.includes(user.uid)
-    );
-  }, [conversations, user]);
-
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="rounded-full relative"
-      asChild
-    >
-      <Link href="/admin/messages" title="Messages">
-        <MessageSquare className="h-5 w-5" />
-        {hasUnread && (
-          <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-          </span>
-        )}
-        <span className="sr-only">Messages</span>
-      </Link>
-    </Button>
-  );
 }
 
 function NotificationBell() {
@@ -350,7 +301,7 @@ export default function AdminLayout({
             </div>
             <DigitalClock />
             <ThemeToggle />
-            <MessagesLink />
+            <MessagesLink basePath="/admin" />
             <NotificationBell />
             <AccountMenu />
             </header>

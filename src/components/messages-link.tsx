@@ -16,7 +16,7 @@ type Conversation = {
     readBy: string[];
 };
 
-export function MessagesLink({ basePath }: { basePath: '/client' | '/investor' }) {
+export function MessagesLink({ basePath }: { basePath: '/client' | '/investor' | '/admin' }) {
     const { user, loading: userLoading } = useUser();
     const firestore = useFirestore();
 
@@ -33,43 +33,18 @@ export function MessagesLink({ basePath }: { basePath: '/client' | '/investor' }
     const hasUnread = useMemo(() => {
         if (!conversations || !user) return false;
         return conversations.some(convo => 
-          convo.lastMessageSenderId !== user.uid && 
           !convo.readBy.includes(user.uid)
         );
     }, [conversations, user]);
     
     const firstConversationId = conversations?.[0]?.id;
     const isLoading = userLoading || conversationsLoading;
+    
+    const href = basePath === '/admin' 
+        ? '/admin/messages' 
+        : (firstConversationId ? `${basePath}/messages/${firstConversationId}` : `${basePath}/dashboard`);
 
-    if (isLoading) {
-        return (
-            <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-full relative"
-                disabled
-            >
-                <MessageSquare className="h-5 w-5" />
-            </Button>
-        );
-    }
-    
-    if (!firstConversationId) {
-         return (
-            <Button
-                variant="ghost"
-                size="icon"
-                className="rounded-full relative"
-                disabled
-                title="No messages yet"
-            >
-                <MessageSquare className="h-5 w-5" />
-                <span className="sr-only">Messages</span>
-            </Button>
-        );
-    }
-    
-    const href = `${basePath}/messages/${firstConversationId}`;
+    const title = basePath === '/admin' ? 'All Messages' : (firstConversationId ? 'Messages' : 'No messages yet');
 
     return (
         <Button
@@ -77,8 +52,9 @@ export function MessagesLink({ basePath }: { basePath: '/client' | '/investor' }
             size="icon"
             className="rounded-full relative"
             asChild
+            disabled={isLoading || (basePath !== '/admin' && !firstConversationId)}
         >
-            <Link href={href} title="Messages">
+            <Link href={href} title={title}>
                 <MessageSquare className="h-5 w-5" />
                  {hasUnread && (
                     <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
