@@ -4,22 +4,20 @@
 import { PageHeader } from "@/components/page-header";
 import { Gavel, AlertTriangle, Users, Phone, Loader2, FileText, Send, MessageCircle } from "lucide-react";
 import { useCollection, useFirestore, useUser } from "@/firebase";
-import { collection, query, where, Timestamp, orderBy, type DocumentData, doc } from "firebase/firestore";
+import { collection, query, where, Timestamp, orderBy, type DocumentData } from "firebase/firestore";
 import { useMemo, useState, useTransition } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { format, formatDistanceToNow, subDays } from "date-fns";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
+import { format, formatDistanceToNow } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
-import { useRouter } from "next/navigation";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
+import { useFormStatus } from "react-dom";
+import { addRecoveryLogAction } from './actions';
 import { useToast } from "@/hooks/use-toast";
-import { addRecoveryLogAction } from '@/app/recovery/dashboard/actions';
 
 
 type RecoveryTask = DocumentData & {
@@ -39,14 +37,6 @@ type RecoveryTask = DocumentData & {
   updatedAt: Timestamp;
 };
 
-type User = DocumentData & {
-    id: string;
-    name: string;
-    email: string;
-    phoneNumber?: string;
-    role: 'Client' | 'Investor';
-};
-
 type Log = DocumentData & {
     id: string;
     text: string;
@@ -54,7 +44,6 @@ type Log = DocumentData & {
     authorName: string;
     createdAt: Timestamp;
 };
-
 
 function LogEntryForm({ taskId, authorId, authorName }: { taskId: string, authorId: string, authorName: string }) {
     const [text, setText] = useState('');
@@ -74,7 +63,7 @@ function LogEntryForm({ taskId, authorId, authorName }: { taskId: string, author
             });
             if(result.success) {
                 toast({ title: "Success", description: result.message });
-                setText('');
+                setText(''); // Clear textarea
             } else {
                 toast({ variant: 'destructive', title: "Error", description: result.message });
             }
@@ -112,7 +101,7 @@ function TaskDetailsSheet({ task, user }: { task: RecoveryTask, user: any }) {
             <SheetHeader>
                 <SheetTitle>{task.clientName}</SheetTitle>
                 <SheetDescription>
-                    Legal Escalation for: <span className="font-medium text-foreground">{task.dealName}</span>
+                    Recovery task for deal: <span className="font-medium text-foreground">{task.dealName}</span>
                 </SheetDescription>
             </SheetHeader>
             <div className="space-y-4 py-4 flex-1 overflow-y-auto pr-4">
@@ -163,169 +152,85 @@ function TaskDetailsSheet({ task, user }: { task: RecoveryTask, user: any }) {
     )
 }
 
-export default function LegalDashboardPage() {
+export default function RecoveryDashboardPage() {
     const firestore = useFirestore();
     const { user, loading: userLoading } = useUser();
     const isMobile = useIsMobile();
-    const router = useRouter();
-    const [searchTerm, setSearchTerm] = useState('');
     const [selectedTask, setSelectedTask] = useState<RecoveryTask | null>(null);
 
-    const legalTasksQuery = useMemo(() => {
+    const recoveryTasksQuery = useMemo(() => {
         if (!firestore) return null;
         return query(
             collection(firestore, 'recoveryTasks'),
-            where('status', '==', 'Escalated_Legal'),
+            where('status', '==', 'Due_Recovery'),
             orderBy('dueDate', 'asc')
         );
     }, [firestore]);
+
+    const { data: recoveryTasks, loading: tasksLoading } = useCollection<RecoveryTask>(recoveryTasksQuery);
     
-    const usersQuery = useMemo(() => {
-        if (!firestore) return null;
-        return query(collection(firestore, 'users'), where('role', 'in', ['Client', 'Investor']));
-    }, [firestore]);
-
-    const { data: legalTasks, loading: tasksLoading } = useCollection<RecoveryTask>(legalTasksQuery);
-    const { data: users, loading: usersLoadingDB } = useCollection<User>(usersQuery);
-
-    const isLoading = tasksLoading || usersLoadingDB || userLoading;
-
-    const filteredUsers = useMemo(() => {
-        if (!users) return [];
-        return users.filter(user => 
-            user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            user.email.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [users, searchTerm]);
-
-    const handleUserClick = (userId: string) => {
-        router.push(`/admin/users/${userId}`);
-    };
+    const isLoading = tasksLoading || userLoading;
 
     return (
         <Sheet open={!!selectedTask} onOpenChange={(isOpen) => !isOpen && setSelectedTask(null)}>
             <PageHeader
-                title="Legal Dashboard"
-                description="Access user information and monitor escalated accounts."
+                title="Recovery Dashboard"
+                description="Manage clients with upcoming payments."
                 icon={Gavel}
             />
 
-            <Card className="mb-8 border-destructive">
+            <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-destructive"><AlertTriangle /> Red Alert: Escalated Accounts</CardTitle>
-                    <CardDescription>Clients with payments that are more than 7 days past due and require legal action.</CardDescription>
+                    <CardTitle className="flex items-center gap-2">Upcoming Payments</CardTitle>
+                    <CardDescription>Clients with payments due in the next 3 days.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {isLoading ? <Skeleton className="h-24 w-full" /> : 
-                     !legalTasks || legalTasks.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No accounts have been escalated for legal action.</p> :
+                    {isLoading ? <Skeleton className="h-48 w-full" /> : 
+                     !recoveryTasks || recoveryTasks.length === 0 ? <p className="text-center text-sm text-muted-foreground py-10">No upcoming recovery tasks.</p> :
                      isMobile ? (
-                        <div className="space-y-3">
-                            {legalTasks.map(task => (
+                         <div className="space-y-3">
+                             {recoveryTasks.map(task => (
                                 <SheetTrigger key={task.id} asChild>
                                     <Card onClick={() => setSelectedTask(task)}>
                                         <CardContent className="p-4 space-y-2">
                                             <p className="font-semibold">{task.clientName}</p>
-                                            <p className="text-sm text-destructive font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</p>
-                                            <p className="text-xs text-muted-foreground">Due since: {format(task.dueDate.toDate(), 'PPP')}</p>
+                                            <p className="text-sm text-primary font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</p>
+                                            <p className="text-xs text-muted-foreground">Due: {format(task.dueDate.toDate(), 'PPP')}</p>
                                             {task.lastLog && <p className="text-xs text-muted-foreground italic truncate pt-1 border-t">Last Log: {task.lastLog}</p>}
                                         </CardContent>
                                     </Card>
                                 </SheetTrigger>
-                            ))}
-                        </div>
-                     ) :
-                     (
+                             ))}
+                         </div>
+                     ) : (
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Client</TableHead>
                                     <TableHead>Deal</TableHead>
-                                    <TableHead>Due Since</TableHead>
+                                    <TableHead>Due Date</TableHead>
                                     <TableHead>Last Log</TableHead>
-                                    <TableHead className="text-right">Total Overdue</TableHead>
+                                    <TableHead className="text-right">Amount Due</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {legalTasks.map(task => (
-                                    <SheetTrigger key={task.id} asChild>
-                                        <TableRow onClick={() => setSelectedTask(task)} className="cursor-pointer hover:bg-muted/50">
+                                {recoveryTasks.map(task => (
+                                     <SheetTrigger key={task.id} asChild>
+                                        <TableRow onClick={() => setSelectedTask(task)} className="cursor-pointer">
                                             <TableCell className="font-medium flex items-center gap-2">
                                                 <MessageCircle className="h-4 w-4 text-muted-foreground" />
                                                 {task.clientName}
                                             </TableCell>
                                             <TableCell>{task.dealName}</TableCell>
-                                            <TableCell>{formatDistanceToNow(task.dueDate.toDate(), { addSuffix: true })}</TableCell>
+                                            <TableCell>{format(task.dueDate.toDate(), 'PPP')}</TableCell>
                                             <TableCell className="text-muted-foreground italic max-w-xs truncate">{task.lastLog || 'No logs yet'}</TableCell>
-                                            <TableCell className="text-right font-bold text-destructive">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</TableCell>
+                                            <TableCell className="text-right font-bold text-primary">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</TableCell>
                                         </TableRow>
                                     </SheetTrigger>
                                 ))}
                             </TableBody>
                         </Table>
                      )}
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Users /> User Directory</CardTitle>
-                    <CardDescription>A directory of all clients and investors on the platform.</CardDescription>
-                    <div className="pt-2">
-                        <Input 
-                            placeholder="Search by name or email..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    {isLoading ? <Skeleton className="h-48 w-full" /> :
-                     isMobile ? (
-                        <div className="space-y-3">
-                            {filteredUsers.map(user => (
-                                <Card key={user.id} onClick={() => handleUserClick(user.id)} className="cursor-pointer hover:bg-muted/50">
-                                    <CardContent className="p-4 space-y-2">
-                                        <div className="flex items-center gap-4">
-                                            <Avatar>
-                                                <AvatarImage src={`https://picsum.photos/seed/${user.id}/128/128`} />
-                                                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex-1">
-                                                <p className="font-medium">{user.name}</p>
-                                                <Badge variant="outline">{user.role}</Badge>
-                                            </div>
-                                        </div>
-                                        <div className="text-sm text-muted-foreground pt-2 border-t mt-2 space-y-1">
-                                            <p>{user.email}</p>
-                                            {user.phoneNumber && <p className="flex items-center gap-2"><Phone className="h-4 w-4" />{user.phoneNumber}</p>}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                     ) : (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead>Email</TableHead>
-                                    <TableHead>Phone Number</TableHead>
-                                    <TableHead>Role</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filteredUsers.map(user => (
-                                    <TableRow key={user.id} onClick={() => handleUserClick(user.id)} className="cursor-pointer hover:bg-muted/50">
-                                        <TableCell className="font-medium">{user.name}</TableCell>
-                                        <TableCell>{user.email}</TableCell>
-                                        <TableCell>{user.phoneNumber || 'N/A'}</TableCell>
-                                        <TableCell><Badge variant="outline">{user.role}</Badge></TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                     )}
-                     {filteredUsers.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">No users found.</p>}
                 </CardContent>
             </Card>
             {selectedTask && user && <TaskDetailsSheet task={selectedTask} user={user} />}

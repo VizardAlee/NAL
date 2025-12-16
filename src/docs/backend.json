@@ -583,11 +583,24 @@
         "repaymentId": { "type": "string" },
         "amountDue": { "type": "number" },
         "dueDate": { "type": "string", "format": "date-time" },
-        "status": { "type": "string", "enum": ["Due_Recovery", "Escalated_Legal"] },
+        "status": { "type": "string", "enum": ["Due_Recovery", "Escalated_Legal", "Resolved"] },
+        "lastLog": { "type": "string", "description": "A snippet of the most recent log entry for quick view."},
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["clientId", "dealId", "repaymentId", "amountDue", "dueDate", "status", "createdAt", "updatedAt"]
+    },
+    "log": {
+      "title": "Log Entry",
+      "description": "A log entry or note for a recovery task.",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string", "description": "The content of the log entry." },
+        "authorId": { "type": "string", "description": "The ID of the user who created the log." },
+        "authorName": { "type": "string", "description": "The name of the user who created the log." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["text", "authorId", "authorName", "createdAt"]
     }
   },
   "auth": {
@@ -743,8 +756,12 @@
         "$ref": "#/entities/recoveryTask"
       },
       "description": "Stores automated tasks for the Recovery and Legal teams regarding upcoming or overdue payments."
+    },
+     "/recoveryTasks/{taskId}/logs/{logId}": {
+      "schema": {
+        "$ref": "#/entities/log"
+      },
+      "description": "Stores log entries for a specific recovery task."
     }
   }
 }
-
-    

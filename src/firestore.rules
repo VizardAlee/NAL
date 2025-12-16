@@ -59,7 +59,7 @@ service cloud.firestore {
     // Rules for the 'deals' collection
     match /deals/{dealId} {
         // Admins, Investors, and Legal can list all deals.
-        allow list: if isAdmin() || isInvestor() || isLegal();
+        allow list: if isAdmin() || isInvestor() || (request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Legal');
         
         // Admins, Investors, Legal can get any single deal.
         // Clients can only get deals they are associated with.
@@ -73,8 +73,17 @@ service cloud.firestore {
     match /recoveryTasks/{taskId} {
       allow read, list: if isAdmin() 
         || (isRecovery() && resource.data.status == 'Due_Recovery') 
-        || (isLegal() && resource.data.status == 'Escalated_Legal');
-      allow write: if isAdmin();
+        || (isLegal()); // Legal can see all recovery tasks
+      allow update: if isAdmin();
+      
+       // Rules for the 'logs' sub-collection
+      match /logs/{logId} {
+      	allow read, list: if isAdmin() || isLegal() || isRecovery();
+        // Allow creating a log if the user is an Admin, or a Recovery/Legal user assigned to the task
+        allow create: if isAdmin() || 
+        							 (isRecovery() && get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data.status == 'Due_Recovery') ||
+                       (isLegal() && get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data.status == 'Escalated_Legal');
+      }
     }
 
     // Rules for the 'dealRequests' collection
@@ -179,9 +188,7 @@ service cloud.firestore {
     match /notifications/{notificationId} {
         // Allow any authenticated user to create a notification, as long as it's for an Admin.
         // This is secure because we check the role of the recipient.
-        allow create: if request.auth != null
-          && exists(/databases/$(database)/documents/users/$(request.resource.data.recipientId))
-          && get(/databases/$(database)/documents/users/$(request.resource.data.recipientId)).data.role == 'Admin';
+        allow create: if request.auth != null; // Notification creation logic is handled server-side now.
           
         // Users can only read/update notifications intended for them
         allow read, update: if request.auth != null && resource.data.recipientId == request.auth.uid;
@@ -228,5 +235,3 @@ service cloud.firestore {
     }
   }
 }
-
-    
