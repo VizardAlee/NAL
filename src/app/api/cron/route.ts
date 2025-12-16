@@ -2,17 +2,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/firebase/admin-app';
 import { FieldValue } from 'firebase-admin/firestore';
-import { add, differenceInDays } from 'date-fns';
+import { addDays, differenceInDays, startOfDay } from 'date-fns';
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
 // Helper function to get the Nisab value
 async function getNisab(): Promise<number> {
     const settingsDoc = await adminDb.doc('platformSettings/zakat').get();
-    if (settingsDoc.exists) {
-        return settingsDoc.data()?.nisab || 0;
-    }
-    return 0; // Default to 0 if not set
+    return settingsDoc.data()?.nisab || 0;
 }
 
 // --- Zakat Automation Logic ---
@@ -20,11 +17,11 @@ async function processZakat() {
     const nisab = await getNisab();
     if (nisab <= 0) {
         console.log('Zakat processing skipped: Nisab not set.');
-        return { processed: 0, skipped: 0, errors: 0, details: [] };
+        return { processed: 0, skipped: 0, errors: 0, details: ['Zakat processing skipped: Nisab not set or is zero.'] };
     }
 
     const usersSnapshot = await adminDb.collection('users').where('role', '==', 'Investor').get();
-    let processedCount = 0, errorCount = 0;
+    let processedCount = 0, errorCount = 0, skippedCount = 0;
     const details = [];
 
     for (const userDoc of usersSnapshot.docs) {
@@ -32,7 +29,6 @@ async function processZakat() {
         const userId = userDoc.id;
 
         try {
-            // Determine the base date for Zakat calculation (1 year anniversary)
             const lastPayment = user.lastZakatPaymentDate?.toDate();
             const firstDepositSnapshot = await adminDb.collection('transactions')
                 .where('userId', '==', userId)
@@ -45,41 +41,32 @@ async function processZakat() {
             const baseDate = lastPayment || firstDepositDate;
 
             if (!baseDate || differenceInDays(new Date(), baseDate) < 365) {
+                skippedCount++;
                 continue; // Not yet a year
             }
 
-            // Calculate portfolio value
             const transactionsSnapshot = await adminDb.collection('transactions').where('userId', '==', userId).get();
-            const portfolioValue = transactionsSnapshot.docs.reduce((sum, doc) => {
-                const tx = doc.data();
-                // We only sum positive values (deposits, profits) and subtract negative ones (withdrawals, investments, previous zakat)
-                return sum + tx.amount;
-            }, 0);
+            const portfolioValue = transactionsSnapshot.docs.reduce((sum, doc) => sum + doc.data().amount, 0);
 
             if (portfolioValue < nisab) {
+                skippedCount++;
                 continue; // Below Nisab threshold
             }
 
             const zakatAmount = portfolioValue * 0.025;
             
-            // Check investible balance
             const batchesSnapshot = await adminDb.collection('fundBatches').where('sourceId', '==', userId).get();
             const investibleBalance = batchesSnapshot.docs.reduce((sum, doc) => sum + doc.data().remainingAmount, 0);
 
             if (investibleBalance < zakatAmount) {
                 details.push(`Skipped Zakat for ${user.name} (${userId}): Insufficient investible balance.`);
+                skippedCount++;
                 continue;
             }
 
-            // --- Perform Zakat Transaction ---
             await adminDb.runTransaction(async (transaction) => {
                 let amountToDeduct = zakatAmount;
-
-                const fundBatchesQuery = adminDb.collection('fundBatches')
-                    .where('sourceId', '==', userId)
-                    .where('remainingAmount', '>', 0)
-                    .orderBy('createdAt', 'asc');
-                
+                const fundBatchesQuery = adminDb.collection('fundBatches').where('sourceId', '==', userId).where('remainingAmount', '>', 0).orderBy('createdAt', 'asc');
                 const userBatches = await transaction.get(fundBatchesQuery);
                 
                 for (const batchDoc of userBatches.docs) {
@@ -113,83 +100,113 @@ async function processZakat() {
         }
     }
 
-    return { processed: processedCount, skipped: usersSnapshot.size - processedCount - errorCount, errors: errorCount, details };
+    return { processed: processedCount, skipped: skippedCount, errors: errorCount, details };
 }
 
-// --- Late Penalty Automation Logic ---
-async function processLatePenalties() {
-    let processedCount = 0, errorCount = 0;
+// --- Recovery & Legal Task Automation Logic ---
+async function processRecoveryTasks() {
+    let tasksCreated = 0, tasksEscalated = 0, clientNotificationsSent = 0, errors = 0;
     const details = [];
 
-    const thirtyDaysAgo = add(new Date(), { days: -30 });
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const activeDealsSnapshot = await adminDb.collection('deals').where('status', '==', 'Active').get();
 
-    const overdueRepaymentsQuery = adminDb.collection('repayments')
-        .where('status', '==', 'Pending')
-        .where('dueDate', '<', thirtyDaysAgo);
+    for (const dealDoc of activeDealsSnapshot.docs) {
+        const deal = dealDoc.data();
+        const dealId = dealDoc.id;
         
-    const overdueSnapshot = await overdueRepaymentsQuery.get();
+        const approvedRepaymentsSnapshot = await adminDb.collection('repayments').where('dealId', '==', dealId).where('status', '==', 'Approved').get();
+        const paidInstallmentNumbers = new Set(approvedRepaymentsSnapshot.docs.map(doc => doc.data().installmentNumber));
 
-    for (const repaymentDoc of overdueSnapshot.docs) {
-        const repayment = repaymentDoc.data();
-        try {
-            // Check if a penalty for this installment for today has already been applied.
-            const penaltyIdentifier = `Late fee for repayment ${repayment.installmentNumber} on deal ${repayment.dealId}`;
-            
-            const penaltyCheckQuery = adminDb.collection('transactions')
-                .where('type', '==', 'Penalty')
-                .where('details', '==', penaltyIdentifier)
-                .where('createdAt', '>=', today);
-            
-            const penaltyTodaySnapshot = await penaltyCheckQuery.get();
+        const schedule = require('@/lib/amortization').generateAmortizationSchedule(deal);
 
-            if (!penaltyTodaySnapshot.empty) {
-                details.push(`Skipped penalty for repayment installment ${repayment.installmentNumber}: Already applied today.`);
-                continue;
+        for (const installment of schedule) {
+            if (paidInstallmentNumbers.has(installment.installment)) continue;
+
+            const daysUntilDue = differenceInDays(installment.dueDate, new Date());
+            const daysPastDue = -daysUntilDue;
+
+            const taskQuery = adminDb.collection('recoveryTasks').where('repaymentId', '==', `${dealId}_${installment.installment}`).limit(1);
+            const existingTaskSnapshot = await taskQuery.get();
+            const taskExists = !existingTaskSnapshot.empty;
+            const taskDoc = taskExists ? existingTaskSnapshot.docs[0] : null;
+
+            // 1. Create Recovery Task (3 days before due)
+            if (daysUntilDue === 3 && !taskExists) {
+                try {
+                    const clientDoc = await adminDb.collection('users').doc(deal.clientId).get();
+                    if (!clientDoc.exists) continue;
+                    const client = clientDoc.data()!;
+
+                    await adminDb.collection('recoveryTasks').add({
+                        clientId: deal.clientId,
+                        clientName: client.name,
+                        clientEmail: client.email,
+                        clientPhoneNumber: client.phoneNumber || 'N/A',
+                        dealId: dealId,
+                        dealName: deal.dealName,
+                        repaymentId: `${dealId}_${installment.installment}`,
+                        amountDue: installment.payment,
+                        dueDate: Timestamp.fromDate(installment.dueDate),
+                        status: 'Due_Recovery',
+                        createdAt: FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+
+                    // Send notification to client
+                    const notify = require('@/app/common/actions/notification-actions').notifyUser;
+                    await notify(
+                        deal.clientId,
+                        'Upcoming Payment Reminder',
+                        `Your payment of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(installment.payment)} for "${deal.dealName}" is due in 3 days.`,
+                        '/client/dashboard'
+                    );
+
+                    tasksCreated++;
+                    clientNotificationsSent++;
+                    details.push(`Created recovery task & notified client for deal ${dealId}, installment ${installment.installment}.`);
+                } catch (e) {
+                    errors++;
+                    details.push(`Error creating task for deal ${dealId}, installment ${installment.installment}: ${e instanceof Error ? e.message : 'Unknown'}`);
+                }
             }
 
-            const penaltyAmount = repayment.amount * 0.01;
-
-            const penaltyTxRef = adminDb.collection('transactions').doc();
-            await penaltyTxRef.set({
-                userId: repayment.clientId, // Associate penalty with the client
-                dealId: repayment.dealId,
-                type: 'Penalty',
-                amount: penaltyAmount, // Positive amount to be tracked, client owes this
-                createdAt: FieldValue.serverTimestamp(),
-                details: penaltyIdentifier,
-            });
-
-            details.push(`Applied 1% penalty of ${penaltyAmount} for overdue installment ${repayment.installmentNumber} on deal ${repayment.dealId}.`);
-            processedCount++;
-
-        } catch (error) {
-            console.error(`Failed to apply penalty for repayment ${repaymentDoc.id}:`, error);
-            errorCount++;
-            details.push(`Error applying penalty for repayment ${repaymentDoc.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            // 2. Escalate to Legal (7 days past due)
+            if (daysPastDue >= 7 && taskDoc && taskDoc.data().status === 'Due_Recovery') {
+                 try {
+                    await taskDoc.ref.update({
+                        status: 'Escalated_Legal',
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+                    tasksEscalated++;
+                    details.push(`Escalated task for deal ${dealId}, installment ${installment.installment} to Legal.`);
+                 } catch (e) {
+                    errors++;
+                    details.push(`Error escalating task for deal ${dealId}, installment ${installment.installment}: ${e instanceof Error ? e.message : 'Unknown'}`);
+                 }
+            }
         }
     }
-    return { processed: processedCount, errors: errorCount, details };
+    return { tasksCreated, tasksEscalated, clientNotificationsSent, errors, details };
 }
 
-
+// --- Main Cron Job Handler ---
 export async function GET(request: NextRequest) {
     const authHeader = request.headers.get('authorization');
-
     if (!CRON_SECRET || authHeader !== `Bearer ${CRON_SECRET}`) {
         return new Response('Unauthorized', { status: 401 });
     }
 
     try {
-        const zakatResult = await processZakat();
-        const penaltyResult = await processLatePenalties();
+        const [zakatResult, recoveryResult] = await Promise.all([
+            processZakat(),
+            processRecoveryTasks()
+        ]);
 
         return NextResponse.json({
             success: true,
-            message: 'Cron job executed successfully.',
+            message: 'Cron jobs executed successfully.',
             zakat: zakatResult,
-            penalties: penaltyResult,
+            recovery: recoveryResult
         });
     } catch (error) {
         console.error('CRON JOB FAILED:', error);
