@@ -58,6 +58,7 @@ export default function MarketerDashboardPage() {
                 setLoading(false);
             });
         } else if (!userLoading) {
+            // This case handles when the user is loaded but has no referral code
             setLoading(false);
         }
     }, [user, userLoading, toast]);

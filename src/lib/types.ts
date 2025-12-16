@@ -1,6 +1,6 @@
 
-
 import { type DocumentData, type Timestamp } from 'firebase/firestore';
+import { type User as AuthUser } from 'firebase/auth';
 
 export type Deal = DocumentData & {
   id: string;
@@ -29,11 +29,14 @@ export type Investment = DocumentData & {
   createdAt: Timestamp;
 };
 
-export type User = DocumentData & {
+// This combines the Firebase Auth user with our Firestore user data
+export type User = AuthUser & DocumentData & {
     id: string;
     name: string;
     email: string;
-    role: 'Admin' | 'Investor' | 'Client';
+    role: 'Admin' | 'Investor' | 'Client' | 'Legal' | 'Recovery' | 'Marketer';
+    referralCode?: string;
+    rating?: number;
 };
 
 export type Repayment = DocumentData & {
@@ -45,7 +48,3 @@ export type Repayment = DocumentData & {
   dueDate: Timestamp;
   installmentNumber: number;
 };
-
-    
-
-    
