@@ -585,6 +585,8 @@
         "dueDate": { "type": "string", "format": "date-time" },
         "status": { "type": "string", "enum": ["Due_Recovery", "Escalated_Legal", "Resolved"] },
         "lastLog": { "type": "string", "description": "A snippet of the most recent log entry for quick view."},
+        "assigneeId": { "type": "string", "description": "The ID of the team member this task is assigned to."},
+        "assigneeName": { "type": "string", "description": "The name of the assigned team member."},
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },

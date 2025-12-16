@@ -59,7 +59,7 @@ service cloud.firestore {
     // Rules for the 'deals' collection
     match /deals/{dealId} {
         // Admins, Investors, and Legal can list all deals.
-        allow list: if isAdmin() || isInvestor() || (request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Legal');
+        allow list: if isAdmin() || isInvestor() || isLegal();
         
         // Admins, Investors, Legal can get any single deal.
         // Clients can only get deals they are associated with.
@@ -71,15 +71,22 @@ service cloud.firestore {
     
     // Rules for the 'recoveryTasks' collection
     match /recoveryTasks/{taskId} {
-      allow read, list: if isAdmin() 
-        || (isRecovery() && resource.data.status == 'Due_Recovery') 
-        || (isLegal()); // Legal can see all recovery tasks
+      // Recovery can see tasks assigned to them or unassigned. Legal and Admin can see all.
+      allow list: if isAdmin() || isLegal() || 
+                    (isRecovery() && resource.data.status == 'Due_Recovery' && 
+                      (!('assigneeId' in resource.data) || resource.data.assigneeId == request.auth.uid));
+      // Read access mirrors list access for individual documents.
+      allow read: if isAdmin() || isLegal() || 
+                    (isRecovery() && resource.data.status == 'Due_Recovery' && 
+                      (!('assigneeId' in resource.data) || resource.data.assigneeId == request.auth.uid));
+
+      // Admins can update tasks (e.g., manually resolve). Recovery/Legal can update via the server action.
       allow update: if isAdmin();
       
        // Rules for the 'logs' sub-collection
       match /logs/{logId} {
       	allow read, list: if isAdmin() || isLegal() || isRecovery();
-        // Allow creating a log if the user is an Admin, or a Recovery/Legal user assigned to the task
+        // Allow creating a log if the user is an Admin, or a Recovery/Legal user for the correct task status.
         allow create: if isAdmin() || 
         							 (isRecovery() && get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data.status == 'Due_Recovery') ||
                        (isLegal() && get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data.status == 'Escalated_Legal');

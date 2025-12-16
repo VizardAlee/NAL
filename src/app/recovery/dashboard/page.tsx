@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Gavel, AlertTriangle, Users, Phone, Loader2, FileText, Send, MessageCircle } from "lucide-react";
+import { Gavel, AlertTriangle, Users, Phone, Loader2, FileText, Send, MessageCircle, UserCheck } from "lucide-react";
 import { useCollection, useFirestore, useUser } from "@/firebase";
 import { collection, query, where, Timestamp, orderBy, type DocumentData } from "firebase/firestore";
 import { useMemo, useState, useTransition } from "react";
@@ -15,7 +15,6 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
-import { useFormStatus } from "react-dom";
 import { addRecoveryLogAction } from './actions';
 import { useToast } from "@/hooks/use-toast";
 
@@ -35,6 +34,8 @@ type RecoveryTask = DocumentData & {
   lastLog?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  assigneeId?: string;
+  assigneeName?: string;
 };
 
 type Log = DocumentData & {
@@ -105,6 +106,16 @@ function TaskDetailsSheet({ task, user }: { task: RecoveryTask, user: any }) {
                 </SheetDescription>
             </SheetHeader>
             <div className="space-y-4 py-4 flex-1 overflow-y-auto pr-4">
+                 {task.assigneeName && (
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base flex items-center gap-2"><UserCheck /> Assigned To</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                             <p className="font-medium">{task.assigneeName}</p>
+                        </CardContent>
+                    </Card>
+                )}
                 <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-base flex items-center gap-2"><Users /> Client Details</CardTitle>
@@ -196,40 +207,46 @@ export default function RecoveryDashboardPage() {
                                             <p className="font-semibold">{task.clientName}</p>
                                             <p className="text-sm text-primary font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</p>
                                             <p className="text-xs text-muted-foreground">Due: {format(task.dueDate.toDate(), 'PPP')}</p>
-                                            {task.lastLog && <p className="text-xs text-muted-foreground italic truncate pt-1 border-t">Last Log: {task.lastLog}</p>}
+                                            {task.assigneeName ? (
+                                                <p className="text-xs text-muted-foreground italic pt-1 border-t">Assigned to: {task.assigneeName}</p>
+                                            ) : task.lastLog && (
+                                                <p className="text-xs text-muted-foreground italic truncate pt-1 border-t">Last Log: {task.lastLog}</p>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </SheetTrigger>
                              ))}
                          </div>
                      ) : (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Client</TableHead>
-                                    <TableHead>Deal</TableHead>
-                                    <TableHead>Due Date</TableHead>
-                                    <TableHead>Last Log</TableHead>
-                                    <TableHead className="text-right">Amount Due</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {recoveryTasks.map(task => (
-                                     <SheetTrigger key={task.id} asChild>
-                                        <TableRow onClick={() => setSelectedTask(task)} className="cursor-pointer">
-                                            <TableCell className="font-medium flex items-center gap-2">
-                                                <MessageCircle className="h-4 w-4 text-muted-foreground" />
-                                                {task.clientName}
-                                            </TableCell>
-                                            <TableCell>{task.dealName}</TableCell>
-                                            <TableCell>{format(task.dueDate.toDate(), 'PPP')}</TableCell>
-                                            <TableCell className="text-muted-foreground italic max-w-xs truncate">{task.lastLog || 'No logs yet'}</TableCell>
-                                            <TableCell className="text-right font-bold text-primary">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</TableCell>
-                                        </TableRow>
-                                    </SheetTrigger>
-                                ))}
-                            </TableBody>
-                        </Table>
+                        <div className="relative overflow-auto">
+                            <table className="w-full caption-bottom text-sm">
+                                <thead className="[&_tr]:border-b">
+                                    <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Client</th>
+                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Deal</th>
+                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Due Date</th>
+                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Assigned To</th>
+                                        <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">Amount Due</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="[&_tr:last-child]:border-0">
+                                    {recoveryTasks.map(task => (
+                                        <SheetTrigger key={task.id} asChild>
+                                            <tr onClick={() => setSelectedTask(task)} className="cursor-pointer border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+                                                <td className="p-4 align-middle font-medium flex items-center gap-2">
+                                                    <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                                                    {task.clientName}
+                                                </td>
+                                                <td className="p-4 align-middle">{task.dealName}</td>
+                                                <td className="p-4 align-middle">{format(task.dueDate.toDate(), 'PPP')}</td>
+                                                <td className="p-4 align-middle text-muted-foreground">{task.assigneeName || 'Unassigned'}</td>
+                                                <td className="p-4 align-middle text-right font-bold text-primary">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</td>
+                                            </tr>
+                                        </SheetTrigger>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                      )}
                 </CardContent>
             </Card>

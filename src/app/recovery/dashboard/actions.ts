@@ -23,8 +23,12 @@ export async function addRecoveryLogAction(input: z.infer<typeof addLogSchema>) 
 
   try {
     const taskRef = adminDb.collection('recoveryTasks').doc(taskId);
-    const logRef = taskRef.collection('logs').doc();
+    const taskDoc = await taskRef.get();
+    if (!taskDoc.exists) {
+        throw new Error("Recovery task not found.");
+    }
 
+    const logRef = taskRef.collection('logs').doc();
     const batch = adminDb.batch();
 
     // 1. Create the new log entry
@@ -35,11 +39,19 @@ export async function addRecoveryLogAction(input: z.infer<typeof addLogSchema>) 
         createdAt: FieldValue.serverTimestamp(),
     });
     
-    // 2. Update the parent task with the latest log info
-    batch.update(taskRef, {
+    // 2. Update the parent task
+    const taskUpdateData: { lastLog: string; updatedAt: FirebaseFirestore.FieldValue, assigneeId?: string, assigneeName?: string } = {
         lastLog: logText,
         updatedAt: FieldValue.serverTimestamp(),
-    });
+    };
+
+    // If the task is unassigned, assign it to the current user
+    if (!taskDoc.data()?.assigneeId) {
+        taskUpdateData.assigneeId = authorId;
+        taskUpdateData.assigneeName = authorName;
+    }
+
+    batch.update(taskRef, taskUpdateData);
 
     await batch.commit();
 
