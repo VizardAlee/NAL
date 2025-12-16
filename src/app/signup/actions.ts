@@ -11,7 +11,7 @@ const signUpSchema = z.object({
   email: z.string().email("Please enter a valid email address."),
   password: z.string().min(8, "Password must be at least 8 characters."),
   phoneNumber: z.string().optional(),
-  role: z.enum(['Investor', 'Client'], { required_error: 'Role is required.' }),
+  role: z.enum(['Investor', 'Client', 'Marketer'], { required_error: 'Role is required.' }),
   referralCode: z.string().optional(),
 });
 
@@ -20,6 +20,13 @@ type ActionResponse = {
     message: string;
     redirectUrl?: string;
 };
+
+// Helper function to generate a unique referral code
+function generateReferralCode(name: string): string {
+    const namePart = name.split(' ')[0].toUpperCase().substring(0, 4).padEnd(4, 'X');
+    const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `MARK-${namePart}-${randomPart}`;
+}
 
 export async function signUpWithEmailAction(
     data: z.infer<typeof signUpSchema>
@@ -62,6 +69,13 @@ export async function signUpWithEmailAction(
         if (referralCode) {
             userData.referredByCode = referralCode;
         }
+        
+        // 4. Generate and add referral code if the user is a Marketer
+        if (role === 'Marketer') {
+            userData.referralCode = generateReferralCode(name);
+            userData.rating = 0; // Initialize rating
+        }
+
 
         await adminDb.collection('users').doc(userRecord.uid).set(userData);
 
@@ -72,6 +86,8 @@ export async function signUpWithEmailAction(
             redirectUrl = '/investor/dashboard';
         } else if (role === 'Client') {
             redirectUrl = '/client/dashboard';
+        } else if (role === 'Marketer') {
+            redirectUrl = '/marketer/dashboard';
         }
 
         return {

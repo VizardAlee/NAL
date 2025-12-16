@@ -37,7 +37,7 @@ const formSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address.' }),
   password: z.string().min(8, { message: 'Password must be at least 8 characters.' }),
   phoneNumber: z.string().optional(),
-  role: z.enum(['Investor', 'Client'], { required_error: 'Please select a role.' }),
+  role: z.enum(['Investor', 'Client', 'Marketer'], { required_error: 'Please select a role.' }),
   referralCode: z.string().optional(),
 });
 
@@ -87,7 +87,7 @@ export default function SignupPage() {
           <CardHeader>
             <CardTitle className="font-headline text-2xl">Create an Account</CardTitle>
             <CardDescription>
-              Join the platform as an Investor or a Client.
+              Join the platform as an Investor, Client, or Marketer.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -163,6 +163,7 @@ export default function SignupPage() {
                                     <SelectContent>
                                     <SelectItem value="Investor">Investor</SelectItem>
                                     <SelectItem value="Client">Client</SelectItem>
+                                    <SelectItem value="Marketer">Marketer</SelectItem>
                                     </SelectContent>
                                 </Select>
                                 <FormMessage />

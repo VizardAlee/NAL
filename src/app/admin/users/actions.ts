@@ -10,8 +10,15 @@ const createUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   phoneNumber: z.string().optional(),
-  role: z.enum(['Investor', 'Client']),
+  role: z.enum(['Investor', 'Client', 'Marketer']),
 });
+
+// Helper function to generate a unique referral code
+function generateReferralCode(name: string): string {
+    const namePart = name.split(' ')[0].toUpperCase().substring(0, 4).padEnd(4, 'X');
+    const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `MARK-${namePart}-${randomPart}`;
+}
 
 export async function createUserAction(data: z.infer<typeof createUserSchema>) {
   const validated = createUserSchema.safeParse(data);
@@ -49,6 +56,12 @@ export async function createUserAction(data: z.infer<typeof createUserSchema>) {
 
     if (phoneNumber) {
       userData.phoneNumber = phoneNumber;
+    }
+    
+    // 5. Generate and add referral code if the user is a Marketer
+    if (finalRole === 'Marketer') {
+        userData.referralCode = generateReferralCode(name);
+        userData.rating = 0; // Initialize rating
     }
 
     await usersCollection.doc(userRecord.uid).set(userData);
