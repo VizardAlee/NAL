@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -424,7 +423,7 @@ export default function ClientDashboard() {
                                         </SheetHeader>
                                         <div className="py-4 flex-1 bg-white overflow-y-auto">
                                             {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
-                                                <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={800} height={1100} className="rounded-md border object-contain" />
+                                                <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={800} height={1100} className="rounded-md object-contain mx-auto" />
                                             ) : (
                                                 <iframe src={`${userProfile.legalDocumentUrl}#toolbar=1`} className="w-full h-full rounded-md border" />
                                             )}
@@ -528,4 +527,3 @@ export default function ClientDashboard() {
         </div>
     );
 }
-
