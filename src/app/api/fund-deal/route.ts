@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
 
     const app = getAdminApp();
     const firestore = admin.firestore(app);
+    let finalAmountFunded = 0;
 
     try {
         await firestore.runTransaction(async (transaction) => {
@@ -123,11 +124,11 @@ export async function POST(request: NextRequest) {
                     return remainingTenureInDays >= (dealDurationInDays - 5);
                 }
             });
-
-            const totalAvailableFunds = eligibleBatches.reduce((sum, doc) => sum + (doc.data() as FundBatch).remainingAmount, 0);
             
-            if (totalAvailableFunds < amountToFund) {
-                throw new Error(`Insufficient funds available. Need ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amountToFund)}, but only ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(totalAvailableFunds)} is available in eligible batches.`);
+            // Do not throw error for insufficient funds, just use what's available
+            const totalAvailableFunds = eligibleBatches.reduce((sum, doc) => sum + (doc.data() as FundBatch).remainingAmount, 0);
+            if (totalAvailableFunds === 0) {
+                throw new Error("No eligible funds available to fund this deal.");
             }
 
             for (const batchDoc of eligibleBatches) {
@@ -136,12 +137,11 @@ export async function POST(request: NextRequest) {
                 const batchData = batchDoc.data() as FundBatch;
                 const amountToDeduct = Math.min(amountToFund, batchData.remainingAmount);
 
+                finalAmountFunded += amountToDeduct;
+
                 // Determine the correct historical timestamp for the transaction.
-                // Use the deal's start date, or createdAt date if start date doesn't exist.
-                // This ensures backdating works correctly for amortization.
                 const dealStartDate = dealData.startDate || dealData.createdAt;
                 const batchTimestamp = batchData.createdAt;
-                // The investment happens at the later of the two dates.
                 const transactionTimestamp = dealStartDate.toMillis() > batchTimestamp.toMillis() ? dealStartDate : batchTimestamp;
 
                 // Create an Investment document
@@ -178,7 +178,14 @@ export async function POST(request: NextRequest) {
             }
         });
 
-        return NextResponse.json({ success: true, message: 'Deal has been successfully funded and is now Active.' }, { status: 200 });
+        const dealDocAfter = await firestore.collection('deals').doc(dealId).get();
+        const dealDataAfter = dealDocAfter.data();
+        
+        if (dealDataAfter?.status === 'Active') {
+            return NextResponse.json({ success: true, message: 'Deal has been fully funded and is now Active.' }, { status: 200 });
+        } else {
+             return NextResponse.json({ success: true, message: `Successfully funded deal with ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(finalAmountFunded)}. Deal is now partially funded.` }, { status: 200 });
+        }
 
     } catch (error: any) {
         console.error('DEAL FUNDING FAILED:', error);
