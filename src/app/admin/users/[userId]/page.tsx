@@ -10,7 +10,7 @@ import { doc, collection, query, where, DocumentData, Timestamp, orderBy, limit 
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone, MessageSquare, Star, Gavel, Download, UserPlus, Briefcase, Copy } from 'lucide-react';
+import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone, MessageSquare, Star, Gavel, Download, UserPlus, Briefcase, Copy, DollarSign } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -288,7 +288,7 @@ export default function UserDetailPage() {
       const totalZakat = transactions.filter(tx => tx.type === 'Zakat').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
       const portfolioValue = (totalCapital + totalProfit) - (totalWithdrawn + totalZakat);
       const investibleBalance = fundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
-      return { portfolioValue, investibleBalance };
+      return { portfolioValue, investibleBalance, totalCapital };
   }, [transactions, fundBatches]);
 
   const { isZakatEligible, zakatAmount } = useMemo(() => {
@@ -398,6 +398,35 @@ export default function UserDetailPage() {
                         </div>
                     </CardHeader>
                 </Card>
+
+                {userProfile.role === 'Investor' && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-sm font-medium">Total Capital Introduced</CardTitle>
+                            <CardDescription>The cumulative sum of all deposits made by this investor.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-3xl font-bold font-headline">
+                                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.totalCapital)}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {userProfile.role === 'Client' && clientPerformanceMetrics && (
+                    <Card>
+                        <CardHeader>
+                             <CardTitle className="text-sm font-medium">Total Deal Value</CardTitle>
+                             <CardDescription>The sum of the principal from all deals for this client.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                             <div className="text-3xl font-bold font-headline">
+                                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(clientPerformanceMetrics.totalDealsValue)}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
 
                 {userProfile.role === 'Marketer' && (
                     <Card>
@@ -923,5 +952,6 @@ export default function UserDetailPage() {
     </div>
   );
 }
+
 
 
