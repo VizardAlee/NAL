@@ -212,7 +212,6 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
                   {marketers?.map(marketer => (
                     <SelectItem key={marketer.id} value={marketer.id}>{marketer.name}</SelectItem>
                   ))}
