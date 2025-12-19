@@ -3,7 +3,7 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign, Info, FileText, Zap, ListFilter } from "lucide-react";
+import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign, Info, FileText, Zap, ListFilter, Users, Briefcase } from "lucide-react";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy, updateDoc } from 'firebase/firestore';
 import { useFirestore } from "@/firebase";
@@ -63,7 +63,7 @@ type PlatformFundBatch = DocumentData & {
 type GenericTransaction = DocumentData & {
     id: string;
     userId: string;
-    type: 'PlatformEarning' | 'Investment' | 'Zakat' | 'Penalty';
+    type: 'PlatformEarning' | 'Investment' | 'Zakat' | 'Penalty' | 'Deposit';
     amount: number;
     createdAt: Timestamp;
 };
@@ -564,6 +564,7 @@ export default function PlatformFundsPage() {
     const dealsQuery = useMemo(() => firestore ? query(collection(firestore, 'deals')) : null, [firestore]);
     const repaymentsQuery = useMemo(() => firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Approved')) : null, [firestore]);
     const earningsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions'), where('type', '==', 'PlatformEarning')) : null, [firestore]);
+    const allInvestorDepositsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions'), where('type', '==', 'Deposit')) : null, [firestore]);
 
 
     const { data: platformFundBatches, loading: platformBatchesLoading } = useCollection<PlatformFundBatch>(platformFundBatchesQuery);
@@ -574,9 +575,10 @@ export default function PlatformFundsPage() {
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
     const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery);
     const { data: earningsTransactions, loading: earningsLoading } = useCollection<GenericTransaction>(earningsQuery);
+    const { data: allInvestorDeposits, loading: depositsLoading } = useCollection<GenericTransaction>(allInvestorDepositsQuery);
 
 
-    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allFundBatchesLoading || assetsLoading || dealsLoading || repaymentsLoading || earningsLoading;
+    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allFundBatchesLoading || assetsLoading || dealsLoading || repaymentsLoading || earningsLoading || depositsLoading;
 
     const metrics = useMemo(() => {
         const investibleCapital = platformFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
@@ -605,9 +607,12 @@ export default function PlatformFundsPage() {
         const managementFeeEarnings = adminTransactions?.filter(tx => tx.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0) || 0;
         const platformEarnings = markupEarnings + managementFeeEarnings;
 
+        const cumulativeInvestments = allInvestorDeposits?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
+        const cumulativeDeals = deals?.reduce((sum, deal) => sum + deal.principal, 0) || 0;
 
-        return { investibleCapital, administrativeBalance, zakatPool, totalInvested, totalInvestiblePool, totalAssetValue, totalClientDebt, platformEarnings };
-    }, [platformFundBatches, adminTransactions, zakatTransactions, allFundBatches, assets, deals, repayments, earningsTransactions]);
+
+        return { investibleCapital, administrativeBalance, zakatPool, totalInvested, totalInvestiblePool, totalAssetValue, totalClientDebt, platformEarnings, cumulativeInvestments, cumulativeDeals };
+    }, [platformFundBatches, adminTransactions, zakatTransactions, allFundBatches, assets, deals, repayments, earningsTransactions, allInvestorDeposits]);
 
     const filteredAdminTransactions = useMemo(() => {
         if (!adminTransactions) return [];
@@ -662,8 +667,8 @@ export default function PlatformFundsPage() {
                 icon={Banknote}
             />
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-6">
+                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Administrative Account</CardTitle>
                         <Wallet className="h-4 w-4 text-muted-foreground" />
@@ -685,12 +690,12 @@ export default function PlatformFundsPage() {
                 </Card>
                  <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Invested</CardTitle>
+                        <CardTitle className="text-sm font-medium">Total Invested (Active)</CardTitle>
                         <Landmark className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                         {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(metrics.totalInvested)}</div>}
-                        <p className="text-xs text-muted-foreground">Total outstanding principal in active deals.</p>
+                        <p className="text-xs text-muted-foreground">Outstanding principal in active deals.</p>
                     </CardContent>
                 </Card>
                  <Card>
@@ -701,6 +706,38 @@ export default function PlatformFundsPage() {
                     <CardContent>
                         {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(metrics.totalInvestiblePool)}</div>}
                         <p className="text-xs text-muted-foreground">Total available capital from all sources.</p>
+                    </CardContent>
+                </Card>
+            </div>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                 <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Client Debt</CardTitle>
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(metrics.totalClientDebt)}</div>}
+                        <p className="text-xs text-muted-foreground">Total outstanding principal and profit.</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Cumulative Investments</CardTitle>
+                        <PiggyBank className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(metrics.cumulativeInvestments)}</div>}
+                        <p className="text-xs text-muted-foreground">Total capital deposited by investors.</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Cumulative Deals Value</CardTitle>
+                        <Briefcase className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(metrics.cumulativeDeals)}</div>}
+                        <p className="text-xs text-muted-foreground">Total principal of all deals created.</p>
                     </CardContent>
                 </Card>
             </div>
