@@ -95,18 +95,18 @@ export default function TaxPage() {
         const chargeableIncome = Math.max(0, grossProfit - rentRelief);
 
         let totalTax = 0;
-        let incomeToTax = chargeableIncome;
+        let remainingIncome = chargeableIncome;
         const breakdown = [];
-
+        
         const brackets = [
-            { description: "First ₦800,000", limit: 800000, rate: 0.00 },
-            { description: "Next ₦2,200,000", limit: 2200000, rate: 0.15 },
-            { description: "Next ₦47,000,000", limit: 47000000, rate: 0.20 },
-            { description: "Above ₦50,000,000", limit: Infinity, rate: 0.25 },
+            { limit: 2000000, rate: 0.10, label: "First ₦2,000,000" },
+            { limit: 2000000, rate: 0.20, label: "Next ₦2,000,000" },
+            { limit: 4000000, rate: 0.30, label: "Next ₦4,000,000" },
+            { limit: 4000000, rate: 0.40, label: "Next ₦4,000,000" },
+            { limit: 8000000, rate: 0.50, label: "Next ₦8,000,000" },
+            { limit: Infinity, rate: 0.60, label: "Above ₦20,000,000" },
         ];
         
-        let remainingIncome = chargeableIncome;
-
         for (const bracket of brackets) {
             if (remainingIncome <= 0) break;
             
@@ -116,7 +116,7 @@ export default function TaxPage() {
             
             if (taxableInBracket > 0) {
                  breakdown.push({
-                    description: `${bracket.description} @ ${bracket.rate * 100}%`,
+                    description: `${bracket.label} @ ${bracket.rate * 100}%`,
                     taxableAmount: taxableInBracket,
                     taxDue: taxForBracket,
                 });
@@ -124,7 +124,6 @@ export default function TaxPage() {
            
             remainingIncome -= taxableInBracket;
         }
-
 
         const profitAfterTax = grossProfit - totalTax;
 
