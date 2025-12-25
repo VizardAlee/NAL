@@ -13,6 +13,7 @@ const requestDealSchema = z.object({
   clientName: z.string().min(1),
   principal: z.coerce.number().positive(),
   profitRate: z.coerce.number().min(0),
+  financingMode: z.enum(['Murabaha', 'Ijara', 'Musharaka', 'Mudaraba']).optional(),
   durationValue: z.coerce.number().positive().int(),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),

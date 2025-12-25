@@ -24,12 +24,13 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useTransition, useEffect } from 'react';
-import { Loader2, Paperclip } from 'lucide-react';
+import { Loader2, Paperclip, BookOpen } from 'lucide-react';
 import { useUser } from '@/firebase';
 import { requestDealAction } from './actions';
 import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
 import { isDurationShort } from '@/lib/duration-helpers';
+import Link from 'next/link';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const ACCEPTED_FILE_TYPES = ["application/pdf"];
@@ -38,6 +39,7 @@ const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
+  financingMode: z.enum(['Murabaha', 'Ijara', 'Musharaka', 'Mudaraba']).default('Murabaha'),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
@@ -72,6 +74,7 @@ export function CreateDealRequestForm() {
       dealName: '',
       principal: 10000,
       profitRate: 5,
+      financingMode: 'Murabaha',
       durationValue: 12,
       durationUnit: 'Months',
       repaymentType: 'Equal Installments',
@@ -143,6 +146,32 @@ export function CreateDealRequestForm() {
             <FormItem>
               <FormLabel>Deal Name</FormLabel>
               <FormControl><Input placeholder="e.g. Q3 Expansion Financing" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="financingMode"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Financing Mode</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="Murabaha">Murabaha (Cost-Plus)</SelectItem>
+                  <SelectItem value="Ijara">Ijara (Leasing)</SelectItem>
+                  <SelectItem value="Musharaka">Musharaka (Partnership)</SelectItem>
+                  <SelectItem value="Mudaraba">Mudaraba (Profit-Sharing)</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormDescription className="flex items-center gap-1 text-xs">
+                <BookOpen className="h-3 w-3" />
+                <Link href="/client/financing-modes" target="_blank" className="hover:underline">Learn about these modes</Link>
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
