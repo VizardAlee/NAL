@@ -10,7 +10,7 @@ import { doc, collection, query, where, DocumentData, Timestamp, orderBy } from 
 import { useFirestore } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { FileText, Users, Landmark, Zap, Loader2, UserCheck, HandCoins, CheckCircle } from 'lucide-react';
+import { FileText, Users, Landmark, Zap, Loader2, UserCheck, HandCoins, CheckCircle, BookOpen } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -251,6 +251,7 @@ export default function DealDetailPage() {
                     <CardContent className="grid md:grid-cols-2 gap-4 text-sm">
                         <div className="font-medium">Client</div><div>{deal.clientName}</div>
                         <div className="font-medium">Principal Amount</div><div>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</div>
+                        <div className="font-medium">Financing Mode</div><div><Badge variant="outline">{deal.financingMode || 'Murabaha'}</Badge></div>
                         <div className="font-medium">Profit Rate</div><div>{deal.profitRate}%</div>
                         <div className="font-medium">Duration</div><div>{deal.durationValue} {deal.durationUnit}</div>
                         <div className="font-medium">Repayment Type</div><div>{deal.repaymentType}</div>

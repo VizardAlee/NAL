@@ -5,12 +5,12 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle, MessageSquare, Copy, Gavel } from "lucide-react";
+import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle, MessageSquare, Copy, Gavel, BookOpen } from "lucide-react";
 import { useMemo, useState, useTransition } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useFirestore, useUser, type User } from '@/firebase';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton } from "@/components/ui/skeleton";
 import { format, differenceInDays, addDays, startOfWeek, subWeeks } from 'date-fns';
 import { Deal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -460,7 +460,7 @@ export default function InvestorDashboard() {
 
   const formatDate = (timestamp: Timestamp | Date | undefined) => {
     if (!timestamp) return 'N/A';
-    const date = timestamp instanceof Timestamp ? timestamp.toDate() : date;
+    const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
     try { return format(date, 'PPP'); } catch { return 'Invalid Date'; }
   };
 
@@ -678,6 +678,9 @@ export default function InvestorDashboard() {
                                     <p className="font-medium">{deal.dealName}</p>
                                     <Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>{deal.status}</Badge>
                                 </div>
+                                 <div className="text-sm text-muted-foreground">
+                                    Financing Mode: <span className="font-medium text-foreground">{deal.financingMode || 'Murabaha'}</span>
+                                </div>
                                 <div className="text-sm text-muted-foreground">
                                     Principal: {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}
                                 </div>
@@ -696,6 +699,7 @@ export default function InvestorDashboard() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Deal Name</TableHead>
+                                <TableHead>Mode</TableHead>
                                 <TableHead>Principal</TableHead>
                                 <TableHead>Profit Rate</TableHead>
                                 <TableHead>Status</TableHead>
@@ -705,13 +709,14 @@ export default function InvestorDashboard() {
                             {!isLoading && deals?.map((deal) => (
                                 <TableRow key={deal.id}>
                                     <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
+                                    <TableCell data-label="Mode"><Badge variant="outline">{deal.financingMode || 'Murabaha'}</TableCell>
                                     <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
                                     <TableCell data-label="Profit Rate">{deal.profitRate}%</TableCell>
                                     <TableCell data-label="Status"><Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>{deal.status}</Badge></TableCell>
                                 </TableRow>
                             ))}
                             {!isLoading && deals?.length === 0 && (
-                                <TableRow><TableCell colSpan={4} className="h-24 text-center">You have not invested in any deals yet.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={5} className="h-24 text-center">You have not invested in any deals yet.</TableCell></TableRow>
                             )}
                         </TableBody>
                     </Table>

@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useMemo, useTransition, useEffect } from 'react';
-import { CalendarIcon, Loader2 } from 'lucide-react';
+import { CalendarIcon, Loader2, BookOpen } from 'lucide-react';
 import { collection, query, where } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { FirebaseError } from 'firebase/app';
@@ -38,6 +38,7 @@ import { isDurationShort } from '@/lib/duration-helpers';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import Link from 'next/link';
 
 
 const formSchema = z.object({
@@ -46,6 +47,7 @@ const formSchema = z.object({
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
   managementFeeRate: z.coerce.number().min(0, { message: 'Management fee rate cannot be negative.' }),
+  financingMode: z.enum(['Murabaha', 'Ijara', 'Musharaka', 'Mudaraba']).optional().default('Murabaha'),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
@@ -81,6 +83,7 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
     resolver: zodResolver(formSchema),
     defaultValues: {
       ...deal,
+      financingMode: deal.financingMode || 'Murabaha',
       managementFeeRate: deal.managementFeeRate || 0,
       startDate: deal.startDate?.toDate(),
     },
@@ -154,6 +157,31 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
                   ))}
                 </SelectContent>
               </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="financingMode"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Financing Mode</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="Murabaha">Murabaha (Cost-Plus)</SelectItem>
+                  <SelectItem value="Ijara">Ijara (Leasing)</SelectItem>
+                  <SelectItem value="Musharaka">Musharaka (Partnership)</SelectItem>
+                  <SelectItem value="Mudaraba">Mudaraba (Profit-Sharing)</SelectItem>
+                </SelectContent>
+              </Select>
+               <FormDescription className="flex items-center gap-1 text-xs">
+                <BookOpen className="h-3 w-3" />
+                <Link href="/admin/financing-modes" target="_blank" className="hover:underline">Learn about these modes</Link>
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}

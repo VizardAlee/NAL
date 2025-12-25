@@ -22,7 +22,7 @@
         "role": {
           "type": "string",
           "description": "The role of the user.",
-          "enum": ["Admin", "Investor", "Client", "Legal", "Recovery", null]
+          "enum": ["Admin", "Investor", "Client", "Legal", "Recovery", "Marketer", null]
         },
         "lastZakatPaymentDate": {
           "type": "string",
@@ -37,6 +37,18 @@
         "legalDocumentUrl": {
             "type": "string",
             "description": "A Base64-encoded Data URI of the user's signed legal document."
+        },
+        "referralCode": {
+            "type": "string",
+            "description": "The marketer's unique referral code."
+        },
+        "referredByCode": {
+            "type": "string",
+            "description": "The referral code of the marketer who referred this user."
+        },
+        "rating": {
+            "type": "number",
+            "description": "The marketer's calculated performance score."
         }
       },
       "required": ["name", "email", "role"]
@@ -87,6 +99,11 @@
           "description": "The unit of time for the deal's duration.",
           "enum": ["Days", "Weeks", "Fortnights", "Months", "Years"]
         },
+        "financingMode": {
+            "type": "string",
+            "description": "The Islamic financing mode used for the deal.",
+            "enum": ["Murabaha", "Ijara", "Musharaka", "Mudaraba"]
+        },
         "repaymentType": {
           "type": "string",
           "description": "The type of repayment plan.",
@@ -111,6 +128,10 @@
             "type": "string",
             "format": "date-time",
             "description": "The official start date of the financing term, used for amortization calculations. Defaults to createdAt if not provided."
+        },
+        "marketerId": {
+          "type": "string",
+          "description": "The ID of the marketer who sourced this deal."
         }
       },
       "required": [
