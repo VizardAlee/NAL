@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -95,25 +94,26 @@ export default function TaxPage() {
         const chargeableIncome = Math.max(0, grossProfit - rentRelief);
 
         let totalTax = 0;
-        let remainingIncome = chargeableIncome;
+        let incomeToTax = chargeableIncome;
         const breakdown = [];
-        
+
+        // New 2026 Tax Brackets
         const brackets = [
-            { limit: 2000000, rate: 0.10, label: "First ₦2,000,000" },
-            { limit: 2000000, rate: 0.20, label: "Next ₦2,000,000" },
-            { limit: 4000000, rate: 0.30, label: "Next ₦4,000,000" },
-            { limit: 4000000, rate: 0.40, label: "Next ₦4,000,000" },
-            { limit: 8000000, rate: 0.50, label: "Next ₦8,000,000" },
-            { limit: Infinity, rate: 0.60, label: "Above ₦20,000,000" },
+            { threshold: 0, limit: 800000, rate: 0.00, label: "Up to ₦800,000" },
+            { threshold: 800000, limit: 2200000, rate: 0.15, label: "₦800,001 - ₦3,000,000" },
+            { threshold: 3000000, limit: 9000000, rate: 0.18, label: "₦3,000,001 - ₦12,000,000" },
+            { threshold: 12000000, limit: 13000000, rate: 0.21, label: "₦12,000,001 - ₦25,000,000" },
+            { threshold: 25000000, limit: 25000000, rate: 0.23, label: "₦25,000,001 - ₦50,000,000" },
+            { threshold: 50000000, limit: Infinity, rate: 0.25, label: "Above ₦50,000,000" },
         ];
         
         for (const bracket of brackets) {
-            if (remainingIncome <= 0) break;
-            
-            const taxableInBracket = Math.min(remainingIncome, bracket.limit);
+            if (incomeToTax <= bracket.threshold) break;
+
+            const taxableInBracket = Math.min(incomeToTax - bracket.threshold, bracket.limit);
             const taxForBracket = taxableInBracket * bracket.rate;
             totalTax += taxForBracket;
-            
+
             if (taxableInBracket > 0) {
                  breakdown.push({
                     description: `${bracket.label} @ ${bracket.rate * 100}%`,
@@ -121,10 +121,8 @@ export default function TaxPage() {
                     taxDue: taxForBracket,
                 });
             }
-           
-            remainingIncome -= taxableInBracket;
         }
-
+        
         const profitAfterTax = grossProfit - totalTax;
 
         return {
@@ -147,7 +145,7 @@ export default function TaxPage() {
         <div>
             <PageHeader
                 title="Tax Calculation (Enterprise)"
-                description="Estimate Personal Income Tax (PIT) based on the proposed 2025 tax reform bill."
+                description="Estimate Personal Income Tax (PIT) based on the upcoming 2026 tax reform."
                 icon={Landmark}
             >
                  <div className="flex flex-col sm:flex-row gap-2">
@@ -220,7 +218,7 @@ export default function TaxPage() {
                     <Card className="lg:col-span-2">
                         <CardHeader>
                             <CardTitle>Personal Income Tax (PIT) Summary</CardTitle>
-                            <CardDescription>Based on proposed 2025 Nigerian PITA rates for enterprise businesses.</CardDescription>
+                            <CardDescription>Based on proposed 2026 Nigerian PITA rates for enterprise businesses.</CardDescription>
                         </CardHeader>
                         <CardContent>
                              <div className="max-w-xs space-y-2 mb-6">
