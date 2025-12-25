@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { useUser } from '../auth/use-user';
 
 // Make setData available to consumers of the hook
 export function useCollection<T extends DocumentData>(
@@ -19,15 +20,24 @@ export function useCollection<T extends DocumentData>(
   const [data, setData] = useState<T[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<FirestoreError | null>(null);
+  const { user, loading: authLoading } = useUser();
 
   useEffect(() => {
-    if (!q) {
+    // If the query is null or auth is still loading, don't proceed.
+    if (!q || authLoading) {
       setLoading(false);
-      setData(null); // Set data to null when query is not available
+      setData(null);
       return;
     }
 
-    // Set loading to true when a new query is provided
+    // If auth is done and there's no user, we can stop.
+    if (!authLoading && !user) {
+      setLoading(false);
+      setData(null);
+      return;
+    }
+
+    // At this point, we have a query and an authenticated user.
     setLoading(true);
 
     const unsubscribe = onSnapshot(
@@ -56,8 +66,10 @@ export function useCollection<T extends DocumentData>(
       }
     );
 
+    // This cleanup function will run when the component unmounts
+    // or when the query or user changes.
     return () => unsubscribe();
-  }, [q]); 
+  }, [q, user, authLoading]); // Add user and authLoading to the dependency array
 
   return { data, loading, error, setData };
 }

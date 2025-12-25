@@ -460,7 +460,7 @@ export default function InvestorDashboard() {
 
   const formatDate = (timestamp: Timestamp | Date | undefined) => {
     if (!timestamp) return 'N/A';
-    const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
+    const date = timestamp instanceof Timestamp ? timestamp.toDate() : date;
     try { return format(date, 'PPP'); } catch { return 'Invalid Date'; }
   };
 
@@ -709,7 +709,7 @@ export default function InvestorDashboard() {
                             {!isLoading && deals?.map((deal) => (
                                 <TableRow key={deal.id}>
                                     <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
-                                    <TableCell data-label="Mode"><Badge variant="outline">{deal.financingMode || 'Murabaha'}</TableCell>
+                                    <TableCell data-label="Mode"><Badge variant="outline">{deal.financingMode || 'Murabaha'}</Badge></TableCell>
                                     <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
                                     <TableCell data-label="Profit Rate">{deal.profitRate}%</TableCell>
                                     <TableCell data-label="Status"><Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>{deal.status}</Badge></TableCell>
