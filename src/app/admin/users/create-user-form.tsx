@@ -34,7 +34,7 @@ const formSchema = z.object({
     .string()
     .min(8, { message: 'Password must be at least 8 characters.' }),
   phoneNumber: z.string().optional(),
-  role: z.enum(['Investor', 'Client', 'Marketer'], { required_error: 'Role is required.' }),
+  role: z.enum(['Investor', 'Client', 'Marketer', 'Admin', 'Legal', 'Recovery'], { required_error: 'Role is required.' }),
 });
 
 type CreateUserFormProps = {
@@ -154,6 +154,9 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
                   <SelectItem value="Investor">Investor</SelectItem>
                   <SelectItem value="Client">Client</SelectItem>
                   <SelectItem value="Marketer">Marketer</SelectItem>
+                  <SelectItem value="Admin">Admin</SelectItem>
+                  <SelectItem value="Legal">Legal</SelectItem>
+                  <SelectItem value="Recovery">Recovery</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />

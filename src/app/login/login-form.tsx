@@ -23,6 +23,7 @@ import { signInWithEmailAndPassword, type User } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { useAuth, useFirestore } from "@/firebase";
 import { FirebaseError } from "firebase/app";
+import Link from "next/link";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -178,6 +179,19 @@ export function LoginForm() {
             </Button>
           </form>
         </Form>
+        <div className="mt-4 text-center text-sm">
+           <p className="text-muted-foreground">
+             Don't have an account?{' '}
+             <Link href="/signup" className="font-medium text-primary hover:underline">
+                Sign up
+             </Link>
+           </p>
+            <p className="text-muted-foreground mt-2">
+                <Link href="/forgot-password" passHref className="text-sm font-medium text-primary hover:underline">
+                    Forgot your password?
+                </Link>
+            </p>
+         </div>
       </CardContent>
     </Card>
   );

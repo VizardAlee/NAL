@@ -10,7 +10,7 @@ const createUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   phoneNumber: z.string().optional(),
-  role: z.enum(['Investor', 'Client', 'Marketer']),
+  role: z.enum(['Investor', 'Client', 'Marketer', 'Admin', 'Legal', 'Recovery']),
 });
 
 // Helper function to generate a unique referral code
@@ -39,34 +39,29 @@ export async function createUserAction(data: z.infer<typeof createUserSchema>) {
       emailVerified: true, // It's good practice to mark email as verified
     });
 
-    // 2. Make first user an Admin
-    const usersCollection = adminDb.collection('users');
-    const snapshot = await usersCollection.get();
-    const finalRole = snapshot.empty ? 'Admin' : role;
+    // 2. Set custom claim for the role
+    await auth.setCustomUserClaims(userRecord.uid, { role });
 
-    // 3. Set custom claim for the role
-    await auth.setCustomUserClaims(userRecord.uid, { role: finalRole });
-
-    // 4. Create user document in Firestore
+    // 3. Create user document in Firestore
     const userData: any = {
       name,
       email,
-      role: finalRole,
+      role,
     };
 
     if (phoneNumber) {
       userData.phoneNumber = phoneNumber;
     }
     
-    // 5. Generate and add referral code if the user is a Marketer
-    if (finalRole === 'Marketer') {
+    // 4. Generate and add referral code if the user is a Marketer
+    if (role === 'Marketer') {
         userData.referralCode = generateReferralCode(name);
         userData.rating = 0; // Initialize rating
     }
 
-    await usersCollection.doc(userRecord.uid).set(userData);
+    await adminDb.collection('users').doc(userRecord.uid).set(userData);
 
-    return { success: true, message: `User ${name} created successfully as ${finalRole}.` };
+    return { success: true, message: `User ${name} created successfully as ${role}.` };
   } catch (error: any) {
     console.error('Create user error:', error);
     if (error.code === 'auth/email-already-exists') {

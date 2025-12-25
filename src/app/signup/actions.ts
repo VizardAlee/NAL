@@ -81,19 +81,11 @@ export async function signUpWithEmailAction(
 
         revalidatePath('/admin/users');
         
-        let redirectUrl = '/';
-        if (role === 'Investor') {
-            redirectUrl = '/investor/dashboard';
-        } else if (role === 'Client') {
-            redirectUrl = '/client/dashboard';
-        } else if (role === 'Marketer') {
-            redirectUrl = '/marketer/dashboard';
-        }
-
+        // Don't auto-redirect, force them to log in.
         return {
             success: true,
-            message: `Account created successfully! You are now registered as a ${role}.`,
-            redirectUrl: redirectUrl
+            message: `Account created successfully! You can now log in.`,
+            redirectUrl: '/login'
         };
 
     } catch (error: any) {

@@ -64,7 +64,7 @@ export default function SignupPage() {
         const result = await signUpWithEmailAction(values);
         if (result.success) {
             toast({ title: "Success", description: result.message });
-            router.push(result.redirectUrl || '/login');
+            router.push('/login');
         } else {
             toast({ variant: 'destructive', title: 'Sign-up Failed', description: result.message });
         }
