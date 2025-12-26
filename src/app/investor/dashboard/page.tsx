@@ -193,9 +193,9 @@ function ContactAdminSheet() {
     const [isPending, startTransition] = useTransition();
 
     const adminsQuery = useMemo(() => {
-        if (!firestore) return null;
+        if (!firestore || !user) return null;
         return query(collection(firestore, 'users'), where('role', '==', 'Admin'));
-    }, [firestore]);
+    }, [firestore, user]);
 
     const { data: admins, loading } = useCollection<UserProfile>(adminsQuery);
 

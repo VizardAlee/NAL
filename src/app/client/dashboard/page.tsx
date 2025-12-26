@@ -11,9 +11,7 @@ import { collection, query, where, DocumentData, Timestamp, orderBy, doc } from 
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Deal, Repayment } from '@/lib/types';
-import { RepaymentHistory } from "@/components/deals/repayment-history";
 import { ClientRepaymentSchedule } from "./client-repayment-schedule";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { requestTerminationAction } from "./actions";
@@ -23,6 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getOrCreateConversation } from "@/app/common/actions/chat-actions";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import Image from "next/image";
+import { RepaymentHistory } from "@/components/deals/repayment-history";
 
 
 const statusVariant = {
@@ -103,9 +102,9 @@ function ContactAdminSheet() {
     const [isPending, startTransition] = useTransition();
 
     const adminsQuery = useMemo(() => {
-        if (!firestore) return null;
+        if (!firestore || !user) return null;
         return query(collection(firestore, 'users'), where('role', '==', 'Admin'));
-    }, [firestore]);
+    }, [firestore, user]);
 
     const { data: admins, loading } = useCollection<any>(adminsQuery);
 
