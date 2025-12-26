@@ -4,7 +4,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy, HandCoins, Gavel, Download, BookOpen } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy, HandCoins, Gavel, Download, BookOpen, History } from "lucide-react";
 import { useMemo, useTransition, useEffect, useState } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, doc } from 'firebase/firestore';
@@ -25,6 +25,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getOrCreateConversation } from "@/app/common/actions/chat-actions";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import Image from "next/image";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 
 const statusVariant = {
@@ -167,7 +172,7 @@ function ContactAdminSheet() {
 
 function DealCard({ deal }: { deal: Deal }) {
     const firestore = useFirestore();
-    const { user, loading: userLoading } = useUser();
+    const { user } = useUser();
     const { toast } = useToast();
     const [isPendingTermination, startTransition] = useTransition();
 
@@ -177,7 +182,7 @@ function DealCard({ deal }: { deal: Deal }) {
     }, [firestore, user?.uid, deal?.id]);
 
     const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(
-        repaymentsQuery
+        repaymentsQuery as any
     );
 
     const lodgedRepayments = useMemo(() => {
@@ -209,10 +214,6 @@ function DealCard({ deal }: { deal: Deal }) {
         });
     }
     
-    if(userLoading || repaymentsLoading) {
-        return <DealsSkeleton />;
-    }
-
     return (
         <Card className="flex flex-col">
             <CardHeader>
@@ -319,7 +320,6 @@ export default function ClientDashboard() {
     const firestore = useFirestore();
     const router = useRouter();
     const { user, loading: userLoading } = useUser();
-    const isMobile = useIsMobile();
     
     const userProfileRef = useMemo(() => {
         if (!firestore || !user?.uid) return null;
@@ -334,10 +334,13 @@ export default function ClientDashboard() {
     }, [firestore, user?.uid]);
 
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(
-        dealsQuery
+        dealsQuery as any
     );
     
     const isLoading = userLoading || dealsLoading || profileLoading;
+
+    const activeDeals = useMemo(() => deals?.filter(d => d.status === 'Active') || [], [deals]);
+    const otherDeals = useMemo(() => deals?.filter(d => d.status !== 'Active') || [], [deals]);
 
     if (isLoading) {
         return <DealsSkeleton />;
@@ -366,9 +369,9 @@ export default function ClientDashboard() {
                 </div>
             </PageHeader>
             
-            {userProfile ? (
-                <div className="grid gap-8">
-                     <Card>
+            <div className="grid gap-8">
+                {userProfile && (
+                    <Card>
                         <CardHeader className="flex flex-row items-center gap-4 space-y-0">
                             <Avatar className="h-16 w-16">
                                 <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/128/128`} />
@@ -381,83 +384,118 @@ export default function ClientDashboard() {
                             </div>
                         </CardHeader>
                     </Card>
+                )}
 
-                    <BankDetailsCard />
+                <BankDetailsCard />
 
-                    {userProfile.legalDocumentUrl && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2"><Gavel /> Legal Document</CardTitle>
-                                <CardDescription>Your signed legal agreement with the platform.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Sheet>
-                                    <SheetTrigger asChild>
-                                        <Button variant="outline">
-                                            <Gavel className="mr-2 h-4 w-4" /> View Legal Document
+                {userProfile?.legalDocumentUrl && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2"><Gavel /> Legal Document</CardTitle>
+                            <CardDescription>Your signed legal agreement with the platform.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Sheet>
+                                <SheetTrigger asChild>
+                                    <Button variant="outline">
+                                        <Gavel className="mr-2 h-4 w-4" /> View Legal Document
+                                    </Button>
+                                </SheetTrigger>
+                                <SheetContent className="w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl flex flex-col">
+                                    <SheetHeader className="flex-row items-center justify-between">
+                                        <SheetTitle>Signed Legal Document</SheetTitle>
+                                        <Button variant="outline" asChild>
+                                            <a href={userProfile.legalDocumentUrl} download={`LegalDocument-${userProfile.name}.pdf`}>
+                                                <Download className="mr-2 h-4 w-4" /> Download
+                                            </a>
                                         </Button>
-                                    </SheetTrigger>
-                                    <SheetContent className="w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl flex flex-col">
-                                        <SheetHeader className="flex-row items-center justify-between">
-                                            <SheetTitle>Signed Legal Document</SheetTitle>
-                                            <Button variant="outline" asChild>
-                                                <a href={userProfile.legalDocumentUrl} download={`LegalDocument-${userProfile.name}.pdf`}>
-                                                    <Download className="mr-2 h-4 w-4" /> Download
-                                                </a>
-                                            </Button>
-                                        </SheetHeader>
-                                        <div className="py-4 flex-1 bg-white overflow-y-auto">
-                                            {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
-                                                <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={800} height={1100} className="rounded-md object-contain mx-auto" />
-                                            ) : (
-                                                <iframe src={`${userProfile.legalDocumentUrl}#toolbar=1`} className="w-full h-full rounded-md border" />
-                                            )}
-                                        </div>
-                                    </SheetContent>
-                                </Sheet>
-                            </CardContent>
-                        </Card>
-                    )}
+                                    </SheetHeader>
+                                    <div className="py-4 flex-1 bg-white overflow-y-auto">
+                                        {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
+                                            <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={800} height={1100} className="rounded-md object-contain mx-auto" />
+                                        ) : (
+                                            <iframe src={`${userProfile.legalDocumentUrl}#toolbar=1`} className="w-full h-full rounded-md border" />
+                                        )}
+                                    </div>
+                                </SheetContent>
+                            </Sheet>
+                        </CardContent>
+                    </Card>
+                )}
 
 
-                    {deals && deals.length > 0 ? (
-                        <div className="grid gap-6 lg:grid-cols-2">
-                            {deals.map(deal => (
-                                <DealCard key={deal.id} deal={deal} />
-                            ))}
-                        </div>
-                    ) : (
-                         <Card className="mt-6 border-dashed">
-                            <CardContent className="p-12 text-center">
-                                <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-                                <h3 className="mt-4 text-lg font-medium">No Deals Found</h3>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                    You do not have any financing deals yet. You can request one now.
-                                </p>
-                                <Button asChild className="mt-4">
-                                    <Link href="/client/deals/request">
-                                        <PlusCircle className="mr-2 h-4 w-4" />
-                                        Request Your First Deal
-                                    </Link>
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    )}
-                </div>
-            ) : (
-                <Card className="mt-6 border-dashed">
-                    <CardContent className="p-12 text-center">
-                        <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-                        <h3 className="mt-4 text-lg font-medium">No Deals Found</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            You do not have any financing deals yet. You can request one using the button above.
-                        </p>
-                    </CardContent>
-                </Card>
-            )}
+                {deals && deals.length > 0 ? (
+                    <>
+                        {activeDeals.map(deal => (
+                            <DealCard key={deal.id} deal={deal} />
+                        ))}
+
+                        {otherDeals.length > 0 && (
+                            <Collapsible>
+                                <CollapsibleTrigger asChild>
+                                    <Button variant="outline" className="w-full">
+                                        <History className="mr-2 h-4 w-4" />
+                                        View Past Deals ({otherDeals.length})
+                                    </Button>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                    <Card className="mt-4">
+                                        <CardHeader>
+                                            <CardTitle>Inactive & Past Deals</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Deal Name</TableHead>
+                                                        <TableHead>Principal</TableHead>
+                                                        <TableHead>Status</TableHead>
+                                                        <TableHead className="text-right"></TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {otherDeals.map(deal => (
+                                                        <TableRow key={deal.id}>
+                                                            <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
+                                                            <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
+                                                            <TableCell data-label="Status">
+                                                                <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
+                                                            </TableCell>
+                                                            <TableCell data-label="Action" className="text-right">
+                                                                <Button asChild variant="outline" size="sm">
+                                                                    <Link href={`/client/deals/${deal.id}`}>
+                                                                        View Details <ArrowRight className="ml-2 h-4 w-4" />
+                                                                    </Link>
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </CardContent>
+                                    </Card>
+                                </CollapsibleContent>
+                            </Collapsible>
+                        )}
+                    </>
+                ) : (
+                     <Card className="mt-6 border-dashed">
+                        <CardContent className="p-12 text-center">
+                            <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
+                            <h3 className="mt-4 text-lg font-medium">No Deals Found</h3>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                You do not have any financing deals yet. You can request one now.
+                            </p>
+                            <Button asChild className="mt-4">
+                                <Link href="/client/deals/request">
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Request Your First Deal
+                                </Link>
+                            </Button>
+                        </CardContent>
+                    </Card>
+                )}
+            </div>
         </div>
     );
 }
-
-
-    
