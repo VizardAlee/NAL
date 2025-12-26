@@ -37,17 +37,22 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Recovery';
     }
+    
+    function isMarketer() {
+       return request.auth != null 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Marketer';
+    }
 
     // Rules for the 'users' collection
     match /users/{userId} {
-      // Admins can get any user. Owners can get their own data. Legal can read any user.
+      // Admins can get any user. Owners can get their own data. Legal/Marketer can read their own.
       allow get: if isAdmin() || isOwner(userId) || isLegal();
       // Admins and Legal can list all users.
       allow list: if isAdmin() || isLegal();
       
-      // Allow any authenticated user to create a new user document (e.g., during signup).
-      // In a real app, you would likely restrict this to admins or specific backend processes.
-      allow create: if request.auth != null;
+      // Allow any unauthenticated or authenticated user to create a new user document (e.g., during signup).
+      allow create: if true;
 
       // Only the user themself or an Admin can update a user document.
       allow update: if isAdmin() || (isOwner(userId) && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phoneNumber']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['legalDocumentUrl'])));
@@ -85,8 +90,9 @@ service cloud.firestore {
 
     // Rules for the 'deals' collection
     match /deals/{dealId} {
-        // Admins, Investors, and Legal can list all deals.
-        allow list: if isAdmin() || isInvestor() || isLegal();
+        // Admins, Investors, and Legal can list all deals. Marketers can see deals they are linked to.
+        // Clients can see deals they are associated with.
+        allow list: if isAdmin() || isInvestor() || isLegal() || (isMarketer() && resource.data.marketerId == request.auth.uid) || (isClient() && resource.data.clientId == request.auth.uid);
         
         // Admins, Investors, Legal can get any single deal.
         // Clients can only get deals they are associated with.
@@ -134,9 +140,9 @@ service cloud.firestore {
     match /transactions/{transactionId} {
         // Admin can do anything
         allow write: if isAdmin();
-        // Investor can read their own transactions, Admins can read all.
-        // Clients can read their own repayment transactions. Legal can read all.
-        allow read, list: if isAdmin() || (isInvestor() && resource.data.userId == request.auth.uid) || (isClient() && resource.data.userId == request.auth.uid) || isLegal();
+        // Investor/Client/Marketer can read their own transactions, Admins can read all.
+        // Legal can read all.
+        allow read, list: if isAdmin() || (isOwner(resource.data.userId)) || isLegal();
     }
 
     // Rules for 'repayments'

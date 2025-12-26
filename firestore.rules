@@ -91,7 +91,8 @@ service cloud.firestore {
     // Rules for the 'deals' collection
     match /deals/{dealId} {
         // Admins, Investors, and Legal can list all deals. Marketers can see deals they are linked to.
-        allow list: if isAdmin() || isInvestor() || isLegal() || (isMarketer() && resource.data.marketerId == request.auth.uid);
+        // Clients can see deals they are associated with.
+        allow list: if isAdmin() || isInvestor() || isLegal() || (isMarketer() && resource.data.marketerId == request.auth.uid) || (isClient() && resource.data.clientId == request.auth.uid);
         
         // Admins, Investors, Legal can get any single deal.
         // Clients can only get deals they are associated with.
@@ -250,5 +251,3 @@ service cloud.firestore {
     }
   }
 }
-
-    
