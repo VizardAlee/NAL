@@ -662,6 +662,7 @@ export default function InvestorDashboard() {
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
             My Invested Deals
+            <Badge variant="secondary">Mudaraba (Profit-Sharing)</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>

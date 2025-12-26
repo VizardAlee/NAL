@@ -39,7 +39,7 @@ const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
-  financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).default('Murabaha'),
+  financingMode: z.enum(['Murabaha', 'Ijara']).default('Murabaha'),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
@@ -164,7 +164,6 @@ export function CreateDealRequestForm() {
                 <SelectContent>
                   <SelectItem value="Murabaha">Murabaha (Cost-Plus)</SelectItem>
                   <SelectItem value="Ijara">Ijara (Leasing)</SelectItem>
-                  <SelectItem value="Mudaraba">Mudaraba (Profit-Sharing)</SelectItem>
                 </SelectContent>
               </Select>
               <FormDescription className="flex items-center gap-1 text-xs">

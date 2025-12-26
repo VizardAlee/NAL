@@ -102,7 +102,7 @@
         "financingMode": {
             "type": "string",
             "description": "The Islamic financing mode used for the deal.",
-            "enum": ["Murabaha", "Ijara", "Mudaraba"]
+            "enum": ["Murabaha", "Ijara"]
         },
         "repaymentType": {
           "type": "string",

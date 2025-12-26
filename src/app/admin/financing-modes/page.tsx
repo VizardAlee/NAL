@@ -13,11 +13,6 @@ const financingModes = [
         name: "Ijara (Leasing)",
         description: "An arrangement where the financier buys an asset and leases it to a client for a specific period and for an agreed-upon rental fee. Ownership of the asset remains with the financier. A variation, 'Ijara wa Iqtina', is a lease that concludes with the client purchasing the asset.",
         application: "Ideal for financing assets that have a long-term use, such as vehicles, machinery, or buildings, without requiring the client to purchase it upfront."
-    },
-    {
-        name: "Mudaraba (Profit-Sharing)",
-        description: "A partnership where one party (the investor or 'Rabb-ul-Mal') provides the capital, and the other party (the entrepreneur or 'Mudarib') provides the labor and expertise. Profits are shared based on a pre-agreed ratio. However, any financial loss is borne entirely by the investor.",
-        application: "Used when an investor wants to finance a business but does not want to be involved in the day-to-day management. The entrepreneur brings their skills to run the business with the provided capital."
     }
 ]
 

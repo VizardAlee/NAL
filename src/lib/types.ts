@@ -12,7 +12,7 @@ export type Deal = DocumentData & {
   managementFeeRate?: number;
   managementFeeAmount?: number;
   managementFeePaid?: boolean;
-  financingMode?: 'Murabaha' | 'Ijara' | 'Mudaraba';
+  financingMode?: 'Murabaha' | 'Ijara';
   durationValue: number;
   durationUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
   repaymentType: 'Equal Installments' | 'Balloon Payment';
