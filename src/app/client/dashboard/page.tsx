@@ -336,25 +336,6 @@ export default function ClientDashboard() {
     
     const isLoading = userLoading || dealsLoading || profileLoading;
 
-    const { mainDeal, olderDeals } = useMemo(() => {
-        if (!deals || deals.length === 0) {
-            return { mainDeal: null, olderDeals: [] };
-        }
-
-        const activeDeal = deals.find(d => d.status === 'Active');
-        if (activeDeal) {
-            return {
-                mainDeal: activeDeal,
-                olderDeals: deals.filter(d => d.id !== activeDeal.id),
-            };
-        }
-
-        // If no active deal, fall back to the most recent one
-        const mainDeal = deals[0];
-        const olderDeals = deals.slice(1);
-        return { mainDeal, olderDeals };
-    }, [deals]);
-
     if (isLoading) {
         return <DealsSkeleton />;
     }
@@ -436,72 +417,12 @@ export default function ClientDashboard() {
                     )}
 
 
-                    {mainDeal ? (
-                        <>
-                            <DealCard deal={mainDeal} />
-
-                            {olderDeals.length > 0 && (
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Previous Deals</CardTitle>
-                                        <CardDescription>A history of your past financing deals.</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        {isMobile ? (
-                                            <div className="space-y-3">
-                                                {olderDeals.map(deal => (
-                                                    <Card key={deal.id} className="p-4" onClick={() => router.push(`/client/deals/${deal.id}`)}>
-                                                        <div className="flex justify-between items-start">
-                                                            <div>
-                                                                <p className="font-medium">{deal.dealName}</p>
-                                                                 <p className="text-sm">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</p>
-                                                            </div>
-                                                            <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
-                                                        </div>
-                                                        <div className="mt-2 text-right">
-                                                            <Button asChild variant="outline" size="sm">
-                                                                <Link href={`/client/deals/${deal.id}`}>
-                                                                    View Details <ArrowRight className="ml-2 h-4 w-4" />
-                                                                </Link>
-                                                            </Button>
-                                                        </div>
-                                                    </Card>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Deal Name</TableHead>
-                                                        <TableHead>Principal</TableHead>
-                                                        <TableHead>Status</TableHead>
-                                                        <TableHead className="text-right"></TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {olderDeals.map(deal => (
-                                                        <TableRow key={deal.id}>
-                                                            <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
-                                                            <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
-                                                            <TableCell data-label="Status">
-                                                                <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
-                                                            </TableCell>
-                                                            <TableCell data-label="Action" className="text-right">
-                                                                <Button asChild variant="outline" size="sm">
-                                                                    <Link href={`/client/deals/${deal.id}`}>
-                                                                        View Details <ArrowRight className="ml-2 h-4 w-4" />
-                                                                    </Link>
-                                                                </Button>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            )}
-                        </>
+                    {deals && deals.length > 0 ? (
+                        <div className="grid gap-6 lg:grid-cols-2">
+                            {deals.map(deal => (
+                                <DealCard key={deal.id} deal={deal} />
+                            ))}
+                        </div>
                     ) : (
                          <Card className="mt-6 border-dashed">
                             <CardContent className="p-12 text-center">
