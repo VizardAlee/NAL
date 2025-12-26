@@ -4,7 +4,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2, ArrowRight, History } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, ArrowRight } from "lucide-react";
 import { useMemo, useTransition } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
@@ -21,16 +21,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Repayment } from '@/lib/types';
 
-
-export type Repayment = DocumentData & {
-  id: string;
-  dealId: string;
-  amount: number;
-  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
-  lodgedAt: Timestamp;
-  dueDate: Timestamp;
-};
 
 const statusVariant = {
     Pending: 'secondary',
@@ -173,12 +165,12 @@ export default function ClientDashboard() {
         return query(collection(firestore, 'deals'), where('clientId', '==', user.uid), orderBy('createdAt', 'desc'));
     }, [firestore, user]);
 
-    const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
+    const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery as any);
     
     const isLoading = userLoading || dealsLoading;
 
-    const mostRecentDeal = useMemo(() => deals?.[0], [deals]);
-    const olderDeals = useMemo(() => deals?.slice(1) || [], [deals]);
+    const activeDeals = useMemo(() => deals?.filter(d => d.status === 'Active') || [], [deals]);
+    const otherDeals = useMemo(() => deals?.filter(d => d.status !== 'Active') || [], [deals]);
 
     return (
         <div>
@@ -190,15 +182,17 @@ export default function ClientDashboard() {
             
             {isLoading ? (
                 <DealsSkeleton />
-            ) : mostRecentDeal ? (
+            ) : deals && deals.length > 0 ? (
                 <div className="grid gap-8">
-                    <DealCard deal={mostRecentDeal} />
+                    {activeDeals.length > 0 && activeDeals.map(deal => (
+                        <DealCard key={deal.id} deal={deal} />
+                    ))}
 
-                    {olderDeals.length > 0 && (
+                    {otherDeals.length > 0 && (
                         <Card>
                             <CardHeader>
-                                <CardTitle>Previous Deals</CardTitle>
-                                <CardDescription>A history of your past financing deals.</CardDescription>
+                                <CardTitle>Inactive/Past Deals</CardTitle>
+                                <CardDescription>A history of your pending, completed, or terminated deals.</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <Table>
@@ -211,7 +205,7 @@ export default function ClientDashboard() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {olderDeals.map(deal => (
+                                        {otherDeals.map(deal => (
                                             <TableRow key={deal.id}>
                                                 <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
                                                 <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
@@ -239,7 +233,7 @@ export default function ClientDashboard() {
                         <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
                         <h3 className="mt-4 text-lg font-medium">No Deals Found</h3>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            You do not have any financing deals yet. An admin will create one for you.
+                            You do not have any financing deals yet. You can request one now.
                         </p>
                     </CardContent>
                 </Card>
