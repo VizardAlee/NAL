@@ -581,8 +581,13 @@ export default function PlatformFundsPage() {
     const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allFundBatchesLoading || assetsLoading || dealsLoading || repaymentsLoading || earningsLoading || depositsLoading;
 
     const metrics = useMemo(() => {
-        const investibleCapital = platformFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
         const administrativeBalance = adminTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
+        
+        const markupEarnings = earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
+        const managementFeeEarnings = adminTransactions?.filter(tx => tx.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0) || 0;
+        const platformEarnings = markupEarnings + managementFeeEarnings;
+
+        const investibleCapital = platformFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
         const zakatPool = zakatTransactions?.reduce((sum, tx) => sum + Math.abs(tx.amount), 0) || 0;
         const totalInvestiblePool = allFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
         const totalAssetValue = assets?.filter(a => a.status === 'Held').reduce((sum, asset) => sum + asset.acquisitionCost, 0) || 0;
@@ -603,9 +608,6 @@ export default function PlatformFundsPage() {
             }
         }
         
-        const markupEarnings = earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
-        const managementFeeEarnings = adminTransactions?.filter(tx => tx.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0) || 0;
-        const platformEarnings = markupEarnings + managementFeeEarnings;
 
         const cumulativeInvestments = allInvestorDeposits?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
         const cumulativeDeals = deals?.reduce((sum, deal) => sum + deal.principal, 0) || 0;
