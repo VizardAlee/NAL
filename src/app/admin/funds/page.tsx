@@ -583,9 +583,7 @@ export default function PlatformFundsPage() {
     const metrics = useMemo(() => {
         const administrativeBalance = adminTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
         
-        const markupEarnings = earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
-        const managementFeeEarnings = adminTransactions?.filter(tx => tx.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0) || 0;
-        const platformEarnings = markupEarnings + managementFeeEarnings;
+        const platformEarnings = earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
 
         const investibleCapital = platformFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
         const zakatPool = zakatTransactions?.reduce((sum, tx) => sum + Math.abs(tx.amount), 0) || 0;

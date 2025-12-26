@@ -44,11 +44,6 @@ type Transaction = DocumentData & {
     dealName?: string;
 };
 
-type AdministrativeTransaction = DocumentData & {
-  type: 'ManagementFee';
-  amount: number;
-};
-
 type DealRequest = DocumentData & {
     id: string;
     dealName: string;
@@ -206,11 +201,6 @@ export default function AdminDashboardPage() {
       );
     }, [firestore]);
 
-    const managementFeesQuery = useMemo(() => {
-        if (!firestore) return null;
-        return query(collection(firestore, 'administrativeTransactions'), where('type', '==', 'ManagementFee'));
-    }, [firestore]);
-
     const thirtyDaysAgo = useMemo(() => subDays(new Date(), 30), []);
     const overdueDealsQuery = useMemo(() => {
       if (!firestore) return null;
@@ -232,12 +222,11 @@ export default function AdminDashboardPage() {
     const { data: recentTerminations, loading: terminationsLoading } = useCollection<TerminationRequest>(terminationsQuery);
     const { data: allRecentFundBatches, loading: recentBatchesLoading } = useCollection<FundBatch>(recentFundBatchesQuery);
     const { data: earningsTransactions, loading: earningsLoading } = useCollection<Transaction>(earningsQuery);
-    const { data: managementFeeTransactions, loading: managementFeesLoading } = useCollection<AdministrativeTransaction>(managementFeesQuery);
     const { data: overdueDeals, loading: overdueDealsLoading } = useCollection<Deal>(overdueDealsQuery);
     
     const allUsersResult = useCollection<User>(usersQuery); 
 
-    const isLoading = [fundBatchesLoading, usersLoading, transactionsLoading, dealRequestsLoading, depositRequestsLoading, withdrawalRequestsLoading, reinvestmentRequestsLoading, terminationsLoading, recentBatchesLoading, earningsLoading, managementFeesLoading, overdueDealsLoading, allUsersResult.loading].some(Boolean);
+    const isLoading = [fundBatchesLoading, usersLoading, transactionsLoading, dealRequestsLoading, depositRequestsLoading, withdrawalRequestsLoading, reinvestmentRequestsLoading, terminationsLoading, recentBatchesLoading, earningsLoading, overdueDealsLoading, allUsersResult.loading].some(Boolean);
 
     const chartData = useMemo(() => {
         const today = new Date();
@@ -269,10 +258,8 @@ export default function AdminDashboardPage() {
     }, [fundBatches]);
 
     const platformEarnings = useMemo(() => {
-        const earningsFromDeals = earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
-        const earningsFromFees = managementFeeTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
-        return earningsFromDeals + earningsFromFees;
-    }, [earningsTransactions, managementFeeTransactions]);
+        return earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
+    }, [earningsTransactions]);
 
     const recentActivities = useMemo(() => {
         if (!allUsersResult.data) return [];
