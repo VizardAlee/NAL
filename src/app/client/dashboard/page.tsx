@@ -18,10 +18,11 @@ import { requestTerminationAction } from "./actions";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getOrCreateConversation } from "@/app/common/actions/chat-actions";
+import { getOrCreateConversation } from '@/app/common/actions/chat-actions';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import Image from "next/image";
 import { RepaymentHistory } from "@/components/deals/repayment-history";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 const statusVariant = {
@@ -446,4 +447,5 @@ export default function ClientDashboard() {
             </div>
         </div>
     );
-}
+
+    
