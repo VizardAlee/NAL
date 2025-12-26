@@ -36,7 +36,7 @@ function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): numb
     return value * (DURATION_IN_DAYS[unit] || 0);
 }
 
-const EIGHTEEN_MONTHS_IN_DAYS = 18 * DURATION_IN_DAYS.Months;
+const TWELVE_MONTHS_IN_DAYS = 12 * DURATION_IN_DAYS.Months;
 
 const serviceAccount: ServiceAccount | undefined = process.env.FIREBASE_CLIENT_EMAIL
   ? {
@@ -112,10 +112,10 @@ export async function POST(request: NextRequest) {
             const eligibleBatches = fundBatchesSnapshot.docs.filter(doc => {
                 const batchData = doc.data() as FundBatch;
                 const originalBatchTenureInDays = convertToDays(batchData.tenureValue, batchData.tenureUnit);
-                const isShortTermBatch = originalBatchTenureInDays < EIGHTEEN_MONTHS_IN_DAYS;
+                const isShortTermBatch = originalBatchTenureInDays <= TWELVE_MONTHS_IN_DAYS;
 
                 if (isShortTermBatch) {
-                    const isShortTermDeal = dealDurationInDays < EIGHTEEN_MONTHS_IN_DAYS;
+                    const isShortTermDeal = dealDurationInDays <= TWELVE_MONTHS_IN_DAYS;
                     return isShortTermDeal;
                 } else {
                     const expiryDate = batchData.createdAt.toDate();

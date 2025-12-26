@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -10,7 +11,7 @@ import { useMemo, useState, useTransition } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useFirestore, useUser, type User } from '@/firebase';
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from '@/components/ui/skeleton';
 import { format, differenceInDays, addDays, startOfWeek, subWeeks } from 'date-fns';
 import { Deal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -79,7 +80,7 @@ function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): numb
     return value * (DURATION_IN_DAYS[unit] || 0);
 }
 
-const EIGHTEEN_MONTHS_IN_DAYS = 18 * DURATION_IN_DAYS.Months;
+const TWELVE_MONTHS_IN_DAYS = 12 * DURATION_IN_DAYS.Months;
 
 
 const chartConfig = {
@@ -338,7 +339,7 @@ export default function InvestorDashboard() {
 
         const dealDurationInDays = convertToDays(deal.durationValue, deal.durationUnit);
         
-        if (dealDurationInDays >= EIGHTEEN_MONTHS_IN_DAYS) {
+        if (dealDurationInDays > TWELVE_MONTHS_IN_DAYS) {
             totalLongTermProfit += profitTx.amount;
         } else {
             totalShortTermProfit += profitTx.amount;

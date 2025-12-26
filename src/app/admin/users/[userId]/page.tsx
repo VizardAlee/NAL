@@ -89,7 +89,7 @@ function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): numb
     return value * (DURATION_IN_DAYS[unit] || 0);
 }
 
-const EIGHTEEN_MONTHS_IN_DAYS = 18 * DURATION_IN_DAYS.Months;
+const TWELVE_MONTHS_IN_DAYS = 12 * DURATION_IN_DAYS.Months;
 
 function UserDetailSkeleton() {
     return (
@@ -310,7 +310,7 @@ export default function UserDetailPage() {
     if (!fundBatches) return [];
     return fundBatches.map(batch => {
         const batchTenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
-        const type = batchTenureInDays < EIGHTEEN_MONTHS_IN_DAYS ? 'Short-Term' : 'Long-Term';
+        const type = batchTenureInDays <= TWELVE_MONTHS_IN_DAYS ? 'Short-Term' : 'Long-Term';
         return { ...batch, type };
     });
   }, [fundBatches]);
@@ -952,6 +952,3 @@ export default function UserDetailPage() {
     </div>
   );
 }
-
-
-
