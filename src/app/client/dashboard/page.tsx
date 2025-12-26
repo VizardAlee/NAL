@@ -17,19 +17,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { requestTerminationAction } from "./actions";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getOrCreateConversation } from "@/app/common/actions/chat-actions";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import Image from "next/image";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 
 
 const statusVariant = {
@@ -239,7 +232,7 @@ function DealCard({ deal }: { deal: Deal }) {
                         <p className="text-muted-foreground">Duration</p>
                         <p className="font-medium">{deal.durationValue} {deal.durationUnit}</p>
                     </div>
-                    <div>
+                     <div>
                         <p className="text-muted-foreground">Financing Mode</p>
                         <div className="font-medium"><Badge variant="outline">{deal.financingMode || 'Murabaha'}</Badge></div>
                     </div>
@@ -339,8 +332,7 @@ export default function ClientDashboard() {
     
     const isLoading = userLoading || dealsLoading || profileLoading;
 
-    const activeDeals = useMemo(() => deals?.filter(d => d.status === 'Active') || [], [deals]);
-    const otherDeals = useMemo(() => deals?.filter(d => d.status !== 'Active') || [], [deals]);
+    const mostRecentDeal = useMemo(() => deals?.[0], [deals]);
 
     if (isLoading) {
         return <DealsSkeleton />;
@@ -355,7 +347,7 @@ export default function ClientDashboard() {
         <div>
             <PageHeader
                 title="Client Dashboard"
-                description="Here is an overview of your current and past financing deals."
+                description="Here is an overview of your most recent financing deal."
                 icon={FileText}
             >
                 <div className="flex gap-2">
@@ -423,61 +415,8 @@ export default function ClientDashboard() {
                     </Card>
                 )}
 
-
-                {deals && deals.length > 0 ? (
-                    <>
-                        {activeDeals.map(deal => (
-                            <DealCard key={deal.id} deal={deal} />
-                        ))}
-
-                        {otherDeals.length > 0 && (
-                            <Collapsible>
-                                <CollapsibleTrigger asChild>
-                                    <Button variant="outline" className="w-full">
-                                        <History className="mr-2 h-4 w-4" />
-                                        View Past Deals ({otherDeals.length})
-                                    </Button>
-                                </CollapsibleTrigger>
-                                <CollapsibleContent>
-                                    <Card className="mt-4">
-                                        <CardHeader>
-                                            <CardTitle>Inactive & Past Deals</CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Deal Name</TableHead>
-                                                        <TableHead>Principal</TableHead>
-                                                        <TableHead>Status</TableHead>
-                                                        <TableHead className="text-right"></TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {otherDeals.map(deal => (
-                                                        <TableRow key={deal.id}>
-                                                            <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
-                                                            <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
-                                                            <TableCell data-label="Status">
-                                                                <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
-                                                            </TableCell>
-                                                            <TableCell data-label="Action" className="text-right">
-                                                                <Button asChild variant="outline" size="sm">
-                                                                    <Link href={`/client/deals/${deal.id}`}>
-                                                                        View Details <ArrowRight className="ml-2 h-4 w-4" />
-                                                                    </Link>
-                                                                </Button>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        </CardContent>
-                                    </Card>
-                                </CollapsibleContent>
-                            </Collapsible>
-                        )}
-                    </>
+                {mostRecentDeal ? (
+                     <DealCard deal={mostRecentDeal} />
                 ) : (
                      <Card className="mt-6 border-dashed">
                         <CardContent className="p-12 text-center">
@@ -494,6 +433,16 @@ export default function ClientDashboard() {
                             </Button>
                         </CardContent>
                     </Card>
+                )}
+
+                {deals && deals.length > 0 && (
+                     <div className="text-center">
+                        <Button asChild variant="outline">
+                            <Link href="/client/deals">
+                                View All Deals ({deals.length}) <ArrowRight className="ml-2 h-4 w-4" />
+                            </Link>
+                        </Button>
+                    </div>
                 )}
             </div>
         </div>
