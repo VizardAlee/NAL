@@ -3,7 +3,6 @@
 
 import { useState, useEffect } from 'react';
 import {
-  onSnapshot,
   type DocumentData,
   type DocumentReference,
   type FirestoreError,
@@ -11,6 +10,7 @@ import {
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useUser } from '../auth/use-user';
+import { safeOnSnapshot } from '../safe-on-snapshot';
 
 export function useDoc<T extends DocumentData>(
   ref: DocumentReference<T> | null
@@ -29,7 +29,7 @@ export function useDoc<T extends DocumentData>(
 
     setLoading(true);
 
-    const unsubscribe = onSnapshot(
+    const unsubscribe = safeOnSnapshot(
       ref,
       (doc) => {
         if (doc.exists()) {
@@ -41,14 +41,6 @@ export function useDoc<T extends DocumentData>(
         setError(null);
       },
       (err) => {
-        // Silently ignore permission-denied errors when the user is logged out.
-        // This is an expected race condition on logout.
-        if (err.code === 'permission-denied' && !user) {
-          setData(null);
-          setLoading(false);
-          return;
-        }
-        
         console.error(err);
         setError(err);
         setLoading(false);

@@ -3,7 +3,6 @@
 
 import { useState, useEffect } from 'react';
 import {
-  onSnapshot,
   type Query,
   type DocumentData,
   type FirestoreError,
@@ -12,6 +11,7 @@ import {
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useUser } from '../auth/use-user';
+import { safeOnSnapshot } from '../safe-on-snapshot';
 
 // Make setData available to consumers of the hook
 export function useCollection<T extends DocumentData>(
@@ -40,7 +40,7 @@ export function useCollection<T extends DocumentData>(
     // At this point, we have a query and an authenticated user.
     setLoading(true);
 
-    const unsubscribe = onSnapshot(
+    const unsubscribe = safeOnSnapshot(
       q,
       (snapshot) => {
         const docs = snapshot.docs.map(
@@ -51,14 +51,6 @@ export function useCollection<T extends DocumentData>(
         setError(null);
       },
       (err) => {
-        // Silently ignore permission-denied errors when the user is logged out.
-        // This is an expected race condition on logout.
-        if (err.code === 'permission-denied' && !user) {
-          setData(null);
-          setLoading(false);
-          return;
-        }
-        
         if (err.code === 'permission-denied' && q && 'path' in q) {
           const path = (q as any).path || 'unknown';
           errorEmitter.emit(
