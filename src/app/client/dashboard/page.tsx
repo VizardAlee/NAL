@@ -241,7 +241,7 @@ function DealCard({ deal }: { deal: Deal }) {
                     </div>
                     <div>
                         <p className="text-muted-foreground">Financing Mode</p>
-                        <p className="font-medium"><Badge variant="outline">{deal.financingMode || 'Murabaha'}</Badge></p>
+                        <div className="font-medium"><Badge variant="outline">{deal.financingMode || 'Murabaha'}</Badge></div>
                     </div>
                     <div>
                         <p className="text-muted-foreground">Repayment</p>
