@@ -3,9 +3,10 @@
 
 import { notifyAdmins } from '@/app/common/actions/notification-actions';
 import { adminDb } from '@/firebase/admin-app';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { differenceInDays } from 'date-fns';
 
 // --- Withdrawal Action ---
 const withdrawalSchema = z.object({
@@ -120,4 +121,68 @@ export async function reinvestAction(input: { amount: number; userId: string, us
       message: `Failed to request reinvestment: ${message}`,
     };
   }
+}
+
+// --- Uninvested Capital Withdrawal ---
+
+const capitalWithdrawalSchema = z.object({
+  batchId: z.string().min(1),
+  userId: z.string().min(1),
+  userName: z.string().min(1),
+});
+
+export async function requestCapitalWithdrawalAction(input: z.infer<typeof capitalWithdrawalSchema>) {
+    const validated = capitalWithdrawalSchema.safeParse(input);
+    if (!validated.success) {
+        return { success: false, message: 'Invalid data provided.' };
+    }
+
+    const { batchId, userId, userName } = validated.data;
+    const DURATION_IN_DAYS = { Days: 1, Weeks: 7, Fortnights: 14, Months: 30.4375, Years: 365.25 };
+
+    try {
+        const batchRef = adminDb.collection('fundBatches').doc(batchId);
+        const batchDoc = await batchRef.get();
+
+        if (!batchDoc.exists) {
+            throw new Error("Fund batch not found.");
+        }
+        const batchData = batchDoc.data()!;
+
+        // Server-side validation
+        const isShortTerm = (batchData.tenureValue * (DURATION_IN_DAYS[batchData.tenureUnit as keyof typeof DURATION_IN_DAYS] || 0)) <= (12 * 30.4375);
+        const isUninvested = batchData.amount === batchData.remainingAmount;
+        const isOverOneMonthOld = differenceInDays(new Date(), batchData.createdAt.toDate()) > 30;
+
+        if (!(isShortTerm && isUninvested && isOverOneMonthOld)) {
+            return { success: false, message: "This fund batch is not eligible for withdrawal." };
+        }
+        
+        const amount = batchData.amount;
+        const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+
+        // This action does not delete the batch. It creates a request for an admin to approve.
+        await adminDb.collection('withdrawalRequests').add({
+            investorId: userId,
+            investorName: userName,
+            amount: amount,
+            status: 'Pending',
+            requestedAt: FieldValue.serverTimestamp(),
+            details: `Withdrawal of uninvested short-term capital (Batch ID: ${batchId}).`
+        });
+
+        await notifyAdmins(
+            'Capital Withdrawal Request',
+            `${userName} requested to withdraw uninvested capital of ${formattedAmount}.`,
+            '/admin/approvals/withdrawals'
+        );
+
+        revalidatePath('/investor/dashboard');
+        revalidatePath('/admin/approvals/withdrawals');
+
+        return { success: true, message: `Withdrawal request for ${formattedAmount} has been submitted.` };
+
+    } catch (error) {
+        return { success: false, message: error instanceof Error ? error.message : "An unknown error occurred." };
+    }
 }

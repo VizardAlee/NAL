@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -20,7 +19,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { WithdrawForm } from "./withdraw-form";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
-import { reinvestAction } from "./withdrawal-actions";
+import { reinvestAction, requestCapitalWithdrawalAction } from "./withdrawal-actions";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -50,6 +49,7 @@ type Investment = DocumentData & {
 };
 
 type FundBatch = DocumentData & {
+    id: string;
     sourceId: string;
     amount: number;
     remainingAmount: number;
@@ -80,7 +80,7 @@ function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): numb
     return value * (DURATION_IN_DAYS[unit] || 0);
 }
 
-const TWELVE_MONTHS_IN_DAYS = 12 * DURATION_IN_DAYS.Months;
+const TWELVE_MONTHS_IN_DAYS = 12 * 30.4375;
 
 
 const chartConfig = {
@@ -254,6 +254,60 @@ function ContactAdminSheet() {
     );
 }
 
+function UninvestedCapitalCard({ batches, user }: { batches: FundBatch[] | null, user: User }) {
+    const { toast } = useToast();
+    const [pendingWithdrawal, setPendingWithdrawal] = useState<string | null>(null);
+
+    const eligibleBatches = useMemo(() => {
+        if (!batches) return [];
+        return batches.filter(batch => {
+            const isShortTerm = (batch.tenureValue * (DURATION_IN_DAYS[batch.tenureUnit as keyof typeof DURATION_IN_DAYS] || 0)) <= TWELVE_MONTHS_IN_DAYS;
+            const isUninvested = batch.amount === batch.remainingAmount;
+            const isOverOneMonthOld = differenceInDays(new Date(), batch.createdAt.toDate()) > 30;
+            return isShortTerm && isUninvested && isOverOneMonthOld;
+        });
+    }, [batches]);
+
+    const handleWithdraw = async (batchId: string) => {
+        setPendingWithdrawal(batchId);
+        const result = await requestCapitalWithdrawalAction({ batchId, userId: user.uid, userName: user.displayName || 'User' });
+        if (result.success) {
+            toast({ title: 'Success', description: result.message });
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.message });
+        }
+        setPendingWithdrawal(null);
+    }
+    
+    if (!eligibleBatches || eligibleBatches.length === 0) {
+        return null;
+    }
+
+    return (
+        <Card className="mt-8">
+            <CardHeader>
+                <CardTitle>Uninvested Short-Term Capital</CardTitle>
+                <CardDescription>The following funds have been uninvested for over a month and are eligible for withdrawal.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-3">
+                    {eligibleBatches.map(batch => (
+                        <div key={batch.id} className="flex items-center justify-between p-3 rounded-md border">
+                            <div>
+                                <p className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</p>
+                                <p className="text-xs text-muted-foreground">Deposited on {format(batch.createdAt.toDate(), 'PPP')}</p>
+                            </div>
+                            <Button size="sm" onClick={() => handleWithdraw(batch.id)} disabled={pendingWithdrawal === batch.id}>
+                                {pendingWithdrawal === batch.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wallet className="mr-2 h-4 w-4" />}
+                                Request Withdrawal
+                            </Button>
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
 
 export default function InvestorDashboard() {
   const firestore = useFirestore();
@@ -261,8 +315,6 @@ export default function InvestorDashboard() {
   const [isWithdrawOpen, setWithdrawOpen] = useState(false);
   const [isDepositOpen, setDepositOpen] = useState(false);
   const isMobile = useIsMobile();
-  const { toast } = useToast();
-  const [isReinvestPending, startReinvestTransition] = useTransition();
 
   const userProfileRef = useMemo(() => {
     if (!firestore || !user?.uid) return null;
@@ -473,7 +525,7 @@ export default function InvestorDashboard() {
         icon={Landmark}
       >
         <div className="flex gap-2">
-            <ContactAdminSheet />
+            {user && <ContactAdminSheet />}
             <Dialog open={isDepositOpen} onOpenChange={setDepositOpen}>
             <DialogTrigger asChild>
                 <Button>
@@ -656,6 +708,8 @@ export default function InvestorDashboard() {
             )}
         </CardContent>
       </Card>
+      
+      {user && <UninvestedCapitalCard batches={fundBatches} user={user} />}
 
 
        <Card className="mt-8">
