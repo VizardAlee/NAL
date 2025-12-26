@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -9,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { useUser } from '../auth/use-user';
 
 export function useDoc<T extends DocumentData>(
   ref: DocumentReference<T> | null
@@ -16,6 +18,7 @@ export function useDoc<T extends DocumentData>(
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<FirestoreError | null>(null);
+  const { user } = useUser();
 
   useEffect(() => {
     if (!ref) {
@@ -38,6 +41,14 @@ export function useDoc<T extends DocumentData>(
         setError(null);
       },
       (err) => {
+        // Silently ignore permission-denied errors when the user is logged out.
+        // This is an expected race condition on logout.
+        if (err.code === 'permission-denied' && !user) {
+          setData(null);
+          setLoading(false);
+          return;
+        }
+        
         console.error(err);
         setError(err);
         setLoading(false);
@@ -55,7 +66,7 @@ export function useDoc<T extends DocumentData>(
     );
 
     return () => unsubscribe();
-  }, [ref]);
+  }, [ref, user]);
 
   return { data, loading, error };
 }

@@ -51,6 +51,14 @@ export function useCollection<T extends DocumentData>(
         setError(null);
       },
       (err) => {
+        // Silently ignore permission-denied errors when the user is logged out.
+        // This is an expected race condition on logout.
+        if (err.code === 'permission-denied' && !user) {
+          setData(null);
+          setLoading(false);
+          return;
+        }
+        
         if (err.code === 'permission-denied' && q && 'path' in q) {
           const path = (q as any).path || 'unknown';
           errorEmitter.emit(
