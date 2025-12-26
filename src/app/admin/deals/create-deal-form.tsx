@@ -134,8 +134,7 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
       const { principal, managementFeeRate, ...restOfValues } = values;
       const managementFeeAmount = (principal * managementFeeRate) / 100;
       
-      const dealsCollection = collection(firestore, 'deals');
-      await addDoc(dealsCollection, {
+      const dealData: any = {
         ...restOfValues,
         principal,
         managementFeeRate,
@@ -145,7 +144,14 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
         startDate: values.startDate ? Timestamp.fromDate(values.startDate) : (values.createdAt ? Timestamp.fromDate(values.createdAt) : Timestamp.now()),
         clientName: selectedClient.name, // Denormalize client name
         status: 'Pending',
-      });
+      };
+
+      if (!dealData.marketerId) {
+        delete dealData.marketerId;
+      }
+      
+      const dealsCollection = collection(firestore, 'deals');
+      await addDoc(dealsCollection, dealData);
 
       toast({
         title: 'Deal Created',
