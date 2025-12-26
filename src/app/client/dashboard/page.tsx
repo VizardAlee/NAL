@@ -232,9 +232,11 @@ function DealCard({ deal }: { deal: Deal }) {
                         <p className="text-muted-foreground">Duration</p>
                         <p className="font-medium">{deal.durationValue} {deal.durationUnit}</p>
                     </div>
-                     <div>
-                        <p className="text-muted-foreground">Financing Mode</p>
-                        <div className="font-medium"><Badge variant="outline">{deal.financingMode || 'Murabaha'}</Badge></div>
+                    <div>
+                      <p className="text-muted-foreground">Financing Mode</p>
+                      <div className="font-medium">
+                        <Badge variant="outline">{deal.financingMode || 'Murabaha'}</Badge>
+                      </div>
                     </div>
                     <div>
                         <p className="text-muted-foreground">Repayment</p>
@@ -277,7 +279,7 @@ function DealCard({ deal }: { deal: Deal }) {
                 </Tabs>
             </div>
         </Card>
-    )
+    );
 }
 
 function DealsSkeleton() {
@@ -351,7 +353,7 @@ export default function ClientDashboard() {
                 icon={FileText}
             >
                 <div className="flex gap-2">
-                    <ContactAdminSheet />
+                    {user && <ContactAdminSheet />}
                     <Button asChild>
                         <Link href="/client/deals/request">
                             <PlusCircle className="mr-2 h-4 w-4" />
@@ -447,5 +449,4 @@ export default function ClientDashboard() {
             </div>
         </div>
     );
-
-    
+}
