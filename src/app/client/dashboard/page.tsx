@@ -5,7 +5,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy, HandCoins, Gavel, Download } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy, HandCoins, Gavel, Download, BookOpen } from "lucide-react";
 import { useMemo, useTransition, useEffect, useState } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, doc } from 'firebase/firestore';
@@ -240,6 +240,10 @@ function DealCard({ deal }: { deal: Deal }) {
                         <p className="font-medium">{deal.durationValue} {deal.durationUnit}</p>
                     </div>
                     <div>
+                        <p className="text-muted-foreground">Financing Mode</p>
+                        <p className="font-medium"><Badge variant="outline">{deal.financingMode || 'Murabaha'}</Badge></p>
+                    </div>
+                    <div>
                         <p className="text-muted-foreground">Repayment</p>
                         <p className="font-medium">{deal.repaymentType}</p>
                     </div>
@@ -431,6 +435,12 @@ export default function ClientDashboard() {
                                 <p className="mt-1 text-sm text-muted-foreground">
                                     You do not have any financing deals yet. You can request one now.
                                 </p>
+                                <Button asChild className="mt-4">
+                                    <Link href="/client/deals/request">
+                                        <PlusCircle className="mr-2 h-4 w-4" />
+                                        Request Your First Deal
+                                    </Link>
+                                </Button>
                             </CardContent>
                         </Card>
                     )}
@@ -449,3 +459,4 @@ export default function ClientDashboard() {
         </div>
     );
 }
+
