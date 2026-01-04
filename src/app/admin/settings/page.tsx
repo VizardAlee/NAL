@@ -179,7 +179,7 @@ function CompanyLogoForm() {
             <CardContent>
                 {loading ? <Skeleton className="h-32 w-32 rounded-lg" /> : (
                 <form action={formAction} className="space-y-4">
-                    <div className="flex items-center gap-6">
+                    <div className="flex flex-col sm:flex-row items-center gap-6">
                         <Image
                             src={preview || logoUrl || '/placeholder.svg'}
                             alt="Company Logo Preview"
@@ -188,7 +188,7 @@ function CompanyLogoForm() {
                             className="h-32 w-32 rounded-lg object-contain border bg-muted"
                         />
                         <input type="hidden" name="logoUrl" value={preview || ''} />
-                        <div className="flex flex-col gap-2">
+                        <div className="flex flex-col w-full sm:w-auto gap-2">
                              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
                                 <ImageIcon className="mr-2 h-4 w-4" />
                                 Choose File
@@ -199,6 +199,13 @@ function CompanyLogoForm() {
                             </Button>
                         </div>
                     </div>
+                     <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        className="hidden"
+                        accept="image/png, image/jpeg, image/webp"
+                    />
                 </form>
                 )}
             </CardContent>
@@ -267,5 +274,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
-    
