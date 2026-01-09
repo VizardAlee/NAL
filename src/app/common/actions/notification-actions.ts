@@ -1,9 +1,11 @@
 
 'use server';
 
-import { adminDb } from '@/firebase/admin-app';
+import { getAdminApp } from '@/firebase/admin-app';
+import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
-import { Timestamp, FieldValue } from 'firebase-admin/firestore';
+
+const adminDb = getFirestore(getAdminApp());
 
 // Main function to create an in-app notification
 async function createInAppNotification(
@@ -40,7 +42,7 @@ async function sendPushNotification(
       return; // No tokens to send to
     }
 
-    const messaging = getMessaging(adminDb.app);
+    const messaging = getMessaging(getAdminApp());
     
     const message = {
       notification: {

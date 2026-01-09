@@ -1,7 +1,8 @@
 
 'use server';
 
-import { adminDb } from '@/firebase/admin-app';
+import { getAdminApp } from '@/firebase/admin-app';
+import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
@@ -38,7 +39,9 @@ export async function signUpWithEmailAction(
     }
 
     const { name, email, password, role, phoneNumber, referralCode } = validated.data;
-    const auth = getAuth(adminDb.app);
+    const app = getAdminApp();
+    const auth = getAuth(app);
+    const adminDb = getFirestore(app);
 
     try {
         const userExists = await auth.getUserByEmail(email).catch(() => null);
