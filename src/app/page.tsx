@@ -51,7 +51,7 @@ export default function Home() {
             alt="Descriptive write-up"
             width={1000}
             height={167}
-            className="object-contain"
+            className="object-contain max-w-4xl"
           />
         </div>
       </section>
