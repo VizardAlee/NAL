@@ -45,7 +45,7 @@ export default function Home() {
 
       {/* Image Section */}
       <section className="w-full bg-background py-0">
-        <div className="container flex justify-start">
+        <div className="container flex justify-center">
           <Image
             src="/business_hub.png"
             alt="Descriptive write-up"
