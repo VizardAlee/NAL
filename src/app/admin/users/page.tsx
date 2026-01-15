@@ -74,7 +74,7 @@ function UsersTable({ users, loading }: { users: User[] | null, loading: boolean
                       <CardContent className="flex items-center gap-4 p-4">
                           <Avatar className="h-12 w-12">
                               <AvatarImage src={`https://picsum.photos/seed/${user.id}/128/128`} alt={user.name} />
-                              <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                              <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
                           </Avatar>
                           <div className="flex-1 space-y-1">
                               <p className="font-medium">{user.name}</p>
@@ -106,7 +106,7 @@ function UsersTable({ users, loading }: { users: User[] | null, loading: boolean
                 <div className="flex items-center gap-3">
                     <Avatar>
                         <AvatarImage src={`https://picsum.photos/seed/${user.id}/128/128`} alt={user.name} />
-                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                        <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
                     </Avatar>
                     <span>{user.name}</span>
                 </div>
