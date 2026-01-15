@@ -43,6 +43,19 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Image Section */}
+      <section className="w-full py-8 bg-background">
+        <div className="container flex justify-center">
+          <Image
+            src="/write-up.png"
+            alt="Descriptive write-up"
+            width={1200}
+            height={200}
+            className="object-contain"
+          />
+        </div>
+      </section>
+
       <main className="flex-1">
         <section className="container py-12 sm:py-24 md:py-32">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
