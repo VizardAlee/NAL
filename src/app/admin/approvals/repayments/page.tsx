@@ -121,7 +121,11 @@ function RepaymentsTable({
         onApprove?.(repayment);
     };
     
-    const formatDate = (date: Date) => format(date, 'PPP');
+    const formatDate = (date: Date | Timestamp | undefined) => {
+        if (!date) return 'N/A';
+        const dateObj = date instanceof Timestamp ? date.toDate() : date;
+        return format(dateObj, 'PPP');
+    };
 
     if (isLoading) {
         return (
@@ -156,8 +160,8 @@ function RepaymentsTable({
                                 {!showApproveButton && <Badge variant={repayment.status === 'Approved' ? 'default' : 'destructive'}>{repayment.status}</Badge>}
                             </div>
                             <div className="text-xs text-muted-foreground space-y-1">
-                                <p><strong>Due Date:</strong> {formatDate(repayment.dueDate.toDate())}</p>
-                                <p><strong>Date Lodged:</strong> {formatDate(repayment.lodgedAt.toDate())}</p>
+                                <p><strong>Due Date:</strong> {formatDate(repayment.dueDate)}</p>
+                                <p><strong>Date Lodged:</strong> {formatDate(repayment.lodgedAt)}</p>
                             </div>
 
                             {showApproveButton && (
@@ -200,8 +204,8 @@ function RepaymentsTable({
                                 <TableCell data-label="Client" className="font-medium">{repayment.clientName}</TableCell>
                                 <TableCell data-label="Deal">{repayment.dealName}</TableCell>
                                 <TableCell data-label="Amount">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(repayment.amount)}</TableCell>
-                                <TableCell data-label="Due Date">{formatDate(repayment.dueDate.toDate())}</TableCell>
-                                <TableCell data-label="Date Lodged">{formatDate(repayment.lodgedAt.toDate())}</TableCell>
+                                <TableCell data-label="Due Date">{formatDate(repayment.dueDate)}</TableCell>
+                                <TableCell data-label="Date Lodged">{formatDate(repayment.lodgedAt)}</TableCell>
                                 {showApproveButton ? (
                                     <TableCell data-label="Action" className="text-right">
                                         <Button
