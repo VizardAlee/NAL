@@ -11,6 +11,7 @@ import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { StatsCounter } from "@/components/stats-counter";
+import { Animated } from "@/components/animated";
 
 const featureImages = PlaceHolderImages.filter(img => ['feature-investor', 'feature-client', 'feature-admin'].includes(img.id));
 const heroImage = PlaceHolderImages.find(img => img.id === 'hero-image');
@@ -60,13 +61,19 @@ export default function Home() {
         <section className="container py-12 sm:py-24 md:py-32">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
             <div className="flex flex-col justify-center space-y-6">
-              <h1 className="text-4xl font-bold tracking-tighter font-headline sm:text-5xl xl:text-6xl/none">
+              <Animated
+                as="h1"
+                className="text-4xl font-bold tracking-tighter font-headline sm:text-5xl xl:text-6xl/none animate-in fade-in slide-in-from-bottom-4 duration-1000"
+              >
                 The Central Hub for Your Financing Ecosystem
-              </h1>
-              <p className="max-w-[600px] text-muted-foreground md:text-xl">
+              </Animated>
+              <Animated
+                as="p"
+                className="max-w-[600px] text-muted-foreground md:text-xl animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-200"
+              >
                 NAL General Marchant connects investors, clients, and administrators on a single platform to manage financing deals with unparalleled efficiency and insight.
-              </p>
-              <div className="flex flex-col gap-4 sm:flex-row">
+              </Animated>
+              <Animated className="flex flex-col gap-4 sm:flex-row animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
                 <Button size="lg" asChild>
                   <Link href="/signup">
                     Get Started
@@ -77,9 +84,9 @@ export default function Home() {
                     Learn More
                   </Link>
                 </Button>
-              </div>
+              </Animated>
             </div>
-            <div className="flex items-center justify-center">
+            <Animated className="flex items-center justify-center animate-in fade-in zoom-in-95 duration-1000 delay-200">
               {heroImage && (
                 <Image
                   src={heroImage.imageUrl}
@@ -90,7 +97,7 @@ export default function Home() {
                   className="rounded-xl object-cover shadow-2xl"
                 />
               )}
-            </div>
+            </Animated>
           </div>
         </section>
 
@@ -99,40 +106,46 @@ export default function Home() {
         <section id="features" className="w-full bg-background py-12 md:py-24 lg:py-32">
           <div className="container">
             <div className="flex flex-col items-center justify-center space-y-4 text-center">
-              <div className="space-y-2">
+              <Animated className="space-y-2">
                 <div className="inline-block rounded-lg bg-secondary px-3 py-1 text-sm">Key Features</div>
                 <h2 className="text-3xl font-bold tracking-tighter font-headline sm:text-5xl">Role-Based Dashboards for Every User</h2>
                 <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
                   Tailored experiences for investors, clients, and administrators ensure everyone has the right information at their fingertips.
                 </p>
-              </div>
+              </Animated>
             </div>
             <div className="mx-auto grid max-w-5xl items-start gap-8 sm:grid-cols-2 md:gap-12 lg:max-w-none lg:grid-cols-3 mt-12">
-              <FeatureCard 
-                icon={<LineChart className="h-8 w-8 text-accent" />} 
-                title="Investor Dashboard" 
-                description="View your portfolio, reinvest funds, and track earnings. Deploy capital into new financing deals as they become available." 
-                image={featureImages.find(img => img.id === 'feature-investor')}
-              />
-              <FeatureCard 
-                icon={<Users className="h-8 w-8 text-accent" />} 
-                title="Client Dashboard" 
-                description="Manage your financing deals. Track loan status, view your repayment schedule, and easily lodge payments for confirmation." 
-                image={featureImages.find(img => img.id === 'feature-client')}
-              />
-              <FeatureCard 
-                icon={<CheckCircle className="h-8 w-8 text-accent" />} 
-                title="Admin Control Panel" 
-                description="Get a platform-wide view. Oversee all deals, manage users, approve financial requests, and activate new deals." 
-                image={featureImages.find(img => img.id === 'feature-admin')}
-              />
+              <Animated delay={200}>
+                <FeatureCard 
+                  icon={<LineChart className="h-8 w-8 text-accent" />} 
+                  title="Investor Dashboard" 
+                  description="View your portfolio, reinvest funds, and track earnings. Deploy capital into new financing deals as they become available." 
+                  image={featureImages.find(img => img.id === 'feature-investor')}
+                />
+              </Animated>
+               <Animated delay={350}>
+                <FeatureCard 
+                  icon={<Users className="h-8 w-8 text-accent" />} 
+                  title="Client Dashboard" 
+                  description="Manage your financing deals. Track loan status, view your repayment schedule, and easily lodge payments for confirmation." 
+                  image={featureImages.find(img => img.id === 'feature-client')}
+                />
+              </Animated>
+              <Animated delay={500}>
+                <FeatureCard 
+                  icon={<CheckCircle className="h-8 w-8 text-accent" />} 
+                  title="Admin Control Panel" 
+                  description="Get a platform-wide view. Oversee all deals, manage users, approve financial requests, and activate new deals." 
+                  image={featureImages.find(img => img.id === 'feature-admin')}
+                />
+              </Animated>
             </div>
           </div>
         </section>
         
         <section className="bg-muted/50 py-12 md:py-24 lg:py-32">
           <div className="container grid gap-10 md:grid-cols-2 md:gap-16">
-            <div className="space-y-4">
+            <Animated as="div" className="space-y-4" delay={200}>
               <div className="inline-block rounded-lg bg-secondary px-3 py-1 text-sm">Powered by AI</div>
               <h2 className="text-3xl font-bold tracking-tighter font-headline sm:text-4xl md:text-5xl">Smart Deal Analyzer</h2>
               <p className="max-w-[700px] text-muted-foreground md:text-lg/relaxed">
@@ -143,8 +156,8 @@ export default function Home() {
                   Try the Analyzer <Bot className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
-            </div>
-            <div className="flex items-center justify-center">
+            </Animated>
+            <Animated as="div" className="flex items-center justify-center" delay={400}>
               {aiImage && (
                 <Image
                   src={aiImage.imageUrl}
@@ -155,7 +168,7 @@ export default function Home() {
                   className="rounded-xl object-cover shadow-2xl"
                 />
               )}
-            </div>
+            </Animated>
           </div>
         </section>
 
