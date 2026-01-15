@@ -47,7 +47,7 @@ export default function Home() {
       <section className="w-full py-8 bg-background">
         <div className="container flex justify-center">
           <Image
-            src="/write-up.png"
+            src="/business_hub.png"
             alt="Descriptive write-up"
             width={1200}
             height={200}
