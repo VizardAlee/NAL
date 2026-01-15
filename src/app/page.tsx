@@ -49,9 +49,9 @@ export default function Home() {
           <Image
             src="/business_hub.png"
             alt="Descriptive write-up"
-            width={600}
-            height={100}
-            className="object-contain max-w-xl w-full h-auto"
+            width={240}
+            height={40}
+            className="object-contain max-w-sm w-full h-auto"
           />
         </div>
       </section>
