@@ -1,278 +1,329 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-        // --- DEV / HEALTHCHECK ---
+    // =========================
+    // HELPERS
+    // =========================
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function userRole() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isAdmin() {
+      return userRole() == 'Admin';
+    }
+
+    function isClient() {
+      return userRole() == 'Client';
+    }
+
+    function isInvestor() {
+      return userRole() == 'Investor';
+    }
+
+    function isLegal() {
+      return userRole() == 'Legal';
+    }
+
+    function isRecovery() {
+      return userRole() == 'Recovery';
+    }
+
+    function isMarketer() {
+      return userRole() == 'Marketer';
+    }
+
+    // =========================
+    // HEALTHCHECK (REMOVE FOR PROD)
+    // =========================
     match /healthcheck/{docId} {
       allow read, write: if true;
     }
 
+    // =========================
+    // USERS
+    // =========================
     match /users/{userId} {
+
+      // ✅ Admin can read all
+      // ✅ User can read own profile
+      // ✅ Legal can read all (if you want)
+      allow get: if isAdmin() || isOwner(userId) || isLegal();
+
+      allow list: if isAdmin() || isLegal();
+
+      // ✅ Only signed-in user creates their own document
+      allow create: if isOwner(userId);
+
+      // ✅ Admin updates anything
+      // ✅ User updates only safe fields
       allow update: if isAdmin()
         || (
           isOwner(userId)
-          && (
-            // Allow setting role ONLY if it does not already exist
-            (
-              !('role' in resource.data)
-              && request.resource.data.role in ['Client', 'Investor', 'Marketer']
-            )
-            ||
-            // Allow normal profile updates (existing behavior)
-            request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['fcmTokens', 'name', 'phoneNumber', 'legalDocumentUrl'])
-          )
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly([
+              'fcmTokens',
+              'name',
+              'phoneNumber',
+              'legalDocumentUrl'
+            ])
         );
-    }
 
-
-
-    function isOwner(userId) {
-      return request.auth != null && request.auth.uid == userId;
-    }
-
-    function isAdmin() {
-      return request.auth != null 
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
-    }
-
-    function isClient() {
-      return request.auth != null 
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Client';
-    }
-    
-    function isInvestor() {
-      return request.auth != null 
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Investor';
-    }
-
-    function isLegal() {
-      return request.auth != null 
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Legal';
-    }
-    
-    function isRecovery() {
-       return request.auth != null 
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Recovery';
-    }
-    
-    function isMarketer() {
-       return request.auth != null 
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Marketer';
-    }
-
-    // Rules for the 'users' collection
-    match /users/{userId} {
-      // Admins can get any user. Owners can get their own data. Legal/Marketer can read their own.
-      allow get: if isAdmin() || isOwner(userId) || isLegal();
-      // Admins and Legal can list all users.
-      allow list: if isAdmin() || isLegal();
-      
-      // Allow any unauthenticated or authenticated user to create a new user document (e.g., during signup).
-      allow create: if true;
-
-      // Only the user themself or an Admin can update a user document.
-      allow update: if isAdmin() || (isOwner(userId) && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phoneNumber']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['legalDocumentUrl'])));
-
-      // Only admins can delete users.
       allow delete: if isAdmin();
     }
-    
-    // Rules for the 'recoveryTasks' collection
+
+    // =========================
+    // DEALS
+    // =========================
+    match /deals/{dealId} {
+      allow get, list: if isAdmin()
+        || isLegal()
+        || (isClient() && resource.data.clientId == request.auth.uid)
+        || (isMarketer() && resource.data.marketerId == request.auth.uid);
+
+      // 🚫 Investors should NOT read all deals unless required
+      // If you want investors to see deals, add explicit restriction rules.
+
+      allow create, update, delete: if isAdmin();
+    }
+
+    // =========================
+    // DEAL REQUESTS
+    // =========================
+    match /dealRequests/{dealRequestId} {
+      allow get, list, update: if isAdmin();
+
+      allow create: if isClient()
+        && request.resource.data.clientId == request.auth.uid;
+
+      allow read: if isClient()
+        && resource.data.clientId == request.auth.uid;
+    }
+
+    // =========================
+    // REPAYMENTS
+    // =========================
+    match /repayments/{repaymentId} {
+
+      // ✅ Admin / Legal can read all
+      allow get, list: if isAdmin() || isLegal();
+
+      // ✅ Client reads own
+      allow read: if isClient()
+        && resource.data.clientId == request.auth.uid;
+
+      // ✅ Client creates repayment only for self
+      // ✅ Must always be "Pending" on create
+      allow create: if isClient()
+        && request.resource.data.clientId == request.auth.uid
+        && request.resource.data.status == "Pending";
+
+      // ✅ Only Admin can approve/reject/update
+      allow update: if isAdmin();
+
+      // 🚫 never allow delete from app users
+      allow delete: if false;
+    }
+
+    // =========================
+    // TRANSACTIONS
+    // =========================
+    match /transactions/{transactionId} {
+
+      // ✅ Only Admin writes transactions
+      allow write: if isAdmin();
+
+      // ✅ Admin / Legal reads all
+      allow read, list: if isAdmin()
+        || isLegal()
+        || (signedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    // =========================
+    // FUND BATCHES
+    // =========================
+    match /fundBatches/{batchId} {
+      allow write: if isAdmin();
+
+      allow read: if isAdmin()
+        || (isInvestor() && resource.data.sourceId == request.auth.uid);
+    }
+
+    // =========================
+    // INVESTMENTS
+    // =========================
+    match /investments/{investmentId} {
+      allow write: if isAdmin();
+
+      allow read, list: if isAdmin()
+        || isLegal()
+        || (isInvestor() && resource.data.investorId == request.auth.uid);
+    }
+
+    // =========================
+    // DEPOSIT REQUESTS
+    // =========================
+    match /depositRequests/{depositRequestId} {
+      allow get, list, update: if isAdmin();
+
+      allow create: if isInvestor()
+        && request.resource.data.investorId == request.auth.uid
+        && request.resource.data.status == "Pending";
+
+      allow read: if isInvestor()
+        && resource.data.investorId == request.auth.uid;
+    }
+
+    // =========================
+    // WITHDRAWAL REQUESTS
+    // =========================
+    match /withdrawalRequests/{requestId} {
+      allow get, list, update: if isAdmin();
+
+      allow create: if isInvestor()
+        && request.resource.data.investorId == request.auth.uid
+        && request.resource.data.status == "Pending";
+
+      allow read: if isInvestor()
+        && resource.data.investorId == request.auth.uid;
+    }
+
+    // =========================
+    // REINVESTMENT REQUESTS
+    // =========================
+    match /reinvestmentRequests/{requestId} {
+      allow get, list, update: if isAdmin();
+
+      allow create: if isInvestor()
+        && request.resource.data.investorId == request.auth.uid
+        && request.resource.data.status == "Pending";
+
+      allow read: if isInvestor()
+        && resource.data.investorId == request.auth.uid;
+    }
+
+    // =========================
+    // TERMINATION REQUESTS
+    // =========================
+    match /terminationRequests/{requestId} {
+      allow get, list, update: if isAdmin();
+
+      allow create: if isClient()
+        && request.resource.data.clientId == request.auth.uid
+        && request.resource.data.status == "Pending";
+
+      allow read: if isClient()
+        && resource.data.clientId == request.auth.uid;
+    }
+
+    // =========================
+    // ADMINISTRATIVE TRANSACTIONS
+    // =========================
+    match /administrativeTransactions/{transactionId} {
+      allow read, write: if isAdmin();
+    }
+
+    // =========================
+    // ASSETS
+    // =========================
+    match /assets/{assetId} {
+      allow read, write: if isAdmin();
+    }
+
+    // =========================
+    // TAX RECORDS
+    // =========================
+    match /taxRecords/{taxRecordId} {
+      allow read, write: if isAdmin();
+    }
+
+    // =========================
+    // PLATFORM SETTINGS (IMPORTANT)
+    // =========================
+    match /platformSettings/{settingId} {
+
+      // ✅ Branding can be public
+      allow read: if settingId == "branding";
+
+      // ✅ Bank details visible only to authenticated users
+      allow read: if settingId == "bankDetails" && signedIn();
+
+      // ✅ Zakat settings should NOT be public
+      allow read: if settingId == "zakat" && (isAdmin() || isLegal());
+
+      // ✅ Only Admin updates any settings
+      allow write: if isAdmin();
+    }
+
+    // =========================
+    // NOTIFICATIONS
+    // =========================
+    match /notifications/{notificationId} {
+      allow create: if isAdmin();
+
+      allow read, update: if signedIn()
+        && resource.data.recipientId == request.auth.uid;
+
+      allow list: if isAdmin();
+    }
+
+    // =========================
+    // RECOVERY TASKS + LOGS
+    // =========================
     match /recoveryTasks/{taskId} {
-      // Recovery users can see tasks assigned to them or unassigned. Legal and Admin can see all.
-      allow list: if isAdmin() || isLegal() || 
-                    (isRecovery() && resource.data.status == 'Due_Recovery' && 
-                      (!('assigneeId' in resource.data) || resource.data.assigneeId == request.auth.uid));
-                      
-      // Admins can read all tasks. Legal can read escalated tasks. Recovery can read tasks they can list.
-      allow get, read: if isAdmin() || 
-                    (isLegal() && resource.data.status == 'Escalated_Legal') || 
-                    (isRecovery() && resource.data.status == 'Due_Recovery' && 
-                      (!('assigneeId' in resource.data) || resource.data.assigneeId == request.auth.uid));
-      
-      // Allow server-side updates (by admin) and log creation by assigned roles.
+
+      allow read: if isAdmin() || isLegal() || isRecovery();
+
       allow create, update: if isAdmin();
-      
-      // Rules for the 'logs' sub-collection
+
       match /logs/{logId} {
-      	allow read, list: if isAdmin() || isLegal() || isRecovery();
-        // Allow creating a log if the user is an Admin, or a Recovery/Legal user for the correct task status.
-        allow create: if isAdmin() || 
-        							 (isRecovery() && get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data.status == 'Due_Recovery') ||
-                       (isLegal() && get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data.status == 'Escalated_Legal');
+        allow read: if isAdmin() || isLegal() || isRecovery();
+        allow create: if isAdmin() || isLegal() || isRecovery();
       }
     }
 
-
-    // Rules for the 'deals' collection
-    match /deals/{dealId} {
-        // Admins, Investors, and Legal can list all deals. Marketers can see deals they are linked to.
-        // Clients can see deals they are associated with.
-        allow list: if isAdmin() || isInvestor() || isLegal() || (isMarketer() && resource.data.marketerId == request.auth.uid) || (isClient() && resource.data.clientId == request.auth.uid);
-        
-        // Admins, Investors, Legal can get any single deal.
-        // Clients can only get deals they are associated with.
-        allow get: if isAdmin() || isInvestor() || isLegal() || (isClient() && resource.data.clientId == request.auth.uid);
-        
-        // Only Admins can create, update or delete deals
-        allow create, update, delete: if isAdmin();
-    }
-
-    // Rules for the 'dealRequests' collection
-    match /dealRequests/{dealRequestId} {
-        // Admins can read/update all requests.
-        allow get, list, update: if isAdmin();
-        // Clients can create their own requests and read them.
-        allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
-        allow read: if isClient() && resource.data.clientId == request.auth.uid;
-    }
-
-    // Rules for the 'depositRequests' collection
-    match /depositRequests/{depositRequestId} {
-        // Admins can read/update all requests.
-        allow get, list, update: if isAdmin();
-        // Investors can create their own requests and read them.
-        allow create: if isInvestor() && request.resource.data.investorId == request.auth.uid;
-        allow read: if isInvestor() && resource.data.investorId == request.auth.uid;
-    }
-
-
-    // Rules for the 'investments' collection
-    match /investments/{investmentId} {
-      // Admins can write.
-      allow write: if isAdmin();
-      // Admins can read all. Investors can read their own investments. Legal can read all.
-      allow read, list: if isAdmin() || (isInvestor() && resource.data.investorId == request.auth.uid) || isLegal();
-    }
-    
-    // Rules for 'fundBatches' and 'transactions'
-    match /fundBatches/{batchId} {
-        // Admin can do anything
-        allow write: if isAdmin();
-        // Investor can read their own fund batches, Admins can read all.
-        allow read: if isAdmin() || (isInvestor() && resource.data.sourceId == request.auth.uid);
-    }
-
-    match /transactions/{transactionId} {
-        // Admin can do anything
-        allow write: if isAdmin();
-        // Investor/Client/Marketer can read their own transactions, Admins can read all.
-        // Legal can read all.
-        allow read, list: if isAdmin() || (isOwner(resource.data.userId)) || isLegal();
-    }
-
-    // Rules for 'repayments'
-    match /repayments/{repaymentId} {
-      // Admins can read and update all repayments. Legal can read all.
-      allow get, list: if isAdmin() || isLegal();
-      allow update: if isAdmin();
-      // Clients can create their own repayments and read their own.
-      allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
-      allow read: if isClient() && resource.data.clientId == request.auth.uid;
-    }
-
-    // Rules for 'withdrawalRequests'
-    match /withdrawalRequests/{requestId} {
-      // Admins can read and update any request
-      allow get, update, list: if isAdmin();
-
-      // Investors can create their own requests
-      allow create: if isInvestor() && request.resource.data.investorId == request.auth.uid;
-
-      // Investors can read their own requests
-      allow read: if isInvestor() && resource.data.investorId == request.auth.uid;
-    }
-
-    // Rules for 'reinvestmentRequests'
-    match /reinvestmentRequests/{requestId} {
-      // Admins can read and update any request
-      allow get, update, list: if isAdmin();
-
-      // Investors can create their own requests
-      allow create: if isInvestor() && request.resource.data.investorId == request.auth.uid;
-
-      // Investors can read their own requests
-      allow read: if isInvestor() && resource.data.investorId == request.auth.uid;
-    }
-    
-    // Rules for 'terminationRequests'
-    match /terminationRequests/{requestId} {
-      // Admins can read and update any request
-      allow get, update, list: if isAdmin();
-      
-      // Clients can create their own requests and read them
-      allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
-      allow read: if isClient() && resource.data.clientId == request.auth.uid;
-    }
-    
-    // Rules for 'administrativeTransactions' and 'assets'
-    match /administrativeTransactions/{transactionId} {
-        // Only admins can read or write administrative transactions.
-        allow read, write: if isAdmin();
-    }
-
-    match /assets/{assetId} {
-        // Only admins can read or write assets.
-        allow read, write: if isAdmin();
-    }
-
-    // Rules for 'notifications'
-    match /notifications/{notificationId} {
-        // Allow any authenticated user to create a notification, as long as it's for an Admin.
-        // This is secure because we check the role of the recipient.
-        allow create: if request.auth != null; // Notification creation logic is handled server-side now.
-          
-        // Users can only read/update notifications intended for them
-        allow read, update: if request.auth != null && resource.data.recipientId == request.auth.uid;
-
-        // Admins can list notifications (to see all, for debugging if needed, but UI filters by recipientId)
-        allow list: if isAdmin();
-    }
-
-    // Rules for 'platformSettings'
-    match /platformSettings/{settingId} {
-        // Allow public read for settings like branding
-        allow read: if true;
-        // Only admins can change settings.
-        allow write: if isAdmin();
-    }
-    
-    // --- Messaging System Rules ---
-
-    // Rules for 'chatRequests' collection
+    // =========================
+    // CHAT REQUESTS
+    // =========================
     match /chatRequests/{requestId} {
-      // Admins can read, list and delete all requests.
       allow get, list, delete: if isAdmin();
-      // Authenticated users can create their own chat requests.
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow read: if false;
     }
 
-    // Rules for 'conversations' collection
+    // =========================
+    // CONVERSATIONS + MESSAGES
+    // =========================
     match /conversations/{conversationId} {
-        // Admins can do everything.
-        allow create, get, list, update: if isAdmin();
 
-        // Regular users can only read/list/update conversations they are a part of.
-        allow get, list, update: if request.auth != null
-            && 'participantIds' in resource.data
-            && request.auth.uid in resource.data.participantIds;
-    }
-    
-    // Rules for 'messages' subcollection
-    match /conversations/{conversationId}/messages/{messageId} {
-        // Users can read/create messages only if they are a participant in the parent conversation.
-        allow read, create: if request.auth != null
-            && exists(/databases/$(database)/documents/conversations/$(conversationId))
-            && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+      allow create: if isAdmin();
+
+      allow get, list, update: if isAdmin()
+        || (
+          signedIn()
+          && request.auth.uid in resource.data.participantIds
+        );
+
+      match /messages/{messageId} {
+        allow read, create: if signedIn()
+          && exists(/databases/$(database)/documents/conversations/$(conversationId))
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+      }
     }
   }
 }
