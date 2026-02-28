@@ -6,6 +6,14 @@ To get started, take a look at src/app/page.tsx.
 
 ## Troubleshooting Git
 
+### 🚨 The "Already up to date" but "Rejected" Loop
+If `git pull` says you are up to date, but `git push` is still rejected:
+1. **Force a sync (The Nuclear Option):**
+   *Warning: This will make the remote GitHub repository exactly match your local code.*
+   ```bash
+   git push origin main --force
+   ```
+
 ### 🚨 Fix "Rejected / Non-Fast-Forward" Push
 If you see `! [rejected] main -> main (non-fast-forward)`, it means GitHub has changes you don't have.
 1. Run this command:
