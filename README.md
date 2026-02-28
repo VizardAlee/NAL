@@ -4,9 +4,7 @@ This is a NextJS starter in Firebase Studio.
 
 To get started, take a look at src/app/page.tsx.
 
-## Troubleshooting Git Authentication
-
-If you encounter `ECONNREFUSED` or `Authentication failed`, follow these steps:
+## Troubleshooting Git
 
 ### 1. Fix "ECONNREFUSED" (Stale Socket)
 Run these commands in your terminal to clear stale VS Code Git authentication variables:
@@ -27,7 +25,13 @@ When you run `git pull origin main`:
 1. **Username:** Enter your GitHub username (`serviceguru-crypt`).
 2. **Password:** **PASTE THE TOKEN** you just copied (characters will not appear as you paste).
 
-### 4. Reset Credentials (Optional)
+### 4. Resolve "Divergent Branches" Error
+If Git says "Need to specify how to reconcile divergent branches", run this to merge the changes:
+```bash
+git pull origin main --no-rebase
+```
+
+### 5. Reset Credentials (Optional)
 If Git doesn't prompt you for a password and just fails, reset the helper:
 ```bash
 git config --global --unset credential.helper
