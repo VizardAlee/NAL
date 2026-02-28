@@ -25,13 +25,20 @@ When you run `git pull origin main`:
 1. **Username:** Enter your GitHub username (`serviceguru-crypt`).
 2. **Password:** **PASTE THE TOKEN** you just copied (characters will not appear as you paste).
 
-### 4. Resolve "Divergent Branches" Error
+### 4. Save Credentials (Avoid Re-typing)
+To stop Git from asking for your token every time, run this command:
+```bash
+git config --global credential.helper store
+```
+The next time you pull/push and enter your credentials, they will be saved permanently on this machine.
+
+### 5. Resolve "Divergent Branches" Error
 If Git says "Need to specify how to reconcile divergent branches", run this to merge the changes:
 ```bash
 git pull origin main --no-rebase
 ```
 
-### 5. Reset Credentials (Optional)
+### 6. Reset Credentials (Optional)
 If Git doesn't prompt you for a password and just fails, reset the helper:
 ```bash
 git config --global --unset credential.helper
