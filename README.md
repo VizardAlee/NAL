@@ -32,11 +32,12 @@ git config --global credential.helper store
 ```
 **Important:** You must enter your username and token **one more time** correctly. Git will then save them permanently on this machine.
 
-### 5. Resolve "Divergent Branches" Error
-If Git says "Need to specify how to reconcile divergent branches", run this to merge the changes:
+### 5. Resolve "Divergent Branches" / "Rejected" Push
+If Git says "Updates were rejected" (non-fast-forward) or "Need to specify how to reconcile divergent branches", run this to merge the changes:
 ```bash
 git pull origin main --no-rebase
 ```
+*Note: This will combine the work from GitHub with your local work. If a text editor opens, just save and close it.*
 
 ### 6. Reset Credentials (Optional)
 If Git doesn't prompt you for a password and just fails, reset the helper to clear old data:
