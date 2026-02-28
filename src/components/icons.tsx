@@ -1,5 +1,4 @@
 
-import Image from 'next/image';
 import type { SVGProps } from "react";
 import { cn } from '@/lib/utils';
 
@@ -12,12 +11,8 @@ export function Logo({ imageUrl, className, ...props }: LogoProps) {
   if (imageUrl) {
     return (
       <div className={cn("relative", className)}>
-        <Image
-          src={imageUrl}
-          alt="Company Logo"
-          layout="fill"
-          objectFit="contain"
-        />
+        {/* Use <img> for runtime-configured logos to avoid Next/Image domain restrictions. */}
+        <img src={imageUrl} alt="Company Logo" className="h-full w-full object-contain" />
       </div>
     );
   }

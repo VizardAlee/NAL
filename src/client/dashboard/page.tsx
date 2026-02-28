@@ -11,12 +11,12 @@ import { collection, query, where, DocumentData, Timestamp, orderBy } from 'fire
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Deal } from '@/lib/types';
-import { RepaymentSchedule } from "./repayment-schedule";
+import { RepaymentSchedule } from "@/components/deals/repayment-schedule";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RepaymentHistory } from "./repayment-history";
+import { RepaymentHistory } from "@/components/deals/repayment-history";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { requestTerminationAction } from "./actions";
+import { requestTerminationAction } from "@/app/client/dashboard/actions";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
@@ -54,10 +54,10 @@ function DealCard({ deal }: { deal: Deal }) {
         if (!user || !user.displayName) return;
         startTransition(async () => {
             const result = await requestTerminationAction({
-              dealId: deal.id,
-              dealName: deal.dealName,
-              clientId: user.uid,
-              clientName: user.displayName!
+                dealId: deal.id,
+                dealName: deal.dealName,
+                clientId: user.uid,
+                clientName: user.displayName!
             });
             if (result.success) {
                 toast({
@@ -79,17 +79,17 @@ function DealCard({ deal }: { deal: Deal }) {
             <CardHeader>
                 <div className="flex items-start justify-between">
                     <CardTitle className="font-headline text-xl">{deal.dealName}</CardTitle>
-                     <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
+                    <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
                 </div>
                 <CardDescription>{deal.clientName}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
-               <div className="flex items-center justify-between p-3 rounded-md bg-muted/50">
+                <div className="flex items-center justify-between p-3 rounded-md bg-muted/50">
                     <span className="text-sm text-muted-foreground">Principal Amount</span>
                     <span className="font-bold">
                         {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}
                     </span>
-               </div>
+                </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                         <p className="text-muted-foreground">Profit Rate</p>
@@ -103,7 +103,7 @@ function DealCard({ deal }: { deal: Deal }) {
                         <p className="text-muted-foreground">Repayment</p>
                         <p className="font-medium">{deal.repaymentType}</p>
                     </div>
-                     <div>
+                    <div>
                         <p className="text-muted-foreground">Frequency</p>
                         <p className="font-medium">{deal.repaymentFrequency}</p>
                     </div>
@@ -116,7 +116,7 @@ function DealCard({ deal }: { deal: Deal }) {
                 )}
             </CardContent>
             <div className="mt-auto flex-grow">
-                 <Tabs defaultValue="schedule" className="w-full">
+                <Tabs defaultValue="schedule" className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
                         <TabsTrigger value="schedule">Upcoming Schedule</TabsTrigger>
                         <TabsTrigger value="history">Repayment History</TabsTrigger>
@@ -166,7 +166,7 @@ export default function ClientDashboard() {
     }, [firestore, user]);
 
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery as any);
-    
+
     const isLoading = userLoading || dealsLoading;
 
     const activeDeals = useMemo(() => deals?.filter(d => d.status === 'Active') || [], [deals]);
@@ -179,7 +179,7 @@ export default function ClientDashboard() {
                 description="Here is an overview of your current and past financing deals."
                 icon={FileText}
             />
-            
+
             {isLoading ? (
                 <DealsSkeleton />
             ) : deals && deals.length > 0 ? (

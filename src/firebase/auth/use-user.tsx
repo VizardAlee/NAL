@@ -14,11 +14,24 @@ export function useUser() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!auth || !firestore) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
+    let unsubscribeFirestore: (() => void) | undefined;
+
     const unsubscribeAuth = onAuthStateChanged(auth, (authUser: AuthUser | null) => {
+      if (unsubscribeFirestore) {
+        unsubscribeFirestore();
+        unsubscribeFirestore = undefined;
+      }
+
       if (authUser) {
         const userDocRef = doc(firestore, 'users', authUser.uid);
-        
-        const unsubscribeFirestore = onSnapshot(userDocRef, (userDoc) => {
+
+        unsubscribeFirestore = onSnapshot(userDocRef, (userDoc) => {
           if (userDoc.exists()) {
             const firestoreData = userDoc.data();
             setUser({
@@ -32,16 +45,23 @@ export function useUser() {
             setUser(authUser as User);
           }
           setLoading(false);
+        }, (err: any) => {
+          if (err.code !== 'permission-denied') {
+            console.error('Error fetching user document:', err);
+          }
+          setLoading(false); // Ensure loading is set to false even on error
         });
 
-        return () => unsubscribeFirestore();
       } else {
         setUser(null);
         setLoading(false);
       }
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      if (unsubscribeFirestore) unsubscribeFirestore();
+      unsubscribeAuth();
+    };
   }, [auth, firestore]);
 
   return { user, loading };

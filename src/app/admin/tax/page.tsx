@@ -23,16 +23,16 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 
 type Transaction = DocumentData & {
-  type: 'PlatformEarning';
-  amount: number;
-  createdAt: Timestamp;
+    type: 'PlatformEarning';
+    amount: number;
+    createdAt: Timestamp;
 };
 
 type AdministrativeTransaction = DocumentData & {
-  type: 'ManagementFee' | 'Expense';
-  amount: number;
-  createdAt: Timestamp;
-  description: string;
+    type: 'ManagementFee' | 'Expense';
+    amount: number;
+    createdAt: Timestamp;
+    description: string;
 };
 
 const formatCurrency = (value: number) => {
@@ -77,16 +77,16 @@ export default function TaxPage() {
 
     const { data: earningsTransactions, loading: earningsLoading } = useCollection<Transaction>(transactionsQuery);
     const { data: adminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
-    
+
     const isLoading = earningsLoading || adminTransactionsLoading;
-    
+
     const taxCalculations = useMemo(() => {
         const platformEarnings = earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
         const managementFees = adminTransactions?.filter(tx => tx.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0) || 0;
-        
+
         const rentTransaction = adminTransactions
             ?.find(tx => tx.type === 'Expense' && tx.description.toLowerCase().includes('rent'));
-        
+
         const annualRent = rentTransaction ? Math.abs(rentTransaction.amount) : 0;
 
         const grossProfit = platformEarnings + managementFees;
@@ -106,7 +106,7 @@ export default function TaxPage() {
             { threshold: 25000000, limit: 25000000, rate: 0.23, label: "₦25,000,001 - ₦50,000,000" },
             { threshold: 50000000, limit: Infinity, rate: 0.25, label: "Above ₦50,000,000" },
         ];
-        
+
         for (const bracket of brackets) {
             if (incomeToTax <= bracket.threshold) break;
 
@@ -115,14 +115,14 @@ export default function TaxPage() {
             totalTax += taxForBracket;
 
             if (taxableInBracket > 0) {
-                 breakdown.push({
+                breakdown.push({
                     description: `${bracket.label} @ ${bracket.rate * 100}%`,
                     taxableAmount: taxableInBracket,
                     taxDue: taxForBracket,
                 });
             }
         }
-        
+
         const profitAfterTax = grossProfit - totalTax;
 
         return {
@@ -136,7 +136,7 @@ export default function TaxPage() {
         };
 
     }, [earningsTransactions, adminTransactions]);
-    
+
     const formatDateDisplay = (dateValue: Date | null) => {
         return dateValue ? format(dateValue, "LLL dd, y") : <span>Pick a date</span>;
     }
@@ -148,16 +148,16 @@ export default function TaxPage() {
                 description="Estimate Personal Income Tax (PIT) based on the upcoming 2026 tax reform."
                 icon={Landmark}
             >
-                 <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                     <Popover>
                         <PopoverTrigger asChild>
-                        <Button
-                            variant={"outline"}
-                            className={cn("w-[140px] justify-start text-left font-normal", !startDate && "text-muted-foreground")}
-                        >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {formatDateDisplay(startDate)}
-                        </Button>
+                            <Button
+                                variant={"outline"}
+                                className={cn("w-[140px] justify-start text-left font-normal", !startDate && "text-muted-foreground")}
+                            >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formatDateDisplay(startDate)}
+                            </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
                             <FullCalendar
@@ -169,7 +169,7 @@ export default function TaxPage() {
                                     center: 'title',
                                     right: 'next'
                                 }}
-                                dateClick={(arg: DateClickArg) => {
+                                dateClick={(arg: any) => {
                                     setStartDate(arg.date);
                                     if (endDate && arg.date > endDate) {
                                         setEndDate(arg.date);
@@ -181,13 +181,13 @@ export default function TaxPage() {
                     <span className="text-muted-foreground hidden sm:inline">-</span>
                     <Popover>
                         <PopoverTrigger asChild>
-                        <Button
-                            variant={"outline"}
-                            className={cn("w-[140px] justify-start text-left font-normal", !endDate && "text-muted-foreground")}
-                        >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {formatDateDisplay(endDate)}
-                        </Button>
+                            <Button
+                                variant={"outline"}
+                                className={cn("w-[140px] justify-start text-left font-normal", !endDate && "text-muted-foreground")}
+                            >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {formatDateDisplay(endDate)}
+                            </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="end">
                             <FullCalendar
@@ -200,7 +200,7 @@ export default function TaxPage() {
                                     center: 'title',
                                     right: 'next'
                                 }}
-                                dateClick={(arg: DateClickArg) => {
+                                dateClick={(arg: any) => {
                                     setEndDate(arg.date);
                                 }}
                             />
@@ -208,10 +208,10 @@ export default function TaxPage() {
                     </Popover>
                 </div>
             </PageHeader>
-            
+
             {isLoading ? (
                 <div className="flex justify-center items-center p-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
             ) : (
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
@@ -221,9 +221,9 @@ export default function TaxPage() {
                             <CardDescription>Based on proposed 2026 Nigerian PITA rates for enterprise businesses.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                             <div className="max-w-xs space-y-2 mb-6">
+                            <div className="max-w-xs space-y-2 mb-6">
                                 <Label>Annual Rent Paid</Label>
-                                <Input 
+                                <Input
                                     type="text"
                                     value={formatCurrency(taxCalculations.annualRent)}
                                     readOnly
@@ -261,10 +261,10 @@ export default function TaxPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Tax Breakdown</CardTitle>
-                             <CardDescription>Progressive tax rates applied to chargeable income.</CardDescription>
+                            <CardDescription>Progressive tax rates applied to chargeable income.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                             {isMobile ? (
+                            {isMobile ? (
                                 <div className="space-y-3">
                                     {taxCalculations.taxBreakdown.map((bracket, index) => (
                                         <Card key={index} className="p-3">
@@ -277,7 +277,7 @@ export default function TaxPage() {
                                         <p className="text-center text-sm text-muted-foreground py-4">No chargeable income.</p>
                                     )}
                                 </div>
-                             ) : (
+                            ) : (
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -301,17 +301,17 @@ export default function TaxPage() {
                                         )}
                                     </TableBody>
                                 </Table>
-                             )}
+                            )}
                         </CardContent>
                     </Card>
 
-                     <TaxMetricCard 
+                    <TaxMetricCard
                         title="Estimated Personal Income Tax (PIT)"
                         value={taxCalculations.personalIncomeTax}
                         description="Total tax from all brackets"
                         isLoading={isLoading}
                     />
-                    <TaxMetricCard 
+                    <TaxMetricCard
                         title="Profit After Tax"
                         value={taxCalculations.profitAfterTax}
                         description="Remaining profit after all taxes"

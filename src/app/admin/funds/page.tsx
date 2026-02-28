@@ -25,12 +25,12 @@ import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Investment, Deal, Repayment } from "@/lib/types";
 import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
+    Pagination,
+    PaginationContent,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -39,12 +39,12 @@ import { CalendarIcon } from "lucide-react";
 import { generateAmortizationSchedule } from "@/lib/amortization";
 import { DateRange } from "react-day-picker";
 import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -52,12 +52,12 @@ import interactionPlugin from '@fullcalendar/interaction';
 
 
 type PlatformFundBatch = DocumentData & {
-  id: string;
-  sourceId: 'platform';
-  amount: number;
-  remainingAmount: number;
-  createdAt: Timestamp;
-  details?: string;
+    id: string;
+    sourceId: 'platform';
+    amount: number;
+    remainingAmount: number;
+    createdAt: Timestamp;
+    details?: string;
 };
 
 type GenericTransaction = DocumentData & {
@@ -69,23 +69,23 @@ type GenericTransaction = DocumentData & {
 };
 
 type AdministrativeTransaction = DocumentData & {
-  id:string;
-  type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible' | 'AssetAcquisition' | 'AssetSale' | 'ManagementFee';
-  amount: number;
-  description: string;
-  createdAt: Timestamp;
-  dealId?: string;
-  dealName?: string;
-  clientId?: string;
-  clientName?: string;
+    id: string;
+    type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible' | 'AssetAcquisition' | 'AssetSale' | 'ManagementFee';
+    amount: number;
+    description: string;
+    createdAt: Timestamp;
+    dealId?: string;
+    dealName?: string;
+    clientId?: string;
+    clientName?: string;
 };
 
 const adminTransactionTypes = [
-    'AdminDeposit', 
-    'Expense', 
-    'TransferToInvestible', 
-    'TransferFromInvestible', 
-    'AssetAcquisition', 
+    'AdminDeposit',
+    'Expense',
+    'TransferToInvestible',
+    'TransferFromInvestible',
+    'AssetAcquisition',
     'AssetSale',
     'ManagementFee'
 ] as const;
@@ -103,18 +103,18 @@ type Asset = DocumentData & {
 };
 
 type FundBatch = DocumentData & {
-  remainingAmount: number;
+    remainingAmount: number;
 }
 
 const ITEMS_PER_PAGE = 10;
 
 const formatDate = (timestamp: Timestamp | Date | undefined) => {
     if (!timestamp) return 'N/A';
-    const date = timestamp instanceof Timestamp ? timestamp.toDate() : date;
+    const parsedDate = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
     try {
-      return format(date, 'PPP p');
+        return format(parsedDate, 'PPP p');
     } catch {
-      return 'Invalid Date';
+        return 'Invalid Date';
     }
 };
 
@@ -144,7 +144,7 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
         try {
             const batch = writeBatch(firestore);
             const now = serverTimestamp();
-            
+
             if (type === 'AssetAcquisition') {
                 const assetRef = doc(collection(firestore, 'assets'));
                 batch.set(assetRef, {
@@ -153,7 +153,7 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
                     acquisitionDate: now,
                     status: 'Held'
                 });
-                
+
                 const adminTxRef = doc(collection(firestore, 'administrativeTransactions'));
                 batch.set(adminTxRef, {
                     type,
@@ -162,15 +162,15 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
                     createdAt: now
                 });
             } else {
-                 const amount = type === 'AdminDeposit' ? values.amount : -Math.abs(values.amount);
-                 await addDoc(collection(firestore, 'administrativeTransactions'), {
+                const amount = type === 'AdminDeposit' ? values.amount : -Math.abs(values.amount);
+                await addDoc(collection(firestore, 'administrativeTransactions'), {
                     type,
                     amount,
                     description: values.description,
                     createdAt: now,
                 });
             }
-            
+
             await batch.commit();
 
             toast({ title: "Success", description: `Transaction recorded: ${values.description}` });
@@ -182,7 +182,7 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
             setIsLoading(false);
         }
     }
-    
+
     const buttonText = {
         AdminDeposit: "Add Funds",
         Expense: "Record Expense",
@@ -238,7 +238,7 @@ function RecognizeAssetForm({ onAssetRecognized }: { onAssetRecognized: () => vo
         resolver: zodResolver(recognizeAssetSchema),
         defaultValues: { description: "", acquisitionCost: 0 },
     });
-    
+
     async function onSubmit(values: z.infer<typeof recognizeAssetSchema>) {
         setIsLoading(true);
         if (!firestore) return;
@@ -259,7 +259,7 @@ function RecognizeAssetForm({ onAssetRecognized }: { onAssetRecognized: () => vo
     }
 
     return (
-         <Form {...form}>
+        <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <FormField
                     control={form.control}
@@ -273,74 +273,74 @@ function RecognizeAssetForm({ onAssetRecognized }: { onAssetRecognized: () => vo
                         </FormItem>
                     )}
                 />
-                 <FormField
+                <FormField
                     control={form.control}
                     name="acquisitionCost"
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel>Original Cost (if known)</FormLabel>
                             <FormControl><Input type="number" {...field} /></FormControl>
-                             <FormDescription>Enter 0 if the cost is unknown or not applicable. This will not affect the administrative balance.</FormDescription>
+                            <FormDescription>Enter 0 if the cost is unknown or not applicable. This will not affect the administrative balance.</FormDescription>
                             <FormMessage />
                         </FormItem>
                     )}
                 />
-                 <FormField
+                <FormField
                     control={form.control}
                     name="acquisitionDate"
                     render={({ field }) => (
                         <FormItem className="flex flex-col">
-                        <FormLabel>Acquisition Date (Optional)</FormLabel>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                            <FormControl>
-                                <Button
-                                variant={"outline"}
-                                className={cn(
-                                    "w-full pl-3 text-left font-normal",
-                                    !field.value && "text-muted-foreground"
-                                )}
-                                >
-                                {field.value ? (
-                                    format(field.value, "PPP")
-                                ) : (
-                                    <span>Pick a date</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                            </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                            <FullCalendar
-                                plugins={[dayGridPlugin, interactionPlugin]}
-                                initialView="dayGridMonth"
-                                selectable={true}
-                                headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
-                                dateClick={(arg) => {
-                                    form.setValue('acquisitionDate', arg.date);
-                                }}
-                                disabledDays={{ after: new Date() }}
-                            />
-                            </PopoverContent>
-                        </Popover>
-                        <FormDescription>
-                            The date the asset was acquired. Defaults to today if left blank.
-                        </FormDescription>
-                        <FormMessage />
+                            <FormLabel>Acquisition Date (Optional)</FormLabel>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <FormControl>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                                "w-full pl-3 text-left font-normal",
+                                                !field.value && "text-muted-foreground"
+                                            )}
+                                        >
+                                            {field.value ? (
+                                                format(field.value, "PPP")
+                                            ) : (
+                                                <span>Pick a date</span>
+                                            )}
+                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                        </Button>
+                                    </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <FullCalendar
+                                        plugins={[dayGridPlugin, interactionPlugin]}
+                                        initialView="dayGridMonth"
+                                        selectable={true}
+                                        headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
+                                        dateClick={(arg: any) => {
+                                            form.setValue('acquisitionDate', arg.date);
+                                        }}
+                                        validRange={{ end: new Date() }}
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                            <FormDescription>
+                                The date the asset was acquired. Defaults to today if left blank.
+                            </FormDescription>
+                            <FormMessage />
                         </FormItem>
                     )}
                 />
-                 <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Recognize Asset
                 </Button>
             </form>
-         </Form>
+        </Form>
     );
 }
 
 const sellAssetSchema = z.object({
-  salePrice: z.coerce.number().min(0, "Sale price cannot be negative."),
+    salePrice: z.coerce.number().min(0, "Sale price cannot be negative."),
 });
 
 function SellAssetForm({ asset, onAssetSold }: { asset: Asset, onAssetSold: () => void }) {
@@ -376,10 +376,10 @@ function SellAssetForm({ asset, onAssetSold }: { asset: Asset, onAssetSold: () =
                 description: `Sale of asset: ${asset.description}`,
                 createdAt: now,
             });
-            
+
             await batch.commit();
 
-            toast({ title: "Asset Sold", description: `${asset.description} has been marked as sold.`});
+            toast({ title: "Asset Sold", description: `${asset.description} has been marked as sold.` });
             onAssetSold();
         } catch (error) {
             console.error("Asset Sale Error:", error);
@@ -392,7 +392,7 @@ function SellAssetForm({ asset, onAssetSold }: { asset: Asset, onAssetSold: () =
     return (
         <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                 <FormField
+                <FormField
                     control={form.control}
                     name="salePrice"
                     render={({ field }) => (
@@ -431,7 +431,7 @@ function TransferFundsForm({
     const firestore = useFirestore();
 
     const dynamicSchema = transferSchema.extend({
-        amount: z.coerce.number().positive().max(maxAmount, { message: "Amount exceeds available balance."}),
+        amount: z.coerce.number().positive().max(maxAmount, { message: "Amount exceeds available balance." }),
     });
 
     const form = useForm<z.infer<typeof dynamicSchema>>({
@@ -582,7 +582,7 @@ export default function PlatformFundsPage() {
 
     const metrics = useMemo(() => {
         const administrativeBalance = adminTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
-        
+
         const platformEarnings = earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
 
         const investibleCapital = platformFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
@@ -598,14 +598,14 @@ export default function PlatformFundsPage() {
                 const schedule = generateAmortizationSchedule(deal);
                 const approvedRepaymentsForDeal = repayments.filter(r => r.dealId === deal.id);
                 const paidInstallmentNumbers = approvedRepaymentsForDeal.map(r => r.installmentNumber);
-                
+
                 const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
-                
+
                 totalClientDebt += remainingInstallments.reduce((sum, inst) => sum + inst.payment, 0);
                 totalInvested += remainingInstallments.reduce((sum, inst) => sum + inst.principal, 0);
             }
         }
-        
+
 
         const cumulativeInvestments = allInvestorDeposits?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
         const cumulativeDeals = deals?.reduce((sum, deal) => sum + deal.principal, 0) || 0;
@@ -640,7 +640,7 @@ export default function PlatformFundsPage() {
     }, [filteredAdminTransactions, currentPage]);
 
     const totalPages = useMemo(() => filteredAdminTransactions ? Math.ceil(filteredAdminTransactions.length / ITEMS_PER_PAGE) : 0, [filteredAdminTransactions]);
-    
+
     const handleFilterChange = (type: AdminTransactionTypeFilter) => {
         setSelectedTypes(prev =>
             prev.includes(type)
@@ -668,7 +668,7 @@ export default function PlatformFundsPage() {
             />
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-6">
-                 <Card>
+                <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Administrative Account</CardTitle>
                         <Wallet className="h-4 w-4 text-muted-foreground" />
@@ -678,7 +678,7 @@ export default function PlatformFundsPage() {
                         <p className="text-xs text-muted-foreground">Balance for operational expenses.</p>
                     </CardContent>
                 </Card>
-                 <Card>
+                <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Platform Earnings</CardTitle>
                         <Zap className="h-4 w-4 text-muted-foreground" />
@@ -688,7 +688,7 @@ export default function PlatformFundsPage() {
                         <p className="text-xs text-muted-foreground">Total accumulated earnings.</p>
                     </CardContent>
                 </Card>
-                 <Card>
+                <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Invested (Active)</CardTitle>
                         <Landmark className="h-4 w-4 text-muted-foreground" />
@@ -698,7 +698,7 @@ export default function PlatformFundsPage() {
                         <p className="text-xs text-muted-foreground">Outstanding principal in active deals.</p>
                     </CardContent>
                 </Card>
-                 <Card>
+                <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Investible Pool</CardTitle>
                         <Library className="h-4 w-4 text-muted-foreground" />
@@ -710,7 +710,7 @@ export default function PlatformFundsPage() {
                 </Card>
             </div>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                 <Card>
+                <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Client Debt</CardTitle>
                         <Users className="h-4 w-4 text-muted-foreground" />
@@ -741,7 +741,7 @@ export default function PlatformFundsPage() {
                     </CardContent>
                 </Card>
             </div>
-            
+
             <Dialog open={!!selectedTx} onOpenChange={(isOpen) => !isOpen && setSelectedTx(null)}>
                 <DialogContent>
                     <DialogHeader>
@@ -753,7 +753,7 @@ export default function PlatformFundsPage() {
                                 <span className="text-muted-foreground">Type:</span>
                                 <Badge variant={selectedTx.amount > 0 ? 'secondary' : 'outline'}>{selectedTx.type}</Badge>
                             </div>
-                             <div className="flex justify-between">
+                            <div className="flex justify-between">
                                 <span className="text-muted-foreground">Amount:</span>
                                 <span className={`font-medium ${selectedTx.amount > 0 ? 'text-primary' : ''}`}>{formatCurrency(selectedTx.amount)}</span>
                             </div>
@@ -763,7 +763,7 @@ export default function PlatformFundsPage() {
                                     <span>{selectedTx.clientName}</span>
                                 </div>
                             )}
-                             <div className="flex justify-between">
+                            <div className="flex justify-between">
                                 <span className="text-muted-foreground">Date:</span>
                                 <span>{formatDate(selectedTx.createdAt)}</span>
                             </div>
@@ -771,7 +771,7 @@ export default function PlatformFundsPage() {
                                 <p className="text-muted-foreground">Description:</p>
                                 <p>{selectedTx.description}</p>
                             </div>
-                             <div>
+                            <div>
                                 <p className="text-muted-foreground">Transaction ID:</p>
                                 <p className="text-xs break-all">{selectedTx.id}</p>
                             </div>
@@ -786,7 +786,7 @@ export default function PlatformFundsPage() {
                     <TabsTrigger value="assets">Asset Management</TabsTrigger>
                 </TabsList>
                 <TabsContent value="activity" className="mt-4">
-                     <Card>
+                    <Card>
                         <CardHeader>
                             <CardTitle>Administrative Activity</CardTitle>
                             <CardDescription>Manage operational funds: deposits, expenses, and transfers.</CardDescription>
@@ -794,13 +794,13 @@ export default function PlatformFundsPage() {
                                 <div className="flex items-center gap-2">
                                     <Popover>
                                         <PopoverTrigger asChild>
-                                        <Button
-                                            variant={"outline"}
-                                            className={cn("w-[140px] justify-start text-left font-normal", !startDate && "text-muted-foreground")}
-                                        >
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {formatDateDisplay(startDate)}
-                                        </Button>
+                                            <Button
+                                                variant={"outline"}
+                                                className={cn("w-[140px] justify-start text-left font-normal", !startDate && "text-muted-foreground")}
+                                            >
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {formatDateDisplay(startDate)}
+                                            </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto p-2" align="start">
                                             <FullCalendar
@@ -808,20 +808,20 @@ export default function PlatformFundsPage() {
                                                 initialView="dayGridMonth"
                                                 selectable={true}
                                                 headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
-                                                dateClick={(arg) => setStartDate(arg.date)}
+                                                dateClick={(arg: any) => setStartDate(arg.date)}
                                             />
                                         </PopoverContent>
                                     </Popover>
                                     <span className="text-muted-foreground">-</span>
                                     <Popover>
                                         <PopoverTrigger asChild>
-                                        <Button
-                                            variant={"outline"}
-                                            className={cn("w-[140px] justify-start text-left font-normal", !endDate && "text-muted-foreground")}
-                                        >
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {formatDateDisplay(endDate)}
-                                        </Button>
+                                            <Button
+                                                variant={"outline"}
+                                                className={cn("w-[140px] justify-start text-left font-normal", !endDate && "text-muted-foreground")}
+                                            >
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {formatDateDisplay(endDate)}
+                                            </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto p-2" align="end">
                                             <FullCalendar
@@ -830,7 +830,7 @@ export default function PlatformFundsPage() {
                                                 selectable={true}
                                                 validRange={startDate ? { start: startDate } : undefined}
                                                 headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
-                                                dateClick={(arg) => setEndDate(arg.date)}
+                                                dateClick={(arg: any) => setEndDate(arg.date)}
                                             />
                                         </PopoverContent>
                                     </Popover>
@@ -856,7 +856,7 @@ export default function PlatformFundsPage() {
                                         ))}
                                     </DropdownMenuContent>
                                 </DropdownMenu>
-                                <div className="flex-grow"/>
+                                <div className="flex-grow" />
                                 <Dialog open={isDialogOpen['deposit']} onOpenChange={(isOpen) => isOpen ? openDialog('deposit') : closeDialog('deposit')}><DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2 h-4 w-4" />Add Funds</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Add Funds to Admin Account</DialogTitle></DialogHeader><AdminTransactionForm type="AdminDeposit" onTransactionComplete={() => closeDialog('deposit')} /></DialogContent></Dialog>
                                 <Dialog open={isDialogOpen['expense']} onOpenChange={(isOpen) => isOpen ? openDialog('expense') : closeDialog('expense')}><DialogTrigger asChild><Button size="sm" variant="outline"><MinusCircle className="mr-2 h-4 w-4" />Record Expense</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Record an Expense</DialogTitle></DialogHeader><AdminTransactionForm type="Expense" onTransactionComplete={() => closeDialog('expense')} /></DialogContent></Dialog>
                                 <Dialog open={isDialogOpen['transferToInvestible']} onOpenChange={(isOpen) => isOpen ? openDialog('transferToInvestible') : closeDialog('transferToInvestible')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Fund Investible</Button></DialogTrigger><DialogContent><TransferFundsForm direction="toInvestible" maxAmount={metrics.administrativeBalance} onTransferComplete={() => closeDialog('transferToInvestible')} /></DialogContent></Dialog>
@@ -864,38 +864,38 @@ export default function PlatformFundsPage() {
                             </div>
                         </CardHeader>
                         <CardContent className="p-0">
-                           {isLoading ? <div className="p-4"><Skeleton className="h-40 w-full"/></div> : 
-                           !paginatedAdminTransactions || paginatedAdminTransactions.length === 0 ? <div className="p-4 py-12 text-center text-sm text-muted-foreground border-t">No administrative activities found for the selected filters.</div> :
-                           isMobile ? (
-                            <div className="p-4 space-y-3 border-t">
-                                {paginatedAdminTransactions.map(tx => (
-                                    <Card key={tx.id} onClick={() => handleRowClick(tx)}>
-                                        <CardContent className="p-4 space-y-2">
-                                            <div className="flex justify-between items-start">
-                                                <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
-                                                <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</p>
-                                            </div>
-                                            <p className="text-sm truncate">{tx.description}</p>
-                                            <p className="text-xs text-muted-foreground">{formatDate(tx.createdAt)}</p>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                           ) : (
-                           <Table>
-                                <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
-                                <TableBody>
-                                {paginatedAdminTransactions?.map(tx => (
-                                    <TableRow key={tx.id} onClick={() => handleRowClick(tx)} className="cursor-pointer">
-                                        <TableCell>{formatDate(tx.createdAt)}</TableCell>
-                                        <TableCell><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell>
-                                        <TableCell className="max-w-xs truncate">{tx.description}</TableCell>
-                                        <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell>
-                                    </TableRow>
-                                ))}
-                                </TableBody>
-                            </Table>
-                            )}
+                            {isLoading ? <div className="p-4"><Skeleton className="h-40 w-full" /></div> :
+                                !paginatedAdminTransactions || paginatedAdminTransactions.length === 0 ? <div className="p-4 py-12 text-center text-sm text-muted-foreground border-t">No administrative activities found for the selected filters.</div> :
+                                    isMobile ? (
+                                        <div className="p-4 space-y-3 border-t">
+                                            {paginatedAdminTransactions.map(tx => (
+                                                <Card key={tx.id} onClick={() => handleRowClick(tx)}>
+                                                    <CardContent className="p-4 space-y-2">
+                                                        <div className="flex justify-between items-start">
+                                                            <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
+                                                            <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</p>
+                                                        </div>
+                                                        <p className="text-sm truncate">{tx.description}</p>
+                                                        <p className="text-xs text-muted-foreground">{formatDate(tx.createdAt)}</p>
+                                                    </CardContent>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <Table>
+                                            <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
+                                            <TableBody>
+                                                {paginatedAdminTransactions?.map(tx => (
+                                                    <TableRow key={tx.id} onClick={() => handleRowClick(tx)} className="cursor-pointer">
+                                                        <TableCell>{formatDate(tx.createdAt)}</TableCell>
+                                                        <TableCell><Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge></TableCell>
+                                                        <TableCell className="max-w-xs truncate">{tx.description}</TableCell>
+                                                        <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}</TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    )}
                         </CardContent>
                         {totalPages > 1 && (<div className="p-4 border-t"><Pagination><PaginationContent><PaginationItem><PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} /></PaginationItem>{[...Array(totalPages)].map((_, i) => (<PaginationItem key={i}><PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>{i + 1}</PaginationLink></PaginationItem>))}<PaginationItem><PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} /></PaginationItem></PaginationContent></Pagination></div>)}
                     </Card>
@@ -914,72 +914,72 @@ export default function PlatformFundsPage() {
                             <h3 className="text-lg font-semibold mb-2">Currently Held Assets</h3>
                             {isMobile ? (
                                 <div className="space-y-3">
-                                {assets?.filter(a => a.status === 'Held').map(asset => (
-                                    <Card key={asset.id}>
-                                        <CardContent className="p-4 space-y-3">
-                                            <p className="font-medium">{asset.description}</p>
-                                            <p className="text-sm text-muted-foreground">Cost: {formatCurrency(asset.acquisitionCost)}</p>
-                                            <p className="text-xs text-muted-foreground">Acquired: {asset.acquisitionDate ? format(asset.acquisitionDate.toDate(), 'PPP') : 'Pending...'}</p>
-                                            <div className="pt-2 border-t">
-                                                <Dialog open={isDialogOpen[`sell-mobile-${asset.id}`]} onOpenChange={(isOpen) => isOpen ? openDialog(`sell-mobile-${asset.id}`) : closeDialog(`sell-mobile-${asset.id}`)}>
-                                                    <DialogTrigger asChild><Button size="sm" variant="outline" className="w-full"><DollarSign className="mr-2 h-4 w-4"/>Sell</Button></DialogTrigger>
-                                                    <DialogContent><DialogHeader><DialogTitle>Record Sale of {asset.description}</DialogTitle></DialogHeader><SellAssetForm asset={asset} onAssetSold={() => closeDialog(`sell-mobile-${asset.id}`)} /></DialogContent>
-                                                </Dialog>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                                {assets?.filter(a => a.status === 'Held').length === 0 && <p className="text-center text-sm text-muted-foreground py-4">No assets are currently held.</p>}
+                                    {assets?.filter(a => a.status === 'Held').map(asset => (
+                                        <Card key={asset.id}>
+                                            <CardContent className="p-4 space-y-3">
+                                                <p className="font-medium">{asset.description}</p>
+                                                <p className="text-sm text-muted-foreground">Cost: {formatCurrency(asset.acquisitionCost)}</p>
+                                                <p className="text-xs text-muted-foreground">Acquired: {asset.acquisitionDate ? format(asset.acquisitionDate.toDate(), 'PPP') : 'Pending...'}</p>
+                                                <div className="pt-2 border-t">
+                                                    <Dialog open={isDialogOpen[`sell-mobile-${asset.id}`]} onOpenChange={(isOpen) => isOpen ? openDialog(`sell-mobile-${asset.id}`) : closeDialog(`sell-mobile-${asset.id}`)}>
+                                                        <DialogTrigger asChild><Button size="sm" variant="outline" className="w-full"><DollarSign className="mr-2 h-4 w-4" />Sell</Button></DialogTrigger>
+                                                        <DialogContent><DialogHeader><DialogTitle>Record Sale of {asset.description}</DialogTitle></DialogHeader><SellAssetForm asset={asset} onAssetSold={() => closeDialog(`sell-mobile-${asset.id}`)} /></DialogContent>
+                                                    </Dialog>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                    {assets?.filter(a => a.status === 'Held').length === 0 && <p className="text-center text-sm text-muted-foreground py-4">No assets are currently held.</p>}
                                 </div>
                             ) : (
                                 <div className="rounded-md border">
                                     <Table>
                                         <TableHeader><TableRow><TableHead>Asset</TableHead><TableHead>Acquisition Date</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
                                         <TableBody>
-                                            {isLoading ? (Array.from({length: 2}).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-5 w-32"/></TableCell><TableCell><Skeleton className="h-5 w-24"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell><TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto"/></TableCell></TableRow>))
-                                            : assets?.filter(a => a.status === 'Held').length > 0 ? assets?.filter(a => a.status === 'Held').map(asset => (
-                                                <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{asset.acquisitionDate ? format(asset.acquisitionDate.toDate(), 'PPP') : 'Pending...'}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <Dialog open={isDialogOpen[`sell-${asset.id}`]} onOpenChange={(isOpen) => isOpen ? openDialog(`sell-${asset.id}`) : closeDialog(`sell-${asset.id}`)}>
-                                                        <DialogTrigger asChild><Button size="sm" variant="outline"><DollarSign className="mr-2 h-4 w-4"/>Sell</Button></DialogTrigger>
-                                                        <DialogContent><DialogHeader><DialogTitle>Record Sale of {asset.description}</DialogTitle></DialogHeader><SellAssetForm asset={asset} onAssetSold={() => closeDialog(`sell-${asset.id}`)} /></DialogContent>
-                                                    </Dialog>
-                                                </TableCell>
-                                                </TableRow>
-                                            )) : <TableRow><TableCell colSpan={4} className="h-24 text-center">No assets are currently held.</TableCell></TableRow>}
+                                            {isLoading ? (Array.from({ length: 2 }).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-5 w-32" /></TableCell><TableCell><Skeleton className="h-5 w-24" /></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell><TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell></TableRow>))
+                                                : (assets?.filter(a => a.status === 'Held').length || 0) > 0 ? assets?.filter(a => a.status === 'Held').map(asset => (
+                                                    <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{asset.acquisitionDate ? format(asset.acquisitionDate.toDate(), 'PPP') : 'Pending...'}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell>
+                                                        <TableCell className="text-right">
+                                                            <Dialog open={isDialogOpen[`sell-${asset.id}`]} onOpenChange={(isOpen) => isOpen ? openDialog(`sell-${asset.id}`) : closeDialog(`sell-${asset.id}`)}>
+                                                                <DialogTrigger asChild><Button size="sm" variant="outline"><DollarSign className="mr-2 h-4 w-4" />Sell</Button></DialogTrigger>
+                                                                <DialogContent><DialogHeader><DialogTitle>Record Sale of {asset.description}</DialogTitle></DialogHeader><SellAssetForm asset={asset} onAssetSold={() => closeDialog(`sell-${asset.id}`)} /></DialogContent>
+                                                            </Dialog>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )) : <TableRow><TableCell colSpan={4} className="h-24 text-center">No assets are currently held.</TableCell></TableRow>}
                                         </TableBody>
                                     </Table>
                                 </div>
                             )}
 
-                             <h3 className="text-lg font-semibold mt-6 mb-2">Sold Assets</h3>
-                             {isMobile ? (
+                            <h3 className="text-lg font-semibold mt-6 mb-2">Sold Assets</h3>
+                            {isMobile ? (
                                 <div className="space-y-3">
-                                {assets?.filter(a => a.status === 'Sold').map(asset => (
-                                     <Card key={asset.id}>
-                                        <CardContent className="p-4 space-y-2">
-                                            <p className="font-medium">{asset.description}</p>
-                                            <div className="flex justify-between text-sm"><span className="text-muted-foreground">Sale Price:</span><span>{formatCurrency(asset.salePrice || 0)}</span></div>
-                                            <div className="flex justify-between text-sm"><span className="text-muted-foreground">Original Cost:</span><span>{formatCurrency(asset.acquisitionCost)}</span></div>
-                                            <p className="text-xs text-muted-foreground pt-1 border-t mt-2">Sold: {asset.saleDate ? format(asset.saleDate.toDate(), 'PPP') : 'N/A'}</p>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                                {assets?.filter(a => a.status === 'Sold').length === 0 && <p className="text-center text-sm text-muted-foreground py-4">No assets have been sold.</p>}
+                                    {assets?.filter(a => a.status === 'Sold').map(asset => (
+                                        <Card key={asset.id}>
+                                            <CardContent className="p-4 space-y-2">
+                                                <p className="font-medium">{asset.description}</p>
+                                                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Sale Price:</span><span>{formatCurrency(asset.salePrice || 0)}</span></div>
+                                                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Original Cost:</span><span>{formatCurrency(asset.acquisitionCost)}</span></div>
+                                                <p className="text-xs text-muted-foreground pt-1 border-t mt-2">Sold: {asset.saleDate ? format(asset.saleDate.toDate(), 'PPP') : 'N/A'}</p>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                    {assets?.filter(a => a.status === 'Sold').length === 0 && <p className="text-center text-sm text-muted-foreground py-4">No assets have been sold.</p>}
                                 </div>
-                             ) : (
+                            ) : (
                                 <div className="rounded-md border">
                                     <Table>
                                         <TableHeader><TableRow><TableHead>Asset</TableHead><TableHead>Sale Date</TableHead><TableHead className="text-right">Sale Price</TableHead><TableHead className="text-right">Original Cost</TableHead></TableRow></TableHeader>
                                         <TableBody>
-                                            {isLoading ? (Array.from({length: 1}).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-5 w-32"/></TableCell><TableCell><Skeleton className="h-5 w-24"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto"/></TableCell></TableRow>))
-                                            : assets?.filter(a => a.status === 'Sold').length > 0 ? assets?.filter(a => a.status === 'Sold').map(asset => (
-                                                <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{asset.saleDate ? format(asset.saleDate.toDate(), 'PPP') : 'N/A'}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.salePrice)}</TableCell><TableCell className="text-right text-muted-foreground">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell></TableRow>
-                                            )) : <TableRow><TableCell colSpan={4} className="h-24 text-center">No assets have been sold.</TableCell></TableRow>}
+                                            {isLoading ? (Array.from({ length: 1 }).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-5 w-32" /></TableCell><TableCell><Skeleton className="h-5 w-24" /></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell></TableRow>))
+                                                : (assets?.filter(a => a.status === 'Sold').length || 0) > 0 ? assets?.filter(a => a.status === 'Sold').map(asset => (
+                                                    <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{asset.saleDate ? format(asset.saleDate.toDate(), 'PPP') : 'N/A'}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.salePrice || 0)}</TableCell><TableCell className="text-right text-muted-foreground">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell></TableRow>
+                                                )) : <TableRow><TableCell colSpan={4} className="h-24 text-center">No assets have been sold.</TableCell></TableRow>}
                                         </TableBody>
                                     </Table>
                                 </div>
-                             )}
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>

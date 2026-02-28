@@ -81,7 +81,7 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
     if (!firestore) return null;
     return query(collection(firestore, 'users'), where('role', '==', 'Client'));
   }, [firestore]);
-  
+
   const marketersQuery = useMemo(() => {
     if (!firestore) return null;
     return query(collection(firestore, 'users'), where('role', '==', 'Marketer'));
@@ -133,7 +133,7 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
     try {
       const functions = getFunctions(app);
       const createDeal = httpsCallable(functions, 'createDeal');
-      
+
       const payload = {
         ...values,
         clientName: selectedClient.name,
@@ -243,40 +243,40 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
           )}
         />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="principal"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Principal Amount</FormLabel>
-                  <FormControl><Input type="number" placeholder="10000" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="profitRate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Profit Rate (%)</FormLabel>
-                  <FormControl><Input type="number" placeholder="5" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <FormField
+            control={form.control}
+            name="principal"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Principal Amount</FormLabel>
+                <FormControl><Input type="number" placeholder="10000" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="profitRate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Profit Rate (%)</FormLabel>
+                <FormControl><Input type="number" placeholder="5" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
         <FormField
-              control={form.control}
-              name="managementFeeRate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Management Fee Rate (%)</FormLabel>
-                  <FormControl><Input type="number" step="0.1" placeholder="2" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          control={form.control}
+          name="managementFeeRate"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Management Fee Rate (%)</FormLabel>
+              <FormControl><Input type="number" step="0.1" placeholder="2" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
@@ -332,7 +332,7 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
             </FormItem>
           )}
         />
-         <FormField
+        <FormField
           control={form.control}
           name="repaymentFrequency"
           render={({ field }) => (
@@ -381,13 +381,13 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <FullCalendar
-                        plugins={[dayGridPlugin, interactionPlugin]}
-                        initialView="dayGridMonth"
-                        selectable={true}
-                        headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
-                        dateClick={(arg) => {
-                            form.setValue('startDate', arg.date);
-                        }}
+                      plugins={[dayGridPlugin, interactionPlugin]}
+                      initialView="dayGridMonth"
+                      selectable={true}
+                      headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
+                      dateClick={(arg: any) => {
+                        form.setValue('startDate', arg.date);
+                      }}
                     />
                   </PopoverContent>
                 </Popover>

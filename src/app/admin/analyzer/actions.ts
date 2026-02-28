@@ -8,7 +8,13 @@ const analyzeSchema = z.object({
   proposalDetails: z.string().min(50, { message: "Proposal details must be at least 50 characters." }),
 });
 
-export async function getAnalysis(prevState: any, formData: FormData) {
+type State = {
+  message: string;
+  data: any | null;
+  errors: any | null;
+};
+
+export async function getAnalysis(prevState: any, formData: FormData): Promise<State> {
   const validatedFields = analyzeSchema.safeParse({
     proposalDetails: formData.get('proposalDetails'),
   });
@@ -17,6 +23,7 @@ export async function getAnalysis(prevState: any, formData: FormData) {
     return {
       message: "Invalid form data.",
       errors: validatedFields.error.flatten().fieldErrors,
+      data: null,
     };
   }
 
@@ -25,11 +32,14 @@ export async function getAnalysis(prevState: any, formData: FormData) {
     return {
       message: "Analysis complete.",
       data: result,
+      errors: null,
     };
   } catch (error) {
     console.error(error);
     return {
       message: "Failed to analyze proposal. Please try again.",
+      data: null,
+      errors: null,
     };
   }
 }

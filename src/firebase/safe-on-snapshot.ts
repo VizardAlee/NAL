@@ -15,14 +15,14 @@ import { onSnapshot, Unsubscribe, DocumentData, Query, DocumentReference } from 
  * @param complete A callback to be called when the listener is closed.
  * @returns An `unsubscribe` function that can be called to cancel the snapshot listener.
  */
-export function safeOnSnapshot<T extends DocumentData>(
-  query: Query<T> | DocumentReference<T>,
+export function safeOnSnapshot<T = DocumentData>(
+  query: Query<any> | DocumentReference<any>,
   next: (snapshot: any) => void,
   error?: (error: any) => void,
   complete?: () => void
 ): Unsubscribe {
   return onSnapshot(
-    query,
+    query as any,
     next,
     (err) => {
       // Completely silence the specific logout permission error.

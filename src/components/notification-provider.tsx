@@ -2,8 +2,8 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import { useUser, useFirestore } from '@/firebase';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import { useUser, useFirebase } from '@/firebase';
+import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
 import { saveFcmToken } from '@/app/common/actions/notification-actions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -20,9 +20,10 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
     const { user } = useUser();
-    const firestore = useFirestore();
+    const { app } = useFirebase();
     const [permission, setPermission] = useState<NotificationPermission>('default');
     const [isSubscribing, setIsSubscribing] = useState(false);
+    const [messagingSupported, setMessagingSupported] = useState(false);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -31,8 +32,22 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         }
     }, []);
 
+    useEffect(() => {
+        let cancelled = false;
+        const checkSupport = async () => {
+            const supported = app ? await isSupported() : false;
+            if (!cancelled) {
+                setMessagingSupported(supported);
+            }
+        };
+        void checkSupport();
+        return () => {
+            cancelled = true;
+        };
+    }, [app]);
+
     const requestPermission = useCallback(async () => {
-        if (!('Notification' in window) || !('serviceWorker' in navigator) || !user) {
+        if (!('Notification' in window) || !('serviceWorker' in navigator) || !user || !app || !messagingSupported) {
             return;
         }
 
@@ -51,7 +66,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             setPermission(permissionResult);
 
             if (permissionResult === 'granted') {
-                const messaging = getMessaging();
+                const messaging = getMessaging(app);
                 const currentToken = await getToken(messaging, {
                     vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
                 });
@@ -69,11 +84,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         } finally {
             setIsSubscribing(false);
         }
-    }, [user, toast]);
+    }, [user, toast, app, messagingSupported]);
 
     useEffect(() => {
-        if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-            const messaging = getMessaging();
+        if (typeof window !== 'undefined' && 'serviceWorker' in navigator && app && messagingSupported) {
+            const messaging = getMessaging(app);
             const unsubscribe = onMessage(messaging, (payload) => {
                 console.log('Foreground message received.', payload);
                 const notificationTitle = payload.notification?.title || 'New Notification';
@@ -85,7 +100,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             });
             return () => unsubscribe();
         }
-    }, []);
+    }, [app, messagingSupported]);
 
     return (
         <NotificationContext.Provider value={{ permission, requestPermission, isSubscribing }}>

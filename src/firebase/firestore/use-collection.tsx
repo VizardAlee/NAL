@@ -14,8 +14,8 @@ import { useUser } from '../auth/use-user';
 import { safeOnSnapshot } from '../safe-on-snapshot';
 
 // Make setData available to consumers of the hook
-export function useCollection<T extends DocumentData>(
-  q: Query<T> | CollectionReference<T> | null | undefined
+export function useCollection<T = DocumentData>(
+  q: Query<any> | CollectionReference<any> | null | undefined
 ) {
   const [data, setData] = useState<T[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -44,7 +44,7 @@ export function useCollection<T extends DocumentData>(
       q,
       (snapshot) => {
         const docs = snapshot.docs.map(
-          (doc) => ({ ...doc.data(), id: doc.id } as T)
+          (doc: any) => ({ ...doc.data(), id: doc.id } as T)
         );
         setData(docs);
         setLoading(false);

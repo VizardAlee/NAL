@@ -118,6 +118,81 @@ body {
   }
 }
 
+@layer utilities {
+  .home-gradient-bg {
+    background:
+      radial-gradient(55rem 55rem at 15% -10%, hsla(var(--primary) / 0.2), transparent 60%),
+      radial-gradient(45rem 45rem at 95% 10%, hsla(var(--accent) / 0.2), transparent 60%),
+      linear-gradient(to bottom, hsla(var(--background) / 0.95), hsl(var(--background)));
+  }
+
+  .home-image-frame {
+    @apply relative w-full overflow-hidden rounded-2xl border border-white/40 bg-card/80 p-2 shadow-2xl backdrop-blur;
+  }
+
+  .home-image-frame::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(130deg, transparent 20%, hsla(var(--accent) / 0.12), transparent 80%);
+    pointer-events: none;
+  }
+
+  .home-feature-card {
+    animation: home-fade-up 0.7s ease both;
+  }
+
+  .home-feature-card:hover {
+    transform: translateY(-6px);
+    transition: transform 0.25s ease;
+  }
+
+  .home-float-card {
+    animation: home-float 4s ease-in-out infinite;
+  }
+
+  .home-image-pulse {
+    animation: home-glow 5s ease-in-out infinite;
+  }
+
+  .home-stagger > * {
+    animation: home-fade-up 0.7s ease both;
+  }
+
+  .home-stagger > *:nth-child(2) {
+    animation-delay: 120ms;
+  }
+}
+
+@keyframes home-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes home-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes home-glow {
+  0%, 100% {
+    box-shadow: 0 20px 50px hsla(var(--primary) / 0.2);
+  }
+  50% {
+    box-shadow: 0 20px 70px hsla(var(--accent) / 0.28);
+  }
+}
+
 /* FullCalendar Customizations */
 .fc {
   --fc-border-color: transparent;
