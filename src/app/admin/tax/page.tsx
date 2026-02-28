@@ -1,4 +1,3 @@
-
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -7,20 +6,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { useFirestore } from "@/firebase";
 import { collection, query, where, DocumentData, Timestamp } from "firebase/firestore";
-import { Landmark, Loader2, CalendarIcon } from "lucide-react";
+import { Landmark, Loader2, CalendarIcon, Info } from "lucide-react";
 import { useMemo, useState } from "react";
 import { startOfDay, endOfDay, format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
-import interactionPlugin, { DateClickArg } from '@fullcalendar/interaction';
+import interactionPlugin from '@fullcalendar/interaction';
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
-
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 type Transaction = DocumentData & {
     type: 'PlatformEarning';
@@ -38,20 +38,6 @@ type AdministrativeTransaction = DocumentData & {
 const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(value);
 };
-
-function TaxMetricCard({ title, value, description, isLoading }: { title: string, value: number, description?: string, isLoading: boolean }) {
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="text-sm font-medium">{title}</CardTitle>
-                {description && <CardDescription>{description}</CardDescription>}
-            </CardHeader>
-            <CardContent>
-                {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(value)}</div>}
-            </CardContent>
-        </Card>
-    );
-}
 
 export default function TaxPage() {
     const firestore = useFirestore();
@@ -83,56 +69,54 @@ export default function TaxPage() {
     const taxCalculations = useMemo(() => {
         const platformEarnings = earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
         const managementFees = adminTransactions?.filter(tx => tx.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0) || 0;
+        const expenses = adminTransactions?.filter(tx => tx.type === 'Expense').reduce((sum, tx) => sum + Math.abs(tx.amount), 0) || 0;
 
-        const rentTransaction = adminTransactions
-            ?.find(tx => tx.type === 'Expense' && tx.description.toLowerCase().includes('rent'));
+        const totalRevenue = platformEarnings + managementFees;
+        const assessableProfit = Math.max(0, totalRevenue - expenses);
 
-        const annualRent = rentTransaction ? Math.abs(rentTransaction.amount) : 0;
+        // LLC Tax Rules (Nigeria Finance Act)
+        // Turnover Thresholds for CIT:
+        // Small (< 25M): 0%
+        // Medium (25M - 100M): 20%
+        // Large (> 100M): 30%
+        // Tertiary Education Tax (EDT): 3% of assessable profit (Small companies exempt)
 
-        const grossProfit = platformEarnings + managementFees;
-        const rentRelief = Math.min(annualRent * 0.20, 500000);
-        const chargeableIncome = Math.max(0, grossProfit - rentRelief);
+        let citRate = 0;
+        let edtRate = 0;
+        let category = "Small Company";
 
-        let totalTax = 0;
-        let incomeToTax = chargeableIncome;
-        const breakdown = [];
-
-        // New 2026 Tax Brackets
-        const brackets = [
-            { threshold: 0, limit: 800000, rate: 0.00, label: "Up to ₦800,000" },
-            { threshold: 800000, limit: 2200000, rate: 0.15, label: "₦800,001 - ₦3,000,000" },
-            { threshold: 3000000, limit: 9000000, rate: 0.18, label: "₦3,000,001 - ₦12,000,000" },
-            { threshold: 12000000, limit: 13000000, rate: 0.21, label: "₦12,000,001 - ₦25,000,000" },
-            { threshold: 25000000, limit: 25000000, rate: 0.23, label: "₦25,000,001 - ₦50,000,000" },
-            { threshold: 50000000, limit: Infinity, rate: 0.25, label: "Above ₦50,000,000" },
-        ];
-
-        for (const bracket of brackets) {
-            if (incomeToTax <= bracket.threshold) break;
-
-            const taxableInBracket = Math.min(incomeToTax - bracket.threshold, bracket.limit);
-            const taxForBracket = taxableInBracket * bracket.rate;
-            totalTax += taxForBracket;
-
-            if (taxableInBracket > 0) {
-                breakdown.push({
-                    description: `${bracket.label} @ ${bracket.rate * 100}%`,
-                    taxableAmount: taxableInBracket,
-                    taxDue: taxForBracket,
-                });
-            }
+        if (totalRevenue >= 100000000) {
+            citRate = 0.30;
+            edtRate = 0.03;
+            category = "Large Company";
+        } else if (totalRevenue >= 25000000) {
+            citRate = 0.20;
+            edtRate = 0.03;
+            category = "Medium Company";
+        } else {
+            citRate = 0;
+            edtRate = 0; // Small companies are typically exempt from EDT
+            category = "Small Company";
         }
 
-        const profitAfterTax = grossProfit - totalTax;
+        const educationTax = assessableProfit * edtRate;
+        const chargeableIncome = Math.max(0, assessableProfit - educationTax);
+        const companyIncomeTax = chargeableIncome * citRate;
+        const totalTaxDue = educationTax + companyIncomeTax;
+        const profitAfterTax = assessableProfit - totalTaxDue;
 
         return {
-            grossProfit,
-            annualRent,
-            rentRelief,
+            totalRevenue,
+            expenses,
+            assessableProfit,
+            educationTax,
+            companyIncomeTax,
             chargeableIncome,
-            personalIncomeTax: totalTax,
+            totalTaxDue,
             profitAfterTax,
-            taxBreakdown: breakdown,
+            citRate,
+            edtRate,
+            category
         };
 
     }, [earningsTransactions, adminTransactions]);
@@ -144,8 +128,8 @@ export default function TaxPage() {
     return (
         <div>
             <PageHeader
-                title="Tax Calculation (Enterprise)"
-                description="Estimate Personal Income Tax (PIT) based on the upcoming 2026 tax reform."
+                title="Corporate Tax (LLC)"
+                description="Calculate Companies Income Tax (CIT) and Tertiary Education Tax (EDT)."
                 icon={Landmark}
             >
                 <div className="flex flex-col sm:flex-row gap-2">
@@ -214,109 +198,114 @@ export default function TaxPage() {
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
             ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
-                    <Card className="lg:col-span-2">
-                        <CardHeader>
-                            <CardTitle>Personal Income Tax (PIT) Summary</CardTitle>
-                            <CardDescription>Based on proposed 2026 Nigerian PITA rates for enterprise businesses.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="max-w-xs space-y-2 mb-6">
-                                <Label>Annual Rent Paid</Label>
-                                <Input
-                                    type="text"
-                                    value={formatCurrency(taxCalculations.annualRent)}
-                                    readOnly
-                                    className="font-medium"
-                                />
-                                <p className="text-xs text-muted-foreground">This value is automatically calculated from the first administrative expense with "rent" in the description for the selected period.</p>
-                            </div>
-                            {isMobile ? (
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-sm"><span className="text-muted-foreground">Gross Profit:</span> <span>{formatCurrency(taxCalculations.grossProfit)}</span></div>
-                                    <div className="flex justify-between text-sm"><span className="text-muted-foreground">Rent Relief:</span> <span className="text-destructive">- {formatCurrency(taxCalculations.rentRelief)}</span></div>
-                                    <div className="flex justify-between font-bold text-base pt-2 border-t mt-2"><span >Chargeable Income:</span> <span>{formatCurrency(taxCalculations.chargeableIncome)}</span></div>
-                                </div>
-                            ) : (
+                <div className="grid gap-6">
+                    <div className="grid gap-6 md:grid-cols-3">
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-medium">Turnover (Revenue)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{formatCurrency(taxCalculations.totalRevenue)}</div>
+                                <Badge variant="secondary" className="mt-2">{taxCalculations.category}</Badge>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-medium">Assessable Profit</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{formatCurrency(taxCalculations.assessableProfit)}</div>
+                                <p className="text-xs text-muted-foreground mt-1">Revenue minus Expenses</p>
+                            </CardContent>
+                        </Card>
+                        <Card className="border-primary bg-primary/5">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-medium">Total Tax Due</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-primary">{formatCurrency(taxCalculations.totalTaxDue)}</div>
+                                <p className="text-xs text-muted-foreground mt-1">CIT + EDT</p>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <div className="grid gap-6 md:grid-cols-2">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Calculation Breakdown</CardTitle>
+                                <CardDescription>Detailed tax computation for Limited Liability Companies.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
                                 <Table>
                                     <TableBody>
                                         <TableRow>
-                                            <TableCell>Gross Profit</TableCell>
-                                            <TableCell className="text-right">{formatCurrency(taxCalculations.grossProfit)}</TableCell>
+                                            <TableCell>Total Revenue (Turnover)</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(taxCalculations.totalRevenue)}</TableCell>
                                         </TableRow>
                                         <TableRow>
-                                            <TableCell>Rent Relief Allowance (20% of rent, capped at ₦500k)</TableCell>
-                                            <TableCell className="text-right text-destructive">- {formatCurrency(taxCalculations.rentRelief)}</TableCell>
+                                            <TableCell>Allowable Expenses</TableCell>
+                                            <TableCell className="text-right text-destructive">- {formatCurrency(taxCalculations.expenses)}</TableCell>
                                         </TableRow>
-                                        <TableRow className="font-medium bg-muted/50">
-                                            <TableCell>Chargeable Income</TableCell>
+                                        <TableRow className="font-medium bg-muted/30">
+                                            <TableCell>Assessable Profit</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(taxCalculations.assessableProfit)}</TableCell>
+                                        </TableRow>
+                                        <TableRow>
+                                            <TableCell>Tertiary Education Tax (EDT) @ {taxCalculations.edtRate * 100}%</TableCell>
+                                            <TableCell className="text-right text-destructive">- {formatCurrency(taxCalculations.educationTax)}</TableCell>
+                                        </TableRow>
+                                        <TableRow className="text-muted-foreground text-xs italic">
+                                            <TableCell>Chargeable Income (Profit after EDT)</TableCell>
                                             <TableCell className="text-right">{formatCurrency(taxCalculations.chargeableIncome)}</TableCell>
                                         </TableRow>
-                                    </TableBody>
-                                </Table>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Tax Breakdown</CardTitle>
-                            <CardDescription>Progressive tax rates applied to chargeable income.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {isMobile ? (
-                                <div className="space-y-3">
-                                    {taxCalculations.taxBreakdown.map((bracket, index) => (
-                                        <Card key={index} className="p-3">
-                                            <p className="font-medium text-sm">{bracket.description}</p>
-                                            <div className="flex justify-between text-xs mt-1"><span>Taxable:</span><span>{formatCurrency(bracket.taxableAmount)}</span></div>
-                                            <div className="flex justify-between text-xs font-bold"><span>Tax Due:</span><span>{formatCurrency(bracket.taxDue)}</span></div>
-                                        </Card>
-                                    ))}
-                                    {taxCalculations.taxBreakdown.length === 0 && (
-                                        <p className="text-center text-sm text-muted-foreground py-4">No chargeable income.</p>
-                                    )}
-                                </div>
-                            ) : (
-                                <Table>
-                                    <TableHeader>
                                         <TableRow>
-                                            <TableHead>Tax Bracket</TableHead>
-                                            <TableHead>Taxable Amount</TableHead>
-                                            <TableHead className="text-right">Tax Due</TableHead>
+                                            <TableCell>Company Income Tax (CIT) @ {taxCalculations.citRate * 100}%</TableCell>
+                                            <TableCell className="text-right text-destructive">- {formatCurrency(taxCalculations.companyIncomeTax)}</TableCell>
                                         </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {taxCalculations.taxBreakdown.map((bracket, index) => (
-                                            <TableRow key={index}>
-                                                <TableCell>{bracket.description}</TableCell>
-                                                <TableCell>{formatCurrency(bracket.taxableAmount)}</TableCell>
-                                                <TableCell className="text-right">{formatCurrency(bracket.taxDue)}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {taxCalculations.taxBreakdown.length === 0 && (
-                                            <TableRow>
-                                                <TableCell colSpan={3} className="text-center h-24">No chargeable income.</TableCell>
-                                            </TableRow>
-                                        )}
+                                        <TableRow className="font-bold border-t-2">
+                                            <TableCell>Net Profit After Tax</TableCell>
+                                            <TableCell className="text-right text-primary">{formatCurrency(taxCalculations.profitAfterTax)}</TableCell>
+                                        </TableRow>
                                     </TableBody>
                                 </Table>
-                            )}
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
 
-                    <TaxMetricCard
-                        title="Estimated Personal Income Tax (PIT)"
-                        value={taxCalculations.personalIncomeTax}
-                        description="Total tax from all brackets"
-                        isLoading={isLoading}
-                    />
-                    <TaxMetricCard
-                        title="Profit After Tax"
-                        value={taxCalculations.profitAfterTax}
-                        description="Remaining profit after all taxes"
-                        isLoading={isLoading}
-                    />
+                        <div className="space-y-6">
+                            <Alert>
+                                <Info className="h-4 w-4" />
+                                <AlertTitle>Company Categorization</AlertTitle>
+                                <AlertDescription className="text-xs space-y-2">
+                                    <p>Based on current Nigerian tax laws:</p>
+                                    <ul className="list-disc pl-4 space-y-1">
+                                        <li><strong>Small Company:</strong> Turnover &lt; ₦25M. CIT Rate: 0%. Exempt from EDT.</li>
+                                        <li><strong>Medium Company:</strong> Turnover ₦25M - ₦100M. CIT Rate: 20%. EDT Rate: 3%.</li>
+                                        <li><strong>Large Company:</strong> Turnover &gt; ₦100M. CIT Rate: 30%. EDT Rate: 3%.</li>
+                                    </ul>
+                                </AlertDescription>
+                            </Alert>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-base">Tax Summary</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-muted-foreground">CIT (Company Income Tax)</span>
+                                        <span className="font-semibold">{formatCurrency(taxCalculations.companyIncomeTax)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-muted-foreground">EDT (Education Tax)</span>
+                                        <span className="font-semibold">{formatCurrency(taxCalculations.educationTax)}</span>
+                                    </div>
+                                    <div className="pt-2 border-t flex justify-between items-center font-bold">
+                                        <span>Total Corporate Tax Due</span>
+                                        <span className="text-primary">{formatCurrency(taxCalculations.totalTaxDue)}</span>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
