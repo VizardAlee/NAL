@@ -43,7 +43,7 @@ If you see `! [rejected] main -> main (non-fast-forward)`, it means GitHub has c
 2. If a text editor opens (Vim), type `:wq` and press **Enter** to save the merge message.
 3. Now you can push:
    ```bash
-   git push origin main
+   git push origin logo:main
    ```
 
 ### 1. Fix "ECONNREFUSED" (Stale Socket)
