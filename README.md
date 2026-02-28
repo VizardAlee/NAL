@@ -6,6 +6,18 @@ To get started, take a look at src/app/page.tsx.
 
 ## Troubleshooting Git
 
+### 🚨 Fix "Rejected / Non-Fast-Forward" Push
+If you see `! [rejected] main -> main (non-fast-forward)`, it means GitHub has changes you don't have.
+1. Run this command:
+   ```bash
+   git pull origin main --no-rebase
+   ```
+2. If a text editor opens (Vim), type `:wq` and press **Enter** to save the merge message.
+3. Now you can push:
+   ```bash
+   git push origin main
+   ```
+
 ### 1. Fix "ECONNREFUSED" (Stale Socket)
 Run these commands in your terminal to clear stale VS Code Git authentication variables:
 ```bash
@@ -20,27 +32,15 @@ GitHub requires a token instead of a password for command-line operations:
 3. Give it a name (e.g., "Firebase Studio") and select the **'repo'** scope.
 4. Click **Generate token** and **COPY IT IMMEDIATELY**. You won't see it again.
 
-### 3. Authenticate with the Token
-When you run `git pull origin main`:
-1. **Username:** Enter your GitHub username (`serviceguru-crypt`).
-2. **Password:** **PASTE THE TOKEN** you just copied (characters will not appear as you paste).
-
-### 4. Save Credentials (Avoid Re-typing)
+### 3. Save Credentials (Avoid Re-typing)
 To stop Git from asking for your token every time, run this command:
 ```bash
 git config --global credential.helper store
 ```
 **Important:** You must enter your username and token **one more time** correctly. Git will then save them permanently on this machine.
 
-### 5. Resolve "Divergent Branches" / "Rejected" Push
-If Git says "Updates were rejected" (non-fast-forward) or "Need to specify how to reconcile divergent branches", run this to merge the changes:
-```bash
-git pull origin main --no-rebase
-```
-*Note: This will combine the work from GitHub with your local work. If a text editor opens, just save and close it.*
-
-### 6. Reset Credentials (Optional)
-If Git doesn't prompt you for a password and just fails, reset the helper to clear old data:
+### 4. Reset Credentials (Optional)
+If Git doesn't prompt you for a password and just fails, or if you entered the wrong token, reset the helper to clear old data:
 ```bash
 git config --global --unset credential.helper
 ```
