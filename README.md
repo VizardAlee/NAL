@@ -6,6 +6,17 @@ To get started, take a look at src/app/page.tsx.
 
 ## Troubleshooting Git
 
+### 🚨 "No tracking information" or "No upstream branch"
+If you see an error saying "There is no tracking information" or "The current branch has no upstream branch":
+1. **Link your current branch to the remote main branch:**
+   ```bash
+   git branch --set-upstream-to=origin/main
+   ```
+2. **If you just want to push your specific branch to main on GitHub:**
+   ```bash
+   git push origin logo:main
+   ```
+
 ### 🚨 The "Already up to date" but "Rejected" Loop
 If `git pull` says you are up to date, but `git push` is still rejected:
 1. **Force a sync (The Nuclear Option):**
