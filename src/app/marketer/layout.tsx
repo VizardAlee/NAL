@@ -22,6 +22,7 @@ import React, { useEffect } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { DigitalClock } from "@/components/digital-clock";
+import { canAccessPortal, getDefaultRouteForUser } from "@/lib/access-control";
 
 function MarketerSkeleton() {
     return (
@@ -84,6 +85,10 @@ export default function MarketerLayout({
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
+      return;
+    }
+    if (!loading && user && !canAccessPortal(user, 'marketer')) {
+      router.push(getDefaultRouteForUser(user));
     }
   }, [user, loading, router]);
   

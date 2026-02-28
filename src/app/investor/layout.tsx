@@ -24,6 +24,7 @@ import { useCompanyLogo } from "@/components/company-logo-provider";
 import { MessagesLink } from "@/components/messages-link";
 import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
 import { DigitalClock } from "@/components/digital-clock";
+import { canAccessPortal, getDefaultRouteForUser } from "@/lib/access-control";
 
 function InvestorSkeleton() {
     return (
@@ -116,6 +117,10 @@ export default function InvestorLayout({
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
+      return;
+    }
+    if (!loading && user && !canAccessPortal(user, 'investor')) {
+      router.push(getDefaultRouteForUser(user));
     }
   }, [user, loading, router]);
   

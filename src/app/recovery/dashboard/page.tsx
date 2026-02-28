@@ -20,22 +20,22 @@ import { useToast } from "@/hooks/use-toast";
 
 
 type RecoveryTask = DocumentData & {
-  id: string;
-  clientId: string;
-  clientName: string;
-  clientEmail: string;
-  clientPhoneNumber: string;
-  dealId: string;
-  dealName: string;
-  repaymentId: string;
-  amountDue: number;
-  dueDate: Timestamp;
-  status: 'Due_Recovery' | 'Escalated_Legal' | 'Resolved';
-  lastLog?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-  assigneeId?: string;
-  assigneeName?: string;
+    id: string;
+    clientId: string;
+    clientName: string;
+    clientEmail: string;
+    clientPhoneNumber: string;
+    dealId: string;
+    dealName: string;
+    repaymentId: string;
+    amountDue: number;
+    dueDate: Timestamp;
+    status: 'Due_Recovery' | 'Escalated_Legal' | 'Resolved';
+    lastLog?: string;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+    assigneeId?: string;
+    assigneeName?: string;
 };
 
 type Log = DocumentData & {
@@ -62,7 +62,7 @@ function LogEntryForm({ taskId, authorId, authorName }: { taskId: string, author
                 authorId,
                 authorName
             });
-            if(result.success) {
+            if (result.success) {
                 toast({ title: "Success", description: result.message });
                 setText(''); // Clear textarea
             } else {
@@ -70,10 +70,10 @@ function LogEntryForm({ taskId, authorId, authorName }: { taskId: string, author
             }
         });
     }
-    
+
     return (
         <form onSubmit={handleSubmit} className="flex items-start gap-2 pt-4">
-            <Textarea 
+            <Textarea
                 placeholder="Add a note about contact attempts, conversations, etc..."
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -89,12 +89,12 @@ function LogEntryForm({ taskId, authorId, authorName }: { taskId: string, author
 
 function TaskDetailsSheet({ task, user }: { task: RecoveryTask, user: any }) {
     const firestore = useFirestore();
-    
+
     const logsQuery = useMemo(() => {
         if (!firestore) return null;
         return query(collection(firestore, `recoveryTasks/${task.id}/logs`), orderBy('createdAt', 'desc'));
     }, [firestore, task.id]);
-    
+
     const { data: logs, loading: logsLoading } = useCollection<Log>(logsQuery);
 
     return (
@@ -106,13 +106,13 @@ function TaskDetailsSheet({ task, user }: { task: RecoveryTask, user: any }) {
                 </SheetDescription>
             </SheetHeader>
             <div className="space-y-4 py-4 flex-1 overflow-y-auto pr-4">
-                 {task.assigneeName && (
+                {task.assigneeName && (
                     <Card>
                         <CardHeader className="pb-2">
                             <CardTitle className="text-base flex items-center gap-2"><UserCheck /> Assigned To</CardTitle>
                         </CardHeader>
                         <CardContent>
-                             <p className="font-medium">{task.assigneeName}</p>
+                            <p className="font-medium">{task.assigneeName}</p>
                         </CardContent>
                     </Card>
                 )}
@@ -125,7 +125,7 @@ function TaskDetailsSheet({ task, user }: { task: RecoveryTask, user: any }) {
                         <p><strong>Phone:</strong> {task.clientPhoneNumber}</p>
                     </CardContent>
                 </Card>
-                 <Card>
+                <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-base flex items-center gap-2"><FileText /> Payment Details</CardTitle>
                     </CardHeader>
@@ -139,10 +139,10 @@ function TaskDetailsSheet({ task, user }: { task: RecoveryTask, user: any }) {
                     <div className="space-y-4">
                         {logsLoading && <p className="text-sm text-muted-foreground">Loading logs...</p>}
                         {logs && logs.length > 0 ? logs.map(log => (
-                             <div key={log.id} className="flex items-start gap-3">
+                            <div key={log.id} className="flex items-start gap-3">
                                 <Avatar className="h-8 w-8">
                                     <AvatarImage src={`https://picsum.photos/seed/${log.authorId}/128/128`} />
-                                    <AvatarFallback>{log.authorName.charAt(0)}</AvatarFallback>
+                                    <AvatarFallback>{log.authorName?.charAt(0) || 'U'}</AvatarFallback>
                                 </Avatar>
                                 <div className="flex-1 space-y-1">
                                     <div className="flex justify-between items-center text-xs">
@@ -156,7 +156,7 @@ function TaskDetailsSheet({ task, user }: { task: RecoveryTask, user: any }) {
                     </div>
                 </div>
             </div>
-             <div className="mt-auto border-t pt-4">
+            <div className="mt-auto border-t pt-4">
                 <LogEntryForm taskId={task.id} authorId={user.uid} authorName={user.displayName} />
             </div>
         </SheetContent>
@@ -179,7 +179,7 @@ export default function RecoveryDashboardPage() {
     }, [firestore]);
 
     const { data: recoveryTasks, loading: tasksLoading } = useCollection<RecoveryTask>(recoveryTasksQuery);
-    
+
     const isLoading = tasksLoading || userLoading;
 
     return (
@@ -196,58 +196,58 @@ export default function RecoveryDashboardPage() {
                     <CardDescription>Clients with payments due in the next 3 days.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {isLoading ? <Skeleton className="h-48 w-full" /> : 
-                     !recoveryTasks || recoveryTasks.length === 0 ? <p className="text-center text-sm text-muted-foreground py-10">No upcoming recovery tasks.</p> :
-                     isMobile ? (
-                         <div className="space-y-3">
-                             {recoveryTasks.map(task => (
-                                <SheetTrigger key={task.id} asChild>
-                                    <Card onClick={() => setSelectedTask(task)}>
-                                        <CardContent className="p-4 space-y-2">
-                                            <p className="font-semibold">{task.clientName}</p>
-                                            <p className="text-sm text-primary font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</p>
-                                            <p className="text-xs text-muted-foreground">Due: {format(task.dueDate.toDate(), 'PPP')}</p>
-                                            {task.assigneeName ? (
-                                                <p className="text-xs text-muted-foreground italic pt-1 border-t">Assigned to: {task.assigneeName}</p>
-                                            ) : task.lastLog && (
-                                                <p className="text-xs text-muted-foreground italic truncate pt-1 border-t">Last Log: {task.lastLog}</p>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                </SheetTrigger>
-                             ))}
-                         </div>
-                     ) : (
-                        <div className="relative overflow-auto">
-                            <table className="w-full caption-bottom text-sm">
-                                <thead className="[&_tr]:border-b">
-                                    <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Client</th>
-                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Deal</th>
-                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Due Date</th>
-                                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Assigned To</th>
-                                        <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">Amount Due</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="[&_tr:last-child]:border-0">
+                    {isLoading ? <Skeleton className="h-48 w-full" /> :
+                        !recoveryTasks || recoveryTasks.length === 0 ? <p className="text-center text-sm text-muted-foreground py-10">No upcoming recovery tasks.</p> :
+                            isMobile ? (
+                                <div className="space-y-3">
                                     {recoveryTasks.map(task => (
                                         <SheetTrigger key={task.id} asChild>
-                                            <tr onClick={() => setSelectedTask(task)} className="cursor-pointer border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                                                <td className="p-4 align-middle font-medium flex items-center gap-2">
-                                                    <MessageCircle className="h-4 w-4 text-muted-foreground" />
-                                                    {task.clientName}
-                                                </td>
-                                                <td className="p-4 align-middle">{task.dealName}</td>
-                                                <td className="p-4 align-middle">{format(task.dueDate.toDate(), 'PPP')}</td>
-                                                <td className="p-4 align-middle text-muted-foreground">{task.assigneeName || 'Unassigned'}</td>
-                                                <td className="p-4 align-middle text-right font-bold text-primary">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</td>
-                                            </tr>
+                                            <Card onClick={() => setSelectedTask(task)}>
+                                                <CardContent className="p-4 space-y-2">
+                                                    <p className="font-semibold">{task.clientName}</p>
+                                                    <p className="text-sm text-primary font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</p>
+                                                    <p className="text-xs text-muted-foreground">Due: {format(task.dueDate.toDate(), 'PPP')}</p>
+                                                    {task.assigneeName ? (
+                                                        <p className="text-xs text-muted-foreground italic pt-1 border-t">Assigned to: {task.assigneeName}</p>
+                                                    ) : task.lastLog && (
+                                                        <p className="text-xs text-muted-foreground italic truncate pt-1 border-t">Last Log: {task.lastLog}</p>
+                                                    )}
+                                                </CardContent>
+                                            </Card>
                                         </SheetTrigger>
                                     ))}
-                                </tbody>
-                            </table>
-                        </div>
-                     )}
+                                </div>
+                            ) : (
+                                <div className="relative overflow-auto">
+                                    <table className="w-full caption-bottom text-sm">
+                                        <thead className="[&_tr]:border-b">
+                                            <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+                                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Client</th>
+                                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Deal</th>
+                                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Due Date</th>
+                                                <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Assigned To</th>
+                                                <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">Amount Due</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="[&_tr:last-child]:border-0">
+                                            {recoveryTasks.map(task => (
+                                                <SheetTrigger key={task.id} asChild>
+                                                    <tr onClick={() => setSelectedTask(task)} className="cursor-pointer border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+                                                        <td className="p-4 align-middle font-medium flex items-center gap-2">
+                                                            <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                                                            {task.clientName}
+                                                        </td>
+                                                        <td className="p-4 align-middle">{task.dealName}</td>
+                                                        <td className="p-4 align-middle">{format(task.dueDate.toDate(), 'PPP')}</td>
+                                                        <td className="p-4 align-middle text-muted-foreground">{task.assigneeName || 'Unassigned'}</td>
+                                                        <td className="p-4 align-middle text-right font-bold text-primary">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</td>
+                                                    </tr>
+                                                </SheetTrigger>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                 </CardContent>
             </Card>
             {selectedTask && user && <TaskDetailsSheet task={selectedTask} user={user} />}

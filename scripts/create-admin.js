@@ -39,7 +39,12 @@ async function createAdminUser() {
 
     // 2. Set custom claim for the admin role
     console.log('2. Setting "Admin" custom claim...');
-    await auth.setCustomUserClaims(userRecord.uid, { role: 'Admin' });
+    await auth.setCustomUserClaims(userRecord.uid, {
+      role: 'Admin',
+      accessRole: 'ADMIN',
+      personas: [],
+      primaryPortal: 'admin',
+    });
     console.log('   -> Custom claim set successfully.');
 
     // 3. Create user profile in Firestore
@@ -49,6 +54,9 @@ async function createAdminUser() {
       name: ADMIN_NAME,
       email: ADMIN_EMAIL,
       role: 'Admin',
+      accessRole: 'ADMIN',
+      personas: [],
+      primaryPortal: 'admin',
     });
     console.log('   -> Firestore profile created successfully.');
 

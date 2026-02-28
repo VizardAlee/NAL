@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ViewPageNav } from '@/components/view-page-nav';
-import { payZakatAction } from './actions';
+import { payZakatAction, updateAccessRoleAction } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
@@ -37,6 +37,7 @@ import { Progress } from '@/components/ui/progress';
 import { LegalDocumentUploader } from './legal-document-uploader';
 import Image from 'next/image';
 import { getMarketerStats } from '@/app/marketer/dashboard/actions';
+import { canManageOwners, isReadOnlyOwner, normalizeAccessModel } from '@/lib/access-control';
 
 type UserProfile = DocumentData & {
     id: string;
@@ -48,6 +49,9 @@ type UserProfile = DocumentData & {
     legalDocumentUrl?: string;
     referralCode?: string;
     rating?: number;
+    accessRole?: 'OWNER' | 'ADMIN' | 'STAFF' | 'USER';
+    personas?: ('INVESTOR' | 'CLIENT' | 'LEGAL' | 'RECOVERY' | 'MARKETER' | 'STAFF_MEMBER')[];
+    primaryPortal?: 'admin' | 'investor' | 'client' | 'legal' | 'recovery' | 'marketer';
 };
 
 type FundBatch = DocumentData & {
@@ -168,6 +172,7 @@ export default function UserDetailPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [fundBatchesCurrentPage, setFundBatchesCurrentPage] = useState(1);
     const [isChatPending, startChatTransition] = useTransition();
+    const [isRoleUpdating, startRoleUpdateTransition] = useTransition();
     const [marketerStats, setMarketerStats] = useState<MarketerStats | null>(null);
     const [statsLoading, setStatsLoading] = useState(true);
 
@@ -353,11 +358,30 @@ export default function UserDetailPage() {
         Terminated: 'destructive',
     } as const;
 
-    const isAdmin = userProfile?.role === 'Admin';
+    const viewerAccess = normalizeAccessModel(authUser as any);
+    const targetAccess = normalizeAccessModel(userProfile as any);
+    const ownerReadOnly = isReadOnlyOwner(authUser as any);
+    const canEditOwners = canManageOwners(authUser as any);
 
     const handleCopyCode = (code: string) => {
         navigator.clipboard.writeText(code);
         toast({ title: "Copied!", description: "Referral code copied to clipboard." });
+    };
+
+    const handleAccessRoleUpdate = (newRole: 'OWNER' | 'ADMIN' | 'STAFF' | 'USER') => {
+        if (!authUser?.uid || !userProfile?.id) return;
+        startRoleUpdateTransition(async () => {
+            const result = await updateAccessRoleAction({
+                actorId: authUser.uid,
+                targetUserId: userProfile.id,
+                newAccessRole: newRole,
+            });
+            toast({
+                variant: result.success ? 'default' : 'destructive',
+                title: result.success ? 'Role Updated' : 'Role Update Failed',
+                description: result.message,
+            });
+        });
     };
 
     return (
@@ -368,7 +392,7 @@ export default function UserDetailPage() {
                 icon={User}
             >
                 <div className="flex items-center gap-2">
-                    <Button onClick={handleInitiateChat} disabled={isChatPending}>
+                    <Button onClick={handleInitiateChat} disabled={isChatPending || ownerReadOnly}>
                         {isChatPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquare className="mr-2 h-4 w-4" />}
                         Chat with User
                     </Button>
@@ -386,7 +410,11 @@ export default function UserDetailPage() {
                             <div>
                                 <CardTitle className='font-headline text-2xl'>{userProfile.name}</CardTitle>
                                 <div className='flex gap-2 items-center mt-1'>
-                                    <Badge variant="secondary">{userProfile.role}</Badge>
+                                    <Badge variant="secondary">{targetAccess.accessRole}</Badge>
+                                    <Badge variant="outline">{userProfile.role}</Badge>
+                                    {targetAccess.personas.map((persona) => (
+                                        <Badge key={`${userProfile.id}-${persona}`} variant="outline">{persona}</Badge>
+                                    ))}
                                     {isZakatEligible && <Badge variant="default">Zakat Eligible</Badge>}
                                 </div>
                                 {userProfile.phoneNumber && (
@@ -398,6 +426,41 @@ export default function UserDetailPage() {
                             </div>
                         </CardHeader>
                     </Card>
+
+                    {canEditOwners && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-base">Owner Assignment</CardTitle>
+                                <CardDescription>
+                                    Owners are read-only for operations. This section controls only owner designation.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                <div className="text-sm text-muted-foreground">
+                                    Current access role: <span className="font-medium text-foreground">{targetAccess.accessRole}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Button
+                                        type="button"
+                                        data-owner-write-exempt="true"
+                                        disabled={isRoleUpdating || targetAccess.accessRole === 'OWNER'}
+                                        onClick={() => handleAccessRoleUpdate('OWNER')}
+                                    >
+                                        Promote to Owner
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        data-owner-write-exempt="true"
+                                        disabled={isRoleUpdating || targetAccess.accessRole !== 'OWNER'}
+                                        onClick={() => handleAccessRoleUpdate(viewerAccess.accessRole === 'OWNER' ? 'USER' : 'ADMIN')}
+                                    >
+                                        Remove Owner
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {userProfile.role === 'Investor' && (
                         <Card>
@@ -510,7 +573,7 @@ export default function UserDetailPage() {
                                 </div>
                                 <Dialog open={isAddFundOpen} onOpenChange={setAddFundOpen}>
                                     <DialogTrigger asChild>
-                                        <Button className="w-full">
+                                        <Button className="w-full" disabled={ownerReadOnly}>
                                             <PlusCircle className="mr-2 h-4 w-4" />
                                             Add Funds
                                         </Button>
@@ -612,14 +675,14 @@ export default function UserDetailPage() {
                                             </div>
                                         </SheetContent>
                                     </Sheet>
-                                    {(userProfile.role !== 'Admin' || userProfile.id === authUser?.uid) && (
+                                    {(userProfile.role !== 'Admin' || userProfile.id === authUser?.uid) && !ownerReadOnly && (
                                         <div className='mt-4 border-t pt-4'>
                                             <h3 className="font-medium mb-2">Replace Document:</h3>
                                             <LegalDocumentUploader userId={userId} />
                                         </div>
                                     )}
                                 </div>
-                            ) : (userProfile.role !== 'Admin' || userProfile.id === authUser?.uid) ? (
+                            ) : (userProfile.role !== 'Admin' || userProfile.id === authUser?.uid) && !ownerReadOnly ? (
                                 <LegalDocumentUploader userId={userId} />
                             ) : (
                                 <div className="p-4 text-center text-sm text-muted-foreground border-dashed border rounded-md">

@@ -6,6 +6,13 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
+import {
+  type AccessRole,
+  type Persona,
+  type PrimaryPortal,
+  normalizeAccessModel,
+  toLegacyRoleFromAccess,
+} from '@/lib/access-control';
 
 const signUpSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
@@ -50,7 +57,14 @@ export async function signUpWithEmailAction(
             return { success: false, message: "This invite link is invalid." };
         }
 
-        const inviteData = inviteSnap.data() as { email: string; role: string; status: 'Pending' | 'Used' };
+        const inviteData = inviteSnap.data() as {
+            email: string;
+            role?: string;
+            accessRole?: AccessRole;
+            personas?: Persona[];
+            primaryPortal?: PrimaryPortal;
+            status: 'Pending' | 'Used';
+        };
         if (!inviteData || inviteData.status !== 'Pending') {
             return { success: false, message: "This invite link has already been used or is invalid." };
         }
@@ -59,7 +73,13 @@ export async function signUpWithEmailAction(
             return { success: false, message: "This invite link is for a different email address." };
         }
 
-        const role = inviteData.role as 'Investor' | 'Client' | 'Marketer' | 'Admin' | 'Legal' | 'Recovery';
+        const accessModel = normalizeAccessModel({
+            role: inviteData.role as any,
+            accessRole: inviteData.accessRole,
+            personas: inviteData.personas,
+            primaryPortal: inviteData.primaryPortal,
+        });
+        const role = toLegacyRoleFromAccess(accessModel);
 
         const userExists = await auth.getUserByEmail(email).catch(() => null);
         if (userExists) {
@@ -75,13 +95,21 @@ export async function signUpWithEmailAction(
         });
 
         // 2. Set Custom Claim for Security Rules
-        await auth.setCustomUserClaims(userRecord.uid, { role });
+        await auth.setCustomUserClaims(userRecord.uid, {
+            role,
+            accessRole: accessModel.accessRole,
+            personas: accessModel.personas,
+            primaryPortal: accessModel.primaryPortal,
+        });
 
         // 3. Create user document in Firestore with the selected role
         const userData: any = {
             name,
             email,
             role,
+            accessRole: accessModel.accessRole,
+            personas: accessModel.personas,
+            primaryPortal: accessModel.primaryPortal,
         };
         if (phoneNumber) {
             userData.phoneNumber = phoneNumber;
@@ -125,6 +153,9 @@ export async function getInviteDetailsAction(inviteToken: string): Promise<{
     valid: boolean;
     email?: string;
     role?: string;
+    accessRole?: AccessRole;
+    personas?: Persona[];
+    primaryPortal?: PrimaryPortal;
     message?: string;
 }> {
     if (!inviteToken) return { valid: false, message: 'Missing invite token.' };
@@ -138,12 +169,32 @@ export async function getInviteDetailsAction(inviteToken: string): Promise<{
             return { valid: false, message: 'This invite link is invalid.' };
         }
 
-        const inviteData = inviteSnap.data() as { email: string; role: string; status: 'Pending' | 'Used' };
+        const inviteData = inviteSnap.data() as {
+            email: string;
+            role?: string;
+            accessRole?: AccessRole;
+            personas?: Persona[];
+            primaryPortal?: PrimaryPortal;
+            status: 'Pending' | 'Used';
+        };
         if (!inviteData || inviteData.status !== 'Pending') {
             return { valid: false, message: 'This invite link has already been used or is invalid.' };
         }
 
-        return { valid: true, email: inviteData.email, role: inviteData.role };
+        const accessModel = normalizeAccessModel({
+            role: inviteData.role as any,
+            accessRole: inviteData.accessRole,
+            personas: inviteData.personas,
+            primaryPortal: inviteData.primaryPortal,
+        });
+        return {
+            valid: true,
+            email: inviteData.email,
+            role: toLegacyRoleFromAccess(accessModel),
+            accessRole: accessModel.accessRole,
+            personas: accessModel.personas,
+            primaryPortal: accessModel.primaryPortal,
+        };
     } catch (error: any) {
         return { valid: false, message: error.message || 'Failed to validate invite link.' };
     }

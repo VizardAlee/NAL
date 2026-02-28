@@ -23,20 +23,20 @@ import { addRecoveryLogAction } from '@/app/recovery/dashboard/actions';
 
 
 type RecoveryTask = DocumentData & {
-  id: string;
-  clientId: string;
-  clientName: string;
-  clientEmail: string;
-  clientPhoneNumber: string;
-  dealId: string;
-  dealName: string;
-  repaymentId: string;
-  amountDue: number;
-  dueDate: Timestamp;
-  status: 'Due_Recovery' | 'Escalated_Legal' | 'Resolved';
-  lastLog?: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+    id: string;
+    clientId: string;
+    clientName: string;
+    clientEmail: string;
+    clientPhoneNumber: string;
+    dealId: string;
+    dealName: string;
+    repaymentId: string;
+    amountDue: number;
+    dueDate: Timestamp;
+    status: 'Due_Recovery' | 'Escalated_Legal' | 'Resolved';
+    lastLog?: string;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
 };
 
 type User = DocumentData & {
@@ -72,7 +72,7 @@ function LogEntryForm({ taskId, authorId, authorName }: { taskId: string, author
                 authorId,
                 authorName
             });
-            if(result.success) {
+            if (result.success) {
                 toast({ title: "Success", description: result.message });
                 setText('');
             } else {
@@ -80,10 +80,10 @@ function LogEntryForm({ taskId, authorId, authorName }: { taskId: string, author
             }
         });
     }
-    
+
     return (
         <form onSubmit={handleSubmit} className="flex items-start gap-2 pt-4">
-            <Textarea 
+            <Textarea
                 placeholder="Add a note about contact attempts, conversations, etc..."
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -99,12 +99,12 @@ function LogEntryForm({ taskId, authorId, authorName }: { taskId: string, author
 
 function TaskDetailsSheet({ task, user }: { task: RecoveryTask, user: any }) {
     const firestore = useFirestore();
-    
+
     const logsQuery = useMemo(() => {
         if (!firestore) return null;
         return query(collection(firestore, `recoveryTasks/${task.id}/logs`), orderBy('createdAt', 'desc'));
     }, [firestore, task.id]);
-    
+
     const { data: logs, loading: logsLoading } = useCollection<Log>(logsQuery);
 
     return (
@@ -125,7 +125,7 @@ function TaskDetailsSheet({ task, user }: { task: RecoveryTask, user: any }) {
                         <p><strong>Phone:</strong> {task.clientPhoneNumber}</p>
                     </CardContent>
                 </Card>
-                 <Card>
+                <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-base flex items-center gap-2"><FileText /> Payment Details</CardTitle>
                     </CardHeader>
@@ -139,10 +139,10 @@ function TaskDetailsSheet({ task, user }: { task: RecoveryTask, user: any }) {
                     <div className="space-y-4">
                         {logsLoading && <p className="text-sm text-muted-foreground">Loading logs...</p>}
                         {logs && logs.length > 0 ? logs.map(log => (
-                             <div key={log.id} className="flex items-start gap-3">
+                            <div key={log.id} className="flex items-start gap-3">
                                 <Avatar className="h-8 w-8">
                                     <AvatarImage src={`https://picsum.photos/seed/${log.authorId}/128/128`} />
-                                    <AvatarFallback>{log.authorName.charAt(0)}</AvatarFallback>
+                                    <AvatarFallback>{log.authorName?.charAt(0) || 'U'}</AvatarFallback>
                                 </Avatar>
                                 <div className="flex-1 space-y-1">
                                     <div className="flex justify-between items-center text-xs">
@@ -156,7 +156,7 @@ function TaskDetailsSheet({ task, user }: { task: RecoveryTask, user: any }) {
                     </div>
                 </div>
             </div>
-             <div className="mt-auto border-t pt-4">
+            <div className="mt-auto border-t pt-4">
                 <LogEntryForm taskId={task.id} authorId={user.uid} authorName={user.displayName} />
             </div>
         </SheetContent>
@@ -179,7 +179,7 @@ export default function LegalDashboardPage() {
             orderBy('dueDate', 'asc')
         );
     }, [firestore]);
-    
+
     const usersQuery = useMemo(() => {
         if (!firestore) return null;
         return query(collection(firestore, 'users'), where('role', 'in', ['Client', 'Investor']));
@@ -192,7 +192,7 @@ export default function LegalDashboardPage() {
 
     const filteredUsers = useMemo(() => {
         if (!users) return [];
-        return users.filter(user => 
+        return users.filter(user =>
             user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             user.email.toLowerCase().includes(searchTerm.toLowerCase())
         );
@@ -216,53 +216,53 @@ export default function LegalDashboardPage() {
                     <CardDescription>Clients with payments that are more than 7 days past due and require legal action.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {isLoading ? <Skeleton className="h-24 w-full" /> : 
-                     !legalTasks || legalTasks.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No accounts have been escalated for legal action.</p> :
-                     isMobile ? (
-                        <div className="space-y-3">
-                            {legalTasks.map(task => (
-                                <SheetTrigger key={task.id} asChild>
-                                    <Card onClick={() => setSelectedTask(task)}>
-                                        <CardContent className="p-4 space-y-2">
-                                            <p className="font-semibold">{task.clientName}</p>
-                                            <p className="text-sm text-destructive font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</p>
-                                            <p className="text-xs text-muted-foreground">Due since: {format(task.dueDate.toDate(), 'PPP')}</p>
-                                            {task.lastLog && <p className="text-xs text-muted-foreground italic truncate pt-1 border-t">Last Log: {task.lastLog}</p>}
-                                        </CardContent>
-                                    </Card>
-                                </SheetTrigger>
-                            ))}
-                        </div>
-                     ) :
-                     (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Client</TableHead>
-                                    <TableHead>Deal</TableHead>
-                                    <TableHead>Due Since</TableHead>
-                                    <TableHead>Last Log</TableHead>
-                                    <TableHead className="text-right">Total Overdue</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {legalTasks.map(task => (
-                                    <SheetTrigger key={task.id} asChild>
-                                        <TableRow onClick={() => setSelectedTask(task)} className="cursor-pointer hover:bg-muted/50">
-                                            <TableCell className="font-medium flex items-center gap-2">
-                                                <MessageCircle className="h-4 w-4 text-muted-foreground" />
-                                                {task.clientName}
-                                            </TableCell>
-                                            <TableCell>{task.dealName}</TableCell>
-                                            <TableCell>{formatDistanceToNow(task.dueDate.toDate(), { addSuffix: true })}</TableCell>
-                                            <TableCell className="text-muted-foreground italic max-w-xs truncate">{task.lastLog || 'No logs yet'}</TableCell>
-                                            <TableCell className="text-right font-bold text-destructive">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</TableCell>
-                                        </TableRow>
-                                    </SheetTrigger>
-                                ))}
-                            </TableBody>
-                        </Table>
-                     )}
+                    {isLoading ? <Skeleton className="h-24 w-full" /> :
+                        !legalTasks || legalTasks.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No accounts have been escalated for legal action.</p> :
+                            isMobile ? (
+                                <div className="space-y-3">
+                                    {legalTasks.map(task => (
+                                        <SheetTrigger key={task.id} asChild>
+                                            <Card onClick={() => setSelectedTask(task)}>
+                                                <CardContent className="p-4 space-y-2">
+                                                    <p className="font-semibold">{task.clientName}</p>
+                                                    <p className="text-sm text-destructive font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</p>
+                                                    <p className="text-xs text-muted-foreground">Due since: {format(task.dueDate.toDate(), 'PPP')}</p>
+                                                    {task.lastLog && <p className="text-xs text-muted-foreground italic truncate pt-1 border-t">Last Log: {task.lastLog}</p>}
+                                                </CardContent>
+                                            </Card>
+                                        </SheetTrigger>
+                                    ))}
+                                </div>
+                            ) :
+                                (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Client</TableHead>
+                                                <TableHead>Deal</TableHead>
+                                                <TableHead>Due Since</TableHead>
+                                                <TableHead>Last Log</TableHead>
+                                                <TableHead className="text-right">Total Overdue</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {legalTasks.map(task => (
+                                                <SheetTrigger key={task.id} asChild>
+                                                    <TableRow onClick={() => setSelectedTask(task)} className="cursor-pointer hover:bg-muted/50">
+                                                        <TableCell className="font-medium flex items-center gap-2">
+                                                            <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                                                            {task.clientName}
+                                                        </TableCell>
+                                                        <TableCell>{task.dealName}</TableCell>
+                                                        <TableCell>{formatDistanceToNow(task.dueDate.toDate(), { addSuffix: true })}</TableCell>
+                                                        <TableCell className="text-muted-foreground italic max-w-xs truncate">{task.lastLog || 'No logs yet'}</TableCell>
+                                                        <TableCell className="text-right font-bold text-destructive">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(task.amountDue)}</TableCell>
+                                                    </TableRow>
+                                                </SheetTrigger>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                )}
                 </CardContent>
             </Card>
 
@@ -271,7 +271,7 @@ export default function LegalDashboardPage() {
                     <CardTitle className="flex items-center gap-2"><Users /> User Directory</CardTitle>
                     <CardDescription>A directory of all clients and investors on the platform.</CardDescription>
                     <div className="pt-2">
-                        <Input 
+                        <Input
                             placeholder="Search by name or email..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -280,52 +280,52 @@ export default function LegalDashboardPage() {
                 </CardHeader>
                 <CardContent>
                     {isLoading ? <Skeleton className="h-48 w-full" /> :
-                     isMobile ? (
-                        <div className="space-y-3">
-                            {filteredUsers.map(user => (
-                                <Card key={user.id} onClick={() => handleUserClick(user.id)} className="cursor-pointer hover:bg-muted/50">
-                                    <CardContent className="p-4 space-y-2">
-                                        <div className="flex items-center gap-4">
-                                            <Avatar>
-                                                <AvatarImage src={`https://picsum.photos/seed/${user.id}/128/128`} />
-                                                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex-1">
-                                                <p className="font-medium">{user.name}</p>
-                                                <Badge variant="outline">{user.role}</Badge>
-                                            </div>
-                                        </div>
-                                        <div className="text-sm text-muted-foreground pt-2 border-t mt-2 space-y-1">
-                                            <p>{user.email}</p>
-                                            {user.phoneNumber && <p className="flex items-center gap-2"><Phone className="h-4 w-4" />{user.phoneNumber}</p>}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                     ) : (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead>Email</TableHead>
-                                    <TableHead>Phone Number</TableHead>
-                                    <TableHead>Role</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
+                        isMobile ? (
+                            <div className="space-y-3">
                                 {filteredUsers.map(user => (
-                                    <TableRow key={user.id} onClick={() => handleUserClick(user.id)} className="cursor-pointer hover:bg-muted/50">
-                                        <TableCell className="font-medium">{user.name}</TableCell>
-                                        <TableCell>{user.email}</TableCell>
-                                        <TableCell>{user.phoneNumber || 'N/A'}</TableCell>
-                                        <TableCell><Badge variant="outline">{user.role}</Badge></TableCell>
-                                    </TableRow>
+                                    <Card key={user.id} onClick={() => handleUserClick(user.id)} className="cursor-pointer hover:bg-muted/50">
+                                        <CardContent className="p-4 space-y-2">
+                                            <div className="flex items-center gap-4">
+                                                <Avatar>
+                                                    <AvatarImage src={`https://picsum.photos/seed/${user.id}/128/128`} />
+                                                    <AvatarFallback>{user.name?.charAt(0) || 'U'}</AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex-1">
+                                                    <p className="font-medium">{user.name}</p>
+                                                    <Badge variant="outline">{user.role}</Badge>
+                                                </div>
+                                            </div>
+                                            <div className="text-sm text-muted-foreground pt-2 border-t mt-2 space-y-1">
+                                                <p>{user.email}</p>
+                                                {user.phoneNumber && <p className="flex items-center gap-2"><Phone className="h-4 w-4" />{user.phoneNumber}</p>}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
                                 ))}
-                            </TableBody>
-                        </Table>
-                     )}
-                     {filteredUsers.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">No users found.</p>}
+                            </div>
+                        ) : (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Name</TableHead>
+                                        <TableHead>Email</TableHead>
+                                        <TableHead>Phone Number</TableHead>
+                                        <TableHead>Role</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {filteredUsers.map(user => (
+                                        <TableRow key={user.id} onClick={() => handleUserClick(user.id)} className="cursor-pointer hover:bg-muted/50">
+                                            <TableCell className="font-medium">{user.name}</TableCell>
+                                            <TableCell>{user.email}</TableCell>
+                                            <TableCell>{user.phoneNumber || 'N/A'}</TableCell>
+                                            <TableCell><Badge variant="outline">{user.role}</Badge></TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        )}
+                    {filteredUsers.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">No users found.</p>}
                 </CardContent>
             </Card>
             {selectedTask && user && <TaskDetailsSheet task={selectedTask} user={user} />}

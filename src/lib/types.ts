@@ -1,6 +1,7 @@
 
 import { type DocumentData, type Timestamp } from 'firebase/firestore';
 import { type User as AuthUser } from 'firebase/auth';
+import { type AccessRole, type Persona, type PrimaryPortal } from '@/lib/access-control';
 
 export type Deal = DocumentData & {
   id: string;
@@ -36,6 +37,9 @@ export type User = AuthUser & DocumentData & {
     name: string;
     email: string;
     role: 'Admin' | 'Investor' | 'Client' | 'Legal' | 'Recovery' | 'Marketer';
+    accessRole?: AccessRole;
+    personas?: Persona[];
+    primaryPortal?: PrimaryPortal;
     referralCode?: string;
     rating?: number;
 };

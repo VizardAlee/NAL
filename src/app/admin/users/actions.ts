@@ -4,10 +4,19 @@ import { adminDb } from '@/firebase/admin-app';
 import { FieldValue } from 'firebase-admin/firestore';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';
+import {
+  type AccessRole,
+  type Persona,
+  type PrimaryPortal,
+  resolvePrimaryPortalFromPersonas,
+  toLegacyRoleFromAccess,
+} from '@/lib/access-control';
 
 const inviteSchema = z.object({
   email: z.string().email(),
-  role: z.enum(['Investor', 'Client', 'Marketer', 'Admin', 'Legal', 'Recovery']),
+  accessRole: z.enum(['OWNER', 'ADMIN', 'STAFF', 'USER']),
+  personas: z.array(z.enum(['INVESTOR', 'CLIENT', 'LEGAL', 'RECOVERY', 'MARKETER', 'STAFF_MEMBER'])).default([]),
+  primaryPortal: z.enum(['admin', 'investor', 'client', 'legal', 'recovery', 'marketer']).optional(),
   inviterId: z.string().min(1),
   inviterName: z.string().min(1),
 });
@@ -22,8 +31,20 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
     return { success: false, message: 'Invalid invite data.' };
   }
 
-  const { email, role, inviterId, inviterName } = validated.data;
+  const { email, accessRole, personas, primaryPortal: requestedPortal, inviterId, inviterName } = validated.data;
   const normalizedEmail = email.toLowerCase();
+  const dedupedPersonas = [...new Set(personas)] as Persona[];
+  const resolvedPrimaryPortal = (
+    requestedPortal ||
+    (accessRole === 'OWNER' || accessRole === 'ADMIN' || accessRole === 'STAFF'
+      ? 'admin'
+      : resolvePrimaryPortalFromPersonas(dedupedPersonas))
+  ) as PrimaryPortal;
+  const legacyRole = toLegacyRoleFromAccess({
+    accessRole: accessRole as AccessRole,
+    personas: dedupedPersonas,
+    primaryPortal: resolvedPrimaryPortal,
+  });
 
   try {
     const existingUser = await adminDb
@@ -54,7 +75,10 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
     const token = randomBytes(24).toString('hex');
     await adminDb.collection('invites').doc(token).set({
       email: normalizedEmail,
-      role,
+      accessRole,
+      personas: dedupedPersonas,
+      primaryPortal: resolvedPrimaryPortal,
+      role: legacyRole,
       status: 'Pending',
       createdAt: FieldValue.serverTimestamp(),
       createdBy: inviterId,

@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "create-admin": "node -r dotenv/config ./scripts/create-admin.js"
+    "create-admin": "node -r dotenv/config ./scripts/create-admin.js",
+    "backfill-access-model": "node -r dotenv/config ./scripts/backfill-access-model.js"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.20",
