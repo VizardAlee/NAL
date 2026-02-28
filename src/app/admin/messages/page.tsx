@@ -40,7 +40,7 @@ function ConversationList({ conversations, currentUserId }: { conversations: Con
             </Card>
         );
     }
-    
+
     return (
         <div className="space-y-4">
             {conversations.map(convo => (
@@ -52,7 +52,7 @@ function ConversationList({ conversations, currentUserId }: { conversations: Con
 
 function ConversationItem({ conversation, currentUserId }: { conversation: Conversation, currentUserId: string }) {
     const router = useRouter();
-    
+
     const otherParticipantIndex = conversation.participantIds.findIndex(id => id !== currentUserId);
     const otherParticipantName = otherParticipantIndex !== -1 ? conversation.participantNames[otherParticipantIndex] : 'Unknown User';
     const otherParticipantAvatar = otherParticipantIndex !== -1 ? conversation.participantAvatars[otherParticipantIndex] : '/placeholder.svg';
@@ -67,7 +67,7 @@ function ConversationItem({ conversation, currentUserId }: { conversation: Conve
             <CardContent className="p-4 flex items-center gap-4">
                 <Avatar className="h-12 w-12">
                     <AvatarImage src={otherParticipantAvatar} />
-                    <AvatarFallback>{otherParticipantName.charAt(0)}</AvatarFallback>
+                    <AvatarFallback>{otherParticipantName?.charAt(0) || 'U'}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 overflow-hidden">
                     <div className="flex justify-between items-center">
@@ -102,9 +102,9 @@ export default function AdminMessagesPage() {
 
     const { data: allAdmins, loading: adminsLoading } = useCollection<UserProfile>(allAdminsQuery);
     const { data: allConversations, loading: conversationsLoading } = useCollection<Conversation>(allConversationsQuery);
-    
+
     const isLoading = userLoading || adminsLoading || conversationsLoading;
-    
+
     const myConversations = useMemo(() => {
         if (!allConversations || !adminUser) return [];
         return allConversations.filter(c => c.participantIds.includes(adminUser.uid));
@@ -117,7 +117,7 @@ export default function AdminMessagesPage() {
 
     if (isLoading || !adminUser) {
         return (
-             <div>
+            <div>
                 <PageHeader title="Messages" description="All your conversations in one place." icon={MessageSquare} />
                 <div className="space-y-4">
                     {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
@@ -140,12 +140,12 @@ export default function AdminMessagesPage() {
                 <TabsContent value={adminUser.uid} className="mt-4">
                     <ConversationList conversations={myConversations} currentUserId={adminUser.uid} />
                 </TabsContent>
-                
+
                 {otherAdmins.map(admin => (
                     <TabsContent key={admin.id} value={admin.id} className="mt-4">
-                        <ConversationList 
-                            conversations={allConversations?.filter(c => c.participantIds.includes(admin.id)) || []} 
-                            currentUserId={adminUser.uid} 
+                        <ConversationList
+                            conversations={allConversations?.filter(c => c.participantIds.includes(admin.id)) || []}
+                            currentUserId={adminUser.uid}
                         />
                     </TabsContent>
                 ))}

@@ -24,6 +24,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { useAuth, useFirestore } from "@/firebase";
 import { FirebaseError } from "firebase/app";
 import Link from "next/link";
+import { getDefaultRouteForUser } from "@/lib/access-control";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -75,36 +76,12 @@ export function LoginForm() {
       }
 
       const userData = userDoc.data();
-      const role = userData.role;
-
       toast({
         title: "Login Successful",
         description: "Redirecting to your dashboard...",
       });
 
-      // Redirect based on role
-      switch (role) {
-        case 'Admin':
-          router.push("/admin/dashboard");
-          break;
-        case 'Investor':
-          router.push("/investor/dashboard");
-          break;
-        case 'Client':
-          router.push("/client/dashboard");
-          break;
-        case 'Legal':
-          router.push("/legal/dashboard");
-          break;
-        case 'Recovery':
-          router.push("/recovery/dashboard");
-          break;
-        case 'Marketer':
-            router.push("/marketer/dashboard");
-            break;
-        default:
-          router.push("/"); // Fallback to home page
-      }
+      router.push(getDefaultRouteForUser(userData));
 
     } catch (error) {
       console.error("Login Error:", error);

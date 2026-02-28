@@ -71,6 +71,7 @@ type GenericTransaction = DocumentData & {
 type AdministrativeTransaction = DocumentData & {
     id: string;
     type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible' | 'AssetAcquisition' | 'AssetSale' | 'ManagementFee';
+    expenseType?: 'GENERAL_EXPENSE' | 'STAFF_PAYOUT';
     amount: number;
     description: string;
     createdAt: Timestamp;
@@ -78,6 +79,11 @@ type AdministrativeTransaction = DocumentData & {
     dealName?: string;
     clientId?: string;
     clientName?: string;
+    staffUserId?: string;
+    staffName?: string;
+    salaryPeriod?: string;
+    salaryCycle?: 'Monthly' | 'BiWeekly' | 'Weekly' | 'OneOff';
+    payoutReference?: string;
 };
 
 const adminTransactionTypes = [
@@ -125,16 +131,44 @@ const formatCurrency = (value: number) => {
 const adminTransactionSchema = z.object({
     amount: z.coerce.number().positive({ message: "Amount must be a positive number." }),
     description: z.string().min(3, { message: "Description is required." }),
+    expenseType: z.enum(['GENERAL_EXPENSE', 'STAFF_PAYOUT']).default('GENERAL_EXPENSE'),
+    staffUserId: z.string().optional(),
+    staffName: z.string().optional(),
+    salaryPeriod: z.string().optional(),
+    salaryCycle: z.enum(['Monthly', 'BiWeekly', 'Weekly', 'OneOff']).optional(),
+    payoutReference: z.string().optional(),
 });
 
-function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDeposit" | "Expense" | "AssetAcquisition", onTransactionComplete: () => void }) {
+type StaffUser = DocumentData & {
+    id: string;
+    name?: string;
+    email?: string;
+    role?: string;
+    accessRole?: string;
+    personas?: string[];
+};
+
+function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDeposit" | "Expense" | "AssetAcquisition" | "StaffPayout", onTransactionComplete: () => void }) {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const firestore = useFirestore();
+    const usersQuery = useMemo(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'users'));
+    }, [firestore]);
+    const { data: users } = useCollection<StaffUser>(usersQuery);
+    const staffUsers = useMemo(() => {
+        return (users || []).filter((u) => u.accessRole === 'STAFF' || (u.personas || []).includes('STAFF_MEMBER'));
+    }, [users]);
 
     const form = useForm<z.infer<typeof adminTransactionSchema>>({
         resolver: zodResolver(adminTransactionSchema),
-        defaultValues: { amount: 1000, description: "" },
+        defaultValues: {
+            amount: 1000,
+            description: "",
+            expenseType: type === 'StaffPayout' ? 'STAFF_PAYOUT' : 'GENERAL_EXPENSE',
+            salaryCycle: 'Monthly',
+        },
     });
 
     async function onSubmit(values: z.infer<typeof adminTransactionSchema>) {
@@ -157,17 +191,28 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
                 const adminTxRef = doc(collection(firestore, 'administrativeTransactions'));
                 batch.set(adminTxRef, {
                     type,
+                    expenseType: 'GENERAL_EXPENSE',
                     amount: -Math.abs(values.amount),
                     description: `Acquired asset: ${values.description}`,
                     createdAt: now
                 });
             } else {
+                const isStaffPayout = type === 'StaffPayout' || values.expenseType === 'STAFF_PAYOUT';
+                if (isStaffPayout && (!values.staffUserId || !values.staffName || !values.salaryPeriod || !values.salaryCycle)) {
+                    throw new Error('Staff payout requires staff, salary period and salary cycle.');
+                }
                 const amount = type === 'AdminDeposit' ? values.amount : -Math.abs(values.amount);
                 await addDoc(collection(firestore, 'administrativeTransactions'), {
-                    type,
+                    type: type === 'StaffPayout' ? 'Expense' : type,
+                    expenseType: isStaffPayout ? 'STAFF_PAYOUT' : 'GENERAL_EXPENSE',
                     amount,
                     description: values.description,
                     createdAt: now,
+                    staffUserId: isStaffPayout ? values.staffUserId : null,
+                    staffName: isStaffPayout ? values.staffName : null,
+                    salaryPeriod: isStaffPayout ? values.salaryPeriod : null,
+                    salaryCycle: isStaffPayout ? values.salaryCycle : null,
+                    payoutReference: values.payoutReference || null,
                 });
             }
 
@@ -186,7 +231,8 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
     const buttonText = {
         AdminDeposit: "Add Funds",
         Expense: "Record Expense",
-        AssetAcquisition: "Record Asset Purchase"
+        AssetAcquisition: "Record Asset Purchase",
+        StaffPayout: "Record Staff Payout",
     }
 
     return (
@@ -214,6 +260,106 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
                         </FormItem>
                     )}
                 />
+                {(type === 'Expense' || type === 'StaffPayout') && (
+                    <FormField
+                        control={form.control}
+                        name="expenseType"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Expense Type</FormLabel>
+                                <FormControl>
+                                    <select
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                        value={type === 'StaffPayout' ? 'STAFF_PAYOUT' : field.value}
+                                        onChange={(e) => field.onChange(e.target.value)}
+                                        disabled={type === 'StaffPayout'}
+                                    >
+                                        <option value="GENERAL_EXPENSE">General Expense</option>
+                                        <option value="STAFF_PAYOUT">Staff Payout</option>
+                                    </select>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                )}
+                {(type === 'StaffPayout' || form.watch('expenseType') === 'STAFF_PAYOUT') && (
+                    <>
+                        <FormField
+                            control={form.control}
+                            name="staffUserId"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Staff Member</FormLabel>
+                                    <FormControl>
+                                        <select
+                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                            value={field.value || ''}
+                                            onChange={(e) => {
+                                                const selectedId = e.target.value;
+                                                const selectedUser = staffUsers.find((u) => u.id === selectedId);
+                                                field.onChange(selectedId);
+                                                form.setValue('staffName', selectedUser?.name || selectedUser?.email || '');
+                                            }}
+                                        >
+                                            <option value="">Select staff</option>
+                                            {staffUsers.map((staff) => (
+                                                <option key={staff.id} value={staff.id}>
+                                                    {staff.name || staff.email || staff.id}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="salaryPeriod"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Salary Period</FormLabel>
+                                    <FormControl><Input placeholder="e.g. 2026-02" {...field} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="salaryCycle"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Salary Cycle</FormLabel>
+                                    <FormControl>
+                                        <select
+                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                            value={field.value || 'Monthly'}
+                                            onChange={(e) => field.onChange(e.target.value)}
+                                        >
+                                            <option value="Monthly">Monthly</option>
+                                            <option value="BiWeekly">Bi-weekly</option>
+                                            <option value="Weekly">Weekly</option>
+                                            <option value="OneOff">One-off</option>
+                                        </select>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="payoutReference"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Payout Reference (Optional)</FormLabel>
+                                    <FormControl><Input placeholder="Bank transfer reference" {...field} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </>
+                )}
                 <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     {buttonText[type]}
@@ -763,6 +909,28 @@ export default function PlatformFundsPage() {
                                     <span>{selectedTx.clientName}</span>
                                 </div>
                             )}
+                            {selectedTx.expenseType === 'STAFF_PAYOUT' && (
+                                <>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Staff:</span>
+                                        <span>{selectedTx.staffName || selectedTx.staffUserId || 'N/A'}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Salary Period:</span>
+                                        <span>{selectedTx.salaryPeriod || 'N/A'}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Salary Cycle:</span>
+                                        <span>{selectedTx.salaryCycle || 'N/A'}</span>
+                                    </div>
+                                    {selectedTx.payoutReference && (
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Reference:</span>
+                                            <span>{selectedTx.payoutReference}</span>
+                                        </div>
+                                    )}
+                                </>
+                            )}
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Date:</span>
                                 <span>{formatDate(selectedTx.createdAt)}</span>
@@ -859,6 +1027,7 @@ export default function PlatformFundsPage() {
                                 <div className="flex-grow" />
                                 <Dialog open={isDialogOpen['deposit']} onOpenChange={(isOpen) => isOpen ? openDialog('deposit') : closeDialog('deposit')}><DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2 h-4 w-4" />Add Funds</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Add Funds to Admin Account</DialogTitle></DialogHeader><AdminTransactionForm type="AdminDeposit" onTransactionComplete={() => closeDialog('deposit')} /></DialogContent></Dialog>
                                 <Dialog open={isDialogOpen['expense']} onOpenChange={(isOpen) => isOpen ? openDialog('expense') : closeDialog('expense')}><DialogTrigger asChild><Button size="sm" variant="outline"><MinusCircle className="mr-2 h-4 w-4" />Record Expense</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Record an Expense</DialogTitle></DialogHeader><AdminTransactionForm type="Expense" onTransactionComplete={() => closeDialog('expense')} /></DialogContent></Dialog>
+                                <Dialog open={isDialogOpen['staffPayout']} onOpenChange={(isOpen) => isOpen ? openDialog('staffPayout') : closeDialog('staffPayout')}><DialogTrigger asChild><Button size="sm" variant="outline"><DollarSign className="mr-2 h-4 w-4" />Record Staff Payout</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Record Staff Salary Payout</DialogTitle></DialogHeader><AdminTransactionForm type="StaffPayout" onTransactionComplete={() => closeDialog('staffPayout')} /></DialogContent></Dialog>
                                 <Dialog open={isDialogOpen['transferToInvestible']} onOpenChange={(isOpen) => isOpen ? openDialog('transferToInvestible') : closeDialog('transferToInvestible')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Fund Investible</Button></DialogTrigger><DialogContent><TransferFundsForm direction="toInvestible" maxAmount={metrics.administrativeBalance} onTransferComplete={() => closeDialog('transferToInvestible')} /></DialogContent></Dialog>
                                 <Dialog open={isDialogOpen['transferFromInvestible']} onOpenChange={(isOpen) => isOpen ? openDialog('transferFromInvestible') : closeDialog('transferFromInvestible')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Withdraw to Admin</Button></DialogTrigger><DialogContent><TransferFundsForm direction="fromInvestible" maxAmount={metrics.investibleCapital} onTransferComplete={() => closeDialog('transferFromInvestible')} /></DialogContent></Dialog>
                             </div>

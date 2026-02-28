@@ -38,6 +38,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
 import { DigitalClock } from "@/components/digital-clock";
 import { MessagesLink } from "@/components/messages-link";
+import { canAccessPortal, getDefaultRouteForUser, isReadOnlyOwner } from "@/lib/access-control";
 
 type Notification = {
     id: string;
@@ -257,12 +258,17 @@ export default function AdminLayout({
   const { user, loading } = useUser();
   const router = useRouter();
   const { logoUrl, loading: logoLoading } = useCompanyLogo();
+  const ownerReadOnly = isReadOnlyOwner(user);
 
   useClearNotificationsByPath();
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
+      return;
+    }
+    if (!loading && user && !canAccessPortal(user, 'admin')) {
+      router.push(getDefaultRouteForUser(user));
     }
   }, [user, loading, router]);
   
@@ -305,7 +311,7 @@ export default function AdminLayout({
             <NotificationBell />
             <AccountMenu />
             </header>
-            <main className="flex-1 p-4 md:p-6">{children}</main>
+            <main className={`flex-1 p-4 md:p-6 ${ownerReadOnly ? 'owner-readonly' : ''}`}>{children}</main>
         </SidebarInset>
         </SidebarProvider>
     </OnboardingTourProvider>

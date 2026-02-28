@@ -8,6 +8,14 @@ const __dirname = path.dirname(__filename);
 const nextConfig = {
   reactStrictMode: false,
   outputFileTracingRoot: __dirname,
+  async rewrites() {
+    return [
+      {
+        source: '/favicon.ico',
+        destination: '/NAL%20LOGO.jpg',
+      },
+    ];
+  },
   typescript: {
     ignoreBuildErrors: true,
   },

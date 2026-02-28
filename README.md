@@ -6,6 +6,15 @@ To get started, take a look at src/app/page.tsx.
 
 ## Troubleshooting Git
 
+### 🚨 "Unfinished Merge" (MERGE_HEAD exists)
+If you see an error saying "You have not concluded your merge":
+1. **Commit the resolved conflicts:**
+   ```bash
+   git add .
+   git commit -m "Resolve merge conflicts"
+   ```
+2. **Now you can pull or push normally.**
+
 ### 🚨 "No tracking information" or "No upstream branch"
 If you see an error saying "There is no tracking information" or "The current branch has no upstream branch":
 1. **Link your current branch to the remote main branch:**

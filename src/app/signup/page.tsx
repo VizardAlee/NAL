@@ -40,6 +40,9 @@ type InviteState = {
   valid: boolean;
   email?: string;
   role?: string;
+  accessRole?: string;
+  personas?: string[];
+  primaryPortal?: string;
   message?: string;
 };
 
@@ -76,7 +79,15 @@ export default function SignupPage() {
       if (!mounted) return;
 
       if (result.valid) {
-        setInviteState({ loading: false, valid: true, email: result.email, role: result.role });
+        setInviteState({
+          loading: false,
+          valid: true,
+          email: result.email,
+          role: result.role,
+          accessRole: result.accessRole,
+          personas: result.personas,
+          primaryPortal: result.primaryPortal,
+        });
         form.setValue('email', result.email || '');
         form.setValue('inviteToken', inviteToken);
       } else {
@@ -167,6 +178,11 @@ export default function SignupPage() {
                             </FormControl>
                             <FormDescription>
                                 Invited as: <span className="font-medium">{inviteState.role}</span>
+                                {inviteState.personas && inviteState.personas.length > 0 && (
+                                  <span className="ml-2 text-muted-foreground">
+                                    ({inviteState.personas.join(', ')})
+                                  </span>
+                                )}
                             </FormDescription>
                             <FormMessage />
                             </FormItem>
