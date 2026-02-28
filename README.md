@@ -30,7 +30,7 @@ To stop Git from asking for your token every time, run this command:
 ```bash
 git config --global credential.helper store
 ```
-The next time you pull/push and enter your credentials, they will be saved permanently on this machine.
+**Important:** You must enter your username and token **one more time** correctly. Git will then save them permanently on this machine.
 
 ### 5. Resolve "Divergent Branches" Error
 If Git says "Need to specify how to reconcile divergent branches", run this to merge the changes:
@@ -39,7 +39,7 @@ git pull origin main --no-rebase
 ```
 
 ### 6. Reset Credentials (Optional)
-If Git doesn't prompt you for a password and just fails, reset the helper:
+If Git doesn't prompt you for a password and just fails, reset the helper to clear old data:
 ```bash
 git config --global --unset credential.helper
 ```
