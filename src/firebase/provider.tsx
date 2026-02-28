@@ -9,9 +9,9 @@ import type { Auth } from 'firebase/auth';
 import type { Firestore } from 'firebase/firestore';
 
 type FirebaseContextValue = {
-  app: FirebaseApp;
-  auth: Auth;
-  firestore: Firestore;
+  app: FirebaseApp | null;
+  auth: Auth | null;
+  firestore: Firestore | null;
 };
 
 const FirebaseContext = createContext<FirebaseContextValue>({
@@ -33,5 +33,9 @@ export const useFirebase = () => useContext(FirebaseContext);
 export const useAuth = () => useContext(FirebaseContext).auth;
 export const useFirestore = () => useContext(FirebaseContext).firestore;
 export const useFirebaseApp = (): FirebaseApp => {
-  return useContext(FirebaseContext).app;
+  const firebaseApp = useContext(FirebaseContext).app;
+  if (!firebaseApp) {
+    throw new Error('Firebase App is not initialized. Configure NEXT_PUBLIC_FIREBASE_* environment variables.');
+  }
+  return firebaseApp;
 };

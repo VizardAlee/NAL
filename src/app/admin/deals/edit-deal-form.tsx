@@ -101,27 +101,27 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     startTransition(async () => {
-        const selectedClient = clients?.find(c => c.id === values.clientId);
-        if (!selectedClient) {
-          toast({ variant: "destructive", title: "Error", description: "Selected client not found." });
-          return;
-        }
+      const selectedClient = clients?.find(c => c.id === values.clientId);
+      if (!selectedClient) {
+        toast({ variant: "destructive", title: "Error", description: "Selected client not found." });
+        return;
+      }
 
-        const result = await updateDealAction(deal.id, selectedClient.name, values);
+      const result = await updateDealAction(deal.id, selectedClient.name, values);
 
-        if (result.success) {
-            toast({
-                title: 'Deal Updated',
-                description: result.message,
-            });
-            onDealUpdated();
-        } else {
-            toast({
-                variant: 'destructive',
-                title: 'Update Failed',
-                description: result.message,
-            });
-        }
+      if (result.success) {
+        toast({
+          title: 'Deal Updated',
+          description: result.message,
+        });
+        onDealUpdated();
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Update Failed',
+          description: result.message,
+        });
+      }
     });
   }
 
@@ -176,7 +176,7 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
                   <SelectItem value="Ijara">Ijara (Leasing)</SelectItem>
                 </SelectContent>
               </Select>
-               <FormDescription className="flex items-center gap-1 text-xs">
+              <FormDescription className="flex items-center gap-1 text-xs">
                 <BookOpen className="h-3 w-3" />
                 <Link href="/admin/financing-modes" target="_blank" className="hover:underline">Learn about these modes</Link>
               </FormDescription>
@@ -185,40 +185,40 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
           )}
         />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="principal"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Principal Amount</FormLabel>
-                  <FormControl><Input type="number" placeholder="10000" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="profitRate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Profit Rate (%)</FormLabel>
-                  <FormControl><Input type="number" placeholder="5" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <FormField
+            control={form.control}
+            name="principal"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Principal Amount</FormLabel>
+                <FormControl><Input type="number" placeholder="10000" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="profitRate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Profit Rate (%)</FormLabel>
+                <FormControl><Input type="number" placeholder="5" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
-         <FormField
-              control={form.control}
-              name="managementFeeRate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Management Fee Rate (%)</FormLabel>
-                  <FormControl><Input type="number" step="0.1" placeholder="2" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        <FormField
+          control={form.control}
+          name="managementFeeRate"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Management Fee Rate (%)</FormLabel>
+              <FormControl><Input type="number" step="0.1" placeholder="2" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}
@@ -274,7 +274,7 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
             </FormItem>
           )}
         />
-         <FormField
+        <FormField
           control={form.control}
           name="repaymentFrequency"
           render={({ field }) => (
@@ -296,50 +296,50 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
           )}
         />
         <FormField
-            control={form.control}
-            name="startDate"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>Deal Start Date</FormLabel>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-full pl-3 text-left font-normal",
-                          !field.value && "text-muted-foreground"
-                        )}
-                      >
-                        {field.value ? (
-                          format(field.value, "PPP")
-                        ) : (
-                          <span>Pick a start date</span>
-                        )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <FullCalendar
-                        plugins={[dayGridPlugin, interactionPlugin]}
-                        initialView="dayGridMonth"
-                        selectable={true}
-                        headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
-                        dateClick={(arg) => {
-                            form.setValue('startDate', arg.date);
-                        }}
-                    />
-                  </PopoverContent>
-                </Popover>
-                <FormDescription>
-                  The official start of the loan term.
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        
+          control={form.control}
+          name="startDate"
+          render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Deal Start Date</FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full pl-3 text-left font-normal",
+                        !field.value && "text-muted-foreground"
+                      )}
+                    >
+                      {field.value ? (
+                        format(field.value, "PPP")
+                      ) : (
+                        <span>Pick a start date</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <FullCalendar
+                    plugins={[dayGridPlugin, interactionPlugin]}
+                    initialView="dayGridMonth"
+                    selectable={true}
+                    headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
+                    dateClick={(arg: any) => {
+                      form.setValue('startDate', arg.date);
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+              <FormDescription>
+                The official start of the loan term.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
         <Button type="submit" className="w-full" disabled={isPending || clientsLoading}>
           {(isPending || clientsLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Save Changes

@@ -38,11 +38,22 @@ function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): numb
 
 const TWELVE_MONTHS_IN_DAYS = 12 * DURATION_IN_DAYS.Months;
 
+function normalizePrivateKey(raw: string | undefined): string {
+    if (!raw) return '';
+    const trimmed = raw.trim();
+    const unquoted =
+        (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+        (trimmed.startsWith("'") && trimmed.endsWith("'"))
+            ? trimmed.slice(1, -1)
+            : trimmed;
+    return unquoted.replace(/\\n/g, '\n');
+}
+
 const serviceAccount: ServiceAccount | undefined = process.env.FIREBASE_CLIENT_EMAIL
   ? {
       projectId: process.env.FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+      privateKey: normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
     }
   : undefined;
 

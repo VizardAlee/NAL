@@ -40,7 +40,20 @@ import { collection, query, where } from "firebase/firestore";
 import { useFirestore } from "@/firebase";
 import { MessageGlow } from "@/components/message-glow";
 
-const menuItems = [
+type MenuItem = {
+  href?: string;
+  label: string;
+  icon: React.ElementType;
+  subItems?: {
+    href: string;
+    label: string;
+    icon?: React.ElementType;
+    notificationCollection?: string;
+  }[];
+  notificationCollection?: string;
+};
+
+const menuItems: MenuItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/deals", label: "Deals", icon: FileText },
   { href: "/admin/users", label: "Users", icon: Users },
@@ -66,35 +79,35 @@ const menuItems = [
 ];
 
 function NotificationBadge({ collectionName }: { collectionName: string }) {
-    const firestore = useFirestore();
-    const { user } = useUser();
+  const firestore = useFirestore();
+  const { user } = useUser();
 
-    const q = React.useMemo(() => {
-        if (!firestore || !user) return null;
-        
-        // For messages, count open chat requests
-        if (collectionName === 'messages') {
-             return query(collection(firestore, 'chatRequests'));
-        }
+  const q = React.useMemo(() => {
+    if (!firestore || !user) return null;
 
-        // For other collections with a 'status' field
-        if (['dealRequests', 'depositRequests', 'withdrawalRequests', 'reinvestmentRequests', 'repayments', 'terminationRequests'].includes(collectionName)) {
-            return query(collection(firestore, collectionName), where('status', '==', 'Pending'));
-        }
+    // For messages, count open chat requests
+    if (collectionName === 'messages') {
+      return query(collection(firestore, 'chatRequests'));
+    }
 
-        // For chatRequests which has no status
-        if (collectionName === 'chatRequests') {
-            return query(collection(firestore, collectionName));
-        }
-        
-        return null;
-    }, [firestore, user, collectionName]);
+    // For other collections with a 'status' field
+    if (['dealRequests', 'depositRequests', 'withdrawalRequests', 'reinvestmentRequests', 'repayments', 'terminationRequests'].includes(collectionName)) {
+      return query(collection(firestore, collectionName), where('status', '==', 'Pending'));
+    }
 
-    const { data } = useCollection(q);
+    // For chatRequests which has no status
+    if (collectionName === 'chatRequests') {
+      return query(collection(firestore, collectionName));
+    }
 
-    if (!data || data.length === 0) return null;
+    return null;
+  }, [firestore, user, collectionName]);
 
-    return <Badge className="ml-auto">{data.length}</Badge>;
+  const { data } = useCollection(q);
+
+  if (!data || data.length === 0) return null;
+
+  return <Badge className="ml-auto">{data.length}</Badge>;
 }
 
 export function AdminNav() {
@@ -168,12 +181,12 @@ export function AdminNav() {
               variant="default"
               className="w-full justify-between"
             >
-              <Link href={item.href} className="flex justify-between items-center w-full">
-                 <div className="flex items-center gap-2">
-                    <item.icon />
-                    <span>{item.label}</span>
-                  </div>
-                 {item.notificationCollection && <NotificationBadge collectionName={item.notificationCollection} />}
+              <Link href={item.href!} className="flex justify-between items-center w-full">
+                <div className="flex items-center gap-2">
+                  <item.icon />
+                  <span>{item.label}</span>
+                </div>
+                {item.notificationCollection && <NotificationBadge collectionName={item.notificationCollection} />}
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

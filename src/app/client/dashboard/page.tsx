@@ -59,7 +59,7 @@ function BankDetailsCard() {
             </Card>
         );
     }
-    
+
     if (!bankDetails) return null;
 
     return (
@@ -116,7 +116,7 @@ function ContactAdminSheet() {
                 adminId: admin.id,
                 adminName: admin.name,
                 userId: user.uid,
-                userName: user.displayName
+                userName: user.displayName || 'User'
             });
 
             if (result.success && result.conversationId) {
@@ -153,7 +153,7 @@ function ContactAdminSheet() {
                             onClick={() => handleSelectAdmin(admin)}
                             disabled={isPending}
                         >
-                            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <MessageSquare className="mr-4 h-4 w-4" />}
+                            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquare className="mr-4 h-4 w-4" />}
                             Chat with {admin.name}
                         </Button>
                     ))}
@@ -187,10 +187,10 @@ function DealCard({ deal }: { deal: Deal }) {
         if (!user || !user.displayName) return;
         startTransition(async () => {
             const result = await requestTerminationAction({
-              dealId: deal.id,
-              dealName: deal.dealName,
-              clientId: user.uid,
-              clientName: user.displayName!
+                dealId: deal.id,
+                dealName: deal.dealName,
+                clientId: user.uid,
+                clientName: user.displayName!
             });
             if (result.success) {
                 toast({
@@ -206,23 +206,23 @@ function DealCard({ deal }: { deal: Deal }) {
             }
         });
     }
-    
+
     return (
         <Card className="flex flex-col">
             <CardHeader>
                 <div className="flex items-start justify-between">
                     <CardTitle className="font-headline text-xl">{deal.dealName}</CardTitle>
-                     <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
+                    <Badge variant={statusVariant[deal.status] || 'secondary'}>{deal.status}</Badge>
                 </div>
                 <CardDescription>{deal.clientName}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
-               <div className="flex items-center justify-between p-3 rounded-md bg-muted/50">
+                <div className="flex items-center justify-between p-3 rounded-md bg-muted/50">
                     <span className="text-sm text-muted-foreground">Principal Amount</span>
                     <span className="font-bold">
                         {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}
                     </span>
-               </div>
+                </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                         <p className="text-muted-foreground">Profit Rate</p>
@@ -233,16 +233,16 @@ function DealCard({ deal }: { deal: Deal }) {
                         <p className="font-medium">{deal.durationValue} {deal.durationUnit}</p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground">Financing Mode</p>
-                      <div className="font-medium">
-                        <Badge variant="outline">{deal.financingMode || 'Murabaha'}</Badge>
-                      </div>
+                        <p className="text-muted-foreground">Financing Mode</p>
+                        <div className="font-medium">
+                            <Badge variant="outline">{deal.financingMode || 'Murabaha'}</Badge>
+                        </div>
                     </div>
                     <div>
                         <p className="text-muted-foreground">Repayment</p>
                         <p className="font-medium">{deal.repaymentType}</p>
                     </div>
-                     <div>
+                    <div>
                         <p className="text-muted-foreground">Frequency</p>
                         <p className="font-medium">{deal.repaymentFrequency}</p>
                     </div>
@@ -254,9 +254,9 @@ function DealCard({ deal }: { deal: Deal }) {
                     </div>
                     <span className="font-medium">
                         {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)}
-                         <span className="text-xs text-muted-foreground"> ({deal.managementFeeRate || 0}%)</span>
+                        <span className="text-xs text-muted-foreground"> ({deal.managementFeeRate || 0}%)</span>
                     </span>
-               </div>
+                </div>
                 {deal.status === 'Active' && (
                     <Button variant="destructive" size="sm" onClick={handleTerminationRequest} disabled={isPendingTermination}>
                         {isPendingTermination ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldAlert className="mr-2 h-4 w-4" />}
@@ -265,7 +265,7 @@ function DealCard({ deal }: { deal: Deal }) {
                 )}
             </CardContent>
             <div className="mt-auto flex-grow">
-                 <Tabs defaultValue="schedule" className="w-full">
+                <Tabs defaultValue="schedule" className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
                         <TabsTrigger value="schedule">Upcoming Schedule</TabsTrigger>
                         <TabsTrigger value="history">Repayment History</TabsTrigger>
@@ -315,14 +315,14 @@ export default function ClientDashboard() {
     const firestore = useFirestore();
     const router = useRouter();
     const { user, loading: userLoading } = useUser();
-    
+
     const userProfileRef = useMemo(() => {
         if (!firestore || !user?.uid) return null;
         return doc(firestore, 'users', user.uid);
     }, [firestore, user?.uid]);
 
     const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userProfileRef);
-    
+
     const dealsQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
         return query(collection(firestore, 'deals'), where('clientId', '==', user.uid), orderBy('createdAt', 'desc'));
@@ -331,7 +331,7 @@ export default function ClientDashboard() {
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(
         dealsQuery as any
     );
-    
+
     const isLoading = userLoading || dealsLoading || profileLoading;
 
     const mostRecentDeal = useMemo(() => deals?.[0], [deals]);
@@ -362,7 +362,7 @@ export default function ClientDashboard() {
                     </Button>
                 </div>
             </PageHeader>
-            
+
             <div className="grid gap-8">
                 {userProfile && (
                     <Card>
@@ -418,9 +418,9 @@ export default function ClientDashboard() {
                 )}
 
                 {mostRecentDeal ? (
-                     <DealCard deal={mostRecentDeal} />
+                    <DealCard deal={mostRecentDeal} />
                 ) : (
-                     <Card className="mt-6 border-dashed">
+                    <Card className="mt-6 border-dashed">
                         <CardContent className="p-12 text-center">
                             <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
                             <h3 className="mt-4 text-lg font-medium">No Deals Found</h3>
@@ -438,7 +438,7 @@ export default function ClientDashboard() {
                 )}
 
                 {deals && deals.length > 0 && (
-                     <div className="text-center">
+                    <div className="text-center">
                         <Button asChild variant="outline">
                             <Link href="/client/deals">
                                 View All Deals ({deals.length}) <ArrowRight className="ml-2 h-4 w-4" />

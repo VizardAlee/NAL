@@ -1,8 +1,8 @@
 
 'use server';
 
-import { adminDb } from '@/firebase/admin-app';
-import { Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { getAdminApp } from '@/firebase/admin-app';
+import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { notifyAdmins, notifyUser } from './notification-actions';
@@ -21,6 +21,7 @@ export async function requestChatWithAdmin(input: z.infer<typeof requestChatSche
   }
 
   const { userId, userName, userRole } = validated.data;
+  const adminDb = getFirestore(getAdminApp());
 
   try {
     const existingRequest = await adminDb
@@ -77,6 +78,8 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
   if (!text && !attachmentUrl) {
     return { success: false, message: 'Message must have either text or an attachment.' };
   }
+
+  const adminDb = getFirestore(getAdminApp());
 
   try {
     const firestore = adminDb;
@@ -167,6 +170,7 @@ export async function getOrCreateConversation(input: z.infer<typeof getOrCreateC
         return { success: false, message: 'Invalid data for conversation.' };
     }
     const { adminId, adminName, userId, userName } = validated.data;
+    const adminDb = getFirestore(getAdminApp());
     
     try {
         const existingConvoQuery = adminDb.collection('conversations')

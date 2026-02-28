@@ -2,13 +2,13 @@
 'use client';
 
 import { getApps, initializeApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth, connectAuthEmulator, inMemoryPersistence, setPersistence } from 'firebase/auth';
+import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
 
-let app: FirebaseApp;
-let auth: Auth;
-let firestore: Firestore;
+let app: FirebaseApp | null = null;
+let auth: Auth | null = null;
+let firestore: Firestore | null = null;
 
 if (firebaseConfig && firebaseConfig.projectId) {
     if (!getApps().length) {
@@ -21,13 +21,8 @@ if (firebaseConfig && firebaseConfig.projectId) {
     firestore = getFirestore(app);
 
 } else {
-    console.warn("Firebase config not found, using mock instances.");
-    // Provide mock instances if config is not available
-    app = {} as FirebaseApp;
-    auth = {} as Auth;
-    firestore = {} as Firestore;
+    console.warn("Firebase config not found. Firebase services are disabled until NEXT_PUBLIC_FIREBASE_* env vars are configured.");
 }
 
 
 export { app, auth, firestore };
-

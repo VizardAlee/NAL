@@ -1,10 +1,12 @@
 
 'use server';
 
-import { adminDb } from '@/firebase/admin-app';
+import { getAdminApp } from '@/firebase/admin-app';
+import { getFirestore } from 'firebase-admin/firestore';
 
 export async function getPublicStats() {
   try {
+    const adminDb = getFirestore(getAdminApp());
     const usersSnapshot = await adminDb.collection('users').get();
     const fundBatchesSnapshot = await adminDb.collection('fundBatches').get();
     const dealsSnapshot = await adminDb

@@ -181,10 +181,7 @@ export function LoginForm() {
         </Form>
         <div className="mt-4 text-center text-sm">
            <p className="text-muted-foreground">
-             Don't have an account?{' '}
-             <Link href="/signup" className="font-medium text-primary hover:underline">
-                Sign up
-             </Link>
+             Account access is by admin invitation only.
            </p>
             <p className="text-muted-foreground mt-2">
                 <Link href="/forgot-password" passHref className="text-sm font-medium text-primary hover:underline">

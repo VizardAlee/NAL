@@ -24,7 +24,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { createUserAction } from './actions';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { useFirebaseApp } from '@/firebase';
 
 
 const formSchema = z.object({
@@ -44,6 +45,7 @@ type CreateUserFormProps = {
 export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const app = useFirebaseApp();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -57,30 +59,30 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
+    try {
+      const functions = getFunctions(app);
+      const createUser = httpsCallable(functions, 'createUser');
+      const result = await createUser(values);
+      const data = result.data as { success: boolean; message: string };
 
-    const result = await createUserAction({
-      name: values.name,
-      email: values.email,
-      password: values.password,
-      phoneNumber: values.phoneNumber,
-      role: values.role,
-    });
-
-    if (result.success) {
-      toast({
-        title: 'User Created',
-        description: result.message,
-      });
-      onUserCreated();
-    } else {
+      if (data.success) {
+        toast({
+          title: 'User Created',
+          description: data.message,
+        });
+        onUserCreated();
+      } else {
+        throw new Error(data.message);
+      }
+    } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'User Creation Failed',
-        description: result.message,
+        description: error.message || 'An unknown error occurred.',
       });
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   }
 
   return (

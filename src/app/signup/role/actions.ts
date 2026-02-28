@@ -1,14 +1,14 @@
 
 'use server';
 
-import { adminDb } from '@/firebase/admin-app';
+import { adminDb, getAdminApp } from '@/firebase/admin-app';
 import { getAuth } from 'firebase-admin/auth';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 
 const setRoleSchema = z.object({
-  role: z.enum(['Investor', 'Client']),
-  userId: z.string().min(1, 'User ID is required.'),
+    role: z.enum(['Investor', 'Client']),
+    userId: z.string().min(1, 'User ID is required.'),
 });
 
 type ActionResponse = {
@@ -31,7 +31,7 @@ export async function setRoleAction(
     }
 
     const { role, userId } = validated.data;
-    const auth = getAuth(adminDb.app);
+    const auth = getAuth(getAdminApp());
 
     try {
         // 1. Set Custom Claim for Security Rules
@@ -40,10 +40,10 @@ export async function setRoleAction(
         // 2. Update Firestore Document
         const userDocRef = adminDb.collection('users').doc(userId);
         await userDocRef.update({ role });
-        
+
         // Revalidate paths that show user data
         revalidatePath('/admin/users');
-        
+
         let redirectUrl = '/';
         if (role === 'Investor') {
             redirectUrl = '/investor/dashboard';

@@ -10,8 +10,10 @@ type CompanyLogoContextType = {
   loading: boolean;
 };
 
+const DEFAULT_LOGO_URL = '/NAL%20LOGO.jpg';
+
 const CompanyLogoContext = createContext<CompanyLogoContextType>({
-  logoUrl: null,
+  logoUrl: DEFAULT_LOGO_URL,
   loading: true,
 });
 
@@ -26,7 +28,7 @@ export function CompanyLogoProvider({ children }: { children: React.ReactNode })
   const { data: brandingSettings, loading } = useDoc<{ logoUrl: string }>(brandingRef);
 
   const value = useMemo(() => ({
-    logoUrl: brandingSettings?.logoUrl || null,
+    logoUrl: brandingSettings?.logoUrl || DEFAULT_LOGO_URL,
     loading,
   }), [brandingSettings, loading]);
 

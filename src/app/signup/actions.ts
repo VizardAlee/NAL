@@ -1,7 +1,8 @@
 
 'use server';
 
-import { adminDb } from '@/firebase/admin-app';
+import { getAdminApp } from '@/firebase/admin-app';
+import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
@@ -11,7 +12,7 @@ const signUpSchema = z.object({
   email: z.string().email("Please enter a valid email address."),
   password: z.string().min(8, "Password must be at least 8 characters."),
   phoneNumber: z.string().optional(),
-  role: z.enum(['Investor', 'Client', 'Marketer'], { required_error: 'Role is required.' }),
+  inviteToken: z.string().min(20, "Invalid invite token."),
   referralCode: z.string().optional(),
 });
 
@@ -37,10 +38,29 @@ export async function signUpWithEmailAction(
         return { success: false, message: 'Invalid form data provided.' };
     }
 
-    const { name, email, password, role, phoneNumber, referralCode } = validated.data;
-    const auth = getAuth(adminDb.app);
+    const { name, email, password, inviteToken, phoneNumber, referralCode } = validated.data;
+    const app = getAdminApp();
+    const auth = getAuth(app);
+    const adminDb = getFirestore(app);
 
     try {
+        const inviteRef = adminDb.collection('invites').doc(inviteToken);
+        const inviteSnap = await inviteRef.get();
+        if (!inviteSnap.exists) {
+            return { success: false, message: "This invite link is invalid." };
+        }
+
+        const inviteData = inviteSnap.data() as { email: string; role: string; status: 'Pending' | 'Used' };
+        if (!inviteData || inviteData.status !== 'Pending') {
+            return { success: false, message: "This invite link has already been used or is invalid." };
+        }
+
+        if (inviteData.email.toLowerCase() !== email.toLowerCase()) {
+            return { success: false, message: "This invite link is for a different email address." };
+        }
+
+        const role = inviteData.role as 'Investor' | 'Client' | 'Marketer' | 'Admin' | 'Legal' | 'Recovery';
+
         const userExists = await auth.getUserByEmail(email).catch(() => null);
         if (userExists) {
             return { success: false, message: "An account with this email already exists." };
@@ -77,7 +97,14 @@ export async function signUpWithEmailAction(
         }
 
 
-        await adminDb.collection('users').doc(userRecord.uid).set(userData);
+        const batch = adminDb.batch();
+        batch.set(adminDb.collection('users').doc(userRecord.uid), userData);
+        batch.update(inviteRef, {
+            status: 'Used',
+            usedBy: userRecord.uid,
+            usedAt: new Date(),
+        });
+        await batch.commit();
 
         revalidatePath('/admin/users');
         
@@ -91,5 +118,33 @@ export async function signUpWithEmailAction(
     } catch (error: any) {
         console.error("Sign up error:", error);
         return { success: false, message: error.message || "An unknown error occurred." };
+    }
+}
+
+export async function getInviteDetailsAction(inviteToken: string): Promise<{
+    valid: boolean;
+    email?: string;
+    role?: string;
+    message?: string;
+}> {
+    if (!inviteToken) return { valid: false, message: 'Missing invite token.' };
+
+    try {
+        const app = getAdminApp();
+        const adminDb = getFirestore(app);
+        const inviteSnap = await adminDb.collection('invites').doc(inviteToken).get();
+
+        if (!inviteSnap.exists) {
+            return { valid: false, message: 'This invite link is invalid.' };
+        }
+
+        const inviteData = inviteSnap.data() as { email: string; role: string; status: 'Pending' | 'Used' };
+        if (!inviteData || inviteData.status !== 'Pending') {
+            return { valid: false, message: 'This invite link has already been used or is invalid.' };
+        }
+
+        return { valid: true, email: inviteData.email, role: inviteData.role };
+    } catch (error: any) {
+        return { valid: false, message: error.message || 'Failed to validate invite link.' };
     }
 }

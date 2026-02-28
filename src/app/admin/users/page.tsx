@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Users, ChevronRight } from 'lucide-react';
-import { CreateUserForm } from './create-user-form';
+import { InviteUserForm } from './invite-user-form';
 import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, type DocumentData } from 'firebase/firestore';
@@ -158,21 +158,21 @@ export default function UsersPage() {
     <div>
       <PageHeader
         title="User Management"
-        description="Add, view, and manage user profiles."
+        description="Invite, view, and manage user profiles."
         icon={Users}
       >
         <Dialog open={isCreateUserOpen} onOpenChange={setCreateUserOpen}>
           <DialogTrigger asChild>
             <Button>
               <PlusCircle className="mr-2 h-4 w-4" />
-              Create User
+              Invite User
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create New User</DialogTitle>
+              <DialogTitle>Invite New User</DialogTitle>
             </DialogHeader>
-            <CreateUserForm onUserCreated={handleUserCreated} />
+            <InviteUserForm onInviteCreated={handleUserCreated} />
           </DialogContent>
         </Dialog>
       </PageHeader>

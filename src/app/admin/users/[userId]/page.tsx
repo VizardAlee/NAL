@@ -19,11 +19,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { format, formatDistanceStrict, isBefore, isEqual } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
 } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ViewPageNav } from '@/components/view-page-nav';
@@ -51,21 +51,21 @@ type UserProfile = DocumentData & {
 };
 
 type FundBatch = DocumentData & {
-  id: string;
-  sourceId: string;
-  amount: number;
-  remainingAmount: number;
-  createdAt: Timestamp;
-  tenureValue: number;
-  tenureUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
+    id: string;
+    sourceId: string;
+    amount: number;
+    remainingAmount: number;
+    createdAt: Timestamp;
+    tenureValue: number;
+    tenureUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
 };
 
 type Transaction = DocumentData & {
-  id: string;
-  type: string;
-  amount: number;
-  createdAt: Timestamp;
-  dealName?: string;
+    id: string;
+    type: string;
+    amount: number;
+    createdAt: Timestamp;
+    dealName?: string;
 };
 
 type MarketerStats = {
@@ -99,7 +99,7 @@ function UserDetailSkeleton() {
                 description="Loading user details..."
                 icon={User}
             />
-             <div className="grid gap-6 lg:grid-cols-3">
+            <div className="grid gap-6 lg:grid-cols-3">
                 <div className="lg:col-span-1 space-y-6">
                     <Card>
                         <CardHeader className="flex-row items-center gap-4">
@@ -111,7 +111,7 @@ function UserDetailSkeleton() {
                         </CardHeader>
                     </Card>
                 </div>
-             </div>
+            </div>
         </div>
     )
 }
@@ -120,13 +120,13 @@ const formatDate = (timestamp: Timestamp | Date | undefined) => {
     if (!timestamp) return 'N/A';
     const date = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
     try {
-      return format(date, 'PPP p');
+        return format(date, 'PPP p');
     } catch {
-      return 'Invalid Date';
+        return 'Invalid Date';
     }
-  };
+};
 
-  const ZakatCountdown = ({ firstDepositDate, lastZakatPaymentDate }: { firstDepositDate: Date, lastZakatPaymentDate?: Date }) => {
+const ZakatCountdown = ({ firstDepositDate, lastZakatPaymentDate }: { firstDepositDate: Date, lastZakatPaymentDate?: Date }) => {
     const [timeLeft, setTimeLeft] = useState('');
 
     const targetDate = useMemo(() => {
@@ -158,797 +158,797 @@ const formatDate = (timestamp: Timestamp | Date | undefined) => {
 
 
 export default function UserDetailPage() {
-  const { userId } = useParams<{ userId: string }>();
-  const firestore = useFirestore();
-  const router = useRouter();
-  const { user: authUser, loading: authUserLoading } = useUser();
-  const [isAddFundOpen, setAddFundOpen] = useState(false);
-  const { toast } = useToast();
-  const isMobile = useIsMobile();
-  const [currentPage, setCurrentPage] = useState(1);
-  const [fundBatchesCurrentPage, setFundBatchesCurrentPage] = useState(1);
-  const [isChatPending, startChatTransition] = useTransition();
-  const [marketerStats, setMarketerStats] = useState<MarketerStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
+    const { userId } = useParams<{ userId: string }>();
+    const firestore = useFirestore();
+    const router = useRouter();
+    const { user: authUser, loading: authUserLoading } = useUser();
+    const [isAddFundOpen, setAddFundOpen] = useState(false);
+    const { toast } = useToast();
+    const isMobile = useIsMobile();
+    const [currentPage, setCurrentPage] = useState(1);
+    const [fundBatchesCurrentPage, setFundBatchesCurrentPage] = useState(1);
+    const [isChatPending, startChatTransition] = useTransition();
+    const [marketerStats, setMarketerStats] = useState<MarketerStats | null>(null);
+    const [statsLoading, setStatsLoading] = useState(true);
 
-  const userRef = useMemo(() => {
-    if (!firestore || !userId) return null;
-    return doc(firestore, 'users', userId);
-  }, [firestore, userId]);
+    const userRef = useMemo(() => {
+        if (!firestore || !userId) return null;
+        return doc(firestore, 'users', userId);
+    }, [firestore, userId]);
 
-  const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userRef);
+    const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userRef);
 
-  useEffect(() => {
-    if (userProfile && userProfile.role === 'Marketer' && userProfile.referralCode) {
-        setStatsLoading(true);
-        getMarketerStats(userProfile.id, userProfile.referralCode).then(result => {
-            if (result.success) {
-                setMarketerStats(result.data as MarketerStats);
-            }
+    useEffect(() => {
+        if (userProfile && userProfile.role === 'Marketer' && userProfile.referralCode) {
+            setStatsLoading(true);
+            getMarketerStats(userProfile.id, userProfile.referralCode).then(result => {
+                if (result.success) {
+                    setMarketerStats(result.data as MarketerStats);
+                }
+                setStatsLoading(false);
+            });
+        } else if (userProfile && userProfile.role !== 'Marketer') {
             setStatsLoading(false);
-        });
-    } else if (userProfile && userProfile.role !== 'Marketer') {
-        setStatsLoading(false);
-    }
-  }, [userProfile]);
-
-  const fundBatchesQuery = useMemo(() => {
-    if (!firestore || !userId) return null;
-    return query(collection(firestore, 'fundBatches'), where('sourceId', '==', userId), orderBy('createdAt', 'desc'));
-  }, [firestore, userId]);
-  
-  const clientDealsQuery = useMemo(() => {
-    if (!firestore || !userId || userProfile?.role !== 'Client') return null;
-    return query(collection(firestore, 'deals'), where('clientId', '==', userId), orderBy('createdAt', 'desc'));
-  }, [firestore, userId, userProfile?.role]);
-  
-  const clientRepaymentsQuery = useMemo(() => {
-    if (!firestore || !userId || userProfile?.role !== 'Client') return null;
-    return query(collection(firestore, 'repayments'), where('clientId', '==', userId), where('status', '==', 'Approved'));
-  }, [firestore, userId, userProfile?.role]);
-
-  const allTransactionsQuery = useMemo(() => {
-    if (!firestore || !userId) return null;
-    return query(collection(firestore, 'transactions'), where('userId', '==', userId), orderBy('createdAt', 'desc'));
-  }, [firestore, userId]);
-
-  const firstDepositQuery = useMemo(() => {
-      if (!firestore || !userId) return null;
-      return query(collection(firestore, 'transactions'), where('userId', '==', userId), where('type', '==', 'Deposit'), orderBy('createdAt', 'asc'), limit(1));
-  }, [firestore, userId]);
-
-  const zakatSettingsRef = useMemo(() => {
-      if (!firestore || !authUser) return null;
-      return doc(firestore, 'platformSettings', 'zakat');
-  }, [firestore, authUser]);
-
-  
-  const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
-  const { data: clientDeals, loading: clientDealsLoading } = useCollection<Deal>(clientDealsQuery);
-  const { data: clientRepayments, loading: clientRepaymentsLoading } = useCollection<Repayment>(clientRepaymentsQuery);
-  const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(allTransactionsQuery);
-  const { data: firstDeposit, loading: firstDepositLoading } = useCollection<Transaction>(firstDepositQuery);
-  const { data: zakatSettings, loading: zakatLoading } = useDoc<{nisab: number}>(zakatSettingsRef);
-
-  const isLoading = authUserLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading || clientDealsLoading || clientRepaymentsLoading || (userProfile?.role === 'Marketer' && statsLoading);
-
-  const handleInitiateChat = () => {
-    if (!authUser || !userProfile) return;
-    startChatTransition(async () => {
-      const result = await getOrCreateConversation({
-        adminId: authUser.uid,
-        adminName: authUser.displayName || 'Admin',
-        userId: userProfile.id,
-        userName: userProfile.name,
-      });
-
-      if (result.success && result.conversationId) {
-        router.push(`/admin/messages/${result.conversationId}`);
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: result.message,
-        });
-      }
-    });
-  };
-
-  const clientPerformanceMetrics = useMemo(() => {
-    if (!clientRepayments || !clientDeals) return null;
-
-    const totalDealsValue = clientDeals.reduce((sum, deal) => sum + deal.principal, 0);
-    const totalAmountRepaid = clientRepayments.reduce((sum, repayment) => sum + repayment.amount, 0);
-    
-    let onTimePayments = 0;
-    let totalDuePayments = 0;
-    
-    clientRepayments.forEach(repayment => {
-        if (repayment.dueDate) {
-            totalDuePayments++;
-            const dueDate = repayment.dueDate.toDate();
-            const lodgedAt = repayment.lodgedAt.toDate();
-            if (isBefore(lodgedAt, dueDate) || isEqual(lodgedAt, dueDate)) {
-                onTimePayments++;
-            }
         }
-    });
+    }, [userProfile]);
 
-    const onTimePaymentScore = totalDuePayments > 0 ? (onTimePayments / totalDuePayments) * 100 : 100;
-    
-    return { totalDealsValue, totalAmountRepaid, onTimePaymentScore };
+    const fundBatchesQuery = useMemo(() => {
+        if (!firestore || !userId) return null;
+        return query(collection(firestore, 'fundBatches'), where('sourceId', '==', userId), orderBy('createdAt', 'desc'));
+    }, [firestore, userId]);
 
-  }, [clientRepayments, clientDeals]);
+    const clientDealsQuery = useMemo(() => {
+        if (!firestore || !userId || userProfile?.role !== 'Client') return null;
+        return query(collection(firestore, 'deals'), where('clientId', '==', userId), orderBy('createdAt', 'desc'));
+    }, [firestore, userId, userProfile?.role]);
 
-  const financialMetrics = useMemo(() => {
-      if (!transactions) return { portfolioValue: 0, investibleBalance: 0 };
-      const totalCapital = transactions.filter(tx => tx.type === 'Deposit').reduce((sum, tx) => sum + tx.amount, 0);
-      const totalProfit = transactions.filter(tx => tx.type === 'ProfitDistribution').reduce((sum, tx) => sum + tx.amount, 0);
-      const totalWithdrawn = transactions.filter(tx => tx.type === 'Withdrawal').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-      const totalZakat = transactions.filter(tx => tx.type === 'Zakat').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-      const portfolioValue = (totalCapital + totalProfit) - (totalWithdrawn + totalZakat);
-      const investibleBalance = fundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
-      return { portfolioValue, investibleBalance, totalCapital };
-  }, [transactions, fundBatches]);
+    const clientRepaymentsQuery = useMemo(() => {
+        if (!firestore || !userId || userProfile?.role !== 'Client') return null;
+        return query(collection(firestore, 'repayments'), where('clientId', '==', userId), where('status', '==', 'Approved'));
+    }, [firestore, userId, userProfile?.role]);
 
-  const { isZakatEligible, zakatAmount } = useMemo(() => {
-    if (!userProfile) return { isZakatEligible: false, isZakatPayable: false, zakatAmount: 0 };
-    
-    if (userProfile.role !== 'Investor') {
-        return { isZakatEligible: false, isZakatPayable: false, zakatAmount: 0 };
+    const allTransactionsQuery = useMemo(() => {
+        if (!firestore || !userId) return null;
+        return query(collection(firestore, 'transactions'), where('userId', '==', userId), orderBy('createdAt', 'desc'));
+    }, [firestore, userId]);
+
+    const firstDepositQuery = useMemo(() => {
+        if (!firestore || !userId) return null;
+        return query(collection(firestore, 'transactions'), where('userId', '==', userId), where('type', '==', 'Deposit'), orderBy('createdAt', 'asc'), limit(1));
+    }, [firestore, userId]);
+
+    const zakatSettingsRef = useMemo(() => {
+        if (!firestore || !authUser) return null;
+        return doc(firestore, 'platformSettings', 'zakat');
+    }, [firestore, authUser]);
+
+
+    const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
+    const { data: clientDeals, loading: clientDealsLoading } = useCollection<Deal>(clientDealsQuery);
+    const { data: clientRepayments, loading: clientRepaymentsLoading } = useCollection<Repayment>(clientRepaymentsQuery);
+    const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(allTransactionsQuery);
+    const { data: firstDeposit, loading: firstDepositLoading } = useCollection<Transaction>(firstDepositQuery);
+    const { data: zakatSettings, loading: zakatLoading } = useDoc<{ nisab: number }>(zakatSettingsRef);
+
+    const isLoading = authUserLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading || clientDealsLoading || clientRepaymentsLoading || (userProfile?.role === 'Marketer' && statsLoading);
+
+    const handleInitiateChat = () => {
+        if (!authUser || !userProfile) return;
+        startChatTransition(async () => {
+            const result = await getOrCreateConversation({
+                adminId: authUser.uid,
+                adminName: authUser.displayName || 'Admin',
+                userId: userProfile.id,
+                userName: userProfile.name,
+            });
+
+            if (result.success && result.conversationId) {
+                router.push(`/admin/messages/${result.conversationId}`);
+            } else {
+                toast({
+                    variant: 'destructive',
+                    title: 'Error',
+                    description: result.message,
+                });
+            }
+        });
+    };
+
+    const clientPerformanceMetrics = useMemo(() => {
+        if (!clientRepayments || !clientDeals) return null;
+
+        const totalDealsValue = clientDeals.reduce((sum, deal) => sum + deal.principal, 0);
+        const totalAmountRepaid = clientRepayments.reduce((sum, repayment) => sum + repayment.amount, 0);
+
+        let onTimePayments = 0;
+        let totalDuePayments = 0;
+
+        clientRepayments.forEach(repayment => {
+            if (repayment.dueDate) {
+                totalDuePayments++;
+                const dueDate = repayment.dueDate.toDate();
+                const lodgedAt = repayment.lodgedAt.toDate();
+                if (isBefore(lodgedAt, dueDate) || isEqual(lodgedAt, dueDate)) {
+                    onTimePayments++;
+                }
+            }
+        });
+
+        const onTimePaymentScore = totalDuePayments > 0 ? (onTimePayments / totalDuePayments) * 100 : 100;
+
+        return { totalDealsValue, totalAmountRepaid, onTimePaymentScore };
+
+    }, [clientRepayments, clientDeals]);
+
+    const financialMetrics = useMemo(() => {
+        if (!transactions) return { portfolioValue: 0, investibleBalance: 0 };
+        const totalCapital = transactions.filter(tx => tx.type === 'Deposit').reduce((sum, tx) => sum + tx.amount, 0);
+        const totalProfit = transactions.filter(tx => tx.type === 'ProfitDistribution').reduce((sum, tx) => sum + tx.amount, 0);
+        const totalWithdrawn = transactions.filter(tx => tx.type === 'Withdrawal').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+        const totalZakat = transactions.filter(tx => tx.type === 'Zakat').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+        const portfolioValue = (totalCapital + totalProfit) - (totalWithdrawn + totalZakat);
+        const investibleBalance = fundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
+        return { portfolioValue, investibleBalance, totalCapital };
+    }, [transactions, fundBatches]);
+
+    const { isZakatEligible, zakatAmount } = useMemo(() => {
+        if (!userProfile) return { isZakatEligible: false, isZakatPayable: false, zakatAmount: 0 };
+
+        if (userProfile.role !== 'Investor') {
+            return { isZakatEligible: false, isZakatPayable: false, zakatAmount: 0 };
+        }
+
+        const nisab = zakatSettings?.nisab || 0;
+        const isEligible = financialMetrics.portfolioValue >= nisab;
+        const amount = financialMetrics.portfolioValue * 0.025;
+
+        return { isZakatEligible: isEligible, zakatAmount: amount };
+    }, [financialMetrics, zakatSettings, userProfile]);
+
+
+    const processedFundBatches = useMemo(() => {
+        if (!fundBatches) return [];
+        return fundBatches.map(batch => {
+            const batchTenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
+            const type = batchTenureInDays <= TWELVE_MONTHS_IN_DAYS ? 'Short-Term' : 'Long-Term';
+            return { ...batch, type };
+        });
+    }, [fundBatches]);
+
+    const paginatedFundBatches = useMemo(() => {
+        if (!processedFundBatches) return [];
+        const startIndex = (fundBatchesCurrentPage - 1) * ITEMS_PER_PAGE;
+        return processedFundBatches.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    }, [processedFundBatches, fundBatchesCurrentPage]);
+
+    const totalFundBatchesPages = useMemo(() => {
+        if (!processedFundBatches) return 0;
+        return Math.ceil(processedFundBatches.length / ITEMS_PER_PAGE);
+    }, [processedFundBatches]);
+
+    const paginatedTransactions = useMemo(() => {
+        if (!transactions) return [];
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+        return transactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    }, [transactions, currentPage]);
+
+    const totalPages = useMemo(() => {
+        if (!transactions) return 0;
+        return Math.ceil(transactions.length / ITEMS_PER_PAGE);
+    }, [transactions]);
+
+
+    if (isLoading || isMobile === undefined) {
+        return <UserDetailSkeleton />;
     }
 
-    const nisab = zakatSettings?.nisab || 0;
-    const isEligible = financialMetrics.portfolioValue >= nisab;
-    const amount = financialMetrics.portfolioValue * 0.025;
-    
-    return { isZakatEligible: isEligible, zakatAmount: amount };
-  }, [financialMetrics, zakatSettings, userProfile]);
+    if (!userProfile) {
+        return notFound();
+    }
 
+    const statusVariant = {
+        Pending: 'secondary',
+        Active: 'default',
+        Completed: 'outline',
+        Terminated: 'destructive',
+    } as const;
 
-  const processedFundBatches = useMemo(() => {
-    if (!fundBatches) return [];
-    return fundBatches.map(batch => {
-        const batchTenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
-        const type = batchTenureInDays <= TWELVE_MONTHS_IN_DAYS ? 'Short-Term' : 'Long-Term';
-        return { ...batch, type };
-    });
-  }, [fundBatches]);
+    const isAdmin = userProfile?.role === 'Admin';
 
-  const paginatedFundBatches = useMemo(() => {
-    if (!processedFundBatches) return [];
-    const startIndex = (fundBatchesCurrentPage - 1) * ITEMS_PER_PAGE;
-    return processedFundBatches.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [processedFundBatches, fundBatchesCurrentPage]);
+    const handleCopyCode = (code: string) => {
+        navigator.clipboard.writeText(code);
+        toast({ title: "Copied!", description: "Referral code copied to clipboard." });
+    };
 
-  const totalFundBatchesPages = useMemo(() => {
-    if (!processedFundBatches) return 0;
-    return Math.ceil(processedFundBatches.length / ITEMS_PER_PAGE);
-  }, [processedFundBatches]);
-
-  const paginatedTransactions = useMemo(() => {
-    if (!transactions) return [];
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return transactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [transactions, currentPage]);
-
-  const totalPages = useMemo(() => {
-    if (!transactions) return 0;
-    return Math.ceil(transactions.length / ITEMS_PER_PAGE);
-  }, [transactions]);
-  
-
-  if (isLoading || isMobile === undefined) {
-    return <UserDetailSkeleton />;
-  }
-
-  if (!userProfile) {
-    return notFound();
-  }
-  
-  const statusVariant = {
-    Pending: 'secondary',
-    Active: 'default',
-    Completed: 'outline',
-    Terminated: 'destructive',
-  } as const;
-
-  const isAdmin = userProfile?.role === 'Admin';
-
-  const handleCopyCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    toast({ title: "Copied!", description: "Referral code copied to clipboard." });
-  };
-
-  return (
-    <div>
-        <PageHeader
-            title={userProfile.name}
-            description={userProfile.email}
-            icon={User}
-        >
-          <div className="flex items-center gap-2">
-            <Button onClick={handleInitiateChat} disabled={isChatPending}>
-              {isChatPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <MessageSquare className="mr-2 h-4 w-4"/>}
-              Chat with User
-            </Button>
-            <ViewPageNav homePath="/admin/users" />
-          </div>
-        </PageHeader>
-        <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-1 space-y-6">
-                <Card>
-                    <CardHeader className="flex-row items-center gap-4 space-y-0">
-                         <Avatar className="h-16 w-16">
-                            <AvatarImage src={`https://picsum.photos/seed/${userProfile.id}/128/128`} />
-                            <AvatarFallback>{userProfile.name?.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                            <CardTitle className='font-headline text-2xl'>{userProfile.name}</CardTitle>
-                            <div className='flex gap-2 items-center mt-1'>
-                                <Badge variant="secondary">{userProfile.role}</Badge>
-                                {isZakatEligible && <Badge variant="default">Zakat Eligible</Badge>}
-                            </div>
-                            {userProfile.phoneNumber && (
-                                <div className="text-sm text-muted-foreground mt-2 flex items-center gap-2">
-                                    <Phone className="h-4 w-4" />
-                                    <span>{userProfile.phoneNumber}</span>
-                                </div>
-                            )}
-                        </div>
-                    </CardHeader>
-                </Card>
-
-                {userProfile.role === 'Investor' && (
+    return (
+        <div>
+            <PageHeader
+                title={userProfile.name}
+                description={userProfile.email}
+                icon={User}
+            >
+                <div className="flex items-center gap-2">
+                    <Button onClick={handleInitiateChat} disabled={isChatPending}>
+                        {isChatPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquare className="mr-2 h-4 w-4" />}
+                        Chat with User
+                    </Button>
+                    <ViewPageNav homePath="/admin/users" />
+                </div>
+            </PageHeader>
+            <div className="grid gap-6 lg:grid-cols-3">
+                <div className="lg:col-span-1 space-y-6">
                     <Card>
-                        <CardHeader>
-                            <CardTitle className="text-sm font-medium">Total Capital Introduced</CardTitle>
-                            <CardDescription>The cumulative sum of all deposits made by this investor.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-3xl font-bold font-headline">
-                                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.totalCapital)}
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {userProfile.role === 'Client' && clientPerformanceMetrics && (
-                    <Card>
-                        <CardHeader>
-                             <CardTitle className="text-sm font-medium">Total Deal Value</CardTitle>
-                             <CardDescription>The sum of the principal from all deals for this client.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                             <div className="text-3xl font-bold font-headline">
-                                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(clientPerformanceMetrics.totalDealsValue)}
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
-
-
-                {userProfile.role === 'Marketer' && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Marketer Details</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardHeader className="flex-row items-center gap-4 space-y-0">
+                            <Avatar className="h-16 w-16">
+                                <AvatarImage src={`https://picsum.photos/seed/${userProfile.id}/128/128`} />
+                                <AvatarFallback>{userProfile.name?.charAt(0)}</AvatarFallback>
+                            </Avatar>
                             <div>
-                                <p className="text-sm text-muted-foreground">Referral Code</p>
-                                <div className="flex items-center gap-2">
-                                    <p className="font-mono font-medium text-lg">{userProfile.referralCode || 'N/A'}</p>
-                                    {userProfile.referralCode && (
-                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleCopyCode(userProfile.referralCode!)}>
-                                            <Copy className="h-4 w-4" />
+                                <CardTitle className='font-headline text-2xl'>{userProfile.name}</CardTitle>
+                                <div className='flex gap-2 items-center mt-1'>
+                                    <Badge variant="secondary">{userProfile.role}</Badge>
+                                    {isZakatEligible && <Badge variant="default">Zakat Eligible</Badge>}
+                                </div>
+                                {userProfile.phoneNumber && (
+                                    <div className="text-sm text-muted-foreground mt-2 flex items-center gap-2">
+                                        <Phone className="h-4 w-4" />
+                                        <span>{userProfile.phoneNumber}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </CardHeader>
+                    </Card>
+
+                    {userProfile.role === 'Investor' && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-sm font-medium">Total Capital Introduced</CardTitle>
+                                <CardDescription>The cumulative sum of all deposits made by this investor.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-3xl font-bold font-headline">
+                                    {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.totalCapital || 0)}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {userProfile.role === 'Client' && clientPerformanceMetrics && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-sm font-medium">Total Deal Value</CardTitle>
+                                <CardDescription>The sum of the principal from all deals for this client.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-3xl font-bold font-headline">
+                                    {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(clientPerformanceMetrics.totalDealsValue)}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+
+                    {userProfile.role === 'Marketer' && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-base">Marketer Details</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Referral Code</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="font-mono font-medium text-lg">{userProfile.referralCode || 'N/A'}</p>
+                                        {userProfile.referralCode && (
+                                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleCopyCode(userProfile.referralCode!)}>
+                                                <Copy className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Performance Rating</p>
+                                    <div className="flex items-center gap-2">
+                                        <Star className="h-5 w-5 text-yellow-400 fill-yellow-400" />
+                                        <p className="font-bold text-lg">{(userProfile.rating || 0).toFixed(1)} / 5.0</p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+
+                    {userProfile.role === 'Client' && clientPerformanceMetrics && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-base"><Star className="h-5 w-5 text-primary" /> Client Credit Score</CardTitle>
+                                <CardDescription>Based on on-time payment history.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="text-center">
+                                    <span className="text-5xl font-bold font-headline text-primary">{clientPerformanceMetrics.onTimePaymentScore.toFixed(0)}</span>
+                                    <span className="text-2xl text-muted-foreground">%</span>
+                                    <p className="text-xs text-muted-foreground">On-Time Payment Score</p>
+                                </div>
+                                <Progress value={clientPerformanceMetrics.onTimePaymentScore} className="h-2" />
+                                <div className="text-sm space-y-2 pt-2 border-t">
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Total Deals Value:</span> <span className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(clientPerformanceMetrics.totalDealsValue)}</span></div>
+                                    <div className="flex justify-between"><span className="text-muted-foreground">Total Amount Repaid:</span> <span className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(clientPerformanceMetrics.totalAmountRepaid)}</span></div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {userProfile.role === 'Investor' && (
+                        <Card>
+                            <CardHeader>
+                                <div className="flex justify-between items-center">
+                                    <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
+
+                                </div>
+                                <CardDescription>Total current value including all capital and profits.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-3xl font-bold font-headline">
+                                    {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.portfolioValue)}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {userProfile.role === 'Investor' && (
+                        <Card>
+                            <CardHeader>
+                                <div className="flex justify-between items-center">
+                                    <CardTitle className="text-sm font-medium">Investible Balance</CardTitle>
+
+                                </div>
+                                <CardDescription>Total capital available for new deals.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="text-3xl font-bold font-headline">
+                                    {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.investibleBalance)}
+                                </div>
+                                <Dialog open={isAddFundOpen} onOpenChange={setAddFundOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button className="w-full">
+                                            <PlusCircle className="mr-2 h-4 w-4" />
+                                            Add Funds
                                         </Button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                        <DialogHeader>
+                                            <DialogTitle>Add Funds to Investor Account</DialogTitle>
+                                        </DialogHeader>
+                                        <AddFundForm userId={userId} />
+                                    </DialogContent>
+                                </Dialog>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {userProfile.role === 'Investor' && isZakatEligible && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-sm font-medium">Zakat Payment</CardTitle>
+                                <CardDescription>Annual Zakat is 2.5% of the portfolio value and is processed automatically when due.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-lg font-bold font-headline mb-2">
+                                    {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(zakatAmount)}
+                                </div>
+                                {firstDeposit?.[0]?.createdAt && (
+                                    <ZakatCountdown
+                                        firstDepositDate={firstDeposit[0].createdAt.toDate()}
+                                        lastZakatPaymentDate={userProfile.lastZakatPaymentDate?.toDate()}
+                                    />
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
+
+                <div className="lg:col-span-2 space-y-6">
+                    {userProfile.role === 'Marketer' && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Marketer Performance</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {statsLoading ? <Skeleton className="h-32 w-full" /> : marketerStats ? (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="p-4 bg-muted rounded-md text-center">
+                                            <p className="text-sm text-muted-foreground">Referred Clients</p>
+                                            <p className="text-2xl font-bold">{marketerStats.referredClientCount}</p>
+                                        </div>
+                                        <div className="p-4 bg-muted rounded-md text-center">
+                                            <p className="text-sm text-muted-foreground">Referred Investors</p>
+                                            <p className="text-2xl font-bold">{marketerStats.referredInvestorCount}</p>
+                                        </div>
+                                        <div className="p-4 bg-muted rounded-md text-center">
+                                            <p className="text-sm text-muted-foreground">Investor Capital</p>
+                                            <p className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', notation: 'compact' }).format(marketerStats.totalInvestorCapital)}</p>
+                                        </div>
+                                        <div className="p-4 bg-muted rounded-md text-center">
+                                            <p className="text-sm text-muted-foreground">Attributed Deal Value</p>
+                                            <p className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', notation: 'compact' }).format(marketerStats.totalDealValue)}</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-center text-muted-foreground py-8">No performance data available.</p>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Gavel className="h-5 w-5" />
+                                <span>Legal Document</span>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {userProfile.legalDocumentUrl ? (
+                                <div>
+                                    <Sheet>
+                                        <SheetTrigger asChild>
+                                            <Button variant="outline"><Gavel className="mr-2 h-4 w-4" /> View Legal Document</Button>
+                                        </SheetTrigger>
+                                        <SheetContent className="w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl flex flex-col">
+                                            <SheetHeader className="flex-row items-center justify-between">
+                                                <SheetTitle>Signed Legal Document</SheetTitle>
+                                                <Button variant="outline" asChild>
+                                                    <a href={userProfile.legalDocumentUrl} download={`LegalDocument-${userProfile.name}.pdf`}>
+                                                        <Download className="mr-2 h-4 w-4" /> Download
+                                                    </a>
+                                                </Button>
+                                            </SheetHeader>
+                                            <div className="py-4 flex-1 bg-white overflow-y-auto">
+                                                {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
+                                                    <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={800} height={1100} className="rounded-md object-contain mx-auto" />
+                                                ) : (
+                                                    <iframe src={`${userProfile.legalDocumentUrl}#toolbar=1`} className="w-full h-full rounded-md border" />
+                                                )}
+                                            </div>
+                                        </SheetContent>
+                                    </Sheet>
+                                    {(userProfile.role !== 'Admin' || userProfile.id === authUser?.uid) && (
+                                        <div className='mt-4 border-t pt-4'>
+                                            <h3 className="font-medium mb-2">Replace Document:</h3>
+                                            <LegalDocumentUploader userId={userId} />
+                                        </div>
                                     )}
                                 </div>
-                            </div>
-                            <div>
-                                <p className="text-sm text-muted-foreground">Performance Rating</p>
-                                <div className="flex items-center gap-2">
-                                    <Star className="h-5 w-5 text-yellow-400 fill-yellow-400" />
-                                    <p className="font-bold text-lg">{(userProfile.rating || 0).toFixed(1)} / 5.0</p>
+                            ) : (userProfile.role !== 'Admin' || userProfile.id === authUser?.uid) ? (
+                                <LegalDocumentUploader userId={userId} />
+                            ) : (
+                                <div className="p-4 text-center text-sm text-muted-foreground border-dashed border rounded-md">
+                                    No legal document has been uploaded for this user.
                                 </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
-
-
-                {userProfile.role === 'Client' && clientPerformanceMetrics && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-base"><Star className="h-5 w-5 text-primary" /> Client Credit Score</CardTitle>
-                            <CardDescription>Based on on-time payment history.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="text-center">
-                                <span className="text-5xl font-bold font-headline text-primary">{clientPerformanceMetrics.onTimePaymentScore.toFixed(0)}</span>
-                                <span className="text-2xl text-muted-foreground">%</span>
-                                <p className="text-xs text-muted-foreground">On-Time Payment Score</p>
-                            </div>
-                            <Progress value={clientPerformanceMetrics.onTimePaymentScore} className="h-2" />
-                            <div className="text-sm space-y-2 pt-2 border-t">
-                                <div className="flex justify-between"><span className="text-muted-foreground">Total Deals Value:</span> <span className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(clientPerformanceMetrics.totalDealsValue)}</span></div>
-                                <div className="flex justify-between"><span className="text-muted-foreground">Total Amount Repaid:</span> <span className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(clientPerformanceMetrics.totalAmountRepaid)}</span></div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {userProfile.role === 'Investor' && (
-                     <Card>
-                        <CardHeader>
-                            <div className="flex justify-between items-center">
-                                <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
-                                
-                            </div>
-                             <CardDescription>Total current value including all capital and profits.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                             <div className="text-3xl font-bold font-headline">
-                                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.portfolioValue)}
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {userProfile.role === 'Investor' && (
-                     <Card>
-                        <CardHeader>
-                             <div className="flex justify-between items-center">
-                                <CardTitle className="text-sm font-medium">Investible Balance</CardTitle>
-                                
-                            </div>
-                             <CardDescription>Total capital available for new deals.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="text-3xl font-bold font-headline">
-                                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.investibleBalance)}
-                            </div>
-                           <Dialog open={isAddFundOpen} onOpenChange={setAddFundOpen}>
-                            <DialogTrigger asChild>
-                                <Button className="w-full">
-                                    <PlusCircle className="mr-2 h-4 w-4" />
-                                    Add Funds
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader>
-                                <DialogTitle>Add Funds to Investor Account</DialogTitle>
-                                </DialogHeader>
-                                <AddFundForm userId={userId} />
-                            </DialogContent>
-                            </Dialog>
-                        </CardContent>
-                    </Card>
-                )}
-
-                 {userProfile.role === 'Investor' && isZakatEligible && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-sm font-medium">Zakat Payment</CardTitle>
-                            <CardDescription>Annual Zakat is 2.5% of the portfolio value and is processed automatically when due.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-lg font-bold font-headline mb-2">
-                                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(zakatAmount)}
-                            </div>
-                            {firstDeposit?.[0]?.createdAt && (
-                                <ZakatCountdown
-                                    firstDepositDate={firstDeposit[0].createdAt.toDate()}
-                                    lastZakatPaymentDate={userProfile.lastZakatPaymentDate?.toDate()}
-                                />
                             )}
                         </CardContent>
                     </Card>
-                )}
-            </div>
 
-            <div className="lg:col-span-2 space-y-6">
-                 {userProfile.role === 'Marketer' && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Marketer Performance</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                        {statsLoading ? <Skeleton className="h-32 w-full" /> : marketerStats ? (
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="p-4 bg-muted rounded-md text-center">
-                                    <p className="text-sm text-muted-foreground">Referred Clients</p>
-                                    <p className="text-2xl font-bold">{marketerStats.referredClientCount}</p>
-                                </div>
-                                 <div className="p-4 bg-muted rounded-md text-center">
-                                    <p className="text-sm text-muted-foreground">Referred Investors</p>
-                                    <p className="text-2xl font-bold">{marketerStats.referredInvestorCount}</p>
-                                </div>
-                                <div className="p-4 bg-muted rounded-md text-center">
-                                    <p className="text-sm text-muted-foreground">Investor Capital</p>
-                                    <p className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', notation: 'compact' }).format(marketerStats.totalInvestorCapital)}</p>
-                                </div>
-                                <div className="p-4 bg-muted rounded-md text-center">
-                                    <p className="text-sm text-muted-foreground">Attributed Deal Value</p>
-                                    <p className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', notation: 'compact' }).format(marketerStats.totalDealValue)}</p>
-                                </div>
-                            </div>
-                        ): (
-                            <p className="text-sm text-center text-muted-foreground py-8">No performance data available.</p>
-                        )}
-                        </CardContent>
-                    </Card>
-                )}
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Gavel className="h-5 w-5" />
-                            <span>Legal Document</span>
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {userProfile.legalDocumentUrl ? (
-                            <div>
-                                <Sheet>
-                                    <SheetTrigger asChild>
-                                        <Button variant="outline"><Gavel className="mr-2 h-4 w-4" /> View Legal Document</Button>
-                                    </SheetTrigger>
-                                    <SheetContent className="w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl flex flex-col">
-                                        <SheetHeader className="flex-row items-center justify-between">
-                                            <SheetTitle>Signed Legal Document</SheetTitle>
-                                            <Button variant="outline" asChild>
-                                                <a href={userProfile.legalDocumentUrl} download={`LegalDocument-${userProfile.name}.pdf`}>
-                                                    <Download className="mr-2 h-4 w-4" /> Download
-                                                </a>
-                                            </Button>
-                                        </SheetHeader>
-                                        <div className="py-4 flex-1 bg-white overflow-y-auto">
-                                            {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
-                                                <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={800} height={1100} className="rounded-md object-contain mx-auto" />
-                                            ) : (
-                                                <iframe src={`${userProfile.legalDocumentUrl}#toolbar=1`} className="w-full h-full rounded-md border" />
+                    {userProfile.role === 'Investor' && (
+                        <>
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Landmark className="h-5 w-5" />
+                                        <span>Fund Batches</span>
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Capital deposited by this investor, available for deals.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    {isMobile ? (
+                                        <div className="space-y-3">
+                                            {paginatedFundBatches.length > 0 ? paginatedFundBatches.map(batch => (
+                                                <Card key={batch.id} className="p-4">
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <p className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</p>
+                                                            <p className="text-xs text-muted-foreground">{formatDate(batch.createdAt)}</p>
+                                                        </div>
+                                                        <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
+                                                    </div>
+                                                    <div className="mt-2 text-primary font-medium text-right">
+                                                        <span className="text-xs text-muted-foreground">Available: </span>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}
+                                                    </div>
+                                                </Card>
+                                            )) : (
+                                                <p className="text-sm text-muted-foreground text-center py-4">No fund batches found.</p>
                                             )}
                                         </div>
-                                    </SheetContent>
-                                </Sheet>
-                                {(userProfile.role !== 'Admin' || userProfile.id === authUser?.uid) && (
-                                  <div className='mt-4 border-t pt-4'>
-                                      <h3 className="font-medium mb-2">Replace Document:</h3>
-                                      <LegalDocumentUploader userId={userId} />
-                                  </div>
-                                )}
-                            </div>
-                        ) : (userProfile.role !== 'Admin' || userProfile.id === authUser?.uid) ? (
-                            <LegalDocumentUploader userId={userId} />
-                        ) : (
-                           <div className="p-4 text-center text-sm text-muted-foreground border-dashed border rounded-md">
-                                No legal document has been uploaded for this user.
-                           </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                {userProfile.role === 'Investor' && (
-                    <>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Landmark className="h-5 w-5" />
-                                    <span>Fund Batches</span>
-                                </CardTitle>
-                                <CardDescription>
-                                    Capital deposited by this investor, available for deals.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                {isMobile ? (
-                                    <div className="space-y-3">
-                                        {paginatedFundBatches.length > 0 ? paginatedFundBatches.map(batch => (
-                                            <Card key={batch.id} className="p-4">
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <p className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</p>
-                                                        <p className="text-xs text-muted-foreground">{formatDate(batch.createdAt)}</p>
-                                                    </div>
-                                                    <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
-                                                </div>
-                                                <div className="mt-2 text-primary font-medium text-right">
-                                                    <span className="text-xs text-muted-foreground">Available: </span>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}
-                                                </div>
-                                            </Card>
-                                        )) : (
-                                            <p className="text-sm text-muted-foreground text-center py-4">No fund batches found.</p>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <Table>
-                                        <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Date</TableHead>
-                                            <TableHead>Type</TableHead>
-                                            <TableHead>Total Amount</TableHead>
-                                            <TableHead className="text-right">Investible Balance</TableHead>
-                                        </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                        {paginatedFundBatches?.map(batch => (
-                                            <TableRow key={batch.id}>
-                                                <TableCell data-label="Date">{formatDate(batch.createdAt)}</TableCell>
-                                                <TableCell data-label="Type">
-                                                    <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
-                                                </TableCell>
-                                                <TableCell data-label="Total Amount" className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</TableCell>
-                                                <TableCell data-label="Investible Balance" className="text-right text-primary font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {!paginatedFundBatches?.length && (
-                                            <TableRow>
-                                                <TableCell colSpan={4} className="h-24 text-center">
-                                                    No fund batches found.
-                                                </TableCell>
-                                            </TableRow>
-                                        )}
-                                        </TableBody>
-                                    </Table>
-                                )}
-                            </CardContent>
-                             {totalFundBatchesPages > 1 && (
-                                <div className="p-4 border-t">
-                                    <Pagination>
-                                        <PaginationContent>
-                                            <PaginationItem>
-                                                <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setFundBatchesCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={fundBatchesCurrentPage === 1} />
-                                            </PaginationItem>
-                                            {[...Array(totalFundBatchesPages)].map((_, i) => (
-                                                <PaginationItem key={i}>
-                                                    <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setFundBatchesCurrentPage(i + 1); }} isActive={fundBatchesCurrentPage === i + 1}>
-                                                        {i + 1}
-                                                    </PaginationLink>
+                                    ) : (
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Date</TableHead>
+                                                    <TableHead>Type</TableHead>
+                                                    <TableHead>Total Amount</TableHead>
+                                                    <TableHead className="text-right">Investible Balance</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {paginatedFundBatches?.map(batch => (
+                                                    <TableRow key={batch.id}>
+                                                        <TableCell data-label="Date">{formatDate(batch.createdAt)}</TableCell>
+                                                        <TableCell data-label="Type">
+                                                            <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
+                                                        </TableCell>
+                                                        <TableCell data-label="Total Amount" className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</TableCell>
+                                                        <TableCell data-label="Investible Balance" className="text-right text-primary font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
+                                                    </TableRow>
+                                                ))}
+                                                {!paginatedFundBatches?.length && (
+                                                    <TableRow>
+                                                        <TableCell colSpan={4} className="h-24 text-center">
+                                                            No fund batches found.
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    )}
+                                </CardContent>
+                                {totalFundBatchesPages > 1 && (
+                                    <div className="p-4 border-t">
+                                        <Pagination>
+                                            <PaginationContent>
+                                                <PaginationItem>
+                                                    <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setFundBatchesCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={fundBatchesCurrentPage === 1} />
                                                 </PaginationItem>
-                                            ))}
-                                            <PaginationItem>
-                                                <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setFundBatchesCurrentPage(p => Math.min(totalFundBatchesPages, p + 1)) }} aria-disabled={fundBatchesCurrentPage === totalFundBatchesPages} />
-                                            </PaginationItem>
-                                        </PaginationContent>
-                                    </Pagination>
-                                </div>
-                            )}
-                        </Card>
-                         <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <History className="h-5 w-5" />
-                                    <span>Transaction History</span>
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                            {isMobile ? (
-                                    <div className="space-y-3">
-                                        {paginatedTransactions?.length > 0 ? paginatedTransactions.map(tx => (
-                                            <Card key={tx.id} className="p-4">
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
-                                                        <p className="text-xs text-muted-foreground mt-1">{formatDate(tx.createdAt)}</p>
-                                                    </div>
-                                                    <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>
-                                                        {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
-                                                    </p>
-                                                </div>
-                                            </Card>
-                                        )) : (
-                                            <p className="text-sm text-muted-foreground text-center py-4">No transactions found.</p>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <Table>
-                                        <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Date</TableHead>
-                                            <TableHead>Type</TableHead>
-                                            <TableHead className="text-right">Amount</TableHead>
-                                        </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                        {paginatedTransactions?.map(tx => (
-                                            <TableRow key={tx.id}>
-                                                <TableCell data-label="Date">{formatDate(tx.createdAt)}</TableCell>
-                                                <TableCell data-label="Type"><Badge variant={tx.amount > 0 ? 'default' : 'secondary'}>{tx.type}</Badge></TableCell>
-                                                <TableCell data-label="Amount" className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>
-                                                    {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {!paginatedTransactions?.length && (
-                                            <TableRow>
-                                                <TableCell colSpan={3} className="h-24 text-center">
-                                                    No transactions found.
-                                                </TableCell>
-                                            </TableRow>
-                                        )}
-                                        </TableBody>
-                                    </Table>
-                                )}
-                            </CardContent>
-                            {totalPages > 1 && (
-                                <div className="p-4 border-t">
-                                    <Pagination>
-                                        <PaginationContent>
-                                            <PaginationItem>
-                                                <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} />
-                                            </PaginationItem>
-                                            {[...Array(totalPages)].map((_, i) => (
-                                                <PaginationItem key={i}>
-                                                    <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>
-                                                        {i + 1}
-                                                    </PaginationLink>
+                                                {[...Array(totalFundBatchesPages)].map((_, i) => (
+                                                    <PaginationItem key={i}>
+                                                        <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setFundBatchesCurrentPage(i + 1); }} isActive={fundBatchesCurrentPage === i + 1}>
+                                                            {i + 1}
+                                                        </PaginationLink>
+                                                    </PaginationItem>
+                                                ))}
+                                                <PaginationItem>
+                                                    <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setFundBatchesCurrentPage(p => Math.min(totalFundBatchesPages, p + 1)) }} aria-disabled={fundBatchesCurrentPage === totalFundBatchesPages} />
                                                 </PaginationItem>
-                                            ))}
-                                            <PaginationItem>
-                                                <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} />
-                                            </PaginationItem>
-                                        </PaginationContent>
-                                    </Pagination>
-                                </div>
-                            )}
-                        </Card>
-                    </>
-                )}
-                 {userProfile.role === 'Client' && (
-                    <>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <FileText className="h-5 w-5" />
-                                    <span>Client Deals</span>
-                                </CardTitle>
-                                <CardDescription>
-                                    A list of all financing deals associated with this client.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                {isMobile ? (
-                                    <div className="space-y-3">
-                                        {clientDeals && clientDeals.length > 0 ? clientDeals.map(deal => (
-                                            <Card key={deal.id} className="p-4" onClick={() => router.push(`/admin/deals/${deal.id}`)}>
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <p className="font-medium">{deal.dealName}</p>
-                                                        <p className="text-sm font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</p>
-                                                    </div>
-                                                    <Badge variant={statusVariant[deal.status as keyof typeof statusVariant] || 'secondary'}>
-                                                        {deal.status}
-                                                    </Badge>
-                                                </div>
-                                            </Card>
-                                        )) : (
-                                            <div className="text-center text-sm text-muted-foreground py-10">This client has no deals.</div>
-                                        )}
+                                            </PaginationContent>
+                                        </Pagination>
                                     </div>
-                                ) : (
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Deal Name</TableHead>
-                                                <TableHead>Principal</TableHead>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead className="text-right">Action</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
+                                )}
+                            </Card>
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <History className="h-5 w-5" />
+                                        <span>Transaction History</span>
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {isMobile ? (
+                                        <div className="space-y-3">
+                                            {paginatedTransactions?.length > 0 ? paginatedTransactions.map(tx => (
+                                                <Card key={tx.id} className="p-4">
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
+                                                            <p className="text-xs text-muted-foreground mt-1">{formatDate(tx.createdAt)}</p>
+                                                        </div>
+                                                        <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>
+                                                            {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                                        </p>
+                                                    </div>
+                                                </Card>
+                                            )) : (
+                                                <p className="text-sm text-muted-foreground text-center py-4">No transactions found.</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Date</TableHead>
+                                                    <TableHead>Type</TableHead>
+                                                    <TableHead className="text-right">Amount</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {paginatedTransactions?.map(tx => (
+                                                    <TableRow key={tx.id}>
+                                                        <TableCell data-label="Date">{formatDate(tx.createdAt)}</TableCell>
+                                                        <TableCell data-label="Type"><Badge variant={tx.amount > 0 ? 'default' : 'secondary'}>{tx.type}</Badge></TableCell>
+                                                        <TableCell data-label="Amount" className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : ''}`}>
+                                                            {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                                {!paginatedTransactions?.length && (
+                                                    <TableRow>
+                                                        <TableCell colSpan={3} className="h-24 text-center">
+                                                            No transactions found.
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    )}
+                                </CardContent>
+                                {totalPages > 1 && (
+                                    <div className="p-4 border-t">
+                                        <Pagination>
+                                            <PaginationContent>
+                                                <PaginationItem>
+                                                    <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} />
+                                                </PaginationItem>
+                                                {[...Array(totalPages)].map((_, i) => (
+                                                    <PaginationItem key={i}>
+                                                        <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>
+                                                            {i + 1}
+                                                        </PaginationLink>
+                                                    </PaginationItem>
+                                                ))}
+                                                <PaginationItem>
+                                                    <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} />
+                                                </PaginationItem>
+                                            </PaginationContent>
+                                        </Pagination>
+                                    </div>
+                                )}
+                            </Card>
+                        </>
+                    )}
+                    {userProfile.role === 'Client' && (
+                        <>
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <FileText className="h-5 w-5" />
+                                        <span>Client Deals</span>
+                                    </CardTitle>
+                                    <CardDescription>
+                                        A list of all financing deals associated with this client.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    {isMobile ? (
+                                        <div className="space-y-3">
                                             {clientDeals && clientDeals.length > 0 ? clientDeals.map(deal => (
-                                                <TableRow key={deal.id} className="cursor-pointer" onClick={() => router.push(`/admin/deals/${deal.id}`)}>
-                                                    <TableCell className="font-medium">{deal.dealName}</TableCell>
-                                                    <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
-                                                    <TableCell>
+                                                <Card key={deal.id} className="p-4" onClick={() => router.push(`/admin/deals/${deal.id}`)}>
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <p className="font-medium">{deal.dealName}</p>
+                                                            <p className="text-sm font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</p>
+                                                        </div>
                                                         <Badge variant={statusVariant[deal.status as keyof typeof statusVariant] || 'secondary'}>
                                                             {deal.status}
                                                         </Badge>
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <Button variant="outline" size="sm">
-                                                            View Deal <ArrowRight className="ml-2 h-4 w-4" />
-                                                        </Button>
-                                                    </TableCell>
-                                                </TableRow>
-                                            )) : (
-                                                <TableRow>
-                                                    <TableCell colSpan={4} className="h-24 text-center">
-                                                        This client has no deals.
-                                                    </TableCell>
-                                                </TableRow>
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                )}
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <History className="h-5 w-5" />
-                                    <span>Transaction History</span>
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                            {isMobile ? (
-                                    <div className="space-y-3">
-                                        {paginatedTransactions?.length > 0 ? paginatedTransactions.map(tx => (
-                                            <Card key={tx.id} className="p-4">
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
-                                                        <p className="text-xs text-muted-foreground mt-1">{formatDate(tx.createdAt)}</p>
                                                     </div>
-                                                     <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : 'text-destructive'}`}>
-                                                        {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
-                                                    </p>
-                                                </div>
-                                                <p className="text-sm text-muted-foreground pt-2 border-t mt-2">Deal: {tx.dealName || 'N/A'}</p>
-                                            </Card>
-                                        )) : (
-                                            <p className="text-sm text-muted-foreground text-center py-4">No transactions found.</p>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <Table>
-                                        <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Date</TableHead>
-                                            <TableHead>Type</TableHead>
-                                            <TableHead>Deal</TableHead>
-                                            <TableHead className="text-right">Amount</TableHead>
-                                        </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                        {paginatedTransactions?.map(tx => (
-                                            <TableRow key={tx.id}>
-                                                <TableCell>{formatDate(tx.createdAt)}</TableCell>
-                                                <TableCell><Badge variant={tx.amount > 0 ? 'default' : 'secondary'}>{tx.type}</Badge></TableCell>
-                                                <TableCell>{tx.dealName || 'N/A'}</TableCell>
-                                                <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : 'text-destructive'}`}>
-                                                    {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {!paginatedTransactions?.length && (
-                                            <TableRow>
-                                                <TableCell colSpan={4} className="h-24 text-center">
-                                                    No transactions found.
-                                                </TableCell>
-                                            </TableRow>
-                                        )}
-                                        </TableBody>
-                                    </Table>
-                                )}
-                            </CardContent>
-                            {totalPages > 1 && (
-                                <div className="p-4 border-t">
-                                    <Pagination>
-                                        <PaginationContent>
-                                            <PaginationItem>
-                                                <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} />
-                                            </PaginationItem>
-                                            {[...Array(totalPages)].map((_, i) => (
-                                                <PaginationItem key={i}>
-                                                    <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>
-                                                        {i + 1}
-                                                    </PaginationLink>
+                                                </Card>
+                                            )) : (
+                                                <div className="text-center text-sm text-muted-foreground py-10">This client has no deals.</div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Deal Name</TableHead>
+                                                    <TableHead>Principal</TableHead>
+                                                    <TableHead>Status</TableHead>
+                                                    <TableHead className="text-right">Action</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {clientDeals && clientDeals.length > 0 ? clientDeals.map(deal => (
+                                                    <TableRow key={deal.id} className="cursor-pointer" onClick={() => router.push(`/admin/deals/${deal.id}`)}>
+                                                        <TableCell className="font-medium">{deal.dealName}</TableCell>
+                                                        <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
+                                                        <TableCell>
+                                                            <Badge variant={statusVariant[deal.status as keyof typeof statusVariant] || 'secondary'}>
+                                                                {deal.status}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <Button variant="outline" size="sm">
+                                                                View Deal <ArrowRight className="ml-2 h-4 w-4" />
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )) : (
+                                                    <TableRow>
+                                                        <TableCell colSpan={4} className="h-24 text-center">
+                                                            This client has no deals.
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    )}
+                                </CardContent>
+                            </Card>
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <History className="h-5 w-5" />
+                                        <span>Transaction History</span>
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {isMobile ? (
+                                        <div className="space-y-3">
+                                            {paginatedTransactions?.length > 0 ? paginatedTransactions.map(tx => (
+                                                <Card key={tx.id} className="p-4">
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
+                                                            <p className="text-xs text-muted-foreground mt-1">{formatDate(tx.createdAt)}</p>
+                                                        </div>
+                                                        <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : 'text-destructive'}`}>
+                                                            {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                                        </p>
+                                                    </div>
+                                                    <p className="text-sm text-muted-foreground pt-2 border-t mt-2">Deal: {tx.dealName || 'N/A'}</p>
+                                                </Card>
+                                            )) : (
+                                                <p className="text-sm text-muted-foreground text-center py-4">No transactions found.</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Date</TableHead>
+                                                    <TableHead>Type</TableHead>
+                                                    <TableHead>Deal</TableHead>
+                                                    <TableHead className="text-right">Amount</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {paginatedTransactions?.map(tx => (
+                                                    <TableRow key={tx.id}>
+                                                        <TableCell>{formatDate(tx.createdAt)}</TableCell>
+                                                        <TableCell><Badge variant={tx.amount > 0 ? 'default' : 'secondary'}>{tx.type}</Badge></TableCell>
+                                                        <TableCell>{tx.dealName || 'N/A'}</TableCell>
+                                                        <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : 'text-destructive'}`}>
+                                                            {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                                {!paginatedTransactions?.length && (
+                                                    <TableRow>
+                                                        <TableCell colSpan={4} className="h-24 text-center">
+                                                            No transactions found.
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    )}
+                                </CardContent>
+                                {totalPages > 1 && (
+                                    <div className="p-4 border-t">
+                                        <Pagination>
+                                            <PaginationContent>
+                                                <PaginationItem>
+                                                    <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.max(1, p - 1)) }} aria-disabled={currentPage === 1} />
                                                 </PaginationItem>
-                                            ))}
-                                            <PaginationItem>
-                                                <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} />
-                                            </PaginationItem>
-                                        </PaginationContent>
-                                    </Pagination>
-                                </div>
-                            )}
-                        </Card>
-                    </>
-                )}
+                                                {[...Array(totalPages)].map((_, i) => (
+                                                    <PaginationItem key={i}>
+                                                        <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(i + 1); }} isActive={currentPage === i + 1}>
+                                                            {i + 1}
+                                                        </PaginationLink>
+                                                    </PaginationItem>
+                                                ))}
+                                                <PaginationItem>
+                                                    <PaginationNext href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p => Math.min(totalPages, p + 1)) }} aria-disabled={currentPage === totalPages} />
+                                                </PaginationItem>
+                                            </PaginationContent>
+                                        </Pagination>
+                                    </div>
+                                )}
+                            </Card>
+                        </>
+                    )}
+                </div>
             </div>
         </div>
-    </div>
-  );
+    );
 }

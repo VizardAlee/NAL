@@ -78,10 +78,10 @@ export function AddFundForm({ userId }: AddFundFormProps) {
 
       const transactionRef = doc(collection(firestore, 'transactions'));
       batch.set(transactionRef, {
-          userId: userId,
-          type: 'Deposit',
-          amount: values.amount,
-          createdAt: timestamp,
+        userId: userId,
+        type: 'Deposit',
+        amount: values.amount,
+        createdAt: timestamp,
       });
 
       await batch.commit();
@@ -117,8 +117,8 @@ export function AddFundForm({ userId }: AddFundFormProps) {
               <FormLabel>Amount to Deposit</FormLabel>
               <FormControl>
                 <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₦</span>
-                    <Input type="number" placeholder="50000" className="pl-8" {...field} />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₦</span>
+                  <Input type="number" placeholder="50000" className="pl-8" {...field} />
                 </div>
               </FormControl>
               <FormMessage />
@@ -160,7 +160,7 @@ export function AddFundForm({ userId }: AddFundFormProps) {
             )}
           />
         </div>
-         <FormField
+        <FormField
           control={form.control}
           name="createdAt"
           render={({ field }) => (
@@ -186,15 +186,15 @@ export function AddFundForm({ userId }: AddFundFormProps) {
                   </FormControl>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                    <FullCalendar
-                        plugins={[dayGridPlugin, interactionPlugin]}
-                        initialView="dayGridMonth"
-                        selectable={true}
-                        headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
-                        dateClick={(arg) => {
-                            form.setValue('createdAt', arg.date);
-                        }}
-                    />
+                  <FullCalendar
+                    plugins={[dayGridPlugin, interactionPlugin]}
+                    initialView="dayGridMonth"
+                    selectable={true}
+                    headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
+                    dateClick={(arg: any) => {
+                      form.setValue('createdAt', arg.date);
+                    }}
+                  />
                 </PopoverContent>
               </Popover>
               <FormDescription>

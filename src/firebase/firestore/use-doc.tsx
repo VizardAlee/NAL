@@ -12,8 +12,8 @@ import { FirestorePermissionError } from '@/firebase/errors';
 import { useUser } from '../auth/use-user';
 import { safeOnSnapshot } from '../safe-on-snapshot';
 
-export function useDoc<T extends DocumentData>(
-  ref: DocumentReference<T> | null
+export function useDoc<T = DocumentData>(
+  ref: DocumentReference<any> | null | undefined
 ) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
