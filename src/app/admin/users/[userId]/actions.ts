@@ -5,6 +5,7 @@ import { adminDb } from '@/firebase/admin-app';
 import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
+import { normalizeAccessModel } from '@/lib/access-control';
 
 
 const payZakatSchema = z.object({
@@ -111,4 +112,74 @@ export async function uploadLegalDocumentAction(input: z.infer<typeof uploadDocu
         console.error('Legal Document Upload Error:', error);
         return { success: false, message: error.message || 'Failed to upload document.' };
     }
+}
+
+const updateAccessRoleSchema = z.object({
+  actorId: z.string().min(1),
+  targetUserId: z.string().min(1),
+  newAccessRole: z.enum(['OWNER', 'ADMIN', 'STAFF', 'USER']),
+});
+
+export async function updateAccessRoleAction(input: z.infer<typeof updateAccessRoleSchema>) {
+  const validated = updateAccessRoleSchema.safeParse(input);
+  if (!validated.success) {
+    return { success: false, message: 'Invalid role update request.' };
+  }
+
+  const { actorId, targetUserId, newAccessRole } = validated.data;
+
+  try {
+    const actorRef = adminDb.collection('users').doc(actorId);
+    const targetRef = adminDb.collection('users').doc(targetUserId);
+    const [actorSnap, targetSnap] = await Promise.all([actorRef.get(), targetRef.get()]);
+
+    if (!actorSnap.exists || !targetSnap.exists) {
+      return { success: false, message: 'Actor or target user was not found.' };
+    }
+
+    const actor = actorSnap.data() || {};
+    const target = targetSnap.data() || {};
+    const actorModel = normalizeAccessModel(actor as any);
+    const targetModel = normalizeAccessModel(target as any);
+
+    if (!(actorModel.accessRole === 'ADMIN' || actorModel.accessRole === 'OWNER')) {
+      return { success: false, message: 'You are not allowed to manage owner assignments.' };
+    }
+
+    if (targetModel.accessRole === newAccessRole) {
+      return { success: true, message: 'No role change needed.' };
+    }
+
+    const ownerCountSnapshot = await adminDb
+      .collection('users')
+      .where('accessRole', '==', 'OWNER')
+      .get();
+    const ownerCount = ownerCountSnapshot.size;
+
+    const demotingOwner = targetModel.accessRole === 'OWNER' && newAccessRole !== 'OWNER';
+    if (demotingOwner && ownerCount <= 1) {
+      return { success: false, message: 'Cannot remove the last owner.' };
+    }
+
+    await targetRef.update({
+      accessRole: newAccessRole,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    await adminDb.collection('transactions').add({
+      userId: actorId,
+      type: 'AccessRoleChange',
+      amount: 0,
+      details: `Changed ${target.name || target.email || targetUserId} accessRole from ${targetModel.accessRole} to ${newAccessRole}.`,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    revalidatePath('/admin/users');
+    revalidatePath(`/admin/users/${targetUserId}`);
+
+    return { success: true, message: `Access role updated to ${newAccessRole}.` };
+  } catch (error: any) {
+    console.error('Update access role error:', error);
+    return { success: false, message: error?.message || 'Failed to update access role.' };
+  }
 }

@@ -102,7 +102,7 @@ export default function AdminConversationPage() {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
-    
+
     // Mark messages as read by the admin
     useEffect(() => {
         if (conversation && adminUser && !conversation.readBy.includes(adminUser.uid)) {
@@ -127,7 +127,7 @@ export default function AdminConversationPage() {
 
         setNewMessage('');
         setAttachment(null);
-        if(fileInputRef.current) fileInputRef.current.value = '';
+        if (fileInputRef.current) fileInputRef.current.value = '';
 
         await sendMessageAction({
             conversationId,
@@ -141,10 +141,10 @@ export default function AdminConversationPage() {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             if (e.target.files[0].type === 'application/pdf' && e.target.files[0].size < 5 * 1024 * 1024) {
-                 setAttachment(e.target.files[0]);
+                setAttachment(e.target.files[0]);
             } else {
                 alert("Please select a PDF file smaller than 5MB.");
-                if(fileInputRef.current) fileInputRef.current.value = '';
+                if (fileInputRef.current) fileInputRef.current.value = '';
             }
         }
     };
@@ -165,12 +165,12 @@ export default function AdminConversationPage() {
                 </Button>
                 <Avatar>
                     <AvatarImage src={otherParticipantAvatar} />
-                    <AvatarFallback>{otherParticipantName.charAt(0)}</AvatarFallback>
+                    <AvatarFallback>{otherParticipantName?.charAt(0) || 'U'}</AvatarFallback>
                 </Avatar>
                 <div>
                     <h2 className="text-lg font-semibold">{otherParticipantName}</h2>
                     {otherUser?.phoneNumber && (
-                         <div className="text-xs text-muted-foreground flex items-center gap-2">
+                        <div className="text-xs text-muted-foreground flex items-center gap-2">
                             <Phone className="h-3 w-3" />
                             <span>{otherUser.phoneNumber}</span>
                         </div>
@@ -181,12 +181,12 @@ export default function AdminConversationPage() {
                 {messagesLoading && <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />}
                 {messages?.map(message => (
                     <div key={message.id} className={`flex items-end gap-2 ${message.senderId === adminUser?.uid ? 'justify-end' : ''}`}>
-                         {message.senderId !== adminUser?.uid && (
+                        {message.senderId !== adminUser?.uid && (
                             <Avatar className="h-8 w-8 self-end">
                                 <AvatarImage src={otherParticipantAvatar} />
-                                <AvatarFallback>{otherParticipantName.charAt(0)}</AvatarFallback>
+                                <AvatarFallback>{otherParticipantName?.charAt(0) || 'U'}</AvatarFallback>
                             </Avatar>
-                         )}
+                        )}
                         <div className={`rounded-lg p-3 max-w-xs md:max-w-md ${message.senderId === adminUser?.uid ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
                             {message.text && <p className="text-sm whitespace-pre-wrap">{message.text}</p>}
                             {message.attachmentUrl && message.attachmentName && (
@@ -220,12 +220,12 @@ export default function AdminConversationPage() {
                             value={newMessage}
                             onChange={(e) => setNewMessage(e.target.value)}
                         />
-                         {attachment && (
+                        {attachment && (
                             <div className="absolute bottom-full left-0 mb-2 w-full">
                                 <div className="flex items-center justify-between p-2 rounded-md bg-muted text-sm">
                                     <span className="truncate">{attachment.name}</span>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setAttachment(null); if(fileInputRef.current) fileInputRef.current.value = ''; }}>
-                                        <X className="h-4 w-4"/>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setAttachment(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}>
+                                        <X className="h-4 w-4" />
                                     </Button>
                                 </div>
                             </div>

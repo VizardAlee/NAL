@@ -164,6 +164,21 @@ body {
   }
 }
 
+.owner-readonly button:not([data-owner-write-exempt='true']),
+.owner-readonly input:not([data-owner-write-exempt='true']),
+.owner-readonly select:not([data-owner-write-exempt='true']),
+.owner-readonly textarea:not([data-owner-write-exempt='true']),
+.owner-readonly [role='switch']:not([data-owner-write-exempt='true']),
+.owner-readonly [role='checkbox']:not([data-owner-write-exempt='true']) {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.owner-readonly [data-owner-write-exempt='true'] {
+  pointer-events: auto;
+  opacity: 1;
+}
+
 @keyframes home-fade-up {
   from {
     opacity: 0;

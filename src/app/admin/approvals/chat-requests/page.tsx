@@ -3,12 +3,12 @@
 
 import { PageHeader } from '@/components/page-header';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Loader2, MessageSquarePlus } from 'lucide-react';
@@ -27,11 +27,11 @@ import { initiateChat } from './actions';
 
 
 type ChatRequest = DocumentData & {
-  id: string;
-  userId: string;
-  userName: string;
-  userRole: 'Investor' | 'Client';
-  requestedAt: Timestamp;
+    id: string;
+    userId: string;
+    userName: string;
+    userRole: 'Investor' | 'Client';
+    requestedAt: Timestamp;
 };
 
 export default function ChatRequestsPage() {
@@ -44,15 +44,15 @@ export default function ChatRequestsPage() {
 
     const requestsQuery = useMemo(() => firestore ? query(collection(firestore, 'chatRequests')) : null, [firestore]);
     const { data: requests, loading } = useCollection<ChatRequest>(requestsQuery);
-    
+
     const handleInitiateChat = async (request: ChatRequest) => {
         if (!adminUser || !adminUser.displayName) {
-            toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in as an admin to perform this action.'});
+            toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in as an admin to perform this action.' });
             return;
         };
 
         setProcessingId(request.id);
-        
+
         try {
             const result = await initiateChat(
                 request.id,
@@ -70,7 +70,7 @@ export default function ChatRequestsPage() {
                 title: 'Chat Initiated',
                 description: `A conversation with ${request.userName} has been created.`,
             });
-            
+
             router.push(`/admin/messages/${result.conversationId}`);
 
         } catch (error) {
@@ -119,17 +119,17 @@ export default function ChatRequestsPage() {
                 </div>
             );
         }
-        
+
         if (isMobile) {
             return (
-                 <div className="space-y-3">
+                <div className="space-y-3">
                     {requests.map(req => (
                         <Card key={req.id}>
                             <CardContent className="p-4 space-y-3">
                                 <div className="flex items-center gap-4">
-                                     <Avatar>
+                                    <Avatar>
                                         <AvatarImage src={`https://picsum.photos/seed/${req.userId}/128/128`} />
-                                        <AvatarFallback>{req.userName.charAt(0)}</AvatarFallback>
+                                        <AvatarFallback>{req.userName?.charAt(0) || 'U'}</AvatarFallback>
                                     </Avatar>
                                     <div className="flex-1">
                                         <p className="font-medium">{req.userName}</p>
@@ -167,7 +167,7 @@ export default function ChatRequestsPage() {
                                 <div className="flex items-center gap-3">
                                     <Avatar>
                                         <AvatarImage src={`https://picsum.photos/seed/${req.userId}/128/128`} />
-                                        <AvatarFallback>{req.userName.charAt(0)}</AvatarFallback>
+                                        <AvatarFallback>{req.userName?.charAt(0) || 'U'}</AvatarFallback>
                                     </Avatar>
                                     <span>{req.userName}</span>
                                 </div>
@@ -203,6 +203,6 @@ export default function ChatRequestsPage() {
     );
 }
 
-    
 
-    
+
+
