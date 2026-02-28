@@ -22,7 +22,7 @@ If `git pull` says you are up to date, but `git push` is still rejected:
 1. **Force a sync (The Nuclear Option):**
    *Warning: This will make the remote GitHub repository exactly match your local code.*
    ```bash
-   git push origin main --force
+   git push origin logo:main --force
    ```
 
 ### 🚨 Fix "Rejected / Non-Fast-Forward" Push
