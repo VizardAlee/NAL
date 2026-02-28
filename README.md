@@ -6,21 +6,29 @@ To get started, take a look at src/app/page.tsx.
 
 ## Troubleshooting Git Authentication
 
-If you encounter `ECONNREFUSED` or authentication errors when pushing/pulling, it is often due to a stale VS Code Git socket. Try the following commands in your terminal:
+If you encounter `ECONNREFUSED` or `Authentication failed`, follow these steps:
 
-1.  **Clear stale environment variables:**
-    ```bash
-    unset GIT_ASKPASS
-    unset VSCODE_GIT_IPC_HANDLE
-    ```
+### 1. Fix "ECONNREFUSED" (Stale Socket)
+Run these commands in your terminal to clear stale VS Code Git authentication variables:
+```bash
+unset GIT_ASKPASS
+unset VSCODE_GIT_IPC_HANDLE
+```
 
-2.  **Reset credential helper (optional):**
-    ```bash
-    git config --global --unset credential.helper
-    ```
+### 2. Generate a Personal Access Token (PAT)
+GitHub requires a token instead of a password for command-line operations:
+1. Go to [GitHub Settings > Developer Settings > Personal Access Tokens (classic)](https://github.com/settings/tokens).
+2. Click **Generate new token (classic)**.
+3. Give it a name (e.g., "Firebase Studio") and select the **'repo'** scope.
+4. Click **Generate token** and **COPY IT IMMEDIATELY**. You won't see it again.
 
-3.  **Pull again:**
-    ```bash
-    git pull origin main
-    ```
-    *Note: When prompted for a password on GitHub, use a **Personal Access Token (PAT)**, not your account password.*
+### 3. Authenticate with the Token
+When you run `git pull origin main`:
+1. **Username:** Enter your GitHub username (`serviceguru-crypt`).
+2. **Password:** **PASTE THE TOKEN** you just copied (characters will not appear as you paste).
+
+### 4. Reset Credentials (Optional)
+If Git doesn't prompt you for a password and just fails, reset the helper:
+```bash
+git config --global --unset credential.helper
+```
