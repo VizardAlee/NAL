@@ -1,7 +1,7 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign, Info, FileText, Zap, ListFilter, Users, Briefcase, Settings } from "lucide-react";
+import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign, Info, FileText, Zap, ListFilter, Users, Briefcase, Settings, PieChart } from "lucide-react";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy, updateDoc } from 'firebase/firestore';
 import { useFirestore, useUser } from "@/firebase";
@@ -85,6 +85,14 @@ type AdministrativeTransaction = DocumentData & {
     salaryCycle?: 'Monthly' | 'BiWeekly' | 'Weekly' | 'OneOff';
     payoutReference?: string;
     loanId?: string;
+};
+
+type OwnerProfitAllocation = DocumentData & {
+    id: string;
+    distributableAmount: number;
+    retainedAmount: number;
+    sourceEarningAmount: number;
+    createdAt: Timestamp;
 };
 
 const adminTransactionTypes = [
@@ -1300,6 +1308,7 @@ export default function PlatformFundsPage() {
     const ownershipPartnersQuery = useMemo(() => firestore ? query(collection(firestore, 'ownershipPartners'), orderBy('shareUnits', 'desc')) : null, [firestore]);
     const ownerPolicyRef = useMemo(() => firestore ? doc(firestore, 'platformPolicies', 'ownerProfit') : null, [firestore]);
     const usersQuery = useMemo(() => firestore ? query(collection(firestore, 'users')) : null, [firestore]);
+    const ownerAllocationsQuery = useMemo(() => firestore ? query(collection(firestore, 'ownerProfitAllocations')) : null, [firestore]);
 
 
     const { data: platformFundBatches, loading: platformBatchesLoading } = useCollection<PlatformFundBatch>(platformFundBatchesQuery);
@@ -1315,9 +1324,10 @@ export default function PlatformFundsPage() {
     const { data: ownershipPartners, loading: partnersLoading, error: partnersError } = useCollection<OwnershipPartner>(ownershipPartnersQuery);
     const { data: ownerPolicy } = useDoc<OwnerProfitPolicy>(ownerPolicyRef);
     const { data: allUsers, error: usersError } = useCollection<DocumentData>(usersQuery);
+    const { data: ownerAllocations, loading: allocationsLoading } = useCollection<OwnerProfitAllocation>(ownerAllocationsQuery);
 
 
-    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allFundBatchesLoading || assetsLoading || dealsLoading || repaymentsLoading || earningsLoading || depositsLoading;
+    const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allFundBatchesLoading || assetsLoading || dealsLoading || repaymentsLoading || earningsLoading || depositsLoading || allocationsLoading;
 
     const metrics = useMemo(() => {
         const administrativeBalance = adminTransactions?.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0) || 0;
@@ -1359,6 +1369,8 @@ export default function PlatformFundsPage() {
             : Math.max(0, adminDebtToPlatformFromTransactions);
         const activeLoanCount = interAccountLoans?.filter((loan) => loan.status === 'Active').length || 0;
 
+        const totalOwnerAllocated = ownerAllocations?.reduce((sum, alloc) => sum + (Number(alloc.distributableAmount) || 0), 0) || 0;
+
 
         return {
             investibleCapital,
@@ -1375,8 +1387,9 @@ export default function PlatformFundsPage() {
             adminDebtToPlatformFromTransactions,
             adminDebtToPlatform,
             activeLoanCount,
+            totalOwnerAllocated,
         };
-    }, [platformFundBatches, adminTransactions, zakatTransactions, allFundBatches, assets, deals, repayments, earningsTransactions, allInvestorDeposits, interAccountLoans]);
+    }, [platformFundBatches, adminTransactions, zakatTransactions, allFundBatches, assets, deals, repayments, earningsTransactions, allInvestorDeposits, interAccountLoans, ownerAllocations]);
 
     const activeInterAccountLoans = useMemo(() => {
         return (interAccountLoans || []).filter((loan) => loan.status === 'Active' && loan.outstanding > 0);
@@ -1656,7 +1669,17 @@ export default function PlatformFundsPage() {
                     </CardContent>
                 </Card>
             </div>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Owner Allocated</CardTitle>
+                        <PieChart className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(metrics.totalOwnerAllocated)}</div>}
+                        <p className="text-xs text-muted-foreground">Sum of all distributions to owners.</p>
+                    </CardContent>
+                </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Client Debt</CardTitle>
