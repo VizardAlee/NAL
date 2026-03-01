@@ -51,7 +51,7 @@ type UserProfile = DocumentData & {
     rating?: number;
     accessRole?: 'OWNER' | 'ADMIN' | 'STAFF' | 'USER';
     personas?: ('INVESTOR' | 'CLIENT' | 'LEGAL' | 'RECOVERY' | 'MARKETER' | 'STAFF_MEMBER')[];
-    primaryPortal?: 'admin' | 'investor' | 'client' | 'legal' | 'recovery' | 'marketer';
+    primaryPortal?: 'owner' | 'admin' | 'investor' | 'client' | 'legal' | 'recovery' | 'marketer';
 };
 
 type FundBatch = DocumentData & {

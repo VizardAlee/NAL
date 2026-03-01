@@ -28,6 +28,7 @@ import { Deal } from '@/lib/types';
 import { Investment } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { usePathname } from 'next/navigation';
+import { runOwnerProfitAllocationAction } from '@/app/admin/funds/actions';
 
 type TerminationRequest = DocumentData & {
     id: string;
@@ -327,7 +328,9 @@ export default function TerminationsPage() {
                         amount: platformProfit,
                         createdAt: now,
                         dealName: deal.dealName,
-                        details: 'Platform share on early termination'
+                        details: 'Platform share on early termination',
+                        ownerAllocatable: true,
+                        platformEarningKind: 'Operating',
                     });
 
                     const platformFundBatchRef = doc(collection(firestore, 'fundBatches'));
@@ -384,6 +387,7 @@ export default function TerminationsPage() {
                     platformEarning: finalInterest * 0.60,
                 });
             });
+            await runOwnerProfitAllocationAction({ includeHistorical: false, limit: 200 });
 
             toast({
                 title: `Request Approved`,

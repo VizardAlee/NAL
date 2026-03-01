@@ -4,12 +4,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { useState, useTransition } from 'react';
-import { Loader2, Copy } from 'lucide-react';
+import { Loader2, Copy, Share2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -34,7 +35,7 @@ const formSchema = z.object({
   email: z.string().email({ message: 'Enter a valid email address.' }),
   accessRole: z.enum(['OWNER', 'ADMIN', 'STAFF', 'USER']),
   personas: z.array(z.enum(['INVESTOR', 'CLIENT', 'LEGAL', 'RECOVERY', 'MARKETER', 'STAFF_MEMBER'])).default([]),
-  primaryPortal: z.enum(['admin', 'investor', 'client', 'legal', 'recovery', 'marketer']),
+  primaryPortal: z.enum(['owner', 'admin', 'investor', 'client', 'legal', 'recovery', 'marketer']),
 });
 
 type InviteUserFormProps = {
@@ -80,7 +81,9 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
       const accessRole = values.accessRole;
       const personas = [...new Set(values.personas)];
       const primaryPortal =
-        accessRole === 'OWNER' || accessRole === 'ADMIN' || accessRole === 'STAFF'
+        accessRole === 'OWNER'
+          ? 'owner'
+          : accessRole === 'ADMIN' || accessRole === 'STAFF'
           ? 'admin'
           : values.primaryPortal || resolvePrimaryPortalFromPersonas(personas as Persona[]);
 
@@ -122,8 +125,32 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
 
   const copyLink = async () => {
     if (!inviteLink) return;
-    await navigator.clipboard.writeText(inviteLink);
-    toast({ title: 'Copied', description: 'Invite link copied to clipboard.' });
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      toast({ title: 'Copied', description: 'Invite link copied to clipboard.' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Copy failed', description: 'Could not copy invite link.' });
+    }
+  };
+
+  const shareLink = async () => {
+    if (!inviteLink) return;
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Invite Link',
+          text: 'Use this invite link to create your account.',
+          url: inviteLink,
+        });
+        return;
+      } catch {
+        // fall through to clipboard copy
+      }
+    }
+
+    await copyLink();
+    toast({ title: 'Share manually', description: 'Link copied. Paste and share it with the invited user.' });
   };
 
   return (
@@ -162,6 +189,9 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
                     <SelectItem value="USER">User</SelectItem>
                   </SelectContent>
                 </Select>
+                <FormDescription>
+                  Access role controls system authority. Example: `ADMIN` can make platform changes, `OWNER` is read-only governance, `STAFF` has operational access, `USER` has no admin authority.
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -200,6 +230,9 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
                     />
                   ))}
                 </div>
+                <FormDescription>
+                  Personas define business identity and workflows this user belongs to (Investor, Client, Legal, Recovery, Marketer, Staff Member). A user can have multiple personas.
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -217,6 +250,7 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
+                    <SelectItem value="owner">Owner</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
                     <SelectItem value="investor">Investor</SelectItem>
                     <SelectItem value="client">Client</SelectItem>
@@ -225,6 +259,9 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
                     <SelectItem value="marketer">Marketer</SelectItem>
                   </SelectContent>
                 </Select>
+                <FormDescription>
+                  Primary portal is the default first page after login. It does not change permissions; it only controls where the user lands initially.
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -239,10 +276,23 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
       {inviteLink && (
         <div className="space-y-2 rounded-lg border p-3">
           <p className="text-sm font-medium">Invite link</p>
+          <p className="text-xs text-muted-foreground">
+            Copy this link and share it with the invited user.
+          </p>
           <div className="flex gap-2">
             <Input value={inviteLink} readOnly />
-            <Button type="button" variant="outline" size="icon" onClick={copyLink}>
+            <Button type="button" variant="outline" size="icon" onClick={copyLink} aria-label="Copy invite link">
               <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={copyLink}>
+              <Copy className="mr-2 h-4 w-4" />
+              Copy Link
+            </Button>
+            <Button type="button" variant="secondary" onClick={shareLink}>
+              <Share2 className="mr-2 h-4 w-4" />
+              Share Link
             </Button>
           </div>
         </div>

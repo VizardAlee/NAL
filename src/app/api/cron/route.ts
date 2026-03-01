@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/firebase/admin-app';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { addDays, differenceInDays, startOfDay, isBefore, isEqual } from 'date-fns';
+import { processOwnerProfitAllocations } from '@/lib/server/owner-profit';
+import { notifyAdmins, notifyUser } from '@/app/common/actions/notification-actions';
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -105,7 +107,7 @@ async function processZakat() {
 
 // --- Recovery & Legal Task Automation Logic ---
 async function processRecoveryTasks() {
-    let tasksCreated = 0, tasksEscalated = 0, clientNotificationsSent = 0, errors = 0;
+    let tasksCreated = 0, tasksEscalated = 0, clientNotificationsSent = 0, adminOverdueNotificationsSent = 0, adminOverdueNotificationsSkipped = 0, errors = 0;
     const details = [];
 
     const activeDealsSnapshot = await adminDb.collection('deals').where('status', '==', 'Active').get();
@@ -153,8 +155,7 @@ async function processRecoveryTasks() {
                     });
 
                     // Send notification to client
-                    const notify = require('@/app/common/actions/notification-actions').notifyUser;
-                    await notify(
+                    await notifyUser(
                         deal.clientId,
                         'Upcoming Payment Reminder',
                         `Your payment of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(installment.payment)} for "${deal.dealName}" is due in 3 days.`,
@@ -167,6 +168,47 @@ async function processRecoveryTasks() {
                 } catch (e) {
                     errors++;
                     details.push(`Error creating task for deal ${dealId}, installment ${installment.installment}: ${e instanceof Error ? e.message : 'Unknown'}`);
+                }
+            }
+
+            // 1b. Notify admins for overdue unpaid installments (deduplicated per installment per day).
+            if (daysPastDue >= 1) {
+                try {
+                    const repaymentKey = `${dealId}_${installment.installment}`;
+                    const dayKey = new Date().toISOString().slice(0, 10);
+                    const alertRef = adminDb.collection('systemNotifications').doc(`overdue_${repaymentKey}_${dayKey}`);
+                    const existingAlert = await alertRef.get();
+
+                    if (existingAlert.exists) {
+                        adminOverdueNotificationsSkipped++;
+                    } else {
+                        const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(installment.payment);
+                        const clientLabel = deal.clientName || deal.clientId || 'Unknown client';
+
+                        await notifyAdmins(
+                            'Overdue Payment Alert',
+                            `${clientLabel} is ${daysPastDue} day(s) overdue on ${formattedAmount} for "${deal.dealName}".`,
+                            '/admin/approvals/repayments'
+                        );
+
+                        await alertRef.set({
+                            type: 'OverduePaymentAlert',
+                            dealId,
+                            dealName: deal.dealName || null,
+                            repaymentId: repaymentKey,
+                            installmentNumber: installment.installment,
+                            dueDate: Timestamp.fromDate(installment.dueDate),
+                            amountDue: installment.payment,
+                            daysPastDue,
+                            createdAt: FieldValue.serverTimestamp(),
+                        });
+
+                        adminOverdueNotificationsSent++;
+                        details.push(`Sent overdue admin alert for deal ${dealId}, installment ${installment.installment} (${daysPastDue} day(s) past due).`);
+                    }
+                } catch (e) {
+                    errors++;
+                    details.push(`Error sending overdue admin alert for deal ${dealId}, installment ${installment.installment}: ${e instanceof Error ? e.message : 'Unknown'}`);
                 }
             }
 
@@ -186,7 +228,7 @@ async function processRecoveryTasks() {
             }
         }
     }
-    return { tasksCreated, tasksEscalated, clientNotificationsSent, errors, details };
+    return { tasksCreated, tasksEscalated, clientNotificationsSent, adminOverdueNotificationsSent, adminOverdueNotificationsSkipped, errors, details };
 }
 
 // --- Marketer Rating Automation Logic ---
@@ -271,6 +313,7 @@ export async function GET(request: NextRequest) {
             processRecoveryTasks(),
             processMarketerRatings()
         ]);
+        const ownerProfitResult = await processOwnerProfitAllocations({ includeHistorical: false, limit: 500 });
 
         return NextResponse.json({
             success: true,
@@ -278,6 +321,7 @@ export async function GET(request: NextRequest) {
             zakat: zakatResult,
             recovery: recoveryResult,
             marketerRating: marketerResult,
+            ownerProfit: ownerProfitResult,
         });
     } catch (error) {
         console.error('CRON JOB FAILED:', error);

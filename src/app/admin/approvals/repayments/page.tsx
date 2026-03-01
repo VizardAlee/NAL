@@ -33,6 +33,7 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { usePathname } from 'next/navigation';
+import { runOwnerProfitAllocationAction } from '@/app/admin/funds/actions';
 
 
 type Repayment = DocumentData & {
@@ -347,7 +348,9 @@ export default function RepaymentsPage() {
                     type: 'PlatformEarning',
                     amount: platformProfit,
                     createdAt: now,
-                    dealName: repayment.dealName
+                    dealName: repayment.dealName,
+                    ownerAllocatable: true,
+                    platformEarningKind: 'Operating',
                 });
 
                 const platformFundBatchRef = doc(collection(firestore, 'fundBatches'));
@@ -380,6 +383,7 @@ export default function RepaymentsPage() {
                     approvedAt: now,
                 });
             });
+            await runOwnerProfitAllocationAction({ includeHistorical: false, limit: 200 });
 
             toast({
                 title: "Repayment Approved",

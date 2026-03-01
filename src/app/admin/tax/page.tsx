@@ -26,6 +26,9 @@ type Transaction = DocumentData & {
     type: 'PlatformEarning';
     amount: number;
     createdAt: Timestamp;
+    ownerAllocatable?: boolean;
+    ownerAllocationId?: string;
+    platformEarningKind?: 'Operating' | 'OwnerDistributionAdjustment' | 'InterAccountAdjustment';
 };
 
 type AdministrativeTransaction = DocumentData & {
@@ -67,7 +70,12 @@ export default function TaxPage() {
     const isLoading = earningsLoading || adminTransactionsLoading;
 
     const taxCalculations = useMemo(() => {
-        const platformEarnings = earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
+        const operatingPlatformEarnings = earningsTransactions?.filter((tx) => {
+            if (tx.amount <= 0) return false;
+            if (tx.platformEarningKind) return tx.platformEarningKind === 'Operating';
+            return tx.ownerAllocatable !== false && !tx.ownerAllocationId;
+        }) || [];
+        const platformEarnings = operatingPlatformEarnings.reduce((sum, tx) => sum + tx.amount, 0);
         const managementFees = adminTransactions?.filter(tx => tx.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0) || 0;
         const expenses = adminTransactions?.filter(tx => tx.type === 'Expense').reduce((sum, tx) => sum + Math.abs(tx.amount), 0) || 0;
 

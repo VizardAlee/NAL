@@ -20,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { CalendarIcon, History, ListFilter } from 'lucide-react';
+import { History, ListFilter } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
@@ -38,28 +38,76 @@ import {
 } from "@/components/ui/pagination";
 import { User } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { cn } from '@/lib/utils';
 
-type Transaction = DocumentData & {
+type UserTransactionType = 'Deposit' | 'Withdrawal' | 'Investment' | 'Repayment' | 'ProfitDistribution' | 'PlatformEarning' | 'Zakat' | 'Penalty';
+type AdminTransactionType =
+    | 'AdminDeposit'
+    | 'Expense'
+    | 'TransferToInvestible'
+    | 'TransferFromInvestible'
+    | 'AssetAcquisition'
+    | 'AssetSale'
+    | 'ManagementFee'
+    | 'LoanFromPlatformEarnings'
+    | 'LoanRepaymentToPlatformEarnings'
+    | 'StaffPayout';
+
+type ActivityType = UserTransactionType | AdminTransactionType;
+
+type UserTransaction = DocumentData & {
   id: string;
-  type: 'Deposit' | 'Withdrawal' | 'Investment' | 'Repayment' | 'ProfitDistribution' | 'PlatformEarning';
+  type: UserTransactionType;
   amount: number;
   dealId?: string;
   userId: string;
   createdAt: Timestamp;
   dealName?: string;
+  details?: string;
 };
 
-const transactionTypes = [
-    'Deposit', 
-    'Withdrawal', 
-    'Investment', 
-    'Repayment', 
-    'ProfitDistribution', 
-    'PlatformEarning'
+type AdministrativeTransaction = DocumentData & {
+    id: string;
+    type: AdminTransactionType;
+    amount: number;
+    createdAt: Timestamp;
+    description?: string;
+    reference?: string;
+    loanId?: string;
+    createdBy?: string;
+};
+
+type ActivityRecord = {
+    id: string;
+    type: ActivityType;
+    amount: number;
+    createdAt: Timestamp;
+    userId: string;
+    details?: string;
+    source: 'transactions' | 'administrativeTransactions';
+};
+
+const activityTypes = [
+    'Deposit',
+    'Withdrawal',
+    'Investment',
+    'Repayment',
+    'ProfitDistribution',
+    'PlatformEarning',
+    'Zakat',
+    'Penalty',
+    'AdminDeposit',
+    'Expense',
+    'TransferToInvestible',
+    'TransferFromInvestible',
+    'AssetAcquisition',
+    'AssetSale',
+    'ManagementFee',
+    'LoanFromPlatformEarnings',
+    'LoanRepaymentToPlatformEarnings',
+    'StaffPayout',
 ] as const;
 
-type TransactionTypeFilter = typeof transactionTypes[number];
+type ActivityTypeFilter = typeof activityTypes[number];
 
 const ITEMS_PER_PAGE = 20;
 
@@ -68,7 +116,7 @@ export default function ActivityPage() {
     const { user: authUser, loading: authLoading } = useUser();
     const isMobile = useIsMobile();
     const [currentPage, setCurrentPage] = useState(1);
-    const [selectedTypes, setSelectedTypes] = useState<TransactionTypeFilter[]>([]);
+    const [selectedTypes, setSelectedTypes] = useState<ActivityTypeFilter[]>([]);
 
     const transactionsQuery = useMemo(() => {
         if (!firestore || !authUser) return null;
@@ -80,35 +128,65 @@ export default function ActivityPage() {
         return query(collection(firestore, 'users'));
     }, [firestore, authUser]);
 
-    const { data: transactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
+    const adminTransactionsQuery = useMemo(() => {
+        if (!firestore || !authUser) return null;
+        return query(collection(firestore, 'administrativeTransactions'), orderBy('createdAt', 'desc'));
+    }, [firestore, authUser]);
+
+    const { data: transactions, loading: transactionsLoading } = useCollection<UserTransaction>(transactionsQuery);
+    const { data: adminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
     const { data: users, loading: usersLoading } = useCollection<User>(usersQuery);
 
-    const isLoading = authLoading || transactionsLoading || usersLoading;
+    const isLoading = authLoading || transactionsLoading || adminTransactionsLoading || usersLoading;
 
-    const filteredTransactions = useMemo(() => {
-        if (!transactions) return [];
-        
-        let filtered = transactions;
+    const activityFeed = useMemo<ActivityRecord[]>(() => {
+        const userFeed: ActivityRecord[] = (transactions || []).map((tx) => ({
+            id: `tx-${tx.id}`,
+            type: tx.type,
+            amount: Number(tx.amount) || 0,
+            createdAt: tx.createdAt,
+            userId: tx.userId,
+            details: tx.dealName || tx.details || (tx.dealId ? `Deal ${tx.dealId}` : undefined),
+            source: 'transactions',
+        }));
+
+        const adminFeed: ActivityRecord[] = (adminTransactions || []).map((tx) => ({
+            id: `admin-tx-${tx.id}`,
+            type: tx.type,
+            amount: Number(tx.amount) || 0,
+            createdAt: tx.createdAt,
+            userId: tx.createdBy || 'platform',
+            details: tx.description || tx.reference || tx.loanId || undefined,
+            source: 'administrativeTransactions',
+        }));
+
+        return [...userFeed, ...adminFeed].sort((a, b) => {
+            const aMs = a.createdAt?.toMillis?.() ?? 0;
+            const bMs = b.createdAt?.toMillis?.() ?? 0;
+            return bMs - aMs;
+        });
+    }, [transactions, adminTransactions]);
+
+    const filteredActivities = useMemo(() => {
+        let filtered = activityFeed;
         
         if (selectedTypes.length > 0) {
-            filtered = filtered.filter(tx => selectedTypes.includes(tx.type as TransactionTypeFilter));
+            filtered = filtered.filter((activity) => selectedTypes.includes(activity.type as ActivityTypeFilter));
         }
 
         return filtered;
-    }, [transactions, selectedTypes]);
+    }, [activityFeed, selectedTypes]);
 
-    const paginatedTransactions = useMemo(() => {
-        if (!filteredTransactions) return [];
+    const paginatedActivities = useMemo(() => {
         const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-        return filteredTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-    }, [filteredTransactions, currentPage]);
+        return filteredActivities.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    }, [filteredActivities, currentPage]);
 
     const totalPages = useMemo(() => {
-        if (!filteredTransactions) return 0;
-        return Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE);
-    }, [filteredTransactions]);
+        return Math.ceil(filteredActivities.length / ITEMS_PER_PAGE);
+    }, [filteredActivities]);
 
-    const handleFilterChange = (type: TransactionTypeFilter) => {
+    const handleFilterChange = (type: ActivityTypeFilter) => {
         setSelectedTypes(prev =>
             prev.includes(type)
                 ? prev.filter(t => t !== type)
@@ -128,6 +206,12 @@ export default function ActivityPage() {
         return users?.find(u => u.id === userId)?.name || 'Unknown User';
     };
 
+    const getSourceLabel = (activity: ActivityRecord) => {
+        if (activity.source === 'administrativeTransactions') {
+            return 'Administrative Account';
+        }
+        return getUserName(activity.userId);
+    };
 
     const renderContent = () => {
         if (isLoading) {
@@ -168,7 +252,7 @@ export default function ActivityPage() {
             );
         }
 
-        if (paginatedTransactions.length === 0) {
+        if (paginatedActivities.length === 0) {
              return (
                 <Card className="h-48 flex items-center justify-center">
                     <p className="text-muted-foreground">No activities found matching your criteria.</p>
@@ -180,23 +264,23 @@ export default function ActivityPage() {
             return (
                 <Card>
                     <CardContent className="p-4 space-y-3">
-                        {paginatedTransactions.map((tx) => (
-                            <Card key={tx.id} className="bg-background">
+                        {paginatedActivities.map((activity) => (
+                            <Card key={activity.id} className="bg-background">
                                 <CardContent className="p-4 space-y-3">
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <p className="font-medium">{getUserName(tx.userId)}</p>
-                                            <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'} className="mt-1">{tx.type}</Badge>
-                                            <p className="text-xs text-muted-foreground mt-1">{formatDateTimestamp(tx.createdAt)}</p>
+                                            <p className="font-medium">{getSourceLabel(activity)}</p>
+                                            <Badge variant={activity.amount > 0 ? 'secondary' : 'outline'} className="mt-1">{activity.type}</Badge>
+                                            <p className="text-xs text-muted-foreground mt-1">{formatDateTimestamp(activity.createdAt)}</p>
                                         </div>
-                                        <p className={`font-bold text-lg ${tx.amount > 0 && tx.type !== 'Withdrawal' ? 'text-primary' : 'text-foreground'}`}>
-                                            {tx.amount > 0 && tx.type !== 'Withdrawal' ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                        <p className={`font-bold text-lg ${activity.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
+                                            {activity.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(activity.amount)}
                                         </p>
                                     </div>
-                                    {tx.dealName && (
+                                    {activity.details && (
                                         <div className="text-sm pt-2 border-t">
-                                            <span className="text-muted-foreground">Deal: </span>
-                                            <span className="font-medium">{tx.dealName}</span>
+                                            <span className="text-muted-foreground">Details: </span>
+                                            <span className="font-medium">{activity.details}</span>
                                         </div>
                                     )}
                                 </CardContent>
@@ -219,16 +303,16 @@ export default function ActivityPage() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                {paginatedTransactions.map((tx) => (
-                    <TableRow key={tx.id}>
-                        <TableCell className="text-xs text-muted-foreground">{formatDateTimestamp(tx.createdAt)}</TableCell>
-                        <TableCell className="font-medium">{getUserName(tx.userId)}</TableCell>
+                {paginatedActivities.map((activity) => (
+                    <TableRow key={activity.id}>
+                        <TableCell className="text-xs text-muted-foreground">{formatDateTimestamp(activity.createdAt)}</TableCell>
+                        <TableCell className="font-medium">{getSourceLabel(activity)}</TableCell>
                         <TableCell>
-                            <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
+                            <Badge variant={activity.amount > 0 ? 'secondary' : 'outline'}>{activity.type}</Badge>
                         </TableCell>
-                        <TableCell>{tx.dealName || 'N/A'}</TableCell>
-                        <TableCell className={`text-right font-medium ${tx.amount > 0 && tx.type !== 'Withdrawal' ? 'text-primary' : 'text-foreground'}`}>
-                            {tx.amount > 0 && tx.type !== 'Withdrawal' ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                        <TableCell>{activity.details || 'N/A'}</TableCell>
+                        <TableCell className={`text-right font-medium ${activity.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
+                            {activity.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(activity.amount)}
                         </TableCell>
                     </TableRow>
                 ))}
@@ -254,9 +338,9 @@ export default function ActivityPage() {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Transaction Type</DropdownMenuLabel>
+                            <DropdownMenuLabel>Activity Type</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            {transactionTypes.map(type => (
+                            {activityTypes.map(type => (
                                 <DropdownMenuCheckboxItem
                                     key={type}
                                     checked={selectedTypes.includes(type)}

@@ -46,6 +46,11 @@ type Transaction = DocumentData & {
     userId?: string;
     status?: 'Approved' | 'Pending'; // for repayments
     installmentNumber?: number;
+    ownerAllocatable?: boolean;
+    ownerAllocationId?: string;
+    sourceType?: string;
+    details?: string;
+    platformEarningKind?: 'Operating' | 'OwnerDistributionAdjustment' | 'InterAccountAdjustment';
 };
 
 type AdministrativeTransaction = DocumentData & {
@@ -253,7 +258,13 @@ export default function ReportsPage() {
         const discrepancy = totalAssets - totalLiabilitiesAndEquity;
 
         // --- INCOME STATEMENT (FLOW) ---
-        const financingRevenue = transactionsInPeriod.filter(t => t.type === 'PlatformEarning').reduce((acc, tx) => acc + tx.amount, 0);
+        const financingRevenue = transactionsInPeriod
+            .filter((tx) => {
+                if (tx.type !== 'PlatformEarning' || tx.amount <= 0) return false;
+                if (tx.platformEarningKind) return tx.platformEarningKind === 'Operating';
+                return tx.ownerAllocatable !== false && !tx.ownerAllocationId;
+            })
+            .reduce((acc, tx) => acc + tx.amount, 0);
         const managementFeeRevenue = adminTransactionsInPeriod.filter(t => t.type === 'ManagementFee').reduce((acc, tx) => acc + tx.amount, 0);
         const soldAssetsInPeriod = allAssets.filter(a => a.status === 'Sold' && filterByDateRange(a));
         const gainOnAssetSale = soldAssetsInPeriod.reduce((acc, asset) => acc + ((asset.salePrice || 0) - asset.acquisitionCost), 0);
@@ -266,7 +277,17 @@ export default function ReportsPage() {
         const cashFromInvesting = adminTransactionsInPeriod.filter(tx => tx.type === 'AssetSale').reduce((acc, tx) => acc + tx.amount, 0)
             - adminTransactionsInPeriod.filter(tx => tx.type === 'AssetAcquisition').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
             - transactionsInPeriod.filter(tx => tx.type === 'Investment').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
-        const cashFromFinancing = transactionsInPeriod.filter(t => t.type === 'Deposit').reduce((acc, tx) => acc + tx.amount, 0)
+        const externalDeposits = transactionsInPeriod
+            .filter((tx) => {
+                if (tx.type !== 'Deposit') return false;
+                if (tx.sourceType === 'OwnerProfitAutoAllocation') return false;
+                if (tx.ownerAllocationId) return false;
+                if (typeof tx.details === 'string' && tx.details.includes('Owner profit allocation')) return false;
+                return true;
+            })
+            .reduce((acc, tx) => acc + tx.amount, 0);
+
+        const cashFromFinancing = externalDeposits
             + transactionsInPeriod.filter(t => t.type === 'Repayment' && t.status === 'Approved').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
             - transactionsInPeriod.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
             + adminTransactionsInPeriod.filter(tx => tx.type === 'AdminDeposit' || tx.type === 'TransferFromInvestible').reduce((acc, tx) => acc + tx.amount, 0)

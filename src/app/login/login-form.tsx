@@ -59,9 +59,10 @@ export function LoginForm() {
     }
 
     try {
+      const normalizedEmail = values.email.trim().toLowerCase();
       const userCredential = await signInWithEmailAndPassword(
         auth,
-        values.email,
+        normalizedEmail,
         values.password
       );
       
@@ -91,7 +92,7 @@ export function LoginForm() {
           case 'auth/user-not-found':
           case 'auth/wrong-password':
           case 'auth/invalid-credential':
-            errorMessage = 'Invalid email or password.';
+            errorMessage = 'Invalid email or password. If this keeps happening, verify you are using the same Firebase project where this account was created.';
             break;
           case 'auth/invalid-email':
             errorMessage = 'Please enter a valid email address.';
@@ -131,7 +132,7 @@ export function LoginForm() {
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="name@example.com" {...field} />
+                    <Input placeholder="name@example.com" autoCapitalize="none" autoCorrect="off" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

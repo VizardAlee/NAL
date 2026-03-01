@@ -236,6 +236,21 @@ service cloud.firestore {
         allow write: if isAdmin();
     }
 
+    match /platformPolicies/{policyId} {
+        allow read: if canAdminRead();
+        allow write: if isAdmin();
+    }
+
+    match /ownershipPartners/{partnerId} {
+        allow read: if canAdminRead();
+        allow write: if isAdmin();
+    }
+
+    match /ownerProfitAllocations/{allocationId} {
+        allow read: if canAdminRead();
+        allow write: if isAdmin();
+    }
+
     // Rules for 'notifications'
     match /notifications/{notificationId} {
         // Allow any authenticated user to create a notification, as long as it's for an Admin.

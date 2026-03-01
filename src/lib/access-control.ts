@@ -10,7 +10,7 @@ export type Persona =
   | 'MARKETER'
   | 'STAFF_MEMBER';
 
-export type PrimaryPortal = 'admin' | 'investor' | 'client' | 'legal' | 'recovery' | 'marketer';
+export type PrimaryPortal = 'owner' | 'admin' | 'investor' | 'client' | 'legal' | 'recovery' | 'marketer';
 
 export type AccessModel = {
   accessRole: AccessRole;
@@ -25,7 +25,7 @@ type UserLike = {
   primaryPortal?: PrimaryPortal | null;
 };
 
-const PORTAL_TO_LEGACY_ROLE: Record<PrimaryPortal, LegacyRole> = {
+const PORTAL_TO_LEGACY_ROLE: Record<Exclude<PrimaryPortal, 'owner'>, LegacyRole> = {
   admin: 'Admin',
   investor: 'Investor',
   client: 'Client',
@@ -34,7 +34,7 @@ const PORTAL_TO_LEGACY_ROLE: Record<PrimaryPortal, LegacyRole> = {
   marketer: 'Marketer',
 };
 
-const PERSONA_TO_PORTAL: Record<Exclude<Persona, 'STAFF_MEMBER'>, PrimaryPortal> = {
+const PERSONA_TO_PORTAL: Record<Exclude<Persona, 'STAFF_MEMBER'>, Exclude<PrimaryPortal, 'owner'>> = {
   INVESTOR: 'investor',
   CLIENT: 'client',
   LEGAL: 'legal',
@@ -68,7 +68,9 @@ export function normalizeAccessModel(user: UserLike | null | undefined): AccessM
     const personas = Array.isArray(user.personas) ? [...new Set(user.personas)] : [];
     const primaryPortal =
       user.primaryPortal ||
-      (user.accessRole === 'OWNER' || user.accessRole === 'ADMIN' || user.accessRole === 'STAFF'
+      (user.accessRole === 'OWNER'
+        ? 'owner'
+        : user.accessRole === 'ADMIN' || user.accessRole === 'STAFF'
         ? 'admin'
         : resolvePrimaryPortalFromPersonas(personas));
 
@@ -115,7 +117,7 @@ export function canWriteAdmin(user: UserLike | null | undefined): boolean {
   return model.accessRole === 'ADMIN';
 }
 
-export function canView(user: UserLike | null | undefined, area: 'admin' | 'investor' | 'client' | 'legal' | 'recovery' | 'marketer'): boolean {
+export function canView(user: UserLike | null | undefined, area: 'owner' | 'admin' | 'investor' | 'client' | 'legal' | 'recovery' | 'marketer'): boolean {
   return canAccessPortal(user, area);
 }
 
@@ -140,6 +142,10 @@ export function canAccessPortal(user: UserLike | null | undefined, portal: Prima
     return canViewAdmin(model);
   }
 
+  if (portal === 'owner') {
+    return model.accessRole === 'OWNER';
+  }
+
   if (model.accessRole === 'OWNER' || model.accessRole === 'ADMIN' || model.accessRole === 'STAFF') {
     return true;
   }
@@ -150,11 +156,17 @@ export function canAccessPortal(user: UserLike | null | undefined, portal: Prima
 export function getDefaultRouteForUser(user: UserLike | null | undefined): string {
   const model = normalizeAccessModel(user);
 
-  if (model.accessRole === 'OWNER' || model.accessRole === 'ADMIN' || model.accessRole === 'STAFF') {
+  if (model.accessRole === 'OWNER') {
+    return '/owner/dashboard';
+  }
+
+  if (model.accessRole === 'ADMIN' || model.accessRole === 'STAFF') {
     return '/admin/dashboard';
   }
 
   switch (model.primaryPortal) {
+    case 'owner':
+      return '/owner/dashboard';
     case 'investor':
       return '/investor/dashboard';
     case 'client':

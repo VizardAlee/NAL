@@ -3,11 +3,11 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign, Info, FileText, Zap, ListFilter, Users, Briefcase } from "lucide-react";
+import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign, Info, FileText, Zap, ListFilter, Users, Briefcase, Settings } from "lucide-react";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy, updateDoc } from 'firebase/firestore';
-import { useFirestore } from "@/firebase";
-import { useMemo, useState } from "react";
+import { useFirestore, useUser } from "@/firebase";
+import { useMemo, useState, useEffect, useTransition } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -49,6 +49,8 @@ import {
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import { useDoc } from "@/firebase/firestore/use-doc";
+import { runOwnerProfitAllocationAction, setOwnershipPartnerActiveAction, upsertOwnershipPartnerAction, upsertOwnerProfitPolicyAction } from "./actions";
 
 
 type PlatformFundBatch = DocumentData & {
@@ -127,6 +129,24 @@ type InterAccountLoan = DocumentData & {
     createdAt: Timestamp;
     createdBy?: string;
     repaidAt?: Timestamp;
+};
+
+type OwnerProfitPolicy = DocumentData & {
+    id: string;
+    retainedPercent: number;
+    distributablePercent: number;
+    totalShares: number;
+    allocationStartDate?: Timestamp;
+    withdrawalCooldown?: 'QUARTERLY';
+};
+
+type OwnershipPartner = DocumentData & {
+    id: string;
+    userId: string;
+    displayName: string;
+    shareUnits: number;
+    active: boolean;
+    updatedAt?: Timestamp;
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -709,6 +729,7 @@ const borrowSchema = z.object({
     amount: z.coerce.number().positive(),
     reason: z.string().min(3, "Reason is required."),
     reference: z.string().optional(),
+    loanDate: z.string().optional(),
 });
 
 function BorrowFromEarningsForm({
@@ -728,14 +749,16 @@ function BorrowFromEarningsForm({
 
     const form = useForm<z.infer<typeof schema>>({
         resolver: zodResolver(schema),
-        defaultValues: { amount: Math.min(1000, maxBorrowAmount), reason: '', reference: '' },
+        defaultValues: { amount: Math.min(1000, maxBorrowAmount), reason: '', reference: '', loanDate: '' },
     });
 
     async function onSubmit(values: z.infer<typeof schema>) {
         setIsLoading(true);
         if (!firestore) return;
         try {
-            const now = serverTimestamp();
+            const createdAtValue = values.loanDate
+                ? Timestamp.fromDate(new Date(`${values.loanDate}T00:00:00`))
+                : serverTimestamp();
             const batch = writeBatch(firestore);
 
             const loanRef = doc(collection(firestore, 'interAccountLoans'));
@@ -747,7 +770,7 @@ function BorrowFromEarningsForm({
                 status: 'Active',
                 reason: values.reason,
                 reference: values.reference || null,
-                createdAt: now,
+                createdAt: createdAtValue,
                 createdBy: 'admin',
             });
 
@@ -756,7 +779,7 @@ function BorrowFromEarningsForm({
                 type: 'LoanFromPlatformEarnings',
                 amount: values.amount,
                 description: `Loan from platform earnings: ${values.reason}`,
-                createdAt: now,
+                createdAt: createdAtValue,
                 loanId: loanRef.id,
                 reference: values.reference || null,
             });
@@ -766,8 +789,10 @@ function BorrowFromEarningsForm({
                 userId: 'platform',
                 type: 'PlatformEarning',
                 amount: -Math.abs(values.amount),
-                createdAt: now,
+                createdAt: createdAtValue,
                 details: `Loan to administrative account (${loanRef.id})`,
+                ownerAllocatable: false,
+                platformEarningKind: 'InterAccountAdjustment',
             });
 
             await batch.commit();
@@ -821,6 +846,18 @@ function BorrowFromEarningsForm({
                             <FormItem>
                                 <FormLabel>Reference (Optional)</FormLabel>
                                 <FormControl><Input placeholder="REF-2026-03-001" {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="loanDate"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Loan Date (Optional)</FormLabel>
+                                <FormControl><Input type="date" {...field} /></FormControl>
+                                <FormDescription>Set this for historical loans that happened before app adoption.</FormDescription>
                                 <FormMessage />
                             </FormItem>
                         )}
@@ -900,6 +937,8 @@ function RepayPlatformLoanForm({
                 amount: Math.abs(values.amount),
                 createdAt: now,
                 details: `Loan repayment from administrative account (${loan.id})`,
+                ownerAllocatable: false,
+                platformEarningKind: 'InterAccountAdjustment',
             });
 
             await batch.commit();
@@ -982,8 +1021,258 @@ function RepayPlatformLoanForm({
     );
 }
 
+const ownerPolicySchema = z.object({
+    retainedPercent: z.coerce.number().min(0).max(100),
+    distributablePercent: z.coerce.number().min(0).max(100),
+    totalShares: z.coerce.number().int().positive(),
+    allocationStartDate: z.string().optional(),
+});
+
+function OwnerProfitPolicyForm({
+    actorId,
+    policy,
+    onComplete,
+}: {
+    actorId?: string;
+    policy?: OwnerProfitPolicy | null;
+    onComplete: () => void;
+}) {
+    const { toast } = useToast();
+    const [isPending, startTransition] = useTransition();
+    const form = useForm<z.infer<typeof ownerPolicySchema>>({
+        resolver: zodResolver(ownerPolicySchema),
+        defaultValues: {
+            retainedPercent: Number(policy?.retainedPercent ?? 50),
+            distributablePercent: Number(policy?.distributablePercent ?? 50),
+            totalShares: Number(policy?.totalShares ?? 20000000),
+            allocationStartDate: policy?.allocationStartDate ? format(policy.allocationStartDate.toDate(), 'yyyy-MM-dd') : '',
+        },
+    });
+
+    useEffect(() => {
+        form.reset({
+            retainedPercent: Number(policy?.retainedPercent ?? 50),
+            distributablePercent: Number(policy?.distributablePercent ?? 50),
+            totalShares: Number(policy?.totalShares ?? 20000000),
+            allocationStartDate: policy?.allocationStartDate ? format(policy.allocationStartDate.toDate(), 'yyyy-MM-dd') : '',
+        });
+    }, [policy, form]);
+
+    const onSubmit = (values: z.infer<typeof ownerPolicySchema>) => {
+        if (!actorId) return;
+        startTransition(async () => {
+            const result = await upsertOwnerProfitPolicyAction({ ...values, actorId });
+            toast({
+                variant: result.success ? 'default' : 'destructive',
+                title: result.success ? 'Saved' : 'Save failed',
+                description: result.message,
+            });
+            if (result.success) onComplete();
+        });
+    };
+
+    return (
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField control={form.control} name="retainedPercent" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Retained %</FormLabel>
+                        <FormControl><Input type="number" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="distributablePercent" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Distributable %</FormLabel>
+                        <FormControl><Input type="number" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="totalShares" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Total Shares</FormLabel>
+                        <FormControl><Input type="number" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="allocationStartDate" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Allocation Start Date</FormLabel>
+                        <FormControl><Input type="date" {...field} /></FormControl>
+                        <FormDescription>Automatic allocations run only for earnings on/after this date.</FormDescription>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <Button type="submit" className="w-full" disabled={isPending}>
+                    {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Policy
+                </Button>
+            </form>
+        </Form>
+    );
+}
+
+const ownerPartnerSchema = z.object({
+    userId: z.string().min(1),
+    displayName: z.string().min(1),
+    shareUnits: z.coerce.number().int().positive(),
+    active: z.boolean().default(true),
+});
+
+function OwnershipPartnerForm({
+    actorId,
+    users,
+    onComplete,
+}: {
+    actorId?: string;
+    users: Array<{ id: string; name?: string; email?: string }>;
+    onComplete: () => void;
+}) {
+    const { toast } = useToast();
+    const [isPending, startTransition] = useTransition();
+    const hasOwnerAccounts = users.length > 0;
+    const form = useForm<z.infer<typeof ownerPartnerSchema>>({
+        resolver: zodResolver(ownerPartnerSchema),
+        defaultValues: {
+            userId: '',
+            displayName: '',
+            shareUnits: 1000000,
+            active: true,
+        },
+    });
+
+    const onSubmit = (values: z.infer<typeof ownerPartnerSchema>) => {
+        if (!actorId) return;
+        startTransition(async () => {
+            const result = await upsertOwnershipPartnerAction({ ...values, actorId });
+            toast({
+                variant: result.success ? 'default' : 'destructive',
+                title: result.success ? 'Saved' : 'Save failed',
+                description: result.message,
+            });
+            if (result.success) {
+                form.reset({ userId: '', displayName: '', shareUnits: 1000000, active: true });
+                onComplete();
+            }
+        });
+    };
+
+    return (
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField control={form.control} name="userId" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Owner Account</FormLabel>
+                        <FormControl>
+                            <select
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={field.value}
+                                disabled={!hasOwnerAccounts}
+                                onChange={(e) => {
+                                    const userId = e.target.value;
+                                    const selectedUser = users.find((u) => u.id === userId);
+                                    field.onChange(userId);
+                                    form.setValue('displayName', selectedUser?.name || selectedUser?.email || userId);
+                                }}
+                            >
+                                <option value="">
+                                    {hasOwnerAccounts ? 'Select owner user' : 'No owner account selected yet'}
+                                </option>
+                                {users.map((u) => (
+                                    <option key={u.id} value={u.id}>{u.name || u.email || u.id}</option>
+                                ))}
+                            </select>
+                        </FormControl>
+                        {!hasOwnerAccounts && (
+                            <FormDescription>
+                                No owner account selected yet. Assign at least one user with `accessRole = OWNER` first.
+                            </FormDescription>
+                        )}
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="shareUnits" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Share Units</FormLabel>
+                        <FormControl><Input type="number" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <Button type="submit" className="w-full" disabled={isPending || !hasOwnerAccounts}>
+                    {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Partner
+                </Button>
+            </form>
+        </Form>
+    );
+}
+
+const allocationRunSchema = z.object({
+    includeHistorical: z.boolean().default(false),
+    fromDate: z.string().optional(),
+    toDate: z.string().optional(),
+    limit: z.coerce.number().int().positive().max(1000).default(500),
+});
+
+function OwnerAllocationRunForm({ onComplete }: { onComplete: () => void }) {
+    const { toast } = useToast();
+    const [isPending, startTransition] = useTransition();
+    const form = useForm<z.infer<typeof allocationRunSchema>>({
+        resolver: zodResolver(allocationRunSchema),
+        defaultValues: { includeHistorical: true, fromDate: '', toDate: '', limit: 500 },
+    });
+
+    const onSubmit = (values: z.infer<typeof allocationRunSchema>) => {
+        startTransition(async () => {
+            const result = await runOwnerProfitAllocationAction(values);
+            toast({
+                variant: result.success ? 'default' : 'destructive',
+                title: result.success ? 'Backfill run complete' : 'Backfill run failed',
+                description: result.success
+                    ? `Processed ${(result as any).processed ?? 0}, skipped ${(result as any).skipped ?? 0}, errors ${(result as any).errors ?? 0}.`
+                    : (result as any).message || 'Could not run backfill.',
+            });
+            if (result.success) onComplete();
+        });
+    };
+
+    return (
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField control={form.control} name="fromDate" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>From Date (Optional)</FormLabel>
+                        <FormControl><Input type="date" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="toDate" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>To Date (Optional)</FormLabel>
+                        <FormControl><Input type="date" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <FormField control={form.control} name="limit" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Max Transactions Per Run</FormLabel>
+                        <FormControl><Input type="number" {...field} /></FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )} />
+                <Button type="submit" className="w-full" disabled={isPending}>
+                    {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Run Historical Allocation
+                </Button>
+            </form>
+        </Form>
+    );
+}
+
 export default function PlatformFundsPage() {
     const firestore = useFirestore();
+    const { user } = useUser();
+    const { toast } = useToast();
     const isMobile = useIsMobile();
     const [isDialogOpen, setDialogOpen] = useState<{ [key: string]: boolean }>({});
     const [currentPage, setCurrentPage] = useState(1);
@@ -991,6 +1280,7 @@ export default function PlatformFundsPage() {
     const [startDate, setStartDate] = useState<Date | null>(null);
     const [endDate, setEndDate] = useState<Date | null>(null);
     const [selectedTypes, setSelectedTypes] = useState<AdminTransactionTypeFilter[]>([]);
+    const [isAllocating, startAllocating] = useTransition();
 
 
     const openDialog = (key: string) => setDialogOpen(prev => ({ ...prev, [key]: true }));
@@ -1006,6 +1296,9 @@ export default function PlatformFundsPage() {
     const earningsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions'), where('type', '==', 'PlatformEarning')) : null, [firestore]);
     const allInvestorDepositsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions'), where('type', '==', 'Deposit')) : null, [firestore]);
     const interAccountLoansQuery = useMemo(() => firestore ? query(collection(firestore, 'interAccountLoans'), orderBy('createdAt', 'desc')) : null, [firestore]);
+    const ownershipPartnersQuery = useMemo(() => firestore ? query(collection(firestore, 'ownershipPartners'), orderBy('shareUnits', 'desc')) : null, [firestore]);
+    const ownerPolicyRef = useMemo(() => firestore ? doc(firestore, 'platformPolicies', 'ownerProfit') : null, [firestore]);
+    const usersQuery = useMemo(() => firestore ? query(collection(firestore, 'users')) : null, [firestore]);
 
 
     const { data: platformFundBatches, loading: platformBatchesLoading } = useCollection<PlatformFundBatch>(platformFundBatchesQuery);
@@ -1018,6 +1311,9 @@ export default function PlatformFundsPage() {
     const { data: earningsTransactions, loading: earningsLoading } = useCollection<GenericTransaction>(earningsQuery);
     const { data: allInvestorDeposits, loading: depositsLoading } = useCollection<GenericTransaction>(allInvestorDepositsQuery);
     const { data: interAccountLoans, loading: loansLoading, error: loansError } = useCollection<InterAccountLoan>(interAccountLoansQuery);
+    const { data: ownershipPartners, loading: partnersLoading, error: partnersError } = useCollection<OwnershipPartner>(ownershipPartnersQuery);
+    const { data: ownerPolicy } = useDoc<OwnerProfitPolicy>(ownerPolicyRef);
+    const { data: allUsers, error: usersError } = useCollection<DocumentData>(usersQuery);
 
 
     const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allFundBatchesLoading || assetsLoading || dealsLoading || repaymentsLoading || earningsLoading || depositsLoading;
@@ -1051,9 +1347,15 @@ export default function PlatformFundsPage() {
 
         const cumulativeInvestments = allInvestorDeposits?.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0) || 0;
         const cumulativeDeals = deals?.reduce((sum, deal) => sum + (Number(deal.principal) || 0), 0) || 0;
-        const adminDebtToPlatform = interAccountLoans
+        const adminDebtToPlatformFromLedger = interAccountLoans
             ?.filter((loan) => loan.status === 'Active')
             .reduce((sum, loan) => sum + (Number(loan.outstanding) || 0), 0) || 0;
+        const adminDebtToPlatformFromTransactions = adminTransactions
+            ?.filter((tx) => tx.type === 'LoanFromPlatformEarnings' || tx.type === 'LoanRepaymentToPlatformEarnings')
+            .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0) || 0;
+        const adminDebtToPlatform = adminDebtToPlatformFromLedger > 0
+            ? adminDebtToPlatformFromLedger
+            : Math.max(0, adminDebtToPlatformFromTransactions);
         const activeLoanCount = interAccountLoans?.filter((loan) => loan.status === 'Active').length || 0;
 
 
@@ -1068,6 +1370,8 @@ export default function PlatformFundsPage() {
             platformEarnings,
             cumulativeInvestments,
             cumulativeDeals,
+            adminDebtToPlatformFromLedger,
+            adminDebtToPlatformFromTransactions,
             adminDebtToPlatform,
             activeLoanCount,
         };
@@ -1077,7 +1381,31 @@ export default function PlatformFundsPage() {
         return (interAccountLoans || []).filter((loan) => loan.status === 'Active' && loan.outstanding > 0);
     }, [interAccountLoans]);
 
+    const ownerSelectableUsers = useMemo(() => {
+        return (allUsers || [])
+            .filter((u) => u.accessRole === 'OWNER')
+            .map((u) => ({
+                id: u.id as string,
+                name: u.name as string | undefined,
+                email: u.email as string | undefined,
+            }));
+    }, [allUsers]);
+
     const safeAdminDebtToPlatform = Number.isFinite(metrics.adminDebtToPlatform) ? metrics.adminDebtToPlatform : 0;
+
+    useEffect(() => {
+        if (!user?.uid) return;
+        startAllocating(async () => {
+            const result = await runOwnerProfitAllocationAction({ includeHistorical: false, limit: 100 });
+            if (!result.success) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Owner auto-allocation failed',
+                    description: (result as any).message || 'Could not process owner allocations automatically.',
+                });
+            }
+        });
+    }, [user?.uid]);
 
     const filteredAdminTransactions = useMemo(() => {
         if (!adminTransactions) return [];
@@ -1132,6 +1460,132 @@ export default function PlatformFundsPage() {
                 icon={Banknote}
             />
 
+            <Card className="mb-6">
+                <CardHeader>
+                    <CardTitle>Owner Profit Allocation</CardTitle>
+                    <CardDescription>
+                        Automatic split of platform earnings into retained earnings and owner reinvestible capital.
+                    </CardDescription>
+                    <div className="flex flex-wrap gap-2 pt-2">
+                        <Dialog open={isDialogOpen['ownerPolicy']} onOpenChange={(isOpen) => isOpen ? openDialog('ownerPolicy') : closeDialog('ownerPolicy')}>
+                            <DialogTrigger asChild><Button size="sm" variant="outline"><Settings className="mr-2 h-4 w-4" />Policy</Button></DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader><DialogTitle>Owner Profit Policy</DialogTitle></DialogHeader>
+                                <OwnerProfitPolicyForm actorId={user?.uid} policy={ownerPolicy || null} onComplete={() => closeDialog('ownerPolicy')} />
+                            </DialogContent>
+                        </Dialog>
+                        <Dialog open={isDialogOpen['ownerPartner']} onOpenChange={(isOpen) => isOpen ? openDialog('ownerPartner') : closeDialog('ownerPartner')}>
+                            <DialogTrigger asChild><Button size="sm" variant="outline"><Users className="mr-2 h-4 w-4" />Add/Update Partner</Button></DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader><DialogTitle>Ownership Partner</DialogTitle></DialogHeader>
+                                <OwnershipPartnerForm actorId={user?.uid} users={ownerSelectableUsers} onComplete={() => closeDialog('ownerPartner')} />
+                            </DialogContent>
+                        </Dialog>
+                        <Dialog open={isDialogOpen['ownerBackfill']} onOpenChange={(isOpen) => isOpen ? openDialog('ownerBackfill') : closeDialog('ownerBackfill')}>
+                            <DialogTrigger asChild><Button size="sm" variant="outline"><History className="mr-2 h-4 w-4" />Backfill Historical</Button></DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader><DialogTitle>Owner Allocation Backfill</DialogTitle></DialogHeader>
+                                <OwnerAllocationRunForm onComplete={() => closeDialog('ownerBackfill')} />
+                            </DialogContent>
+                        </Dialog>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isAllocating}
+                            onClick={() => {
+                                startAllocating(async () => {
+                                    const result = await runOwnerProfitAllocationAction({ includeHistorical: false, limit: 500 });
+                                    toast({
+                                        variant: result.success ? 'default' : 'destructive',
+                                        title: result.success ? 'Owner allocation run complete' : 'Owner allocation run failed',
+                                        description: result.success
+                                            ? `Processed ${(result as any).processed ?? 0}, skipped ${(result as any).skipped ?? 0}.`
+                                            : (result as any).message || 'Failed to run owner allocation.',
+                                    });
+                                });
+                            }}
+                        >
+                            {isAllocating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Run Allocation
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-3">
+                        <div className="rounded-md border p-3">
+                            <p className="text-xs text-muted-foreground">Retained %</p>
+                            <p className="text-lg font-semibold">{ownerPolicy?.retainedPercent ?? 50}%</p>
+                        </div>
+                        <div className="rounded-md border p-3">
+                            <p className="text-xs text-muted-foreground">Distributable %</p>
+                            <p className="text-lg font-semibold">{ownerPolicy?.distributablePercent ?? 50}%</p>
+                        </div>
+                        <div className="rounded-md border p-3">
+                            <p className="text-xs text-muted-foreground">Allocation Start Date</p>
+                            <p className="text-lg font-semibold">{ownerPolicy?.allocationStartDate ? format(ownerPolicy.allocationStartDate.toDate(), 'PPP') : 'Not set'}</p>
+                        </div>
+                    </div>
+                    <div className="rounded-md border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Partner</TableHead>
+                                    <TableHead>Share Units</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="text-right">Action</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {partnersLoading ? (
+                                    <TableRow><TableCell colSpan={4}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+                                ) : partnersError ? (
+                                    <TableRow>
+                                        <TableCell colSpan={4} className="h-16 text-center text-destructive">
+                                            Could not load ownership partners (permission or query error).
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (ownershipPartners?.length || 0) === 0 ? (
+                                    <TableRow><TableCell colSpan={4} className="h-16 text-center text-muted-foreground">No ownership partners configured.</TableCell></TableRow>
+                                ) : (
+                                    ownershipPartners?.map((partner) => (
+                                        <TableRow key={partner.id}>
+                                            <TableCell>{partner.displayName}</TableCell>
+                                            <TableCell>{partner.shareUnits.toLocaleString()}</TableCell>
+                                            <TableCell><Badge variant={partner.active ? 'default' : 'secondary'}>{partner.active ? 'Active' : 'Inactive'}</Badge></TableCell>
+                                            <TableCell className="text-right">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={async () => {
+                                                        const result = await setOwnershipPartnerActiveAction({
+                                                            userId: partner.userId,
+                                                            active: !partner.active,
+                                                            actorId: user?.uid || '',
+                                                        });
+                                                        toast({
+                                                            variant: result.success ? 'default' : 'destructive',
+                                                            title: result.success ? 'Updated' : 'Update failed',
+                                                            description: result.message,
+                                                        });
+                                                    }}
+                                                >
+                                                    {partner.active ? 'Deactivate' : 'Activate'}
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                    {usersError && (
+                        <p className="text-xs text-destructive">
+                            Could not load users for partner picker. Check Firestore rules/deploy.
+                        </p>
+                    )}
+                </CardContent>
+            </Card>
+
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5 mb-6">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -1184,6 +1638,11 @@ export default function PlatformFundsPage() {
                         {loansError && (
                             <p className="text-xs text-destructive mt-1">
                                 Could not load loan ledger. Showing fallback value.
+                            </p>
+                        )}
+                        {!loansError && metrics.adminDebtToPlatformFromLedger === 0 && metrics.adminDebtToPlatformFromTransactions > 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Derived from administrative transactions while ledger catches up.
                             </p>
                         )}
                         {loansLoading && (

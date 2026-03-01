@@ -40,7 +40,7 @@ type User = DocumentData & {
   role: 'Admin' | 'Investor' | 'Client' | 'Legal' | 'Recovery' | 'Marketer';
   accessRole?: 'OWNER' | 'ADMIN' | 'STAFF' | 'USER';
   personas?: ('INVESTOR' | 'CLIENT' | 'LEGAL' | 'RECOVERY' | 'MARKETER' | 'STAFF_MEMBER')[];
-  primaryPortal?: 'admin' | 'investor' | 'client' | 'legal' | 'recovery' | 'marketer';
+  primaryPortal?: 'owner' | 'admin' | 'investor' | 'client' | 'legal' | 'recovery' | 'marketer';
 };
 
 function UsersTable({ users, loading }: { users: User[] | null, loading: boolean }) {
@@ -173,7 +173,7 @@ export default function UsersPage() {
   }, [users]);
 
   const handleUserCreated = () => {
-    setCreateUserOpen(false);
+    // Keep dialog open after link generation so admin can copy/share the invite URL.
   };
 
   return (

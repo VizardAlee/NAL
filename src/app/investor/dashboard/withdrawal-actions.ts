@@ -6,7 +6,7 @@ import { adminDb } from '@/firebase/admin-app';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { differenceInDays } from 'date-fns';
+import { addQuarters, differenceInDays, startOfQuarter } from 'date-fns';
 
 // --- Withdrawal Action ---
 const withdrawalSchema = z.object({
@@ -29,6 +29,29 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
     const { userId, userName, amount } = validatedFields.data;
 
     try {
+        const userSnap = await adminDb.collection('users').doc(userId).get();
+        const userData = userSnap.data() as any;
+        const isOwnerAccount = userData?.accessRole === 'OWNER';
+
+        if (isOwnerAccount) {
+            const quarterStart = startOfQuarter(new Date());
+            const nextQuarterStart = addQuarters(quarterStart, 1);
+            const existingOwnerWithdrawal = await adminDb
+                .collection('withdrawalRequests')
+                .where('investorId', '==', userId)
+                .where('requestedAt', '>=', Timestamp.fromDate(quarterStart))
+                .where('requestedAt', '<', Timestamp.fromDate(nextQuarterStart))
+                .limit(1)
+                .get();
+
+            if (!existingOwnerWithdrawal.empty) {
+                return {
+                    success: false,
+                    message: 'Owner withdrawals are allowed once per quarter. You already made a withdrawal request this quarter.',
+                };
+            }
+        }
+
         const batch = adminDb.batch();
         const now = FieldValue.serverTimestamp();
 

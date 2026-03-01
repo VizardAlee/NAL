@@ -16,7 +16,7 @@ const inviteSchema = z.object({
   email: z.string().email(),
   accessRole: z.enum(['OWNER', 'ADMIN', 'STAFF', 'USER']),
   personas: z.array(z.enum(['INVESTOR', 'CLIENT', 'LEGAL', 'RECOVERY', 'MARKETER', 'STAFF_MEMBER'])).default([]),
-  primaryPortal: z.enum(['admin', 'investor', 'client', 'legal', 'recovery', 'marketer']).optional(),
+  primaryPortal: z.enum(['owner', 'admin', 'investor', 'client', 'legal', 'recovery', 'marketer']).optional(),
   inviterId: z.string().min(1),
   inviterName: z.string().min(1),
 });
@@ -36,7 +36,9 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
   const dedupedPersonas = [...new Set(personas)] as Persona[];
   const resolvedPrimaryPortal = (
     requestedPortal ||
-    (accessRole === 'OWNER' || accessRole === 'ADMIN' || accessRole === 'STAFF'
+    (accessRole === 'OWNER'
+      ? 'owner'
+      : accessRole === 'ADMIN' || accessRole === 'STAFF'
       ? 'admin'
       : resolvePrimaryPortalFromPersonas(dedupedPersonas))
   ) as PrimaryPortal;
