@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { Crown, Landmark, PieChart, TrendingUp, Wallet, Banknote, Briefcase, Info, ArrowDownToLine, Loader2, LockKeyhole, History, Users2, Percent } from 'lucide-react';
+import { Crown, Landmark, PieChart, TrendingUp, Wallet, Banknote, Briefcase, Info, ArrowDownToLine, Loader2, LockKeyhole, History, Users2, Percent, Scale } from 'lucide-react';
 import { Timestamp, collection, query, where, orderBy, limit, DocumentData, doc } from 'firebase/firestore';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -95,6 +95,8 @@ type OwnershipPartner = DocumentData & {
 
 type OwnerPolicy = DocumentData & {
   totalShares: number;
+  retainedPercent: number;
+  distributablePercent: number;
 };
 
 type WithdrawalQuarter = { label: string; startDate: string; endDate: string };
@@ -279,13 +281,14 @@ export default function OwnerDashboardPage() {
   const { data: ownerPolicy, loading: policyLoading } = useDoc<OwnerPolicy>(ownerPolicyRef as any);
 
   const metrics = useMemo(() => {
-    const platformEarnings = (earnings || []).reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+    const grossPlatformEarnings = (earnings || []).reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
     const activeDealsCount = (deals || []).filter((deal) => deal.status === 'Active').length;
     const totalUsers = (users || []).length;
     const adminDebtToPlatform = (activeLoans || []).reduce((sum, loan) => sum + (Number(loan.outstanding) || 0), 0);
 
-    // Global Owner Allocations (Transparency Metric)
-    const globalTotalAllocated = (ownerAllocations || []).reduce((sum, alloc) => sum + (Number(alloc.distributableAmount) || 0), 0);
+    // Transparency Metrics: Split between Retained and Distributable
+    const globalTotalRetained = (ownerAllocations || []).reduce((sum, alloc) => sum + (Number(alloc.retainedAmount) || 0), 0);
+    const globalTotalDistributed = (ownerAllocations || []).reduce((sum, alloc) => sum + (Number(alloc.distributableAmount) || 0), 0);
 
     // Personal Metrics
     let personalTotalAllocated = 0;
@@ -315,11 +318,12 @@ export default function OwnerDashboardPage() {
     const mySharePercent = totalAuthShares > 0 ? (myShareUnits / totalAuthShares) * 100 : 0;
 
     return {
-      platformEarnings,
+      grossPlatformEarnings,
       activeDealsCount,
       totalUsers,
       adminDebtToPlatform,
-      globalTotalAllocated,
+      globalTotalRetained,
+      globalTotalDistributed,
       personalTotalAllocated,
       personalProfitBalance,
       personalInvestible,
@@ -357,13 +361,13 @@ export default function OwnerDashboardPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left Column: Personal Stake */}
         <div className="lg:col-span-1 space-y-6">
-          <Card className="border-primary bg-primary/5">
+          <Card className="border-primary bg-primary/5 shadow-md">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Wallet className="h-5 w-5 text-primary" />
                 My Ownership Stake
               </CardTitle>
-              <CardDescription>Your share of the platform's distributed profits.</CardDescription>
+              <CardDescription>Your share of distributed profits based on equity.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4 pb-4 border-b">
@@ -446,23 +450,25 @@ export default function OwnerDashboardPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Operational Snapshot</CardTitle>
+              <CardTitle className="text-sm font-medium">Split Policy</CardTitle>
+              <CardDescription>Current earnings distribution rule.</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-8 w-3/4" />
-              ) : (
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Active deals</span>
-                    <span className="font-semibold">{metrics.activeDealsCount}</span>
+              {isLoading ? <Skeleton className="h-12 w-full" /> : (
+                <div className="flex items-center justify-between p-3 rounded-md bg-muted/50 border">
+                  <div className="text-center flex-1 border-r">
+                    <p className="text-[10px] uppercase text-muted-foreground">Retained</p>
+                    <p className="text-xl font-bold text-primary">{ownerPolicy?.retainedPercent || 50}%</p>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total users</span>
-                    <span className="font-semibold">{metrics.totalUsers}</span>
+                  <div className="text-center flex-1">
+                    <p className="text-[10px] uppercase text-muted-foreground">Shared</p>
+                    <p className="text-xl font-bold text-accent-foreground">{ownerPolicy?.distributablePercent || 50}%</p>
                   </div>
                 </div>
               )}
+              <p className="text-[10px] text-muted-foreground mt-3 leading-relaxed">
+                Platform Earnings are split between <strong>Retained Earnings</strong> (reinvested into platform operations) and <strong>Shared Profits</strong> (allocated to owners based on equity).
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -472,11 +478,11 @@ export default function OwnerDashboardPage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Platform Earnings</CardTitle>
+                <CardTitle className="text-sm font-medium">Gross Earnings</CardTitle>
               </CardHeader>
               <CardContent>
-                {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(metrics.platformEarnings)}</div>}
-                <p className="text-[10px] text-muted-foreground mt-1">Gross operational markup</p>
+                {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(metrics.grossPlatformEarnings)}</div>}
+                <p className="text-[10px] text-muted-foreground mt-1">Total markup before split</p>
               </CardContent>
             </Card>
 
@@ -484,22 +490,25 @@ export default function OwnerDashboardPage() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <Users2 className="h-4 w-4 text-primary" />
-                  Shared Profits
+                  Equity Pool (Shared)
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold text-primary">{formatCurrency(metrics.globalTotalAllocated)}</div>}
-                <p className="text-[10px] text-muted-foreground mt-1">Cumulative shared among all partners</p>
+                {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold text-primary">{formatCurrency(metrics.globalTotalDistributed)}</div>}
+                <p className="text-[10px] text-muted-foreground mt-1">Total shared among all owners</p>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="bg-muted/30">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Admin Debt</CardTitle>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Landmark className="h-4 w-4 text-muted-foreground" />
+                  Retained Earnings
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(metrics.adminDebtToPlatform)}</div>}
-                <p className="text-[10px] text-muted-foreground mt-1">Inter-account liabilities</p>
+                {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(metrics.globalTotalRetained)}</div>}
+                <p className="text-[10px] text-muted-foreground mt-1">Platform operational share</p>
               </CardContent>
             </Card>
           </div>
@@ -549,11 +558,11 @@ export default function OwnerDashboardPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <PieChart className="h-4 w-4" />
-                Recent Profit Allocations
+                <Scale className="h-4 w-4" />
+                Recent Split Audits
               </CardTitle>
               <CardDescription>
-                Distributions from platform earnings into retained and owner portions.
+                Verification of exact percentage splits for recent earnings.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -570,14 +579,14 @@ export default function OwnerDashboardPage() {
                   {ownerAllocations.slice(0, 6).map((allocation) => (
                     <div key={allocation.id} className="flex flex-col gap-2 rounded-md border p-3 md:flex-row md:items-center md:justify-between text-sm">
                       <div>
-                        <p className="font-medium">Total: {formatCurrency(allocation.sourceEarningAmount)}</p>
+                        <p className="font-medium">Gross: {formatCurrency(allocation.sourceEarningAmount)}</p>
                         <p className="text-xs text-muted-foreground">
-                          Retained: {formatCurrency(allocation.retainedAmount)} | Distributed: {formatCurrency(allocation.distributableAmount)}
+                          Retained: {formatCurrency(allocation.retainedAmount)} ({allocation.policySnapshot?.retainedPercent}%) | Distributed: {formatCurrency(allocation.distributableAmount)} ({allocation.policySnapshot?.distributablePercent}%)
                         </p>
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-muted-foreground">{allocation.createdAt ? format(allocation.createdAt.toDate(), 'PPP') : 'Recently'}</p>
-                        <Badge variant="outline" className="mt-1">Processed</Badge>
+                        <Badge variant="outline" className="mt-1">Verified</Badge>
                       </div>
                     </div>
                   ))}
