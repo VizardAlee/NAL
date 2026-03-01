@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Crown, Landmark, PieChart, TrendingUp, Wallet, Banknote, Briefcase, Info, ArrowDownToLine, Loader2, LockKeyhole, History, Users2, Percent, Scale } from 'lucide-react';
 import { Timestamp, collection, query, where, orderBy, limit, DocumentData, doc } from 'firebase/firestore';
@@ -163,10 +163,12 @@ function WithdrawDialog({
         setAmount('');
         onClose();
       } else {
+        // Detailed log for copying index links
+        console.error("Withdrawal Request Server Error:", result);
         toast({ title: 'Failed to submit request', description: result.message, variant: 'destructive' });
       }
     } catch (err) {
-      console.error(err);
+      console.error("Withdrawal Request Exception:", err);
       toast({ title: 'Failed to submit request', variant: 'destructive' });
     } finally {
       setIsPending(false);
@@ -267,18 +269,24 @@ export default function OwnerDashboardPage() {
   );
   const { data: withdrawalWindowData } = useDoc<{ quarters: WithdrawalQuarter[] }>(withdrawalWindowRef);
 
-  const { data: users, loading: usersLoading } = useCollection<DocumentData>(usersQuery);
-  const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
-  const { data: earnings, loading: earningsLoading } = useCollection<Transaction>(earningsQuery);
-  const { data: pendingRepayments, loading: repaymentsLoading } = useCollection<Repayment>(pendingRepaymentsQuery);
-  const { data: activeLoans, loading: loansLoading } = useCollection<Loan>(activeLoansQuery);
-  const { data: ownerAllocations, loading: allocationsLoading } = useCollection<OwnerAllocation>(ownerAllocationsQuery);
-  const { data: myFundBatches, loading: myBatchesLoading } = useCollection<FundBatch>(myFundBatchesQuery);
-  const { data: myInvestments, loading: myInvestmentsLoading } = useCollection<Investment>(myInvestmentsQuery);
-  const { data: myWithdrawals, loading: myWithdrawalsLoading } = useCollection<WithdrawalRequest>(myWithdrawalRequestsQuery);
-  const { data: myTransactions, loading: myTransactionsLoading } = useCollection<Transaction>(myTransactionsQuery);
+  const { data: users, loading: usersLoading, error: usersErr } = useCollection<DocumentData>(usersQuery);
+  const { data: deals, loading: dealsLoading, error: dealsErr } = useCollection<Deal>(dealsQuery);
+  const { data: earnings, loading: earningsLoading, error: earningsErr } = useCollection<Transaction>(earningsQuery);
+  const { data: pendingRepayments, loading: repaymentsLoading, error: repaymentsErr } = useCollection<Repayment>(pendingRepaymentsQuery);
+  const { data: activeLoans, loading: loansLoading, error: loansErr } = useCollection<Loan>(activeLoansQuery);
+  const { data: ownerAllocations, loading: allocationsLoading, error: allocationsErr } = useCollection<OwnerAllocation>(ownerAllocationsQuery);
+  const { data: myFundBatches, loading: myBatchesLoading, error: batchesErr } = useCollection<FundBatch>(myFundBatchesQuery);
+  const { data: myInvestments, loading: myInvestmentsLoading, error: investmentsErr } = useCollection<Investment>(myInvestmentsQuery);
+  const { data: myWithdrawals, loading: myWithdrawalsLoading, error: withdrawalsErr } = useCollection<WithdrawalRequest>(myWithdrawalRequestsQuery);
+  const { data: myTransactions, loading: myTransactionsLoading, error: transactionsErr } = useCollection<Transaction>(myTransactionsQuery);
   const { data: myPartnerData, loading: partnerLoading } = useDoc<OwnershipPartner>(myPartnerRef as any);
   const { data: ownerPolicy, loading: policyLoading } = useDoc<OwnerPolicy>(ownerPolicyRef as any);
+
+  // General log for query errors (helpful for indexing link capture)
+  useEffect(() => {
+    const errs = [usersErr, dealsErr, earningsErr, repaymentsErr, loansErr, allocationsErr, batchesErr, investmentsErr, withdrawalsErr, transactionsErr].filter(Boolean);
+    errs.forEach(e => console.error("Firestore Query Error:", e));
+  }, [usersErr, dealsErr, earningsErr, repaymentsErr, loansErr, allocationsErr, batchesErr, investmentsErr, withdrawalsErr, transactionsErr]);
 
   const metrics = useMemo(() => {
     const grossPlatformEarnings = (earnings || []).reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
@@ -497,7 +505,6 @@ export default function OwnerDashboardPage() {
                 {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold text-primary">{formatCurrency(metrics.globalTotalDistributed)}</div>}
                 <p className="text-[10px] text-muted-foreground mt-1">Total shared among all owners</p>
               </CardContent>
-            </Card>
 
             <Card className="bg-muted/30">
               <CardHeader className="pb-2">

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -71,12 +70,13 @@ export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: Wit
         });
         onWithdrawalRequested();
       } else {
-        // Log the detailed error to the console instead of a toast
-        console.error("Withdrawal Request Failed:", state.message);
+        // Detailed log for copying index links and debugging
+        console.error("Withdrawal Request Failed Detailed Error:", state);
+        
         toast({
           variant: 'destructive',
           title: 'Request Failed',
-          description: 'An error occurred. Please check the console for details.',
+          description: state.message || 'An error occurred. Please check the console for details.',
         });
       }
       setToastShown(true);
