@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { Crown, Landmark, PieChart, TrendingUp, Wallet, Banknote, Briefcase, Info, ArrowDownToLine, Loader2, LockKeyhole, History, Users2 } from 'lucide-react';
+import { Crown, Landmark, PieChart, TrendingUp, Wallet, Banknote, Briefcase, Info, ArrowDownToLine, Loader2, LockKeyhole, History, Users2, Percent } from 'lucide-react';
 import { Timestamp, collection, query, where, orderBy, limit, DocumentData, doc } from 'firebase/firestore';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -85,6 +85,16 @@ type WithdrawalRequest = DocumentData & {
     amount: number;
     status: 'Pending' | 'Approved' | 'Rejected';
     requestedAt: Timestamp;
+};
+
+type OwnershipPartner = DocumentData & {
+  userId: string;
+  shareUnits: number;
+  active: boolean;
+};
+
+type OwnerPolicy = DocumentData & {
+  totalShares: number;
 };
 
 type WithdrawalQuarter = { label: string; startDate: string; endDate: string };
@@ -222,7 +232,7 @@ export default function OwnerDashboardPage() {
     [firestore]
   );
   const ownerAllocationsQuery = useMemo(
-    () => (firestore ? query(collection(firestore, 'ownerProfitAllocations'), orderBy('createdAt', 'desc'), limit(100)) : null),
+    () => (firestore ? query(collection(firestore, 'ownerProfitAllocations'), orderBy('createdAt', 'desc'), limit(200)) : null),
     [firestore]
   );
 
@@ -244,6 +254,10 @@ export default function OwnerDashboardPage() {
     [firestore, user]
   );
 
+  // Partner & Policy refs
+  const myPartnerRef = useMemo(() => (firestore && user ? doc(firestore, 'ownershipPartners', user.uid) : null), [firestore, user]);
+  const ownerPolicyRef = useMemo(() => (firestore ? doc(firestore, 'platformPolicies', 'ownerProfit') : null), [firestore]);
+
   // Withdrawal window
   const withdrawalWindowRef = useMemo(
     () => (firestore ? doc(firestore, 'platformSettings', 'ownerWithdrawalWindow') : null),
@@ -261,6 +275,8 @@ export default function OwnerDashboardPage() {
   const { data: myInvestments, loading: myInvestmentsLoading } = useCollection<Investment>(myInvestmentsQuery);
   const { data: myWithdrawals, loading: myWithdrawalsLoading } = useCollection<WithdrawalRequest>(myWithdrawalRequestsQuery);
   const { data: myTransactions, loading: myTransactionsLoading } = useCollection<Transaction>(myTransactionsQuery);
+  const { data: myPartnerData, loading: partnerLoading } = useDoc<OwnershipPartner>(myPartnerRef as any);
+  const { data: ownerPolicy, loading: policyLoading } = useDoc<OwnerPolicy>(ownerPolicyRef as any);
 
   const metrics = useMemo(() => {
     const platformEarnings = (earnings || []).reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
@@ -294,6 +310,10 @@ export default function OwnerDashboardPage() {
       return sum;
     }, 0);
 
+    const totalAuthShares = ownerPolicy?.totalShares || 20000000;
+    const myShareUnits = myPartnerData?.shareUnits || 0;
+    const mySharePercent = totalAuthShares > 0 ? (myShareUnits / totalAuthShares) * 100 : 0;
+
     return {
       platformEarnings,
       activeDealsCount,
@@ -304,10 +324,13 @@ export default function OwnerDashboardPage() {
       personalProfitBalance,
       personalInvestible,
       personalInvested,
+      myShareUnits,
+      mySharePercent,
+      totalAuthShares,
     };
-  }, [earnings, deals, users, activeLoans, ownerAllocations, user, myFundBatches, myInvestments, myTransactions]);
+  }, [earnings, deals, users, activeLoans, ownerAllocations, user, myFundBatches, myInvestments, myTransactions, myPartnerData, ownerPolicy]);
 
-  const isLoading = usersLoading || dealsLoading || earningsLoading || repaymentsLoading || loansLoading || allocationsLoading || myBatchesLoading || myInvestmentsLoading || myWithdrawalsLoading || myTransactionsLoading;
+  const isLoading = usersLoading || dealsLoading || earningsLoading || repaymentsLoading || loansLoading || allocationsLoading || myBatchesLoading || myInvestmentsLoading || myWithdrawalsLoading || myTransactionsLoading || partnerLoading || policyLoading;
 
   const withdrawalStatus = useMemo(() => {
     if (!withdrawalWindowData?.quarters?.length) return { open: false };
@@ -343,11 +366,26 @@ export default function OwnerDashboardPage() {
               <CardDescription>Your share of the platform's distributed profits.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 pb-4 border-b">
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase font-semibold">Share Units</p>
+                  <p className="text-lg font-bold">{(metrics.myShareUnits || 0).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase font-semibold">Equity %</p>
+                  <div className="flex items-center gap-1">
+                    <Percent className="h-3 w-3 text-primary" />
+                    <p className="text-lg font-bold">{metrics.mySharePercent.toFixed(2)}%</p>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <p className="text-sm text-muted-foreground">Available Profit Balance</p>
                 <p className="text-3xl font-bold font-headline">{formatCurrency(metrics.personalProfitBalance)}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">Total Allocated: {formatCurrency(metrics.personalTotalAllocated)}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Total Historical Allocation: {formatCurrency(metrics.personalTotalAllocated)}</p>
               </div>
+              
               <div className="grid grid-cols-2 gap-4 pt-2 border-t">
                 <div>
                   <p className="text-xs text-muted-foreground">Invested</p>
