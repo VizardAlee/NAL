@@ -1543,59 +1543,104 @@ export default function PlatformFundsPage() {
                             <p className="text-lg font-semibold">{ownerPolicy?.allocationStartDate ? format(ownerPolicy.allocationStartDate.toDate(), 'PPP') : 'Not set'}</p>
                         </div>
                     </div>
-                    <div className="rounded-md border">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Partner</TableHead>
-                                    <TableHead>Share Units</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Action</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {partnersLoading ? (
-                                    <TableRow><TableCell colSpan={4}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
-                                ) : partnersError ? (
+                    
+                    {isMobile ? (
+                        <div className="space-y-3">
+                            {partnersLoading ? (
+                                <Skeleton className="h-24 w-full" />
+                            ) : partnersError ? (
+                                <p className="text-center text-destructive py-4">Could not load partners.</p>
+                            ) : (ownershipPartners?.length || 0) === 0 ? (
+                                <p className="text-center text-muted-foreground py-4">No ownership partners configured.</p>
+                            ) : (
+                                ownershipPartners?.map((partner) => (
+                                    <Card key={partner.id}>
+                                        <CardContent className="p-4 flex justify-between items-center">
+                                            <div className="space-y-1">
+                                                <p className="font-semibold">{partner.displayName}</p>
+                                                <div className="flex gap-2 items-center">
+                                                    <Badge variant="outline">{partner.shareUnits.toLocaleString()} units</Badge>
+                                                    <Badge variant={partner.active ? 'default' : 'secondary'}>{partner.active ? 'Active' : 'Inactive'}</Badge>
+                                                </div>
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={async () => {
+                                                    const result = await setOwnershipPartnerActiveAction({
+                                                        userId: partner.userId,
+                                                        active: !partner.active,
+                                                        actorId: user?.uid || '',
+                                                    });
+                                                    toast({
+                                                        variant: result.success ? 'default' : 'destructive',
+                                                        title: result.success ? 'Updated' : 'Update failed',
+                                                        description: result.message,
+                                                    });
+                                                }}
+                                            >
+                                                {partner.active ? 'Deactivate' : 'Activate'}
+                                            </Button>
+                                        </CardContent>
+                                    </Card>
+                                ))
+                            )}
+                        </div>
+                    ) : (
+                        <div className="rounded-md border">
+                            <Table>
+                                <TableHeader>
                                     <TableRow>
-                                        <TableCell colSpan={4} className="h-16 text-center text-destructive">
-                                            Could not load ownership partners (permission or query error).
-                                        </TableCell>
+                                        <TableHead>Partner</TableHead>
+                                        <TableHead>Share Units</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead className="text-right">Action</TableHead>
                                     </TableRow>
-                                ) : (ownershipPartners?.length || 0) === 0 ? (
-                                    <TableRow><TableCell colSpan={4} className="h-16 text-center text-muted-foreground">No ownership partners configured.</TableCell></TableRow>
-                                ) : (
-                                    ownershipPartners?.map((partner) => (
-                                        <TableRow key={partner.id}>
-                                            <TableCell>{partner.displayName}</TableCell>
-                                            <TableCell>{partner.shareUnits.toLocaleString()}</TableCell>
-                                            <TableCell><Badge variant={partner.active ? 'default' : 'secondary'}>{partner.active ? 'Active' : 'Inactive'}</Badge></TableCell>
-                                            <TableCell className="text-right">
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={async () => {
-                                                        const result = await setOwnershipPartnerActiveAction({
-                                                            userId: partner.userId,
-                                                            active: !partner.active,
-                                                            actorId: user?.uid || '',
-                                                        });
-                                                        toast({
-                                                            variant: result.success ? 'default' : 'destructive',
-                                                            title: result.success ? 'Updated' : 'Update failed',
-                                                            description: result.message,
-                                                        });
-                                                    }}
-                                                >
-                                                    {partner.active ? 'Deactivate' : 'Activate'}
-                                                </Button>
+                                </TableHeader>
+                                <TableBody>
+                                    {partnersLoading ? (
+                                        <TableRow><TableCell colSpan={4}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+                                    ) : partnersError ? (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="h-16 text-center text-destructive">
+                                                Could not load ownership partners (permission or query error).
                                             </TableCell>
                                         </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                    ) : (ownershipPartners?.length || 0) === 0 ? (
+                                        <TableRow><TableCell colSpan={4} className="h-16 text-center text-muted-foreground">No ownership partners configured.</TableCell></TableRow>
+                                    ) : (
+                                        ownershipPartners?.map((partner) => (
+                                            <TableRow key={partner.id}>
+                                                <TableCell>{partner.displayName}</TableCell>
+                                                <TableCell>{partner.shareUnits.toLocaleString()}</TableCell>
+                                                <TableCell><Badge variant={partner.active ? 'default' : 'secondary'}>{partner.active ? 'Active' : 'Inactive'}</Badge></TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={async () => {
+                                                            const result = await setOwnershipPartnerActiveAction({
+                                                                userId: partner.userId,
+                                                                active: !partner.active,
+                                                                actorId: user?.uid || '',
+                                                            });
+                                                            toast({
+                                                                variant: result.success ? 'default' : 'destructive',
+                                                                title: result.success ? 'Updated' : 'Update failed',
+                                                                description: result.message,
+                                                            });
+                                                        }}
+                                                    >
+                                                        {partner.active ? 'Deactivate' : 'Activate'}
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
                     {usersError && (
                         <p className="text-xs text-destructive">
                             Could not load users for partner picker. Check Firestore rules/deploy.
