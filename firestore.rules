@@ -230,6 +230,12 @@ service cloud.firestore {
         allow write: if isAdmin();
     }
 
+    match /interAccountLoans/{loanId} {
+        // Owners can view; only admins can mutate loan ledger.
+        allow read: if canAdminRead();
+        allow write: if isAdmin();
+    }
+
     // Rules for 'notifications'
     match /notifications/{notificationId} {
         // Allow any authenticated user to create a notification, as long as it's for an Admin.

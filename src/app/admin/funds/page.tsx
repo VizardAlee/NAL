@@ -70,7 +70,7 @@ type GenericTransaction = DocumentData & {
 
 type AdministrativeTransaction = DocumentData & {
     id: string;
-    type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible' | 'AssetAcquisition' | 'AssetSale' | 'ManagementFee';
+    type: 'AdminDeposit' | 'Expense' | 'TransferToInvestible' | 'TransferFromInvestible' | 'AssetAcquisition' | 'AssetSale' | 'ManagementFee' | 'LoanFromPlatformEarnings' | 'LoanRepaymentToPlatformEarnings';
     expenseType?: 'GENERAL_EXPENSE' | 'STAFF_PAYOUT';
     amount: number;
     description: string;
@@ -84,6 +84,7 @@ type AdministrativeTransaction = DocumentData & {
     salaryPeriod?: string;
     salaryCycle?: 'Monthly' | 'BiWeekly' | 'Weekly' | 'OneOff';
     payoutReference?: string;
+    loanId?: string;
 };
 
 const adminTransactionTypes = [
@@ -93,7 +94,9 @@ const adminTransactionTypes = [
     'TransferFromInvestible',
     'AssetAcquisition',
     'AssetSale',
-    'ManagementFee'
+    'ManagementFee',
+    'LoanFromPlatformEarnings',
+    'LoanRepaymentToPlatformEarnings'
 ] as const;
 
 type AdminTransactionTypeFilter = typeof adminTransactionTypes[number];
@@ -111,6 +114,20 @@ type Asset = DocumentData & {
 type FundBatch = DocumentData & {
     remainingAmount: number;
 }
+
+type InterAccountLoan = DocumentData & {
+    id: string;
+    fromAccount: 'platformEarnings';
+    toAccount: 'administrative';
+    principal: number;
+    outstanding: number;
+    status: 'Active' | 'Repaid';
+    reason: string;
+    reference?: string;
+    createdAt: Timestamp;
+    createdBy?: string;
+    repaidAt?: Timestamp;
+};
 
 const ITEMS_PER_PAGE = 10;
 
@@ -688,6 +705,283 @@ function TransferFundsForm({
     );
 }
 
+const borrowSchema = z.object({
+    amount: z.coerce.number().positive(),
+    reason: z.string().min(3, "Reason is required."),
+    reference: z.string().optional(),
+});
+
+function BorrowFromEarningsForm({
+    maxBorrowAmount,
+    onComplete,
+}: {
+    maxBorrowAmount: number;
+    onComplete: () => void;
+}) {
+    const { toast } = useToast();
+    const firestore = useFirestore();
+    const [isLoading, setIsLoading] = useState(false);
+
+    const schema = borrowSchema.extend({
+        amount: z.coerce.number().positive().max(maxBorrowAmount, { message: "Amount exceeds platform earnings balance." }),
+    });
+
+    const form = useForm<z.infer<typeof schema>>({
+        resolver: zodResolver(schema),
+        defaultValues: { amount: Math.min(1000, maxBorrowAmount), reason: '', reference: '' },
+    });
+
+    async function onSubmit(values: z.infer<typeof schema>) {
+        setIsLoading(true);
+        if (!firestore) return;
+        try {
+            const now = serverTimestamp();
+            const batch = writeBatch(firestore);
+
+            const loanRef = doc(collection(firestore, 'interAccountLoans'));
+            batch.set(loanRef, {
+                fromAccount: 'platformEarnings',
+                toAccount: 'administrative',
+                principal: values.amount,
+                outstanding: values.amount,
+                status: 'Active',
+                reason: values.reason,
+                reference: values.reference || null,
+                createdAt: now,
+                createdBy: 'admin',
+            });
+
+            const adminTxRef = doc(collection(firestore, 'administrativeTransactions'));
+            batch.set(adminTxRef, {
+                type: 'LoanFromPlatformEarnings',
+                amount: values.amount,
+                description: `Loan from platform earnings: ${values.reason}`,
+                createdAt: now,
+                loanId: loanRef.id,
+                reference: values.reference || null,
+            });
+
+            const earningsTxRef = doc(collection(firestore, 'transactions'));
+            batch.set(earningsTxRef, {
+                userId: 'platform',
+                type: 'PlatformEarning',
+                amount: -Math.abs(values.amount),
+                createdAt: now,
+                details: `Loan to administrative account (${loanRef.id})`,
+            });
+
+            await batch.commit();
+            toast({ title: "Loan recorded", description: "Administrative account has borrowed from platform earnings." });
+            onComplete();
+        } catch (error: any) {
+            console.error("Borrow error:", error);
+            toast({ variant: "destructive", title: "Borrow failed", description: error?.message || "Could not record loan." });
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    return (
+        <>
+            <DialogHeader>
+                <DialogTitle>Borrow from Platform Earnings</DialogTitle>
+                <DialogDescription>
+                    Move funds into Administrative Account and create a tracked liability.
+                </DialogDescription>
+            </DialogHeader>
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+                    <FormField
+                        control={form.control}
+                        name="amount"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Amount</FormLabel>
+                                <FormControl><Input type="number" {...field} /></FormControl>
+                                <FormDescription>Max available: {formatCurrency(maxBorrowAmount)}</FormDescription>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="reason"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Reason</FormLabel>
+                                <FormControl><Input placeholder="Operational expense bridge" {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="reference"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Reference (Optional)</FormLabel>
+                                <FormControl><Input placeholder="REF-2026-03-001" {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <Button type="submit" className="w-full" disabled={isLoading || maxBorrowAmount <= 0}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Borrow
+                    </Button>
+                </form>
+            </Form>
+        </>
+    );
+}
+
+const repayLoanSchema = z.object({
+    loanId: z.string().min(1, "Select a loan."),
+    amount: z.coerce.number().positive(),
+    reference: z.string().optional(),
+});
+
+function RepayPlatformLoanForm({
+    maxAdminBalance,
+    loans,
+    onComplete,
+}: {
+    maxAdminBalance: number;
+    loans: InterAccountLoan[];
+    onComplete: () => void;
+}) {
+    const { toast } = useToast();
+    const firestore = useFirestore();
+    const [isLoading, setIsLoading] = useState(false);
+    const form = useForm<z.infer<typeof repayLoanSchema>>({
+        resolver: zodResolver(repayLoanSchema),
+        defaultValues: { loanId: loans[0]?.id || '', amount: Math.min(1000, maxAdminBalance), reference: '' },
+    });
+
+    const selectedLoanId = form.watch('loanId');
+    const selectedLoan = useMemo(() => loans.find((loan) => loan.id === selectedLoanId), [loans, selectedLoanId]);
+    const maxRepayable = Math.max(0, Math.min(maxAdminBalance, selectedLoan?.outstanding || 0));
+
+    async function onSubmit(values: z.infer<typeof repayLoanSchema>) {
+        setIsLoading(true);
+        if (!firestore) return;
+        try {
+            const loan = loans.find((item) => item.id === values.loanId);
+            if (!loan) throw new Error("Loan not found.");
+            if (values.amount > maxAdminBalance) throw new Error("Repayment exceeds administrative balance.");
+            if (values.amount > loan.outstanding) throw new Error("Repayment exceeds selected loan outstanding.");
+
+            const now = serverTimestamp();
+            const batch = writeBatch(firestore);
+            const nextOutstanding = loan.outstanding - values.amount;
+
+            const loanRef = doc(firestore, 'interAccountLoans', loan.id);
+            batch.update(loanRef, {
+                outstanding: nextOutstanding,
+                status: nextOutstanding <= 0 ? 'Repaid' : 'Active',
+                repaidAt: nextOutstanding <= 0 ? now : null,
+                updatedAt: now,
+            });
+
+            const adminTxRef = doc(collection(firestore, 'administrativeTransactions'));
+            batch.set(adminTxRef, {
+                type: 'LoanRepaymentToPlatformEarnings',
+                amount: -Math.abs(values.amount),
+                description: `Repayment to platform earnings for loan ${loan.id}`,
+                createdAt: now,
+                loanId: loan.id,
+                reference: values.reference || null,
+            });
+
+            const earningsTxRef = doc(collection(firestore, 'transactions'));
+            batch.set(earningsTxRef, {
+                userId: 'platform',
+                type: 'PlatformEarning',
+                amount: Math.abs(values.amount),
+                createdAt: now,
+                details: `Loan repayment from administrative account (${loan.id})`,
+            });
+
+            await batch.commit();
+            toast({ title: "Repayment recorded", description: "Loan repayment to platform earnings was successful." });
+            onComplete();
+        } catch (error: any) {
+            console.error("Repayment error:", error);
+            toast({ variant: "destructive", title: "Repayment failed", description: error?.message || "Could not record repayment." });
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    return (
+        <>
+            <DialogHeader>
+                <DialogTitle>Repay Platform Earnings Loan</DialogTitle>
+                <DialogDescription>
+                    Repay an active administrative liability back to platform earnings.
+                </DialogDescription>
+            </DialogHeader>
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+                    <FormField
+                        control={form.control}
+                        name="loanId"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Active Loan</FormLabel>
+                                <FormControl>
+                                    <select
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                        value={field.value}
+                                        onChange={field.onChange}
+                                    >
+                                        <option value="">Select loan</option>
+                                        {loans.map((loan) => (
+                                            <option key={loan.id} value={loan.id}>
+                                                {loan.id.slice(0, 8)}... | Outstanding {formatCurrency(loan.outstanding)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="amount"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Repayment Amount</FormLabel>
+                                <FormControl><Input type="number" {...field} /></FormControl>
+                                <FormDescription>
+                                    Max repayable now: {formatCurrency(maxRepayable)}
+                                </FormDescription>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="reference"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Reference (Optional)</FormLabel>
+                                <FormControl><Input placeholder="REP-2026-03-001" {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <Button type="submit" className="w-full" disabled={isLoading || maxRepayable <= 0}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Repay Loan
+                    </Button>
+                </form>
+            </Form>
+        </>
+    );
+}
+
 export default function PlatformFundsPage() {
     const firestore = useFirestore();
     const isMobile = useIsMobile();
@@ -711,6 +1005,7 @@ export default function PlatformFundsPage() {
     const repaymentsQuery = useMemo(() => firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Approved')) : null, [firestore]);
     const earningsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions'), where('type', '==', 'PlatformEarning')) : null, [firestore]);
     const allInvestorDepositsQuery = useMemo(() => firestore ? query(collection(firestore, 'transactions'), where('type', '==', 'Deposit')) : null, [firestore]);
+    const interAccountLoansQuery = useMemo(() => firestore ? query(collection(firestore, 'interAccountLoans'), orderBy('createdAt', 'desc')) : null, [firestore]);
 
 
     const { data: platformFundBatches, loading: platformBatchesLoading } = useCollection<PlatformFundBatch>(platformFundBatchesQuery);
@@ -722,19 +1017,20 @@ export default function PlatformFundsPage() {
     const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery);
     const { data: earningsTransactions, loading: earningsLoading } = useCollection<GenericTransaction>(earningsQuery);
     const { data: allInvestorDeposits, loading: depositsLoading } = useCollection<GenericTransaction>(allInvestorDepositsQuery);
+    const { data: interAccountLoans, loading: loansLoading, error: loansError } = useCollection<InterAccountLoan>(interAccountLoansQuery);
 
 
     const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allFundBatchesLoading || assetsLoading || dealsLoading || repaymentsLoading || earningsLoading || depositsLoading;
 
     const metrics = useMemo(() => {
-        const administrativeBalance = adminTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
+        const administrativeBalance = adminTransactions?.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0) || 0;
 
-        const platformEarnings = earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
+        const platformEarnings = earningsTransactions?.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0) || 0;
 
-        const investibleCapital = platformFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
-        const zakatPool = zakatTransactions?.reduce((sum, tx) => sum + Math.abs(tx.amount), 0) || 0;
-        const totalInvestiblePool = allFundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
-        const totalAssetValue = assets?.filter(a => a.status === 'Held').reduce((sum, asset) => sum + asset.acquisitionCost, 0) || 0;
+        const investibleCapital = platformFundBatches?.reduce((sum, batch) => sum + (Number(batch.remainingAmount) || 0), 0) || 0;
+        const zakatPool = zakatTransactions?.reduce((sum, tx) => sum + Math.abs(Number(tx.amount) || 0), 0) || 0;
+        const totalInvestiblePool = allFundBatches?.reduce((sum, batch) => sum + (Number(batch.remainingAmount) || 0), 0) || 0;
+        const totalAssetValue = assets?.filter(a => a.status === 'Held').reduce((sum, asset) => sum + (Number(asset.acquisitionCost) || 0), 0) || 0;
 
         let totalClientDebt = 0;
         let totalInvested = 0;
@@ -753,12 +1049,35 @@ export default function PlatformFundsPage() {
         }
 
 
-        const cumulativeInvestments = allInvestorDeposits?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
-        const cumulativeDeals = deals?.reduce((sum, deal) => sum + deal.principal, 0) || 0;
+        const cumulativeInvestments = allInvestorDeposits?.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0) || 0;
+        const cumulativeDeals = deals?.reduce((sum, deal) => sum + (Number(deal.principal) || 0), 0) || 0;
+        const adminDebtToPlatform = interAccountLoans
+            ?.filter((loan) => loan.status === 'Active')
+            .reduce((sum, loan) => sum + (Number(loan.outstanding) || 0), 0) || 0;
+        const activeLoanCount = interAccountLoans?.filter((loan) => loan.status === 'Active').length || 0;
 
 
-        return { investibleCapital, administrativeBalance, zakatPool, totalInvested, totalInvestiblePool, totalAssetValue, totalClientDebt, platformEarnings, cumulativeInvestments, cumulativeDeals };
-    }, [platformFundBatches, adminTransactions, zakatTransactions, allFundBatches, assets, deals, repayments, earningsTransactions, allInvestorDeposits]);
+        return {
+            investibleCapital,
+            administrativeBalance,
+            zakatPool,
+            totalInvested,
+            totalInvestiblePool,
+            totalAssetValue,
+            totalClientDebt,
+            platformEarnings,
+            cumulativeInvestments,
+            cumulativeDeals,
+            adminDebtToPlatform,
+            activeLoanCount,
+        };
+    }, [platformFundBatches, adminTransactions, zakatTransactions, allFundBatches, assets, deals, repayments, earningsTransactions, allInvestorDeposits, interAccountLoans]);
+
+    const activeInterAccountLoans = useMemo(() => {
+        return (interAccountLoans || []).filter((loan) => loan.status === 'Active' && loan.outstanding > 0);
+    }, [interAccountLoans]);
+
+    const safeAdminDebtToPlatform = Number.isFinite(metrics.adminDebtToPlatform) ? metrics.adminDebtToPlatform : 0;
 
     const filteredAdminTransactions = useMemo(() => {
         if (!adminTransactions) return [];
@@ -813,7 +1132,7 @@ export default function PlatformFundsPage() {
                 icon={Banknote}
             />
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-6">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5 mb-6">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Administrative Account</CardTitle>
@@ -852,6 +1171,24 @@ export default function PlatformFundsPage() {
                     <CardContent>
                         {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(metrics.totalInvestiblePool)}</div>}
                         <p className="text-xs text-muted-foreground">Total available capital from all sources.</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Admin Debt to Platform</CardTitle>
+                        <HandCoins className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{formatCurrency(safeAdminDebtToPlatform)}</div>
+                        <p className="text-xs text-muted-foreground">Outstanding liability across {metrics.activeLoanCount} active loan(s).</p>
+                        {loansError && (
+                            <p className="text-xs text-destructive mt-1">
+                                Could not load loan ledger. Showing fallback value.
+                            </p>
+                        )}
+                        {loansLoading && (
+                            <p className="text-xs text-muted-foreground mt-1">Loading loan ledger...</p>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -930,6 +1267,12 @@ export default function PlatformFundsPage() {
                                         </div>
                                     )}
                                 </>
+                            )}
+                            {(selectedTx.type === 'LoanFromPlatformEarnings' || selectedTx.type === 'LoanRepaymentToPlatformEarnings') && selectedTx.loanId && (
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Loan ID:</span>
+                                    <span className="text-xs">{selectedTx.loanId}</span>
+                                </div>
                             )}
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Date:</span>
@@ -1028,6 +1371,8 @@ export default function PlatformFundsPage() {
                                 <Dialog open={isDialogOpen['deposit']} onOpenChange={(isOpen) => isOpen ? openDialog('deposit') : closeDialog('deposit')}><DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2 h-4 w-4" />Add Funds</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Add Funds to Admin Account</DialogTitle></DialogHeader><AdminTransactionForm type="AdminDeposit" onTransactionComplete={() => closeDialog('deposit')} /></DialogContent></Dialog>
                                 <Dialog open={isDialogOpen['expense']} onOpenChange={(isOpen) => isOpen ? openDialog('expense') : closeDialog('expense')}><DialogTrigger asChild><Button size="sm" variant="outline"><MinusCircle className="mr-2 h-4 w-4" />Record Expense</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Record an Expense</DialogTitle></DialogHeader><AdminTransactionForm type="Expense" onTransactionComplete={() => closeDialog('expense')} /></DialogContent></Dialog>
                                 <Dialog open={isDialogOpen['staffPayout']} onOpenChange={(isOpen) => isOpen ? openDialog('staffPayout') : closeDialog('staffPayout')}><DialogTrigger asChild><Button size="sm" variant="outline"><DollarSign className="mr-2 h-4 w-4" />Record Staff Payout</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Record Staff Salary Payout</DialogTitle></DialogHeader><AdminTransactionForm type="StaffPayout" onTransactionComplete={() => closeDialog('staffPayout')} /></DialogContent></Dialog>
+                                <Dialog open={isDialogOpen['borrowFromEarnings']} onOpenChange={(isOpen) => isOpen ? openDialog('borrowFromEarnings') : closeDialog('borrowFromEarnings')}><DialogTrigger asChild><Button size="sm" variant="outline"><HandCoins className="mr-2 h-4 w-4" />Borrow from Earnings</Button></DialogTrigger><DialogContent><BorrowFromEarningsForm maxBorrowAmount={Math.max(0, metrics.platformEarnings)} onComplete={() => closeDialog('borrowFromEarnings')} /></DialogContent></Dialog>
+                                <Dialog open={isDialogOpen['repayEarningsLoan']} onOpenChange={(isOpen) => isOpen ? openDialog('repayEarningsLoan') : closeDialog('repayEarningsLoan')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Repay Earnings Loan</Button></DialogTrigger><DialogContent><RepayPlatformLoanForm maxAdminBalance={Math.max(0, metrics.administrativeBalance)} loans={activeInterAccountLoans} onComplete={() => closeDialog('repayEarningsLoan')} /></DialogContent></Dialog>
                                 <Dialog open={isDialogOpen['transferToInvestible']} onOpenChange={(isOpen) => isOpen ? openDialog('transferToInvestible') : closeDialog('transferToInvestible')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Fund Investible</Button></DialogTrigger><DialogContent><TransferFundsForm direction="toInvestible" maxAmount={metrics.administrativeBalance} onTransferComplete={() => closeDialog('transferToInvestible')} /></DialogContent></Dialog>
                                 <Dialog open={isDialogOpen['transferFromInvestible']} onOpenChange={(isOpen) => isOpen ? openDialog('transferFromInvestible') : closeDialog('transferFromInvestible')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Withdraw to Admin</Button></DialogTrigger><DialogContent><TransferFundsForm direction="fromInvestible" maxAmount={metrics.investibleCapital} onTransferComplete={() => closeDialog('transferFromInvestible')} /></DialogContent></Dialog>
                             </div>
