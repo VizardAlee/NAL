@@ -34,6 +34,7 @@ type WithdrawalRequest = DocumentData & {
     status: 'Pending' | 'Approved' | 'Rejected';
     requestedAt: Timestamp;
     processedAt?: Timestamp;
+    type?: 'OwnerWithdrawal' | 'InvestorWithdrawal';
 };
 
 // New hook to clear notifications when a page is visited
@@ -107,7 +108,8 @@ function WithdrawalsTable({
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead>Investor</TableHead>
+                        <TableHead>Requester</TableHead>
+                        <TableHead>Type</TableHead>
                         <TableHead>Amount</TableHead>
                         <TableHead>Date Requested</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
@@ -117,6 +119,7 @@ function WithdrawalsTable({
                     {Array.from({ length: 3 }).map((_, i) => (
                         <TableRow key={i}>
                             <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                             <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                             <TableCell><Skeleton className="h-5 w-28" /></TableCell>
                             <TableCell className="text-right"><Skeleton className="h-8 w-40 ml-auto" /></TableCell>
@@ -143,7 +146,12 @@ function WithdrawalsTable({
                         <CardContent className="p-4 space-y-3">
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <p className="font-medium">{request.investorName}</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="font-medium">{request.investorName}</p>
+                                        <Badge variant={request.type === 'OwnerWithdrawal' ? 'secondary' : 'outline'} className="text-[10px] py-0">
+                                            {request.type === 'OwnerWithdrawal' ? 'Owner' : 'Investor'}
+                                        </Badge>
+                                    </div>
                                     <p className="text-sm text-primary font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.amount)}</p>
                                     <p className="text-xs text-muted-foreground">{request.requestedAt ? format(request.requestedAt.toDate(), 'PPP') : 'N/A'}</p>
                                 </div>
@@ -183,7 +191,8 @@ function WithdrawalsTable({
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Investor</TableHead>
+                            <TableHead>Requester</TableHead>
+                            <TableHead>Type</TableHead>
                             <TableHead>Amount</TableHead>
                             <TableHead>Date Requested</TableHead>
                             {showActionButtons ? <TableHead className="text-right">Actions</TableHead> : <TableHead>Status</TableHead>}
@@ -192,7 +201,12 @@ function WithdrawalsTable({
                     <TableBody>
                         {!isLoading && requests.map((request) => (
                             <TableRow key={request.id}>
-                                <TableCell data-label="Investor" className="font-medium">{request.investorName}</TableCell>
+                                <TableCell data-label="Requester" className="font-medium">{request.investorName}</TableCell>
+                                <TableCell data-label="Type">
+                                    <Badge variant={request.type === 'OwnerWithdrawal' ? 'secondary' : 'outline'}>
+                                        {request.type === 'OwnerWithdrawal' ? 'Owner' : 'Investor'}
+                                    </Badge>
+                                </TableCell>
                                 <TableCell data-label="Amount">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.amount)}</TableCell>
                                 <TableCell data-label="Date Requested">{request.requestedAt ? format(request.requestedAt.toDate(), 'PPP') : 'N/A'}</TableCell>
                                 {showActionButtons ? (
@@ -291,7 +305,7 @@ export default function WithdrawalsPage() {
         <div>
             <PageHeader
                 title="Withdrawal Approvals"
-                description="Review and approve/reject investor withdrawal requests."
+                description="Review and approve/reject withdrawal requests from investors and owners."
                 icon={CheckCircle}
             />
             <Tabs defaultValue="pending" className="w-full">

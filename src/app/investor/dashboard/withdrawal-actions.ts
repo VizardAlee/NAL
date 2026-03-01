@@ -21,7 +21,7 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
         userId: formData.get('userId'),
         userName: formData.get('userName'),
     });
-    
+
     if (!validatedFields.success) {
         return { success: false, message: 'Invalid form data.' };
     }
@@ -63,6 +63,7 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
             amount,
             status: 'Pending',
             requestedAt: now,
+            type: isOwnerAccount ? 'OwnerWithdrawal' : 'InvestorWithdrawal',
         });
 
         // 2. Update the user's last withdrawal date
@@ -70,9 +71,9 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
         batch.update(userRef, {
             lastWithdrawalDate: now,
         });
-        
+
         await batch.commit();
-        
+
         const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
         await notifyAdmins(
             'Withdrawal Request',
@@ -82,9 +83,9 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
 
         revalidatePath('/admin/approvals/withdrawals');
         revalidatePath('/investor/dashboard');
-        
+
         return { success: true, message: `Your request to withdraw ${formattedAmount} has been submitted.` };
-    } catch(error) {
+    } catch (error) {
         console.error("WITHDRAWAL REQUEST ACTION ERROR:", error);
         return { success: false, message: error instanceof Error ? error.message : "An unknown error occurred." };
     }
@@ -94,64 +95,64 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
 // --- Reinvestment Action ---
 
 const reinvestSchema = z.object({
-  amount: z.coerce.number().positive("Amount must be a positive number."),
-  userId: z.string().min(1, "User ID is required."),
-  userName: z.string().min(1, "User name is required."),
+    amount: z.coerce.number().positive("Amount must be a positive number."),
+    userId: z.string().min(1, "User ID is required."),
+    userName: z.string().min(1, "User name is required."),
 });
 
 export async function reinvestAction(input: { amount: number; userId: string, userName: string }): Promise<{ success: boolean; message: string; }> {
 
-  const validatedFields = reinvestSchema.safeParse(input);
+    const validatedFields = reinvestSchema.safeParse(input);
 
-  if (!validatedFields.success) {
-    return {
-      success: false,
-      message: 'Invalid input. Please try again.',
-    };
-  }
+    if (!validatedFields.success) {
+        return {
+            success: false,
+            message: 'Invalid input. Please try again.',
+        };
+    }
 
-  const { amount, userId, userName } = validatedFields.data;
+    const { amount, userId, userName } = validatedFields.data;
 
-  try {
-    
-    await adminDb.collection('reinvestmentRequests').add({
-      investorId: userId,
-      investorName: userName,
-      amount: amount,
-      status: 'Pending',
-      requestedAt: FieldValue.serverTimestamp(),
-    });
+    try {
 
-    const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
-    await notifyAdmins(
-        'Reinvestment Request',
-        `${userName} requested to reinvest ${formattedAmount}.`,
-        '/admin/approvals/reinvestments'
-    );
+        await adminDb.collection('reinvestmentRequests').add({
+            investorId: userId,
+            investorName: userName,
+            amount: amount,
+            status: 'Pending',
+            requestedAt: FieldValue.serverTimestamp(),
+        });
 
-    revalidatePath('/investor/dashboard');
-    revalidatePath('/admin/approvals/reinvestments');
+        const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+        await notifyAdmins(
+            'Reinvestment Request',
+            `${userName} requested to reinvest ${formattedAmount}.`,
+            '/admin/approvals/reinvestments'
+        );
 
-    return {
-      success: true,
-      message: `Successfully requested to reinvest ${formattedAmount}. An admin will approve it shortly.`,
-    };
-  } catch (error) {
-    console.error('REINVESTMENT REQUEST ERROR:', error);
-    const message = error instanceof Error ? error.message : 'An unknown error occurred.';
-    return {
-      success: false,
-      message: `Failed to request reinvestment: ${message}`,
-    };
-  }
+        revalidatePath('/investor/dashboard');
+        revalidatePath('/admin/approvals/reinvestments');
+
+        return {
+            success: true,
+            message: `Successfully requested to reinvest ${formattedAmount}. An admin will approve it shortly.`,
+        };
+    } catch (error) {
+        console.error('REINVESTMENT REQUEST ERROR:', error);
+        const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+        return {
+            success: false,
+            message: `Failed to request reinvestment: ${message}`,
+        };
+    }
 }
 
 // --- Uninvested Capital Withdrawal ---
 
 const capitalWithdrawalSchema = z.object({
-  batchId: z.string().min(1),
-  userId: z.string().min(1),
-  userName: z.string().min(1),
+    batchId: z.string().min(1),
+    userId: z.string().min(1),
+    userName: z.string().min(1),
 });
 
 export async function requestCapitalWithdrawalAction(input: z.infer<typeof capitalWithdrawalSchema>) {
@@ -180,7 +181,7 @@ export async function requestCapitalWithdrawalAction(input: z.infer<typeof capit
         if (!(isShortTerm && isUninvested && isOverOneMonthOld)) {
             return { success: false, message: "This fund batch is not eligible for withdrawal." };
         }
-        
+
         const amount = batchData.amount;
         const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
 
