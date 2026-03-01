@@ -505,6 +505,7 @@ export default function OwnerDashboardPage() {
                 {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold text-primary">{formatCurrency(metrics.globalTotalDistributed)}</div>}
                 <p className="text-[10px] text-muted-foreground mt-1">Total shared among all owners</p>
               </CardContent>
+            </Card>
 
             <Card className="bg-muted/30">
               <CardHeader className="pb-2">
