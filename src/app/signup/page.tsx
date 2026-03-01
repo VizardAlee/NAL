@@ -1,10 +1,9 @@
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition, Suspense } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -21,10 +20,9 @@ import { Logo } from '@/components/icons';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { getInviteDetailsAction, signUpWithEmailAction } from './actions';
 import { useCompanyLogo } from '@/components/company-logo-provider';
-import { useSearchParams } from 'next/navigation';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -46,7 +44,7 @@ type InviteState = {
   message?: string;
 };
 
-export default function SignupPage() {
+function SignupPageContent() {
   const { toast } = useToast();
   const router = useRouter();
   const { logoUrl } = useCompanyLogo();
@@ -255,5 +253,17 @@ export default function SignupPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    }>
+      <SignupPageContent />
+    </Suspense>
   );
 }
