@@ -28,11 +28,12 @@ import { usePathname } from 'next/navigation';
 
 type WithdrawalRequest = DocumentData & {
     id: string;
-    investorId: string;
-    investorName: string;
+    investorId?: string;
+    userId?: string;        // fallback field used by old owner requests
+    investorName?: string;
     amount: number;
     status: 'Pending' | 'Approved' | 'Rejected';
-    requestedAt: Timestamp;
+    requestedAt?: Timestamp;
     processedAt?: Timestamp;
     type?: 'OwnerWithdrawal' | 'InvestorWithdrawal';
 };
@@ -273,11 +274,13 @@ export default function WithdrawalsPage() {
 
             // If approved, create a 'Withdrawal' transaction
             if (newStatus === 'Approved') {
+                const resolvedUserId = request.investorId || request.userId;
+                if (!resolvedUserId) throw new Error('Cannot determine user ID for this withdrawal request.');
                 const transactionRef = doc(collection(firestore, 'transactions'));
                 batch.set(transactionRef, {
-                    userId: request.investorId,
+                    userId: resolvedUserId,
                     type: 'Withdrawal',
-                    amount: -request.amount, // Negative amount for withdrawal
+                    amount: -request.amount,
                     createdAt: Timestamp.now(),
                 });
             }
