@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, XCircle, Hourglass, History } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs, orderBy, FieldValue } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
@@ -156,7 +156,7 @@ function WithdrawalsTable({
                                     <p className="text-sm text-primary font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.amount)}</p>
                                     <p className="text-xs text-muted-foreground">{request.requestedAt ? format(request.requestedAt.toDate(), 'PPP') : 'N/A'}</p>
                                 </div>
-                                {!showActionButtons && <Badge variant={request.status === 'Approved' ? 'default' : 'destructive'}>{request.status}</Badge>}
+                                {!showActionButtons && <Badge variant={request.status === 'Approved' ? 'default' : request.status === 'Rejected' ? 'destructive' : 'secondary'}>{request.status}</Badge>}
                             </div>
                             {showActionButtons && (
                                 <div className="flex justify-end gap-2 pt-2 border-t">
@@ -232,7 +232,7 @@ function WithdrawalsTable({
                                     </TableCell>
                                 ) : (
                                     <TableCell data-label="Status">
-                                        <Badge variant={request.status === 'Approved' ? 'default' : 'destructive'}>{request.status}</Badge>
+                                        <Badge variant={request.status === 'Approved' ? 'default' : request.status === 'Rejected' ? 'destructive' : 'secondary'}>{request.status}</Badge>
                                     </TableCell>
                                 )}
                             </TableRow>
@@ -252,7 +252,7 @@ export default function WithdrawalsPage() {
     useClearNotificationsByPath();
 
     const pendingQuery = useMemo(() => firestore ? query(collection(firestore, 'withdrawalRequests'), where('status', '==', 'Pending')) : null, [firestore]);
-    const processedQuery = useMemo(() => firestore ? query(collection(firestore, 'withdrawalRequests'), where('status', 'in', ['Approved', 'Rejected'])) : null, [firestore]);
+    const processedQuery = useMemo(() => firestore ? query(collection(firestore, 'withdrawalRequests'), where('status', 'in', ['Approved', 'Rejected']), orderBy('requestedAt', 'desc')) : null, [firestore]);
 
     const { data: pendingRequests, loading: pendingLoading } = useCollection<WithdrawalRequest>(pendingQuery);
     const { data: processedRequests, loading: processedLoading } = useCollection<WithdrawalRequest>(processedQuery);
@@ -272,17 +272,46 @@ export default function WithdrawalsPage() {
                 processedAt: Timestamp.now()
             });
 
-            // If approved, create a 'Withdrawal' transaction
+            // If approved, create a 'Withdrawal' transaction and deduct from fund batches FIFO
             if (newStatus === 'Approved') {
                 const resolvedUserId = request.investorId || request.userId;
                 if (!resolvedUserId) throw new Error('Cannot determine user ID for this withdrawal request.');
+                
+                // 1. Create the negative transaction
                 const transactionRef = doc(collection(firestore, 'transactions'));
                 batch.set(transactionRef, {
                     userId: resolvedUserId,
                     type: 'Withdrawal',
-                    amount: -request.amount,
+                    amount: -Math.abs(request.amount),
                     createdAt: Timestamp.now(),
                 });
+
+                // 2. Deduct from fund batches FIFO
+                const batchesQuery = query(
+                    collection(firestore, 'fundBatches'),
+                    where('sourceId', '==', resolvedUserId),
+                    where('remainingAmount', '>', 0),
+                    orderBy('createdAt', 'asc')
+                );
+                
+                const batchesSnap = await getDocs(batchesQuery);
+                let remainingToDeduct = Math.abs(request.amount);
+
+                for (const batchDoc of batchesSnap.docs) {
+                    if (remainingToDeduct <= 0) break;
+                    const batchData = batchDoc.data();
+                    const available = batchData.remainingAmount;
+                    const deduction = Math.min(available, remainingToDeduct);
+
+                    batch.update(batchDoc.ref, {
+                        remainingAmount: FieldValue.increment(-deduction)
+                    });
+                    remainingToDeduct -= deduction;
+                }
+
+                if (remainingToDeduct > 0.01) {
+                    throw new Error(`Insufficient investible balance. Could not deduct full withdrawal amount (Remaining: ${remainingToDeduct}).`);
+                }
             }
 
             await batch.commit();

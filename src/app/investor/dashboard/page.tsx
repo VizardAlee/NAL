@@ -60,6 +60,13 @@ type FundBatch = DocumentData & {
     details?: string;
 };
 
+type WithdrawalRequest = DocumentData & {
+    id: string;
+    amount: number;
+    status: 'Pending' | 'Approved' | 'Rejected';
+    requestedAt: Timestamp;
+};
+
 type UserProfile = DocumentData & {
     id: string;
     lastWithdrawalDate?: Timestamp;
@@ -349,6 +356,11 @@ export default function InvestorDashboard() {
         return query(collection(firestore, 'transactions'), where('userId', '==', user.uid), where('type', '==', 'Deposit'), orderBy('createdAt', 'asc'), limit(1));
     }, [firestore, user]);
 
+    const withdrawalRequestsQuery = useMemo(() => {
+        if (!firestore || !user?.uid) return null;
+        return query(collection(firestore, 'withdrawalRequests'), where('investorId', '==', user.uid), orderBy('requestedAt', 'desc'), limit(5));
+    }, [firestore, user]);
+
 
     const { data: userProfile, loading: userProfileLoading } = useDoc<UserProfile>(userProfileRef as any);
     const { data: investments, loading: investmentsLoading } = useCollection<Investment>(investmentsQuery);
@@ -356,6 +368,7 @@ export default function InvestorDashboard() {
     const { data: allTransactions, loading: allTransactionsLoading } = useCollection<Transaction>(allTransactionsQuery);
     const { data: recentTransactions, loading: recentTransactionsLoading } = useCollection<Transaction>(recentTransactionsQuery);
     const { data: firstDeposit, loading: firstDepositLoading } = useCollection<Transaction>(firstDepositQuery);
+    const { data: withdrawalRequests, loading: withdrawalRequestsLoading } = useCollection<WithdrawalRequest>(withdrawalRequestsQuery);
 
 
     const investedDealIds = useMemo(() => {
@@ -370,14 +383,15 @@ export default function InvestorDashboard() {
 
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
 
-    const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || firstDepositLoading;
+    const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || firstDepositLoading || withdrawalRequestsLoading;
 
-    const { longTermProfits, withdrawableBalance, expectedIncome } = useMemo(() => {
+    const { longTermProfits, withdrawableBalance, expectedIncome, totalProfitsEarned } = useMemo(() => {
         if (!allTransactions || !deals || !investments) {
-            return { longTermProfits: 0, withdrawableBalance: 0, expectedIncome: 0 };
+            return { longTermProfits: 0, withdrawableBalance: 0, expectedIncome: 0, totalProfitsEarned: 0 };
         }
 
         const profitTransactions = allTransactions.filter(tx => tx.type === 'ProfitDistribution');
+        const totalProfitsEarned = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
         const totalWithdrawnFromProfits = allTransactions
             .filter(tx => tx.type === 'Withdrawal')
             .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
@@ -417,6 +431,7 @@ export default function InvestorDashboard() {
             longTermProfits: totalLongTermProfit,
             withdrawableBalance: totalShortTermProfit - totalWithdrawnFromProfits,
             expectedIncome: totalExpectedIncome,
+            totalProfitsEarned
         };
     }, [allTransactions, deals, investments, user]);
 
@@ -518,6 +533,8 @@ export default function InvestorDashboard() {
         try { return format(parsedDate, 'PPP'); } catch { return 'Invalid Date'; }
     };
 
+    const formatCurrency = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+
     return (
         <div>
             <PageHeader
@@ -585,44 +602,54 @@ export default function InvestorDashboard() {
                 </div>
             )}
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
                         <span className="text-muted-foreground font-bold text-lg">₦</span>
                     </CardHeader>
                     <CardContent>
-                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.portfolioValue)}</div>}
-                        <p className="text-xs text-muted-foreground">Total value of your investments</p>
+                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(financialMetrics.portfolioValue)}</div>}
+                        <p className="text-xs text-muted-foreground">Total stake value</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Investable Balance</CardTitle>
+                        <CardTitle className="text-sm font-medium">Investible Balance</CardTitle>
                         <Banknote className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(financialMetrics.investableBalance)}</div>}
-                        <p className="text-xs text-muted-foreground">Capital ready for new deals</p>
+                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(financialMetrics.investableBalance)}</div>}
+                        <p className="text-xs text-muted-foreground">Ready for new deals</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Profits Shared</CardTitle>
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(totalProfitsEarned)}</div>}
+                        <p className="text-xs text-muted-foreground">Cumulative earned</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Expected Income</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        <History className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(expectedIncome)}</div>}
+                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(expectedIncome)}</div>}
                         <p className="text-xs text-muted-foreground">From active deals</p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="lg:col-span-1">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Withdrawable Balance</CardTitle>
+                        <CardTitle className="text-sm font-medium">Withdrawable</CardTitle>
                         <Wallet className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(withdrawableBalance)}</div>}
+                        {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{formatCurrency(withdrawableBalance)}</div>}
                         <Dialog open={isWithdrawOpen} onOpenChange={setWithdrawOpen}>
                             <DialogTrigger asChild>
                                 <Button
@@ -632,7 +659,7 @@ export default function InvestorDashboard() {
                                     disabled={withdrawableBalance <= 0}
                                 >
                                     <Download className="mr-2 h-4 w-4" />
-                                    Withdraw Profits
+                                    Withdraw
                                 </Button>
                             </DialogTrigger>
                             <DialogContent>
@@ -643,8 +670,6 @@ export default function InvestorDashboard() {
                             </DialogContent>
                         </Dialog>
                         {user && <ReinvestButton balance={withdrawableBalance} user={user} />}
-                        {withdrawalRules.isLocked && <p className="text-xs text-destructive mt-1">Long-term profits are locked for 1 year.</p>}
-                        {withdrawalRules.cooldownActive && <p className="text-xs text-destructive mt-1">Next withdrawal available in {90 - differenceInDays(new Date(), userProfile!.lastWithdrawalDate!.toDate())} days.</p>}
                     </CardContent>
                 </Card>
             </div>
@@ -689,7 +714,7 @@ export default function InvestorDashboard() {
                                 />
                                 <Tooltip
                                     cursor={{ strokeDasharray: '3 3' }}
-                                    content={<ChartTooltipContent indicator="dot" formatter={(value) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(Number(value))} />}
+                                    content={<ChartTooltipContent indicator="dot" formatter={(value) => formatCurrency(Number(value))} />}
                                 />
                                 <Line
                                     dataKey="portfolioValue"
@@ -706,6 +731,50 @@ export default function InvestorDashboard() {
                                 />
                             </LineChart>
                         </ChartContainer>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card className="mt-8">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <History className="h-5 w-5" />
+                        Withdrawal History
+                    </CardTitle>
+                    <CardDescription>Recent status of your withdrawal requests.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {isLoading ? (
+                        <div className="space-y-3">
+                            {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+                        </div>
+                    ) : !withdrawalRequests || withdrawalRequests.length === 0 ? (
+                        <p className="text-center text-sm text-muted-foreground py-8">No withdrawal requests found.</p>
+                    ) : (
+                        <div className="rounded-md border">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Requested On</TableHead>
+                                        <TableHead>Amount</TableHead>
+                                        <TableHead className="text-right">Status</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {withdrawalRequests.map((req) => (
+                                        <TableRow key={req.id}>
+                                            <TableCell>{format(req.requestedAt.toDate(), 'PPP')}</TableCell>
+                                            <TableCell className="font-medium">{formatCurrency(req.amount)}</TableCell>
+                                            <TableCell className="text-right">
+                                                <Badge variant={req.status === 'Approved' ? 'default' : req.status === 'Rejected' ? 'destructive' : 'secondary'}>
+                                                    {req.status}
+                                                </Badge>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
                     )}
                 </CardContent>
             </Card>
@@ -739,7 +808,7 @@ export default function InvestorDashboard() {
                                             Financing Mode: <span className="font-medium text-foreground">{deal.financingMode || 'Murabaha'}</span>
                                         </div>
                                         <div className="text-sm text-muted-foreground">
-                                            Principal: {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}
+                                            Principal: {formatCurrency(deal.principal)}
                                         </div>
                                         <div className="text-sm text-muted-foreground">
                                             Profit Rate: {deal.profitRate}%
@@ -767,7 +836,7 @@ export default function InvestorDashboard() {
                                         <TableRow key={deal.id}>
                                             <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
                                             <TableCell data-label="Mode"><Badge variant="outline">{deal.financingMode || 'Murabaha'}</Badge></TableCell>
-                                            <TableCell data-label="Principal">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>
+                                            <TableCell data-label="Principal">{formatCurrency(deal.principal)}</TableCell>
                                             <TableCell data-label="Profit Rate">{deal.profitRate}%</TableCell>
                                             <TableCell data-label="Status"><Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>{deal.status}</Badge></TableCell>
                                         </TableRow>
@@ -807,7 +876,7 @@ export default function InvestorDashboard() {
                                         <div className="flex justify-between items-start">
                                             <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
                                             <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
-                                                {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                                {tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount)}
                                             </p>
                                         </div>
                                         <p className="text-sm text-muted-foreground">{tx.dealName || 'N/A'}</p>
@@ -838,7 +907,7 @@ export default function InvestorDashboard() {
                                             </TableCell>
                                             <TableCell data-label="Details">{tx.dealName || 'N/A'}</TableCell>
                                             <TableCell data-label="Amount" className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
-                                                {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                                {tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount)}
                                             </TableCell>
                                         </TableRow>
                                     ))}
