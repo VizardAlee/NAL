@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, XCircle, Hourglass, History } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs, orderBy, FieldValue } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs, orderBy, increment, getDoc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
@@ -304,7 +304,7 @@ export default function WithdrawalsPage() {
                     const deduction = Math.min(available, remainingToDeduct);
 
                     batch.update(batchDoc.ref, {
-                        remainingAmount: FieldValue.increment(-deduction)
+                        remainingAmount: increment(-deduction)
                     });
                     remainingToDeduct -= deduction;
                 }
