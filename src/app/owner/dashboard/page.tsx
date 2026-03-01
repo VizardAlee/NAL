@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { Crown, Landmark, PieChart, TrendingUp, Wallet, Banknote, Briefcase, Info, ArrowDownToLine, Loader2, LockKeyhole } from 'lucide-react';
-import { Timestamp, collection, query, where, orderBy, limit, DocumentData, doc, addDoc } from 'firebase/firestore';
+import { Timestamp, collection, query, where, orderBy, limit, DocumentData, doc } from 'firebase/firestore';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +23,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { requestWithdrawalAction } from '@/app/investor/dashboard/withdrawal-actions';
 
 type Transaction = DocumentData & {
   id: string;
@@ -107,13 +108,14 @@ function WithdrawDialog({
   onClose,
   maxAmount,
   userId,
+  userName,
 }: {
   open: boolean;
   onClose: () => void;
   maxAmount: number;
   userId: string;
+  userName: string;
 }) {
-  const firestore = useFirestore();
   const { toast } = useToast();
   const [amount, setAmount] = useState('');
   const [isPending, setIsPending] = useState(false);
@@ -125,19 +127,20 @@ function WithdrawDialog({
       toast({ title: 'Invalid amount', variant: 'destructive' });
       return;
     }
-    if (!firestore) return;
     setIsPending(true);
     try {
-      await addDoc(collection(firestore, 'withdrawalRequests'), {
-        userId,
-        amount: parsed,
-        status: 'Pending',
-        createdAt: Timestamp.now(),
-        type: 'OwnerWithdrawal',
-      });
-      toast({ title: 'Withdrawal request submitted', description: 'Admin will review and process your request.' });
-      setAmount('');
-      onClose();
+      const formData = new FormData();
+      formData.set('amount', String(parsed));
+      formData.set('userId', userId);
+      formData.set('userName', userName);
+      const result = await requestWithdrawalAction(null, formData);
+      if (result.success) {
+        toast({ title: 'Withdrawal request submitted', description: result.message });
+        setAmount('');
+        onClose();
+      } else {
+        toast({ title: 'Failed to submit request', description: result.message, variant: 'destructive' });
+      }
     } catch (err) {
       console.error(err);
       toast({ title: 'Failed to submit request', variant: 'destructive' });
@@ -486,6 +489,7 @@ export default function OwnerDashboardPage() {
           onClose={() => setWithdrawDialogOpen(false)}
           maxAmount={metrics.personalTotalAllocated}
           userId={user.uid}
+          userName={user.displayName || user.email || 'Owner'}
         />
       )}
     </div>

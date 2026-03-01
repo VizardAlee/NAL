@@ -3,12 +3,12 @@
 
 import { PageHeader } from '@/components/page-header';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, XCircle, Hourglass, History } from 'lucide-react';
@@ -27,13 +27,13 @@ import { usePathname } from 'next/navigation';
 
 
 type WithdrawalRequest = DocumentData & {
-  id: string;
-  investorId: string;
-  investorName: string;
-  amount: number;
-  status: 'Pending' | 'Approved' | 'Rejected';
-  requestedAt: Timestamp;
-  processedAt?: Timestamp;
+    id: string;
+    investorId: string;
+    investorName: string;
+    amount: number;
+    status: 'Pending' | 'Approved' | 'Rejected';
+    requestedAt: Timestamp;
+    processedAt?: Timestamp;
 };
 
 // New hook to clear notifications when a page is visited
@@ -53,7 +53,7 @@ function useClearNotificationsByPath() {
                     where('link', '==', pathname),
                     where('read', '==', false)
                 );
-                
+
                 const snapshot = await getDocs(notificationsToClearQuery);
                 if (snapshot.empty) return;
 
@@ -61,7 +61,7 @@ function useClearNotificationsByPath() {
                 snapshot.docs.forEach(doc => {
                     batch.update(doc.ref, { read: true });
                 });
-                
+
                 await batch.commit();
             } catch (error) {
                 console.error("Failed to clear notifications:", error);
@@ -104,7 +104,7 @@ function WithdrawalsTable({
             );
         }
         return (
-             <Table>
+            <Table>
                 <TableHeader>
                     <TableRow>
                         <TableHead>Investor</TableHead>
@@ -126,10 +126,10 @@ function WithdrawalsTable({
             </Table>
         )
     }
-    
+
     if (requests.length === 0) {
         return (
-             <div className="p-4 py-12 text-center text-sm text-muted-foreground border rounded-lg">
+            <div className="p-4 py-12 text-center text-sm text-muted-foreground border rounded-lg">
                 No withdrawal requests found in this category.
             </div>
         );
@@ -145,13 +145,13 @@ function WithdrawalsTable({
                                 <div>
                                     <p className="font-medium">{request.investorName}</p>
                                     <p className="text-sm text-primary font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.amount)}</p>
-                                    <p className="text-xs text-muted-foreground">{format(request.requestedAt.toDate(), 'PPP')}</p>
+                                    <p className="text-xs text-muted-foreground">{request.requestedAt ? format(request.requestedAt.toDate(), 'PPP') : 'N/A'}</p>
                                 </div>
                                 {!showActionButtons && <Badge variant={request.status === 'Approved' ? 'default' : 'destructive'}>{request.status}</Badge>}
                             </div>
                             {showActionButtons && (
                                 <div className="flex justify-end gap-2 pt-2 border-t">
-                                     <Button
+                                    <Button
                                         size="sm"
                                         variant="outline"
                                         onClick={() => handleProcessClick(request, 'Rejected')}
@@ -194,7 +194,7 @@ function WithdrawalsTable({
                             <TableRow key={request.id}>
                                 <TableCell data-label="Investor" className="font-medium">{request.investorName}</TableCell>
                                 <TableCell data-label="Amount">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.amount)}</TableCell>
-                                <TableCell data-label="Date Requested">{format(request.requestedAt.toDate(), 'PPP')}</TableCell>
+                                <TableCell data-label="Date Requested">{request.requestedAt ? format(request.requestedAt.toDate(), 'PPP') : 'N/A'}</TableCell>
                                 {showActionButtons ? (
                                     <TableCell data-label="Actions" className="text-right space-x-2">
                                         <Button
@@ -241,13 +241,13 @@ export default function WithdrawalsPage() {
 
     const { data: pendingRequests, loading: pendingLoading } = useCollection<WithdrawalRequest>(pendingQuery);
     const { data: processedRequests, loading: processedLoading } = useCollection<WithdrawalRequest>(processedQuery);
-    
+
     const isLoading = pendingLoading || processedLoading;
 
     const handleProcessRequest = async (request: WithdrawalRequest, newStatus: 'Approved' | 'Rejected') => {
         if (!firestore) return;
         setProcessingId(request.id);
-        
+
         try {
             const batch = writeBatch(firestore);
             const requestRef = doc(firestore, 'withdrawalRequests', request.id);
