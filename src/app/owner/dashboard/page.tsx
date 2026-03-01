@@ -157,15 +157,24 @@ function WithdrawDialog({
       formData.set('amount', String(parsed));
       formData.set('userId', userId);
       formData.set('userName', userName);
+      
       const result = await requestWithdrawalAction(null, formData);
+      
       if (result.success) {
         toast({ title: 'Withdrawal request submitted', description: result.message });
         setAmount('');
         onClose();
       } else {
         // Detailed log for copying index links
-        console.error("Withdrawal Request Server Error:", result);
-        toast({ title: 'Failed to submit request', description: result.message, variant: 'destructive' });
+        console.error("Withdrawal Request Failed.");
+        console.error("Message:", result.message);
+        console.error("Full Result Details:", result);
+        
+        toast({ 
+          variant: 'destructive',
+          title: 'Request Failed', 
+          description: result.message || 'Check console for details.'
+        });
       }
     } catch (err) {
       console.error("Withdrawal Request Exception:", err);
@@ -549,7 +558,7 @@ export default function OwnerDashboardPage() {
                                             <TableCell className="text-xs">{format(req.requestedAt.toDate(), 'PP')}</TableCell>
                                             <TableCell className="font-medium">{formatCurrency(req.amount)}</TableCell>
                                             <TableCell className="text-right">
-                                                <Badge variant={req.status === 'Approved' ? 'default' : req.status === 'Rejected' ? 'destructive' : 'secondary'}>
+                                                <Badge variant={req.status === 'Approved' ? 'default' : 'Rejected' ? 'destructive' : 'secondary'}>
                                                     {req.status}
                                                 </Badge>
                                             </TableCell>

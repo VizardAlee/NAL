@@ -71,12 +71,14 @@ export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: Wit
         onWithdrawalRequested();
       } else {
         // Detailed log for copying index links and debugging
-        console.error("Withdrawal Request Failed Detailed Error:", state);
+        console.error("Withdrawal Request Failed.");
+        console.error("Message:", state.message);
+        console.error("Full State Details:", state);
         
         toast({
           variant: 'destructive',
           title: 'Request Failed',
-          description: state.message || 'An error occurred. Please check the console for details.',
+          description: state.message || 'An error occurred. Check the console for details.',
         });
       }
       setToastShown(true);

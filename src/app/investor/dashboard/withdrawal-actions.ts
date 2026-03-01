@@ -1,4 +1,3 @@
-
 'use server';
 
 import { notifyAdmins } from '@/app/common/actions/notification-actions';
@@ -23,7 +22,7 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
     });
 
     if (!validatedFields.success) {
-        return { success: false, message: 'Invalid form data.' };
+        return { success: false, message: 'Invalid form data: ' + validatedFields.error.errors[0].message };
     }
 
     const { userId, userName, amount } = validatedFields.data;
@@ -36,6 +35,8 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
         if (isOwnerAccount) {
             const quarterStart = startOfQuarter(new Date());
             const nextQuarterStart = addQuarters(quarterStart, 1);
+            
+            // Check for existing withdrawal request in this quarter
             const existingOwnerWithdrawal = await adminDb
                 .collection('withdrawalRequests')
                 .where('investorId', '==', userId)
@@ -83,11 +84,19 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
 
         revalidatePath('/admin/approvals/withdrawals');
         revalidatePath('/investor/dashboard');
+        revalidatePath('/owner/dashboard');
 
         return { success: true, message: `Your request to withdraw ${formattedAmount} has been submitted.` };
-    } catch (error) {
+    } catch (error: any) {
         console.error("WITHDRAWAL REQUEST ACTION ERROR:", error);
-        return { success: false, message: error instanceof Error ? error.message : "An unknown error occurred." };
+        
+        // Return detailed error message so the indexing link can be captured if present
+        return { 
+            success: false, 
+            message: error?.message || "An unknown error occurred.",
+            code: error?.code || 'internal',
+            details: JSON.stringify(error)
+        };
     }
 }
 
