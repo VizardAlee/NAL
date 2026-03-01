@@ -73,15 +73,19 @@ export async function notifyAdmins(
     message: string,
     link: string
 ) {
-    const [legacyAdmins, accessRoleAdmins] = await Promise.all([
+    const [legacyAdmins, accessRoleAdmins, accessRoleStaff, accessRoleOwners] = await Promise.all([
         adminDb.collection('users').where('role', '==', 'Admin').get(),
         adminDb.collection('users').where('accessRole', '==', 'ADMIN').get(),
+        adminDb.collection('users').where('accessRole', '==', 'STAFF').get(),
+        adminDb.collection('users').where('accessRole', '==', 'OWNER').get(),
     ]);
 
     const adminIds = Array.from(
         new Set([
             ...legacyAdmins.docs.map((doc) => doc.id),
             ...accessRoleAdmins.docs.map((doc) => doc.id),
+            ...accessRoleStaff.docs.map((doc) => doc.id),
+            ...accessRoleOwners.docs.map((doc) => doc.id),
         ])
     );
     if (adminIds.length === 0) return;
