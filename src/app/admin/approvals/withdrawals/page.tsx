@@ -148,7 +148,7 @@ function WithdrawalsTable({
                             <div className="flex justify-between items-start">
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <p className="font-medium">{request.investorName}</p>
+                                        <p className="font-medium">{request.investorName || 'N/A'}</p>
                                         <Badge variant={request.type === 'OwnerWithdrawal' ? 'secondary' : 'outline'} className="text-[10px] py-0">
                                             {request.type === 'OwnerWithdrawal' ? 'Owner' : 'Investor'}
                                         </Badge>
@@ -202,7 +202,7 @@ function WithdrawalsTable({
                     <TableBody>
                         {!isLoading && requests.map((request) => (
                             <TableRow key={request.id}>
-                                <TableCell data-label="Requester" className="font-medium">{request.investorName}</TableCell>
+                                <TableCell data-label="Requester" className="font-medium">{request.investorName || 'N/A'}</TableCell>
                                 <TableCell data-label="Type">
                                     <Badge variant={request.type === 'OwnerWithdrawal' ? 'secondary' : 'outline'}>
                                         {request.type === 'OwnerWithdrawal' ? 'Owner' : 'Investor'}

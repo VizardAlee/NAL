@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { Crown, Landmark, PieChart, TrendingUp, Wallet, Banknote, Briefcase, Info, ArrowDownToLine, Loader2, LockKeyhole } from 'lucide-react';
+import { Crown, Landmark, PieChart, TrendingUp, Wallet, Banknote, Briefcase, Info, ArrowDownToLine, Loader2, LockKeyhole, History } from 'lucide-react';
 import { Timestamp, collection, query, where, orderBy, limit, DocumentData, doc } from 'firebase/firestore';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +25,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { requestWithdrawalAction } from '@/app/investor/dashboard/withdrawal-actions';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 type Transaction = DocumentData & {
   id: string;
@@ -79,6 +81,13 @@ type Investment = DocumentData & {
   dealId: string;
 };
 
+type WithdrawalRequest = DocumentData & {
+    id: string;
+    amount: number;
+    status: 'Pending' | 'Approved' | 'Rejected';
+    requestedAt: Timestamp;
+};
+
 type WithdrawalQuarter = { label: string; startDate: string; endDate: string };
 
 const formatCurrency = (value: number) =>
@@ -126,6 +135,10 @@ function WithdrawDialog({
     if (!parsed || parsed <= 0) {
       toast({ title: 'Invalid amount', variant: 'destructive' });
       return;
+    }
+    if (parsed > maxAmount) {
+        toast({ title: 'Insufficient funds', description: 'Amount exceeds your allocated profit balance.', variant: 'destructive' });
+        return;
     }
     setIsPending(true);
     try {
@@ -223,6 +236,14 @@ export default function OwnerDashboardPage() {
     () => (firestore && user ? query(collection(firestore, 'investments'), where('investorId', '==', user.uid)) : null),
     [firestore, user]
   );
+  const myWithdrawalRequestsQuery = useMemo(
+    () => (firestore && user ? query(collection(firestore, 'withdrawalRequests'), where('investorId', '==', user.uid), orderBy('requestedAt', 'desc'), limit(10)) : null),
+    [firestore, user]
+  );
+  const myTransactionsQuery = useMemo(
+    () => (firestore && user ? query(collection(firestore, 'transactions'), where('userId', '==', user.uid), orderBy('createdAt', 'desc')) : null),
+    [firestore, user]
+  );
 
   // Withdrawal window
   const withdrawalWindowRef = useMemo(
@@ -239,6 +260,8 @@ export default function OwnerDashboardPage() {
   const { data: ownerAllocations, loading: allocationsLoading } = useCollection<OwnerAllocation>(ownerAllocationsQuery);
   const { data: myFundBatches, loading: myBatchesLoading } = useCollection<FundBatch>(myFundBatchesQuery);
   const { data: myInvestments, loading: myInvestmentsLoading } = useCollection<Investment>(myInvestmentsQuery);
+  const { data: myWithdrawals, loading: myWithdrawalsLoading } = useCollection<WithdrawalRequest>(myWithdrawalRequestsQuery);
+  const { data: myTransactions, loading: myTransactionsLoading } = useCollection<Transaction>(myTransactionsQuery);
 
   const metrics = useMemo(() => {
     const platformEarnings = (earnings || []).reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
@@ -255,6 +278,13 @@ export default function OwnerDashboardPage() {
       });
     }
 
+    // Subtract approved withdrawals to show net balance
+    const approvedWithdrawals = (myTransactions || [])
+        .filter(tx => tx.type === 'Withdrawal')
+        .reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0);
+    
+    const personalProfitBalance = Math.max(0, personalTotalAllocated - approvedWithdrawals);
+
     const personalInvestible = (myFundBatches || []).reduce((sum, b) => sum + (b.remainingAmount || 0), 0);
     const personalInvested = (myInvestments || []).reduce((sum, i) => {
       const deal = deals?.find(d => d.id === i.dealId);
@@ -268,19 +298,19 @@ export default function OwnerDashboardPage() {
       totalUsers,
       adminDebtToPlatform,
       personalTotalAllocated,
+      personalProfitBalance,
       personalInvestible,
       personalInvested,
     };
-  }, [earnings, deals, users, activeLoans, ownerAllocations, user, myFundBatches, myInvestments]);
+  }, [earnings, deals, users, activeLoans, ownerAllocations, user, myFundBatches, myInvestments, myTransactions]);
 
-  const isLoading = usersLoading || dealsLoading || earningsLoading || repaymentsLoading || loansLoading || allocationsLoading || myBatchesLoading || myInvestmentsLoading;
+  const isLoading = usersLoading || dealsLoading || earningsLoading || repaymentsLoading || loansLoading || allocationsLoading || myBatchesLoading || myInvestmentsLoading || myWithdrawalsLoading || myTransactionsLoading;
 
   const withdrawalStatus = useMemo(() => {
     if (!withdrawalWindowData?.quarters?.length) return { open: false };
     return isDateInWindow(withdrawalWindowData.quarters);
   }, [withdrawalWindowData]);
 
-  // Find the next upcoming withdrawal window for the disabled button label
   const nextWindow = useMemo(() => {
     if (withdrawalStatus.open) return null;
     const today = new Date();
@@ -311,8 +341,9 @@ export default function OwnerDashboardPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <p className="text-sm text-muted-foreground">Total Profit Allocated</p>
-                <p className="text-2xl font-bold font-headline">{formatCurrency(metrics.personalTotalAllocated)}</p>
+                <p className="text-sm text-muted-foreground">Available Profit Balance</p>
+                <p className="text-3xl font-bold font-headline">{formatCurrency(metrics.personalProfitBalance)}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Total Allocated: {formatCurrency(metrics.personalTotalAllocated)}</p>
               </div>
               <div className="grid grid-cols-2 gap-4 pt-2 border-t">
                 <div>
@@ -338,6 +369,7 @@ export default function OwnerDashboardPage() {
                     <Button
                       className="w-full"
                       onClick={() => setWithdrawDialogOpen(true)}
+                      disabled={metrics.personalProfitBalance <= 0}
                     >
                       <ArrowDownToLine className="mr-2 h-4 w-4" />
                       Withdraw Funds
@@ -417,6 +449,48 @@ export default function OwnerDashboardPage() {
           </div>
 
           <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div className="space-y-1">
+                    <CardTitle className="flex items-center gap-2">
+                        <History className="h-4 w-4" />
+                        My Withdrawal History
+                    </CardTitle>
+                    <CardDescription>Status of your recent withdrawal requests.</CardDescription>
+                </div>
+            </CardHeader>
+            <CardContent>
+                {isLoading ? <div className="space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div> :
+                    !myWithdrawals || myWithdrawals.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No withdrawal requests found.</p> : (
+                        <div className="rounded-md border">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Date</TableHead>
+                                        <TableHead>Amount</TableHead>
+                                        <TableHead className="text-right">Status</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {myWithdrawals.map((req) => (
+                                        <TableRow key={req.id}>
+                                            <TableCell className="text-xs">{format(req.requestedAt.toDate(), 'PP')}</TableCell>
+                                            <TableCell className="font-medium">{formatCurrency(req.amount)}</TableCell>
+                                            <TableCell className="text-right">
+                                                <Badge variant={req.status === 'Approved' ? 'default' : req.status === 'Rejected' ? 'destructive' : 'secondary'}>
+                                                    {req.status}
+                                                </Badge>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )
+                }
+            </CardContent>
+          </Card>
+
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <PieChart className="h-4 w-4" />
@@ -487,7 +561,7 @@ export default function OwnerDashboardPage() {
         <WithdrawDialog
           open={withdrawDialogOpen}
           onClose={() => setWithdrawDialogOpen(false)}
-          maxAmount={metrics.personalTotalAllocated}
+          maxAmount={metrics.personalProfitBalance}
           userId={user.uid}
           userName={user.displayName || user.email || 'Owner'}
         />
