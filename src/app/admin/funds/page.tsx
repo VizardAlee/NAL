@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { PageHeader } from "@/components/page-header";
@@ -1225,6 +1223,9 @@ function OwnerAllocationRunForm({ onComplete }: { onComplete: () => void }) {
     const onSubmit = (values: z.infer<typeof allocationRunSchema>) => {
         startTransition(async () => {
             const result = await runOwnerProfitAllocationAction(values);
+            if (!result.success) {
+                console.error("Owner allocation backfill failed:", result);
+            }
             toast({
                 variant: result.success ? 'default' : 'destructive',
                 title: result.success ? 'Backfill run complete' : 'Backfill run failed',
@@ -1398,6 +1399,7 @@ export default function PlatformFundsPage() {
         startAllocating(async () => {
             const result = await runOwnerProfitAllocationAction({ includeHistorical: false, limit: 100 });
             if (!result.success) {
+                console.error("Owner profit auto-allocation run failed:", result);
                 toast({
                     variant: 'destructive',
                     title: 'Owner auto-allocation failed',
@@ -1405,7 +1407,7 @@ export default function PlatformFundsPage() {
                 });
             }
         });
-    }, [user?.uid]);
+    }, [user?.uid, toast]);
 
     const filteredAdminTransactions = useMemo(() => {
         if (!adminTransactions) return [];
@@ -1495,6 +1497,9 @@ export default function PlatformFundsPage() {
                             onClick={() => {
                                 startAllocating(async () => {
                                     const result = await runOwnerProfitAllocationAction({ includeHistorical: false, limit: 500 });
+                                    if (!result.success) {
+                                        console.error("Owner profit allocation run failed:", result);
+                                    }
                                     toast({
                                         variant: result.success ? 'default' : 'destructive',
                                         title: result.success ? 'Owner allocation run complete' : 'Owner allocation run failed',
