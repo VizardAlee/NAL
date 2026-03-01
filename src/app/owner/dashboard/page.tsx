@@ -83,12 +83,17 @@ type WithdrawalQuarter = { label: string; startDate: string; endDate: string };
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(value || 0);
 
+function parseLocalDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day); // local midnight, avoids UTC offset issue
+}
+
 function isDateInWindow(quarters: WithdrawalQuarter[]): { open: boolean; activeQuarter?: WithdrawalQuarter } {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   for (const q of quarters) {
-    const start = new Date(q.startDate);
-    const end = new Date(q.endDate);
+    const start = parseLocalDate(q.startDate);
+    const end = parseLocalDate(q.endDate);
     end.setHours(23, 59, 59, 999);
     if (today >= start && today <= end) {
       return { open: true, activeQuarter: q };
