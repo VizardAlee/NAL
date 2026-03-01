@@ -1,9 +1,8 @@
-
 'use client';
 
 import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { Crown, Landmark, PieChart, TrendingUp, Wallet, Banknote, Briefcase, Info, ArrowDownToLine, Loader2, LockKeyhole, History } from 'lucide-react';
+import { Crown, Landmark, PieChart, TrendingUp, Wallet, Banknote, Briefcase, Info, ArrowDownToLine, Loader2, LockKeyhole, History, Users2 } from 'lucide-react';
 import { Timestamp, collection, query, where, orderBy, limit, DocumentData, doc } from 'firebase/firestore';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -223,7 +222,7 @@ export default function OwnerDashboardPage() {
     [firestore]
   );
   const ownerAllocationsQuery = useMemo(
-    () => (firestore ? query(collection(firestore, 'ownerProfitAllocations'), orderBy('createdAt', 'desc'), limit(50)) : null),
+    () => (firestore ? query(collection(firestore, 'ownerProfitAllocations'), orderBy('createdAt', 'desc'), limit(100)) : null),
     [firestore]
   );
 
@@ -269,6 +268,9 @@ export default function OwnerDashboardPage() {
     const totalUsers = (users || []).length;
     const adminDebtToPlatform = (activeLoans || []).reduce((sum, loan) => sum + (Number(loan.outstanding) || 0), 0);
 
+    // Global Owner Allocations (Transparency Metric)
+    const globalTotalAllocated = (ownerAllocations || []).reduce((sum, alloc) => sum + (Number(alloc.distributableAmount) || 0), 0);
+
     // Personal Metrics
     let personalTotalAllocated = 0;
     if (ownerAllocations && user) {
@@ -297,6 +299,7 @@ export default function OwnerDashboardPage() {
       activeDealsCount,
       totalUsers,
       adminDebtToPlatform,
+      globalTotalAllocated,
       personalTotalAllocated,
       personalProfitBalance,
       personalInvestible,
@@ -428,22 +431,37 @@ export default function OwnerDashboardPage() {
 
         {/* Right Column: Platform Stats & Allocations */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Platform Earnings</CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(metrics.platformEarnings)}</div>}
+                <p className="text-[10px] text-muted-foreground mt-1">Gross operational markup</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-primary/5 border-primary/20">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Users2 className="h-4 w-4 text-primary" />
+                  Shared Profits
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold text-primary">{formatCurrency(metrics.globalTotalAllocated)}</div>}
+                <p className="text-[10px] text-muted-foreground mt-1">Cumulative shared among all partners</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Admin Debt to Platform</CardTitle>
+                <CardTitle className="text-sm font-medium">Admin Debt</CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(metrics.adminDebtToPlatform)}</div>}
+                <p className="text-[10px] text-muted-foreground mt-1">Inter-account liabilities</p>
               </CardContent>
             </Card>
           </div>
