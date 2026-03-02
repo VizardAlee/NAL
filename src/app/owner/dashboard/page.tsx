@@ -39,6 +39,7 @@ type Transaction = DocumentData & {
   type: string;
   amount: number;
   createdAt: Timestamp;
+  platformEarningKind?: 'Operating' | 'OwnerDistributionAdjustment' | 'InterAccountAdjustment';
 };
 
 type Deal = DocumentData & {
@@ -71,6 +72,11 @@ type OwnerAllocation = DocumentData & {
     displayName: string;
     allocatedAmount: number;
   }>;
+  policySnapshot?: {
+    retainedPercent: number;
+    distributablePercent: number;
+    totalShares: number;
+  };
 };
 
 type FundBatch = DocumentData & {
@@ -175,15 +181,11 @@ function WithdrawDialog({
         setAmount('');
         onClose();
       } else {
-        // Detailed log for copying index links
-        console.error("Withdrawal Request Failed.");
-        console.error("Message:", result.message);
-        console.error("Full Result Details:", result);
-        
+        console.error("Withdrawal Request Failed:", result);
         toast({ 
           variant: 'destructive',
           title: 'Request Failed', 
-          description: result.message || 'Check console for details.'
+          description: result.message || 'An error occurred. Check the console for details.'
         });
       }
     } catch (err) {
@@ -256,7 +258,7 @@ export default function OwnerDashboardPage() {
     [firestore]
   );
   const ownerAllocationsQuery = useMemo(
-    () => (firestore ? query(collection(firestore, 'ownerProfitAllocations'), orderBy('createdAt', 'desc'), limit(200)) : null),
+    () => (firestore ? query(collection(firestore, 'ownerProfitAllocations'), orderBy('createdAt', 'desc'), limit(500)) : null),
     [firestore]
   );
 
@@ -289,32 +291,31 @@ export default function OwnerDashboardPage() {
   );
   const { data: withdrawalWindowData } = useDoc<{ quarters: WithdrawalQuarter[] }>(withdrawalWindowRef);
 
-  const { data: users, loading: usersLoading, error: usersErr } = useCollection<DocumentData>(usersQuery);
-  const { data: deals, loading: dealsLoading, error: dealsErr } = useCollection<Deal>(dealsQuery);
-  const { data: earnings, loading: earningsLoading, error: earningsErr } = useCollection<Transaction>(earningsQuery);
-  const { data: pendingRepayments, loading: repaymentsLoading, error: repaymentsErr } = useCollection<Repayment>(pendingRepaymentsQuery);
-  const { data: activeLoans, loading: loansLoading, error: loansErr } = useCollection<Loan>(activeLoansQuery);
-  const { data: ownerAllocations, loading: allocationsLoading, error: allocationsErr } = useCollection<OwnerAllocation>(ownerAllocationsQuery);
-  const { data: myFundBatches, loading: myBatchesLoading, error: batchesErr } = useCollection<FundBatch>(myFundBatchesQuery);
-  const { data: myInvestments, loading: myInvestmentsLoading, error: investmentsErr } = useCollection<Investment>(myInvestmentsQuery);
-  const { data: myWithdrawals, loading: myWithdrawalsLoading, error: withdrawalsErr } = useCollection<WithdrawalRequest>(myWithdrawalRequestsQuery);
-  const { data: myTransactions, loading: myTransactionsLoading, error: transactionsErr } = useCollection<Transaction>(myTransactionsQuery);
+  const { data: users, loading: usersLoading } = useCollection<DocumentData>(usersQuery);
+  const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
+  const { data: earnings, loading: earningsLoading } = useCollection<Transaction>(earningsQuery);
+  const { data: pendingRepayments, loading: repaymentsLoading } = useCollection<Repayment>(pendingRepaymentsQuery);
+  const { data: activeLoans, loading: loansLoading } = useCollection<Loan>(activeLoansQuery);
+  const { data: ownerAllocations, loading: allocationsLoading } = useCollection<OwnerAllocation>(ownerAllocationsQuery);
+  const { data: myFundBatches, loading: myBatchesLoading } = useCollection<FundBatch>(myFundBatchesQuery);
+  const { data: myInvestments, loading: myInvestmentsLoading } = useCollection<Investment>(myInvestmentsQuery);
+  const { data: myWithdrawals, loading: myWithdrawalsLoading } = useCollection<WithdrawalRequest>(myWithdrawalRequestsQuery);
+  const { data: myTransactions, loading: myTransactionsLoading } = useCollection<Transaction>(myTransactionsQuery);
   const { data: myPartnerData, loading: partnerLoading } = useDoc<OwnershipPartner>(myPartnerRef as any);
   const { data: ownerPolicy, loading: policyLoading } = useDoc<OwnerPolicy>(ownerPolicyRef as any);
 
-  // General log for query errors (helpful for indexing link capture)
-  useEffect(() => {
-    const errs = [usersErr, dealsErr, earningsErr, repaymentsErr, loansErr, allocationsErr, batchesErr, investmentsErr, withdrawalsErr, transactionsErr].filter(Boolean);
-    errs.forEach(e => console.error("Firestore Query Error:", e));
-  }, [usersErr, dealsErr, earningsErr, repaymentsErr, loansErr, allocationsErr, batchesErr, investmentsErr, withdrawalsErr, transactionsErr]);
-
   const metrics = useMemo(() => {
-    const grossPlatformEarnings = (earnings || []).reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+    // Gross Earnings: Sum of all incoming 'Operating' profit transactions.
+    // Excludes distribution adjustments and inter-account adjustments.
+    const grossPlatformEarnings = (earnings || [])
+        .filter(tx => tx.amount > 0 && (tx.platformEarningKind === 'Operating' || !tx.platformEarningKind))
+        .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+
     const activeDealsCount = (deals || []).filter((deal) => deal.status === 'Active').length;
     const totalUsers = (users || []).length;
     const adminDebtToPlatform = (activeLoans || []).reduce((sum, loan) => sum + (Number(loan.outstanding) || 0), 0);
 
-    // Transparency Metrics: Split between Retained and Distributable
+    // Cumulative split totals from the audit collection
     const globalTotalRetained = (ownerAllocations || []).reduce((sum, alloc) => sum + (Number(alloc.retainedAmount) || 0), 0);
     const globalTotalDistributed = (ownerAllocations || []).reduce((sum, alloc) => sum + (Number(alloc.distributableAmount) || 0), 0);
 
@@ -327,9 +328,9 @@ export default function OwnerDashboardPage() {
       });
     }
 
-    // Subtract approved withdrawals to show net balance
+    // Approved withdrawals are negative 'Withdrawal' transactions.
     const approvedWithdrawals = (myTransactions || [])
-        .filter(tx => tx.type === 'Withdrawal')
+        .filter(tx => tx.type === 'Withdrawal' && tx.amount < 0)
         .reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0);
     
     const personalProfitBalance = Math.max(0, personalTotalAllocated - approvedWithdrawals);
