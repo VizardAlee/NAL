@@ -25,6 +25,14 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { requestWithdrawalAction } from '@/app/investor/dashboard/withdrawal-actions';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 type Transaction = DocumentData & {
   id: string;
@@ -100,6 +108,8 @@ type OwnerPolicy = DocumentData & {
 };
 
 type WithdrawalQuarter = { label: string; startDate: string; endDate: string };
+
+const ITEMS_PER_PAGE = 5;
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(value || 0);
@@ -228,6 +238,7 @@ export default function OwnerDashboardPage() {
   const firestore = useFirestore();
   const { user } = useUser();
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
+  const [withdrawalPage, setWithdrawalPage] = useState(1);
 
   // Platform Queries
   const usersQuery = useMemo(() => (firestore ? query(collection(firestore, 'users')) : null), [firestore]);
@@ -259,7 +270,7 @@ export default function OwnerDashboardPage() {
     [firestore, user]
   );
   const myWithdrawalRequestsQuery = useMemo(
-    () => (firestore && user ? query(collection(firestore, 'withdrawalRequests'), where('investorId', '==', user.uid), orderBy('requestedAt', 'desc'), limit(10)) : null),
+    () => (firestore && user ? query(collection(firestore, 'withdrawalRequests'), where('investorId', '==', user.uid), orderBy('requestedAt', 'desc'), limit(100)) : null),
     [firestore, user]
   );
   const myTransactionsQuery = useMemo(
@@ -366,6 +377,16 @@ export default function OwnerDashboardPage() {
       .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
     return upcoming[0] ?? null;
   }, [withdrawalWindowData, withdrawalStatus]);
+
+  const paginatedWithdrawals = useMemo(() => {
+    if (!myWithdrawals) return [];
+    const start = (withdrawalPage - 1) * ITEMS_PER_PAGE;
+    return myWithdrawals.slice(start, start + ITEMS_PER_PAGE);
+  }, [myWithdrawals, withdrawalPage]);
+
+  const withdrawalTotalPages = useMemo(() => {
+    return myWithdrawals ? Math.ceil(myWithdrawals.length / ITEMS_PER_PAGE) : 0;
+  }, [myWithdrawals]);
 
   return (
     <div className="space-y-6">
@@ -543,30 +564,65 @@ export default function OwnerDashboardPage() {
             <CardContent>
                 {isLoading ? <div className="space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div> :
                     !myWithdrawals || myWithdrawals.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No withdrawal requests found.</p> : (
-                        <div className="rounded-md border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Date</TableHead>
-                                        <TableHead>Amount</TableHead>
-                                        <TableHead className="text-right">Status</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {myWithdrawals.map((req) => (
-                                        <TableRow key={req.id}>
-                                            <TableCell className="text-xs">{format(req.requestedAt.toDate(), 'PP')}</TableCell>
-                                            <TableCell className="font-medium">{formatCurrency(req.amount)}</TableCell>
-                                            <TableCell className="text-right">
-                                                <Badge variant={req.status === 'Approved' ? 'default' : 'Rejected' ? 'destructive' : 'secondary'}>
-                                                    {req.status}
-                                                </Badge>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
+                        <>
+                          <div className="rounded-md border">
+                              <Table>
+                                  <TableHeader>
+                                      <TableRow>
+                                          <TableHead>Date</TableHead>
+                                          <TableHead>Amount</TableHead>
+                                          <TableHead className="text-right">Status</TableHead>
+                                      </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                      {paginatedWithdrawals.map((req) => (
+                                          <TableRow key={req.id}>
+                                              <TableCell className="text-xs">{format(req.requestedAt.toDate(), 'PP')}</TableCell>
+                                              <TableCell className="font-medium">{formatCurrency(req.amount)}</TableCell>
+                                              <TableCell className="text-right">
+                                                  <Badge variant={req.status === 'Approved' ? 'default' : req.status === 'Rejected' ? 'destructive' : 'secondary'}>
+                                                      {req.status}
+                                                  </Badge>
+                                              </TableCell>
+                                          </TableRow>
+                                      ))}
+                                  </TableBody>
+                              </Table>
+                          </div>
+                          {withdrawalTotalPages > 1 && (
+                            <div className="mt-4">
+                              <Pagination>
+                                <PaginationContent>
+                                  <PaginationItem>
+                                    <PaginationPrevious
+                                      href="#"
+                                      onClick={(e) => { e.preventDefault(); setWithdrawalPage(p => Math.max(1, p - 1)) }}
+                                      aria-disabled={withdrawalPage === 1}
+                                    />
+                                  </PaginationItem>
+                                  {[...Array(withdrawalTotalPages)].map((_, i) => (
+                                    <PaginationItem key={i}>
+                                      <PaginationLink
+                                        href="#"
+                                        onClick={(e) => { e.preventDefault(); setWithdrawalPage(i + 1); }}
+                                        isActive={withdrawalPage === i + 1}
+                                      >
+                                        {i + 1}
+                                      </PaginationLink>
+                                    </PaginationItem>
+                                  ))}
+                                  <PaginationItem>
+                                    <PaginationNext
+                                      href="#"
+                                      onClick={(e) => { e.preventDefault(); setWithdrawalPage(p => Math.min(withdrawalTotalPages, p + 1)) }}
+                                      aria-disabled={withdrawalPage === withdrawalTotalPages}
+                                    />
+                                  </PaginationItem>
+                                </PaginationContent>
+                              </Pagination>
+                            </div>
+                          )}
+                        </>
                     )
                 }
             </CardContent>
