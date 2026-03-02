@@ -217,18 +217,49 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t">
-        <div className="container flex h-24 items-center justify-center py-10">
-          <div className="flex flex-col items-center gap-2 md:flex-row">
-            <Logo imageUrl={logoUrl} className="h-6 w-6 text-primary" />
-            <a
-              href="https://wa.me/2347032545288"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-center text-sm leading-loose text-muted-foreground hover:text-primary hover:underline"
-            >
+      <footer className="border-t bg-background">
+        <div className="container py-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="flex flex-col items-start gap-4">
+              <div className="flex items-center gap-2">
+                <Logo imageUrl={logoUrl} className="h-6 w-6 text-primary" />
+                <span className="font-bold font-headline">NAL General Marchant</span>
+              </div>
+              <p className="text-sm text-muted-foreground max-w-xs">
+                Empowering ethical investment and structured financing across Nigeria.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4 md:col-span-2">
+              <div className="space-y-3">
+                <h4 className="font-semibold text-sm">Platform</h4>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li><Link href="/login" className="hover:text-primary transition-colors">Login</Link></li>
+                  <li><Link href="/signup" className="hover:text-primary transition-colors">Get Started</Link></li>
+                </ul>
+              </div>
+              <div className="space-y-3">
+                <h4 className="font-semibold text-sm">Legal</h4>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li><Link href="/terms" className="hover:text-primary transition-colors">Terms of Use</Link></li>
+                  <li><Link href="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div className="mt-12 pt-8 border-t flex flex-col items-center justify-between gap-4 md:flex-row">
+            <p className="text-center text-sm leading-loose text-muted-foreground">
               Built by Service Guru. &copy; {new Date().getFullYear()} All rights reserved.
-            </a>
+            </p>
+            <div className="flex items-center gap-4">
+              <a
+                href="https://wa.me/2347032545288"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-muted-foreground hover:text-primary hover:underline"
+              >
+                Support
+              </a>
+            </div>
           </div>
         </div>
       </footer>
