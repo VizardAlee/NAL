@@ -780,11 +780,12 @@ function BorrowFromEarningsForm({
                 createdBy: 'admin',
             });
 
+            const loanDateLabel = values.loanDate ? format(new Date(`${values.loanDate}T00:00:00`), 'PPP') : 'today';
             const adminTxRef = doc(collection(firestore, 'administrativeTransactions'));
             batch.set(adminTxRef, {
                 type: 'LoanFromPlatformEarnings',
                 amount: values.amount,
-                description: `Loan from platform earnings: ${values.reason}`,
+                description: `Loan from platform earnings (${loanDateLabel}): ${values.reason}`,
                 createdAt: createdAtValue,
                 loanId: loanRef.id,
                 reference: values.reference || null,
@@ -926,11 +927,12 @@ function RepayPlatformLoanForm({
                 updatedAt: now,
             });
 
+            const loanDateLabel = format(loan.createdAt.toDate(), 'PPP');
             const adminTxRef = doc(collection(firestore, 'administrativeTransactions'));
             batch.set(adminTxRef, {
                 type: 'LoanRepaymentToPlatformEarnings',
                 amount: -Math.abs(values.amount),
-                description: `Repayment to platform earnings for loan ${loan.id}`,
+                description: `Repayment for loan taken on ${loanDateLabel}`,
                 createdAt: now,
                 loanId: loan.id,
                 reference: values.reference || null,
@@ -1802,8 +1804,11 @@ export default function PlatformFundsPage() {
                             )}
                             {(selectedTx.type === 'LoanFromPlatformEarnings' || selectedTx.type === 'LoanRepaymentToPlatformEarnings') && selectedTx.loanId && (
                                 <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Loan ID:</span>
-                                    <span className="text-xs">{selectedTx.loanId}</span>
+                                    <span className="text-muted-foreground">Original Loan Date:</span>
+                                    <span>{(() => {
+                                        const loan = interAccountLoans?.find(l => l.id === selectedTx.loanId);
+                                        return loan ? format(loan.createdAt.toDate(), 'PPP') : 'N/A';
+                                    })()}</span>
                                 </div>
                             )}
                             <div className="flex justify-between">
