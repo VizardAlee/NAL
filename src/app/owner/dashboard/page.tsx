@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { Crown, Landmark, PieChart, TrendingUp, Wallet, Banknote, Briefcase, Info, ArrowDownToLine, Loader2, LockKeyhole, History, Users2, Percent, Scale } from 'lucide-react';
+import { Crown, Landmark, PieChart, TrendingUp, Wallet, Banknote, Briefcase, Info, ArrowDownToLine, Loader2, LockKeyhole, History, Users2, Percent, Scale, AlertTriangle } from 'lucide-react';
 import { Timestamp, collection, query, where, orderBy, limit, DocumentData, doc } from 'firebase/firestore';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -101,7 +101,7 @@ type WithdrawalRequest = DocumentData & {
     requestedAt: Timestamp;
 };
 
-type OwnershipPartner = DocumentData & {
+type UserProfile = DocumentData & {
   userId: string;
   shareUnits: number;
   active: boolean;
@@ -164,7 +164,7 @@ function WithdrawDialog({
       return;
     }
     if (parsed > maxAmount) {
-        toast({ title: 'Insufficient funds', description: 'Amount exceeds your allocated profit balance.', variant: 'destructive' });
+        toast({ title: 'Insufficient funds', description: 'Amount exceeds your withdrawable liquid profit balance.', variant: 'destructive' });
         return;
     }
     setIsPending(true);
@@ -181,7 +181,7 @@ function WithdrawDialog({
         setAmount('');
         onClose();
       } else {
-        console.error("Withdrawal Request Failed:", result);
+        console.error("Withdrawal Request Server Error:", result);
         toast({ 
           variant: 'destructive',
           title: 'Request Failed', 
@@ -202,7 +202,7 @@ function WithdrawDialog({
         <DialogHeader>
           <DialogTitle>Request Withdrawal</DialogTitle>
           <DialogDescription>
-            Enter the amount you wish to withdraw from your allocated profit. This will be reviewed by an admin.
+            Enter the amount you wish to withdraw from your allocated profit. Only liquid (uninvested) funds can be withdrawn.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -218,7 +218,7 @@ function WithdrawDialog({
               required
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Available: {formatCurrency(maxAmount)}
+              Max Withdrawable (Liquid): {formatCurrency(maxAmount)}
             </p>
           </div>
           <DialogFooter>
@@ -305,8 +305,6 @@ export default function OwnerDashboardPage() {
   const { data: ownerPolicy, loading: policyLoading } = useDoc<OwnerPolicy>(ownerPolicyRef as any);
 
   const metrics = useMemo(() => {
-    // Gross Earnings: Sum of all incoming 'Operating' profit transactions.
-    // Excludes distribution adjustments and inter-account adjustments.
     const grossPlatformEarnings = (earnings || [])
         .filter(tx => tx.amount > 0 && (tx.platformEarningKind === 'Operating' || !tx.platformEarningKind))
         .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
@@ -315,7 +313,6 @@ export default function OwnerDashboardPage() {
     const totalUsers = (users || []).length;
     const adminDebtToPlatform = (activeLoans || []).reduce((sum, loan) => sum + (Number(loan.outstanding) || 0), 0);
 
-    // Cumulative split totals from the audit collection
     const globalTotalRetained = (ownerAllocations || []).reduce((sum, alloc) => sum + (Number(alloc.retainedAmount) || 0), 0);
     const globalTotalDistributed = (ownerAllocations || []).reduce((sum, alloc) => sum + (Number(alloc.distributableAmount) || 0), 0);
 
@@ -328,12 +325,11 @@ export default function OwnerDashboardPage() {
       });
     }
 
-    // Approved withdrawals are negative 'Withdrawal' transactions.
     const approvedWithdrawals = (myTransactions || [])
         .filter(tx => tx.type === 'Withdrawal' && tx.amount < 0)
         .reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0);
     
-    const personalProfitBalance = Math.max(0, personalTotalAllocated - approvedWithdrawals);
+    const personalUnwithdrawnProfit = Math.max(0, personalTotalAllocated - approvedWithdrawals);
 
     const personalInvestible = (myFundBatches || []).reduce((sum, b) => sum + (b.remainingAmount || 0), 0);
     const personalInvested = (myInvestments || []).reduce((sum, i) => {
@@ -341,6 +337,11 @@ export default function OwnerDashboardPage() {
       if (deal?.status === 'Active') return sum + (i.amount || 0);
       return sum;
     }, 0);
+
+    // --- WITHDRAWABLE LIQUID PROFIT CALCULATION ---
+    // Rule: Owners can only withdraw funds that are currently liquid (uninvested).
+    // If an owner has 1M unwithdrawn profit but 500k is currently powering deals, they can only withdraw 500k.
+    const withdrawableLiquidProfit = Math.min(personalUnwithdrawnProfit, personalInvestible);
 
     const totalAuthShares = ownerPolicy?.totalShares || 20000000;
     const myShareUnits = myPartnerData?.shareUnits || 0;
@@ -354,7 +355,8 @@ export default function OwnerDashboardPage() {
       globalTotalRetained,
       globalTotalDistributed,
       personalTotalAllocated,
-      personalProfitBalance,
+      personalUnwithdrawnProfit,
+      withdrawableLiquidProfit,
       personalInvestible,
       personalInvested,
       myShareUnits,
@@ -424,9 +426,16 @@ export default function OwnerDashboardPage() {
               </div>
 
               <div>
-                <p className="text-sm text-muted-foreground">Available Profit Balance</p>
-                <p className="text-3xl font-bold font-headline">{formatCurrency(metrics.personalProfitBalance)}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">Total Historical Allocation: {formatCurrency(metrics.personalTotalAllocated)}</p>
+                <p className="text-sm text-muted-foreground">Available Profit Balance (Liquid)</p>
+                <p className="text-3xl font-bold font-headline">{formatCurrency(metrics.withdrawableLiquidProfit)}</p>
+                <div className="flex items-center gap-2 mt-1">
+                    <p className="text-[10px] text-muted-foreground">Total Unwithdrawn: {formatCurrency(metrics.personalUnwithdrawnProfit)}</p>
+                    {metrics.personalInvested > 0 && (
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-destructive/30 text-destructive h-4 flex items-center gap-1">
+                            <AlertTriangle className="h-2.5 w-2.5" /> Invested Lock
+                        </Badge>
+                    )}
+                </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4 pt-2 border-t">
@@ -438,7 +447,7 @@ export default function OwnerDashboardPage() {
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Investible</p>
+                  <p className="text-xs text-muted-foreground">Investible (Cash)</p>
                   <div className="flex items-center gap-1.5 mt-1">
                     <Banknote className="h-3 w-3 text-primary" />
                     <span className="font-semibold">{formatCurrency(metrics.personalInvestible)}</span>
@@ -453,7 +462,7 @@ export default function OwnerDashboardPage() {
                     <Button
                       className="w-full"
                       onClick={() => setWithdrawDialogOpen(true)}
-                      disabled={metrics.personalProfitBalance <= 0}
+                      disabled={metrics.withdrawableLiquidProfit <= 0}
                     >
                       <ArrowDownToLine className="mr-2 h-4 w-4" />
                       Withdraw Funds
@@ -479,9 +488,9 @@ export default function OwnerDashboardPage() {
 
               <Alert className="mt-4 bg-background/50">
                 <Info className="h-4 w-4" />
-                <AlertTitle className="text-xs">Reinvestment Rule</AlertTitle>
+                <AlertTitle className="text-xs">Reinvestment & Withdrawal Rule</AlertTitle>
                 <AlertDescription className="text-[10px] leading-tight">
-                  Allocated profits are automatically prioritized for new deals. Funds must contribute to the ecosystem before being realized as withdrawable earnings.
+                  Invested funds are locked until the associated deal is completed. Only liquid profit (not active in deals) is available for withdrawal during open windows.
                 </AlertDescription>
               </Alert>
             </CardContent>
@@ -700,7 +709,7 @@ export default function OwnerDashboardPage() {
         <WithdrawDialog
           open={withdrawDialogOpen}
           onClose={() => setWithdrawDialogOpen(false)}
-          maxAmount={metrics.personalProfitBalance}
+          maxAmount={metrics.withdrawableLiquidProfit}
           userId={user.uid}
           userName={user.displayName || user.email || 'Owner'}
         />
