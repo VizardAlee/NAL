@@ -31,6 +31,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { canWriteAdmin, normalizeAccessModel } from '@/lib/access-control';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 type User = DocumentData & {
@@ -191,11 +192,15 @@ export default function UsersPage() {
                 Invite User
               </Button>
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
+            <DialogContent className="max-h-[90vh] p-0 overflow-hidden flex flex-col">
+              <DialogHeader className="p-6 pb-2">
                 <DialogTitle>Invite New User</DialogTitle>
               </DialogHeader>
-              <InviteUserForm onInviteCreated={handleUserCreated} />
+              <ScrollArea className="flex-1">
+                <div className="p-6 pt-2">
+                  <InviteUserForm onInviteCreated={handleUserCreated} />
+                </div>
+              </ScrollArea>
             </DialogContent>
           </Dialog>
         )}
