@@ -1,3 +1,4 @@
+
 'use client';
 
 import { PageHeader } from '@/components/page-header';
@@ -192,15 +193,13 @@ export default function UsersPage() {
                 Invite User
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[90vh] p-0 overflow-hidden flex flex-col">
-              <DialogHeader className="p-6 pb-2">
+            <DialogContent className="max-h-[90vh] h-[85vh] p-0 overflow-hidden flex flex-col sm:max-w-xl">
+              <DialogHeader className="p-6 pb-2 border-b shrink-0">
                 <DialogTitle>Invite New User</DialogTitle>
               </DialogHeader>
-              <ScrollArea className="flex-1">
-                <div className="p-6 pt-2">
-                  <InviteUserForm onInviteCreated={handleUserCreated} />
-                </div>
-              </ScrollArea>
+              <div className="flex-1 overflow-y-auto p-6 pt-4">
+                <InviteUserForm onInviteCreated={handleUserCreated} />
+              </div>
             </DialogContent>
           </Dialog>
         )}
