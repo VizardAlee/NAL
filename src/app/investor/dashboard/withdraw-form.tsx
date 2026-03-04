@@ -16,9 +16,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useActionState, useState } from 'react';
-import { useFormStatus } from 'react-dom';
 import { Loader2 } from 'lucide-react';
-import { useUser } from '@/firebase';
+import { useAuth, useUser } from '@/firebase';
 import { requestWithdrawalAction } from './withdrawal-actions';
 
 type WithdrawFormProps = {
@@ -33,23 +32,12 @@ const formSchema = z.object({
     .min(1, { message: 'Withdrawal amount must be greater than zero.' }),
 });
 
-function SubmitButton({ balance }: { balance: number }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" className="w-full" disabled={pending || balance <= 0}>
-      {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-      Request Withdrawal
-    </Button>
-  );
-}
-
 export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: WithdrawFormProps) {
   const { toast } = useToast();
   const { user } = useUser();
-  const [state, formAction] = useActionState(requestWithdrawalAction, { success: false, message: '' });
+  const auth = useAuth();
+  const [state, action, isPending] = useActionState(requestWithdrawalAction, { success: false, message: '' });
   const [toastShown, setToastShown] = useState(false);
-  const { pending } = useFormStatus();
-
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema.refine(data => data.amount <= withdrawableBalance, {
@@ -70,11 +58,7 @@ export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: Wit
         });
         onWithdrawalRequested();
       } else {
-        // Detailed log for copying index links and debugging
         console.error("Withdrawal Request Failed.");
-        console.error("Message:", state.message);
-        console.error("Full State Details:", state);
-        
         toast({
           variant: 'destructive',
           title: 'Request Failed',
@@ -84,18 +68,39 @@ export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: Wit
       setToastShown(true);
     }
   }, [state, toast, onWithdrawalRequested, toastShown]);
-  
+
+  // Reset toastShown when a new submission starts (isPending becomes true)
   useEffect(() => {
-    if (!pending) {
+    if (isPending) {
       setToastShown(false);
     }
-  }, [pending]);
+  }, [isPending]);
+
+  const handleSubmit = async (values: z.infer<typeof formSchema>) => {
+    const currentUser = auth?.currentUser;
+    if (!currentUser) {
+      toast({
+        variant: 'destructive',
+        title: 'Request Failed',
+        description: 'You must be logged in.',
+      });
+      return;
+    }
+
+    const authToken = await currentUser.getIdToken();
+    const formData = new FormData();
+    formData.append('authToken', authToken);
+    formData.append('amount', values.amount.toString());
+    formData.append('userId', user?.uid || '');
+    formData.append('userName', user?.displayName || user?.email || 'Investor');
+
+    // Call the server action provided by useActionState
+    action(formData);
+  };
 
   return (
     <Form {...form}>
-      <form action={formAction} className="space-y-4 pt-4">
-        <input type="hidden" name="userId" value={user?.uid || ''} />
-        <input type="hidden" name="userName" value={user?.displayName || ''} />
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 pt-4">
         <FormField
           control={form.control}
           name="amount"
@@ -105,7 +110,7 @@ export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: Wit
               <FormControl>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₦</span>
-                  <Input type="number" placeholder="10000" className="pl-8" {...field} />
+                  <Input type="number" placeholder="10000" className="pl-8" {...field} disabled={isPending} />
                 </div>
               </FormControl>
               <FormDescription>
@@ -115,7 +120,10 @@ export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: Wit
             </FormItem>
           )}
         />
-        <SubmitButton balance={withdrawableBalance} />
+        <Button type="submit" className="w-full" disabled={isPending || withdrawableBalance <= 0}>
+          {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isPending ? 'Submitting...' : 'Request Withdrawal'}
+        </Button>
       </form>
     </Form>
   );

@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useTransition } from 'react';
 import { Loader2 } from 'lucide-react';
-import { useUser } from '@/firebase';
+import { useAuth, useUser } from '@/firebase';
 import { requestDepositAction } from './deposit-actions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
@@ -38,6 +38,7 @@ export function DepositForm({ onDepositRequested }: DepositFormProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const { user } = useUser();
+  const auth = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -47,13 +48,20 @@ export function DepositForm({ onDepositRequested }: DepositFormProps) {
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!user || !user.displayName) {
+    const currentUser = auth?.currentUser;
+    if (!user || !user.displayName || !currentUser) {
       toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in.' });
       return;
     }
 
     startTransition(async () => {
-        const result = await requestDepositAction({ amount: values.amount, userId: user.uid, userName: user.displayName! });
+        const authToken = await currentUser.getIdToken();
+        const result = await requestDepositAction({
+          authToken,
+          amount: values.amount,
+          userId: user.uid,
+          userName: user.displayName!,
+        });
 
         if (result.success) {
             toast({

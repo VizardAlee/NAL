@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 
 const messageSchema = z.object({
+  authToken: z.string().min(1),
   conversationId: z.string().min(1),
   senderId: z.string().min(1),
   text: z.string().optional(),

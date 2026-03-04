@@ -25,7 +25,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useState, useTransition, useEffect } from 'react';
 import { Loader2, Paperclip, BookOpen } from 'lucide-react';
-import { useUser } from '@/firebase';
+import { useAuth, useUser } from '@/firebase';
 import { requestDealAction } from './actions';
 import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
@@ -39,7 +39,7 @@ const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
-  financingMode: z.enum(['Murabaha', 'Ijara']).default('Murabaha'),
+  financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).default('Murabaha'),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
@@ -67,6 +67,7 @@ export function CreateDealRequestForm() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { user } = useUser();
+  const auth = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -94,11 +95,13 @@ export function CreateDealRequestForm() {
   }, [isShortDeal, form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!user || !user.displayName) {
+    const currentUser = auth?.currentUser;
+    if (!user || !user.displayName || !currentUser) {
         toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to make a request.' });
         return;
     }
     startTransition(async () => {
+        const authToken = await currentUser.getIdToken();
         let pdfDataUri: string | undefined = undefined;
         if (values.proposalPdf) {
             try {
@@ -114,6 +117,7 @@ export function CreateDealRequestForm() {
         }
 
         const result = await requestDealAction({
+            authToken,
             ...values,
             proposalPdf: pdfDataUri,
             clientId: user.uid,
@@ -164,6 +168,7 @@ export function CreateDealRequestForm() {
                 <SelectContent>
                   <SelectItem value="Murabaha">Murabaha (Cost-Plus)</SelectItem>
                   <SelectItem value="Ijara">Ijara (Leasing)</SelectItem>
+                  <SelectItem value="Mudaraba">Mudaraba (Profit Sharing)</SelectItem>
                 </SelectContent>
               </Select>
               <FormDescription className="flex items-center gap-1 text-xs">

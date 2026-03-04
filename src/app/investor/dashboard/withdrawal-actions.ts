@@ -6,13 +6,34 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { addQuarters, differenceInDays, startOfQuarter } from 'date-fns';
+import { verifyAuthTokenForUser } from '@/lib/server/auth';
 
 // --- Withdrawal Action ---
 const withdrawalSchema = z.object({
+    authToken: z.string().min(1, 'Authentication token is required.'),
     amount: z.coerce.number().positive("Amount must be a positive number."),
     userId: z.string().min(1, "User ID is required."),
     userName: z.string().min(1, "User name is required."),
 });
+
+function parseLocalDate(dateStr: string): Date {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+}
+
+function isDateInWindow(quarters: any[]): { open: boolean; label?: string } {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (const q of quarters) {
+        const start = parseLocalDate(q.startDate);
+        const end = parseLocalDate(q.endDate);
+        end.setHours(23, 59, 59, 999);
+        if (today >= start && today <= end) {
+            return { open: true, label: q.label };
+        }
+    }
+    return { open: false };
+}
 
 export async function requestWithdrawalAction(prevState: any, formData: FormData) {
     const validatedFields = withdrawalSchema.safeParse({
@@ -25,30 +46,40 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
         return { success: false, message: 'Invalid form data: ' + validatedFields.error.errors[0].message };
     }
 
-    const { userId, userName, amount } = validatedFields.data;
+    const { authToken, userId, userName, amount } = validatedFields.data;
 
     try {
+        await verifyAuthTokenForUser(authToken, userId);
         const userSnap = await adminDb.collection('users').doc(userId).get();
         const userData = userSnap.data() as any;
         const isOwnerAccount = userData?.accessRole === 'OWNER';
 
         if (isOwnerAccount) {
-            const quarterStart = startOfQuarter(new Date());
-            const nextQuarterStart = addQuarters(quarterStart, 1);
-            
-            // Check for existing withdrawal request in this quarter
+            // 1. Check for custom withdrawal window
+            const settingsSnap = await adminDb.doc('platformSettings/ownerWithdrawalWindow').get();
+            const settingsData = settingsSnap.data();
+            const quarters = settingsData?.quarters || [];
+
+            const window = isDateInWindow(quarters);
+            if (!window.open) {
+                return {
+                    success: false,
+                    message: 'Withdrawals are currently closed. Please wait for an active withdrawal window.',
+                };
+            }
+
+            // 2. Check for existing withdrawal request in this specific window (label)
             const existingOwnerWithdrawal = await adminDb
                 .collection('withdrawalRequests')
                 .where('investorId', '==', userId)
-                .where('requestedAt', '>=', Timestamp.fromDate(quarterStart))
-                .where('requestedAt', '<', Timestamp.fromDate(nextQuarterStart))
+                .where('windowLabel', '==', window.label)
                 .limit(1)
                 .get();
 
             if (!existingOwnerWithdrawal.empty) {
                 return {
                     success: false,
-                    message: 'Owner withdrawals are allowed once per quarter. You already made a withdrawal request this quarter.',
+                    message: `You have already made a withdrawal request for the ${window.label} window. Owners are allowed one request per window.`,
                 };
             }
         }
@@ -56,15 +87,24 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
         const batch = adminDb.batch();
         const now = FieldValue.serverTimestamp();
 
+        // Check window again to get the label for reference
+        let currentWindowLabel = null;
+        if (isOwnerAccount) {
+            const settingsSnap = await adminDb.doc('platformSettings/ownerWithdrawalWindow').get();
+            const window = isDateInWindow(settingsSnap.data()?.quarters || []);
+            currentWindowLabel = window.label;
+        }
+
         // 1. Create the withdrawal request
         const requestRef = adminDb.collection('withdrawalRequests').doc();
         batch.set(requestRef, {
-            investorId: userId,
+            investorId: userId, // Rules check this field
             investorName: userName,
             amount,
             status: 'Pending',
             requestedAt: now,
             type: isOwnerAccount ? 'OwnerWithdrawal' : 'InvestorWithdrawal',
+            ...(currentWindowLabel ? { windowLabel: currentWindowLabel } : {}),
         });
 
         // 2. Update the user's last withdrawal date
@@ -89,10 +129,8 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
         return { success: true, message: `Your request to withdraw ${formattedAmount} has been submitted.` };
     } catch (error: any) {
         console.error("WITHDRAWAL REQUEST ACTION ERROR:", error);
-        
-        // Return detailed error message so the indexing link can be captured if present
-        return { 
-            success: false, 
+        return {
+            success: false,
             message: error?.message || "An unknown error occurred.",
             code: error?.code || 'internal',
             details: JSON.stringify(error)
@@ -104,12 +142,13 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
 // --- Reinvestment Action ---
 
 const reinvestSchema = z.object({
+    authToken: z.string().min(1, 'Authentication token is required.'),
     amount: z.coerce.number().positive("Amount must be a positive number."),
     userId: z.string().min(1, "User ID is required."),
     userName: z.string().min(1, "User name is required."),
 });
 
-export async function reinvestAction(input: { amount: number; userId: string, userName: string }): Promise<{ success: boolean; message: string; }> {
+export async function reinvestAction(input: { authToken: string; amount: number; userId: string; userName: string }): Promise<{ success: boolean; message: string; }> {
 
     const validatedFields = reinvestSchema.safeParse(input);
 
@@ -120,9 +159,10 @@ export async function reinvestAction(input: { amount: number; userId: string, us
         };
     }
 
-    const { amount, userId, userName } = validatedFields.data;
+    const { authToken, amount, userId, userName } = validatedFields.data;
 
     try {
+        await verifyAuthTokenForUser(authToken, userId);
 
         await adminDb.collection('reinvestmentRequests').add({
             investorId: userId,
@@ -159,6 +199,7 @@ export async function reinvestAction(input: { amount: number; userId: string, us
 // --- Uninvested Capital Withdrawal ---
 
 const capitalWithdrawalSchema = z.object({
+    authToken: z.string().min(1, 'Authentication token is required.'),
     batchId: z.string().min(1),
     userId: z.string().min(1),
     userName: z.string().min(1),
@@ -170,10 +211,11 @@ export async function requestCapitalWithdrawalAction(input: z.infer<typeof capit
         return { success: false, message: 'Invalid data provided.' };
     }
 
-    const { batchId, userId, userName } = validated.data;
+    const { authToken, batchId, userId, userName } = validated.data;
     const DURATION_IN_DAYS = { Days: 1, Weeks: 7, Fortnights: 14, Months: 30.4375, Years: 365.25 };
 
     try {
+        await verifyAuthTokenForUser(authToken, userId);
         const batchRef = adminDb.collection('fundBatches').doc(batchId);
         const batchDoc = await batchRef.get();
 

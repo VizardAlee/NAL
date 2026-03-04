@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { notifyAdmins } from '@/app/common/actions/notification-actions';
 import { adminDb } from '@/firebase/admin-app';
+import { verifyAuthTokenForUser } from '@/lib/server/auth';
 
 // --- Lodge Payment Action ---
 const lodgePaymentSchema = z.object({
@@ -111,6 +112,7 @@ export async function lodgePaymentAction(
 
 // --- Termination Request Action ---
 const terminationRequestSchema = z.object({
+  authToken: z.string().min(1, 'Authentication token is required.'),
   dealId: z.string().min(1),
   dealName: z.string().min(1),
   clientId: z.string().min(1),
@@ -132,28 +134,25 @@ export async function requestTerminationAction(
         return { success: false, message: "Invalid data for termination request." };
     }
 
-    const { dealId, dealName, clientId, clientName } = validatedFields.data;
+    const { authToken, dealId, dealName, clientId, clientName } = validatedFields.data;
     
     try {
+        await verifyAuthTokenForUser(authToken, clientId);
         const { firestore } = initializeFirebase();
-
-        const existingReqQuery = await firestore.collection('terminationRequests')
-            .where('dealId', '==', dealId)
-            .where('status', '==', 'Pending')
-            .limit(1)
-            .get();
-        
-        if (!existingReqQuery.empty) {
-            return { success: false, message: "A termination request for this deal is already pending." };
-        }
-
-        await firestore.collection('terminationRequests').add({
-            dealId,
-            dealName,
-            clientId,
-            clientName,
-            status: 'Pending',
-            requestedAt: Timestamp.now(),
+        const requestRef = firestore.collection('terminationRequests').doc(`${dealId}_${clientId}`);
+        await firestore.runTransaction(async (trx) => {
+            const existingRequest = await trx.get(requestRef);
+            if (existingRequest.exists && existingRequest.data()?.status === 'Pending') {
+                throw new Error('A termination request for this deal is already pending.');
+            }
+            trx.set(requestRef, {
+                dealId,
+                dealName,
+                clientId,
+                clientName,
+                status: 'Pending',
+                requestedAt: Timestamp.now(),
+            });
         });
 
         await notifyAdmins(

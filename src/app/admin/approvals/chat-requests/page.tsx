@@ -15,7 +15,7 @@ import { Loader2, MessageSquarePlus } from 'lucide-react';
 import { useState, useMemo, useTransition } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, DocumentData, Timestamp } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
+import { useAuth, useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -36,6 +36,7 @@ type ChatRequest = DocumentData & {
 
 export default function ChatRequestsPage() {
     const firestore = useFirestore();
+    const auth = useAuth();
     const { user: adminUser } = useUser();
     const { toast } = useToast();
     const router = useRouter();
@@ -46,7 +47,8 @@ export default function ChatRequestsPage() {
     const { data: requests, loading } = useCollection<ChatRequest>(requestsQuery);
 
     const handleInitiateChat = async (request: ChatRequest) => {
-        if (!adminUser || !adminUser.displayName) {
+        const currentUser = auth?.currentUser;
+        if (!adminUser || !adminUser.displayName || !currentUser) {
             toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in as an admin to perform this action.' });
             return;
         };
@@ -54,10 +56,13 @@ export default function ChatRequestsPage() {
         setProcessingId(request.id);
 
         try {
+            const authToken = await currentUser.getIdToken();
             const result = await initiateChat(
+                authToken,
                 request.id,
                 request.userId,
                 request.userName,
+                request.userRole,
                 adminUser.uid,
                 adminUser.displayName
             );
@@ -202,7 +207,5 @@ export default function ChatRequestsPage() {
         </div>
     );
 }
-
-
 
 

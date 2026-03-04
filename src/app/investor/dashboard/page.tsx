@@ -9,7 +9,7 @@ import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, 
 import { useMemo, useState, useTransition } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc, updateDoc, writeBatch } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
+import { useAuth, useFirestore, useUser } from '@/firebase';
 import { type User } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, differenceInDays, addDays, startOfWeek, subWeeks } from 'date-fns';
@@ -96,12 +96,21 @@ const chartConfig = {
 };
 
 function ReinvestButton({ balance, user }: { balance: number, user: User }) {
+    const auth = useAuth();
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
 
     const handleReinvest = () => {
+        const currentUser = auth?.currentUser;
+        if (!currentUser) return;
         startTransition(async () => {
-            const result = await reinvestAction({ amount: balance, userId: user.uid, userName: user.displayName || 'Unknown' });
+            const authToken = await currentUser.getIdToken();
+            const result = await reinvestAction({
+                authToken,
+                amount: balance,
+                userId: user.uid,
+                userName: user.displayName || 'Unknown',
+            });
             if (result.success) {
                 toast({
                     title: "Reinvestment Request Sent",
@@ -196,6 +205,7 @@ function BankDetailsCard() {
 
 function ContactAdminSheet() {
     const firestore = useFirestore();
+    const auth = useAuth();
     const router = useRouter();
     const { user } = useUser();
     const { toast } = useToast();
@@ -209,9 +219,12 @@ function ContactAdminSheet() {
     const { data: admins, loading } = useCollection<UserProfile>(adminsQuery);
 
     const handleSelectAdmin = (admin: UserProfile) => {
-        if (!user?.displayName) return;
+        const currentUser = auth?.currentUser;
+        if (!user?.displayName || !currentUser) return;
         startTransition(async () => {
+            const authToken = await currentUser.getIdToken();
             const result = await getOrCreateConversation({
+                authToken,
                 adminId: admin.id,
                 adminName: admin.name,
                 userId: user.uid,
@@ -263,6 +276,7 @@ function ContactAdminSheet() {
 }
 
 function UninvestedCapitalCard({ batches, user }: { batches: FundBatch[] | null, user: User }) {
+    const auth = useAuth();
     const { toast } = useToast();
     const [pendingWithdrawal, setPendingWithdrawal] = useState<string | null>(null);
 
@@ -277,8 +291,16 @@ function UninvestedCapitalCard({ batches, user }: { batches: FundBatch[] | null,
     }, [batches]);
 
     const handleWithdraw = async (batchId: string) => {
+        const currentUser = auth?.currentUser;
+        if (!currentUser) return;
         setPendingWithdrawal(batchId);
-        const result = await requestCapitalWithdrawalAction({ batchId, userId: user.uid, userName: user.displayName || 'User' });
+        const authToken = await currentUser.getIdToken();
+        const result = await requestCapitalWithdrawalAction({
+            authToken,
+            batchId,
+            userId: user.uid,
+            userName: user.displayName || 'User'
+        });
         if (result.success) {
             toast({ title: 'Success', description: result.message });
         } else {
@@ -427,9 +449,14 @@ export default function InvestorDashboard() {
             }
         }
 
+        // --- WITHDRAWABLE BALANCE CALCULATION ---
+        const totalWithdrawnShortTerm = (allTransactions || [])
+            .filter(tx => tx.type === 'Withdrawal' && (tx.metadata?.source === 'ShortTermProfit' || tx.amount < 0))
+            .reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0);
+
         return {
             longTermProfits: totalLongTermProfit,
-            withdrawableBalance: totalShortTermProfit - totalWithdrawnFromProfits,
+            withdrawableBalance: Math.max(0, totalShortTermProfit - totalWithdrawnShortTerm),
             expectedIncome: totalExpectedIncome,
             totalProfitsEarned
         };

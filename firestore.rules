@@ -186,17 +186,9 @@ service cloud.firestore {
       allow get, list: if canAdminRead();
       allow update: if isAdmin();
 
-      // Investors can create their own requests
-      allow create: if isInvestor() && request.resource.data.investorId == request.auth.uid;
-
-      // Investors can read their own requests
-      allow read: if isInvestor() && resource.data.investorId == request.auth.uid;
-
-      // Owners can create their own withdrawal requests (type: OwnerWithdrawal)
-      allow create: if isOwnerRole() && request.resource.data.userId == request.auth.uid;
-
-      // Owners can read their own requests
-      allow read: if isOwnerRole() && resource.data.userId == request.auth.uid;
+      // All users (Investors/Owners) use investorId as the primary field for their requests
+      allow create: if (isInvestor() || isOwnerRole()) && request.resource.data.investorId == request.auth.uid;
+      allow read: if (isInvestor() || isOwnerRole()) && resource.data.investorId == request.auth.uid;
     }
 
     // Rules for 'reinvestmentRequests'

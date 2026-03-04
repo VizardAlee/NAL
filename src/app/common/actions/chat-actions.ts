@@ -6,9 +6,11 @@ import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { notifyAdmins, notifyUser } from './notification-actions';
+import { verifyAuthToken, verifyAuthTokenForUser } from '@/lib/server/auth';
 
 
 const requestChatSchema = z.object({
+  authToken: z.string().min(1),
   userId: z.string().min(1),
   userName: z.string().min(1),
   userRole: z.enum(['Investor', 'Client']),
@@ -20,24 +22,25 @@ export async function requestChatWithAdmin(input: z.infer<typeof requestChatSche
     return { success: false, message: 'Invalid data for chat request.' };
   }
 
-  const { userId, userName, userRole } = validated.data;
+  const { authToken, userId, userName, userRole } = validated.data;
   const adminDb = getFirestore(getAdminApp());
 
   try {
-    const existingRequest = await adminDb
-      .collection('chatRequests')
-      .where('userId', '==', userId)
-      .limit(1)
-      .get();
+    await verifyAuthTokenForUser(authToken, userId);
 
-    if (!existingRequest.empty) {
-      return { success: false, message: 'You already have a pending chat request.' };
-    }
-
-    await adminDb.collection('chatRequests').add({
-      ...validated.data,
-      status: 'Pending',
-      requestedAt: Timestamp.now(),
+    const requestRef = adminDb.collection('chatRequests').doc(userId);
+    await adminDb.runTransaction(async (trx) => {
+      const snap = await trx.get(requestRef);
+      if (snap.exists && snap.data()?.status === 'Pending') {
+        throw new Error('You already have a pending chat request.');
+      }
+      trx.set(requestRef, {
+        userId,
+        userName,
+        userRole,
+        status: 'Pending',
+        requestedAt: Timestamp.now(),
+      });
     });
 
     await notifyAdmins(
@@ -60,6 +63,7 @@ export async function requestChatWithAdmin(input: z.infer<typeof requestChatSche
 
 
 const messageSchema = z.object({
+  authToken: z.string().min(1),
   conversationId: z.string().min(1),
   senderId: z.string().min(1),
   text: z.string().optional(),
@@ -73,7 +77,7 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
     return { success: false, message: 'Invalid message data.' };
   }
 
-  const { conversationId, senderId, text, attachmentUrl, attachmentName } = validated.data;
+  const { authToken, conversationId, senderId, text, attachmentUrl, attachmentName } = validated.data;
   
   if (!text && !attachmentUrl) {
     return { success: false, message: 'Message must have either text or an attachment.' };
@@ -82,6 +86,8 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
   const adminDb = getFirestore(getAdminApp());
 
   try {
+    await verifyAuthTokenForUser(authToken, senderId);
+
     const firestore = adminDb;
     const conversationRef = firestore.collection('conversations').doc(conversationId);
     
@@ -158,6 +164,7 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
 }
 
 const getOrCreateConvoSchema = z.object({
+  authToken: z.string().min(1),
   adminId: z.string().min(1),
   adminName: z.string().min(1),
   userId: z.string().min(1),
@@ -169,10 +176,15 @@ export async function getOrCreateConversation(input: z.infer<typeof getOrCreateC
     if (!validated.success) {
         return { success: false, message: 'Invalid data for conversation.' };
     }
-    const { adminId, adminName, userId, userName } = validated.data;
+    const { authToken, adminId, adminName, userId, userName } = validated.data;
     const adminDb = getFirestore(getAdminApp());
     
     try {
+        const decoded = await verifyAuthToken(authToken);
+        if (decoded.uid !== adminId && decoded.uid !== userId) {
+            return { success: false, message: 'Forbidden: invalid user context.' };
+        }
+
         const existingConvoQuery = adminDb.collection('conversations')
             .where('participantIds', 'array-contains', adminId);
 
@@ -186,32 +198,35 @@ export async function getOrCreateConversation(input: z.infer<typeof getOrCreateC
             return { success: true, conversationId: existingConvo.id };
         }
 
-        const newConversationRef = adminDb.collection('conversations').doc();
-        const batch = adminDb.batch();
-        const now = FieldValue.serverTimestamp();
+        const conversationId = [adminId, userId].sort().join('_');
+        const newConversationRef = adminDb.collection('conversations').doc(conversationId);
         const initialMessage = `Hi ${userName}, this is ${adminName}. How can I assist you?`;
+        await adminDb.runTransaction(async (trx) => {
+            const conversationDoc = await trx.get(newConversationRef);
+            if (conversationDoc.exists) {
+                return;
+            }
+            const now = FieldValue.serverTimestamp();
+            trx.set(newConversationRef, {
+                participantIds: [adminId, userId],
+                participantNames: [adminName, userName],
+                participantAvatars: [`https://picsum.photos/seed/${adminId}/128/128`, `https://picsum.photos/seed/${userId}/128/128`],
+                lastMessage: initialMessage,
+                lastMessageSenderId: adminId,
+                lastUpdatedAt: now,
+                readBy: [adminId],
+            });
 
-        batch.set(newConversationRef, {
-            participantIds: [adminId, userId],
-            participantNames: [adminName, userName],
-            participantAvatars: [`https://picsum.photos/seed/${adminId}/128/128`, `https://picsum.photos/seed/${userId}/128/128`],
-            lastMessage: initialMessage,
-            lastMessageSenderId: adminId,
-            lastUpdatedAt: now,
-            readBy: [adminId],
+            const firstMessageRef = newConversationRef.collection('messages').doc();
+            trx.set(firstMessageRef, {
+                conversationId: newConversationRef.id,
+                senderId: adminId,
+                text: initialMessage,
+                createdAt: now,
+            });
         });
 
-        const firstMessageRef = newConversationRef.collection('messages').doc();
-        batch.set(firstMessageRef, {
-            conversationId: newConversationRef.id,
-            senderId: adminId,
-            text: initialMessage,
-            createdAt: now,
-        });
-
-        await batch.commit();
-
-        return { success: true, conversationId: newConversationRef.id };
+        return { success: true, conversationId };
     } catch (error) {
         const message = error instanceof Error ? error.message : 'An unknown error occurred.';
         return { success: false, message };

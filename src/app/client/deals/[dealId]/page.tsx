@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { FileText, ShieldAlert, Loader2, HandCoins, Gavel, Download } from "lucide-react";
 import { useMemo, useTransition } from 'react';
-import { useCollection, useDoc } from '@/firebase';
+import { useAuth, useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, doc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -60,6 +60,7 @@ function DealDetailSkeleton() {
 export default function ClientDealDetailPage() {
     const { dealId } = useParams<{ dealId: string }>();
     const firestore = useFirestore();
+    const auth = useAuth();
     const { user } = useUser();
     const { toast } = useToast();
     const [isPendingTermination, startTransition] = useTransition();
@@ -91,9 +92,12 @@ export default function ClientDealDetailPage() {
     }, [repayments]);
 
     const handleTerminationRequest = () => {
-        if (!user || !user.displayName || !deal) return;
+        const currentUser = auth?.currentUser;
+        if (!user || !user.displayName || !deal || !currentUser) return;
         startTransition(async () => {
+            const authToken = await currentUser.getIdToken();
             const result = await requestTerminationAction({
+              authToken,
               dealId: deal.id,
               dealName: deal.dealName,
               clientId: user.uid,

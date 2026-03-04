@@ -3,7 +3,7 @@
 
 import { useMemo, useState, useTransition, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { useDoc, useCollection, useUser, useFirestore } from '@/firebase';
+import { useDoc, useCollection, useUser, useFirestore, useAuth } from '@/firebase';
 import { doc, collection, query, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Loader2, Send, Paperclip, X, Download } from 'lucide-react';
@@ -59,6 +59,7 @@ export default function InvestorConversationPage() {
     const { conversationId } = useParams<{ conversationId: string }>();
     const { user } = useUser();
     const firestore = useFirestore();
+    const auth = useAuth();
     const [newMessage, setNewMessage] = useState('');
     const [attachment, setAttachment] = useState<File | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -93,7 +94,8 @@ export default function InvestorConversationPage() {
     const handleSendMessage = async (formData: FormData) => {
         const text = formData.get('messageText') as string;
         if ((!text || !text.trim()) && !attachment) return;
-        if (!user || !conversationId) return;
+        const currentUser = auth?.currentUser;
+        if (!user || !conversationId || !currentUser) return;
 
         let attachmentUrl: string | undefined;
         let attachmentName: string | undefined;
@@ -107,7 +109,9 @@ export default function InvestorConversationPage() {
         setAttachment(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
 
+        const authToken = await currentUser.getIdToken();
         await sendMessageAction({
+            authToken,
             conversationId,
             senderId: user.uid,
             text,

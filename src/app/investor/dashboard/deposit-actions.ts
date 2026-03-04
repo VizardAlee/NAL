@@ -6,14 +6,16 @@ import { initializeFirebase } from '@/firebase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { notifyAdmins } from '@/app/common/actions/notification-actions';
+import { verifyAuthTokenForUser } from '@/lib/server/auth';
 
 const depositSchema = z.object({
+  authToken: z.string().min(1, 'Authentication token is required.'),
   amount: z.coerce.number().positive("Amount must be a positive number."),
   userId: z.string().min(1, "User ID is required."),
   userName: z.string().min(1, "User name is required."),
 });
 
-export async function requestDepositAction(input: { amount: number; userId: string, userName: string }): Promise<{ success: boolean; message: string; }> {
+export async function requestDepositAction(input: { authToken: string; amount: number; userId: string; userName: string }): Promise<{ success: boolean; message: string; }> {
 
   const validatedFields = depositSchema.safeParse(input);
 
@@ -24,9 +26,10 @@ export async function requestDepositAction(input: { amount: number; userId: stri
     };
   }
 
-  const { amount, userId, userName } = validatedFields.data;
+  const { authToken, amount, userId, userName } = validatedFields.data;
 
   try {
+    await verifyAuthTokenForUser(authToken, userId);
     const { firestore } = initializeFirebase();
     
     await firestore.collection('depositRequests').add({

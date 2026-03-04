@@ -4,7 +4,7 @@
 
 import { useMemo, useState, useTransition, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { useDoc, useCollection, useUser, useFirestore } from '@/firebase';
+import { useDoc, useCollection, useUser, useFirestore, useAuth } from '@/firebase';
 import { doc, collection, query, orderBy, addDoc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
@@ -69,6 +69,7 @@ export default function AdminConversationPage() {
     const { conversationId } = useParams<{ conversationId: string }>();
     const { user: adminUser } = useUser();
     const firestore = useFirestore();
+    const auth = useAuth();
     const [newMessage, setNewMessage] = useState('');
     const [attachment, setAttachment] = useState<File | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -115,7 +116,8 @@ export default function AdminConversationPage() {
     const handleSendMessage = async (formData: FormData) => {
         const text = formData.get('messageText') as string;
         if ((!text || !text.trim()) && !attachment) return;
-        if (!adminUser || !conversationId) return;
+        const currentUser = auth?.currentUser;
+        if (!adminUser || !conversationId || !currentUser) return;
 
         let attachmentUrl: string | undefined;
         let attachmentName: string | undefined;
@@ -129,7 +131,9 @@ export default function AdminConversationPage() {
         setAttachment(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
 
+        const authToken = await currentUser.getIdToken();
         await sendMessageAction({
+            authToken,
             conversationId,
             senderId: adminUser.uid,
             text,

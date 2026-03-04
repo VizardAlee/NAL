@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, XCircle, Hourglass, History } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs, orderBy, increment, getDoc } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs, orderBy, increment, getDoc, runTransaction } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
@@ -38,43 +38,6 @@ type WithdrawalRequest = DocumentData & {
     type?: 'OwnerWithdrawal' | 'InvestorWithdrawal';
 };
 
-// New hook to clear notifications when a page is visited
-function useClearNotificationsByPath() {
-    const firestore = useFirestore();
-    const pathname = usePathname();
-    const { user } = useUser();
-
-    useEffect(() => {
-        if (!firestore || !pathname || !user) return;
-
-        const clearNotifications = async () => {
-            try {
-                const notificationsToClearQuery = query(
-                    collection(firestore, 'notifications'),
-                    where('recipientId', '==', user.uid),
-                    where('link', '==', pathname),
-                    where('read', '==', false)
-                );
-
-                const snapshot = await getDocs(notificationsToClearQuery);
-                if (snapshot.empty) return;
-
-                const batch = writeBatch(firestore);
-                snapshot.docs.forEach(doc => {
-                    batch.update(doc.ref, { read: true });
-                });
-
-                await batch.commit();
-            } catch (error) {
-                console.error("Failed to clear notifications:", error);
-            }
-        };
-
-        const timer = setTimeout(clearNotifications, 500);
-        return () => clearTimeout(timer);
-
-    }, [firestore, pathname, user]);
-}
 
 function WithdrawalsTable({
     requests,
@@ -249,7 +212,6 @@ export default function WithdrawalsPage() {
     const { toast } = useToast();
     const [processingId, setProcessingId] = useState<string | null>(null);
 
-    useClearNotificationsByPath();
 
     const pendingQuery = useMemo(() => firestore ? query(collection(firestore, 'withdrawalRequests'), where('status', '==', 'Pending')) : null, [firestore]);
     const processedQuery = useMemo(() => firestore ? query(collection(firestore, 'withdrawalRequests'), where('status', 'in', ['Approved', 'Rejected']), orderBy('requestedAt', 'desc')) : null, [firestore]);
@@ -264,57 +226,64 @@ export default function WithdrawalsPage() {
         setProcessingId(request.id);
 
         try {
-            const batch = writeBatch(firestore);
-            const requestRef = doc(firestore, 'withdrawalRequests', request.id);
+            await runTransaction(firestore, async (transaction) => {
+                const requestRef = doc(firestore, 'withdrawalRequests', request.id);
+                const requestDoc = await transaction.get(requestRef);
 
-            batch.update(requestRef, {
-                status: newStatus,
-                processedAt: Timestamp.now()
-            });
+                if (!requestDoc.exists()) {
+                    throw new Error("Withdrawal request not found.");
+                }
 
-            // If approved, create a 'Withdrawal' transaction and deduct from fund batches FIFO
-            if (newStatus === 'Approved') {
-                const resolvedUserId = request.investorId || request.userId;
-                if (!resolvedUserId) throw new Error('Cannot determine user ID for this withdrawal request.');
-                
-                // 1. Create the negative transaction
-                const transactionRef = doc(collection(firestore, 'transactions'));
-                batch.set(transactionRef, {
-                    userId: resolvedUserId,
-                    type: 'Withdrawal',
-                    amount: -Math.abs(request.amount),
-                    createdAt: Timestamp.now(),
+                if (requestDoc.data().status !== 'Pending') {
+                    throw new Error("This request has already been processed.");
+                }
+
+                transaction.update(requestRef, {
+                    status: newStatus,
+                    processedAt: Timestamp.now()
                 });
 
-                // 2. Deduct from fund batches FIFO
-                const batchesQuery = query(
-                    collection(firestore, 'fundBatches'),
-                    where('sourceId', '==', resolvedUserId),
-                    where('remainingAmount', '>', 0),
-                    orderBy('createdAt', 'asc')
-                );
-                
-                const batchesSnap = await getDocs(batchesQuery);
-                let remainingToDeduct = Math.abs(request.amount);
+                if (newStatus === 'Approved') {
+                    const resolvedUserId = request.investorId || request.userId;
+                    if (!resolvedUserId) throw new Error('Cannot determine user ID for this withdrawal request.');
 
-                for (const batchDoc of batchesSnap.docs) {
-                    if (remainingToDeduct <= 0) break;
-                    const batchData = batchDoc.data();
-                    const available = batchData.remainingAmount;
-                    const deduction = Math.min(available, remainingToDeduct);
-
-                    batch.update(batchDoc.ref, {
-                        remainingAmount: increment(-deduction)
+                    // 1. Create the negative transaction
+                    const transactionRef = doc(collection(firestore, 'transactions'));
+                    transaction.set(transactionRef, {
+                        userId: resolvedUserId,
+                        type: 'Withdrawal',
+                        amount: -Math.abs(request.amount),
+                        createdAt: Timestamp.now(),
                     });
-                    remainingToDeduct -= deduction;
-                }
 
-                if (remainingToDeduct > 0.01) {
-                    throw new Error(`Insufficient investible balance. Could not deduct full withdrawal amount (Remaining: ${remainingToDeduct}).`);
-                }
-            }
+                    // 2. Deduct from fund batches FIFO
+                    const batchesQuery = query(
+                        collection(firestore, 'fundBatches'),
+                        where('sourceId', '==', resolvedUserId),
+                        where('remainingAmount', '>', 0),
+                        orderBy('createdAt', 'asc')
+                    );
 
-            await batch.commit();
+                    const batchesSnap = await getDocs(batchesQuery);
+                    let remainingToDeduct = Math.abs(request.amount);
+
+                    for (const batchDoc of batchesSnap.docs) {
+                        if (remainingToDeduct <= 0) break;
+                        const batchData = batchDoc.data();
+                        const available = batchData.remainingAmount;
+                        const deduction = Math.min(available, remainingToDeduct);
+
+                        transaction.update(batchDoc.ref, {
+                            remainingAmount: increment(-deduction)
+                        });
+                        remainingToDeduct -= deduction;
+                    }
+
+                    if (remainingToDeduct > 0.01) {
+                        throw new Error(`Insufficient investible balance. Could not deduct full withdrawal amount (Remaining: ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(remainingToDeduct)}).`);
+                    }
+                }
+            });
 
             toast({
                 title: `Request ${newStatus}`,

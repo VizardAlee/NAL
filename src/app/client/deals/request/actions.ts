@@ -6,8 +6,10 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { notifyAdmins } from '@/app/common/actions/notification-actions';
+import { verifyAuthTokenForUser } from '@/lib/server/auth';
 
 const requestDealSchema = z.object({
+  authToken: z.string().min(1, 'Authentication token is required.'),
   dealName: z.string().min(3),
   clientId: z.string().min(1),
   clientName: z.string().min(1),
@@ -29,8 +31,10 @@ export async function requestDealAction(input: z.infer<typeof requestDealSchema>
     }
 
     try {
+        const { authToken, ...requestPayload } = validated.data;
+        await verifyAuthTokenForUser(authToken, requestPayload.clientId);
         const dealRequestData = {
-            ...validated.data,
+            ...requestPayload,
             status: 'Pending',
             requestedAt: Timestamp.now(),
         };
@@ -38,7 +42,7 @@ export async function requestDealAction(input: z.infer<typeof requestDealSchema>
 
         await notifyAdmins(
             'New Deal Request',
-            `${validated.data.clientName} has requested a new deal: "${validated.data.dealName}"`,
+            `${requestPayload.clientName} has requested a new deal: "${requestPayload.dealName}"`,
             '/admin/approvals/deal-requests'
         );
         

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as admin from 'firebase-admin';
 import { ServiceAccount } from 'firebase-admin';
 import { differenceInDays } from 'date-fns';
+import { getAuthErrorStatus, verifyAdminOrOwner } from '@/lib/server/auth';
 
 // Defines the shape of the data for a Deal document
 interface Deal {
@@ -72,6 +73,10 @@ function getAdminApp() {
 
 export async function POST(request: NextRequest) {
     const { dealId } = await request.json();
+    const authHeader = request.headers.get('authorization');
+    const authToken = authHeader?.startsWith('Bearer ')
+        ? authHeader.slice('Bearer '.length).trim()
+        : '';
 
     if (!dealId) {
         return NextResponse.json({ success: false, message: 'Deal ID is missing.' }, { status: 400 });
@@ -82,6 +87,8 @@ export async function POST(request: NextRequest) {
     let finalAmountFunded = 0;
 
     try {
+        await verifyAdminOrOwner(authToken);
+
         await firestore.runTransaction(async (transaction) => {
             const dealRef = firestore.collection('deals').doc(dealId);
             const dealDoc = await transaction.get(dealRef);
@@ -199,6 +206,10 @@ export async function POST(request: NextRequest) {
         }
 
     } catch (error: any) {
+        const authStatus = getAuthErrorStatus(error);
+        if (authStatus) {
+            return NextResponse.json({ success: false, message: error.message }, { status: authStatus });
+        }
         console.error('DEAL FUNDING FAILED:', error);
         return NextResponse.json({ success: false, message: error.message || 'An unknown error occurred during funding.' }, { status: 500 });
     }

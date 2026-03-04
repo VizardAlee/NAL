@@ -8,7 +8,7 @@ import { FileText, ShieldAlert, Loader2, ArrowRight } from "lucide-react";
 import { useMemo, useTransition } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
+import { useAuth, useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Deal } from '@/lib/types';
 import { RepaymentSchedule } from "@/components/deals/repayment-schedule";
@@ -34,6 +34,7 @@ const statusVariant = {
 
 function DealCard({ deal }: { deal: Deal }) {
     const firestore = useFirestore();
+    const auth = useAuth();
     const { user } = useUser();
     const { toast } = useToast();
     const [isPendingTermination, startTransition] = useTransition();
@@ -51,9 +52,12 @@ function DealCard({ deal }: { deal: Deal }) {
     }, [repayments]);
 
     const handleTerminationRequest = () => {
-        if (!user || !user.displayName) return;
+        const currentUser = auth?.currentUser;
+        if (!user || !user.displayName || !currentUser) return;
         startTransition(async () => {
+            const authToken = await currentUser.getIdToken();
             const result = await requestTerminationAction({
+                authToken,
                 dealId: deal.id,
                 dealName: deal.dealName,
                 clientId: user.uid,

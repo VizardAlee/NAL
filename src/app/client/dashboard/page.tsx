@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy, HandCoins, Gavel, Download, BookOpen, History } from "lucide-react";
 import { useMemo, useTransition, useEffect, useState } from 'react';
-import { useCollection, useDoc } from '@/firebase';
+import { useAuth, useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, doc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -97,6 +97,7 @@ function BankDetailsCard() {
 
 function ContactAdminSheet() {
     const firestore = useFirestore();
+    const auth = useAuth();
     const router = useRouter();
     const { user } = useUser();
     const { toast } = useToast();
@@ -110,9 +111,12 @@ function ContactAdminSheet() {
     const { data: admins, loading } = useCollection<any>(adminsQuery);
 
     const handleSelectAdmin = (admin: any) => {
-        if (!user?.displayName) return;
+        const currentUser = auth?.currentUser;
+        if (!user?.displayName || !currentUser) return;
         startTransition(async () => {
+            const authToken = await currentUser.getIdToken();
             const result = await getOrCreateConversation({
+                authToken,
                 adminId: admin.id,
                 adminName: admin.name,
                 userId: user.uid,
@@ -165,6 +169,7 @@ function ContactAdminSheet() {
 
 function DealCard({ deal }: { deal: Deal }) {
     const firestore = useFirestore();
+    const auth = useAuth();
     const { user } = useUser();
     const { toast } = useToast();
     const [isPendingTermination, startTransition] = useTransition();
@@ -184,9 +189,12 @@ function DealCard({ deal }: { deal: Deal }) {
     }, [repayments]);
 
     const handleTerminationRequest = () => {
-        if (!user || !user.displayName) return;
+        const currentUser = auth?.currentUser;
+        if (!user || !user.displayName || !currentUser) return;
         startTransition(async () => {
+            const authToken = await currentUser.getIdToken();
             const result = await requestTerminationAction({
+                authToken,
                 dealId: deal.id,
                 dealName: deal.dealName,
                 clientId: user.uid,

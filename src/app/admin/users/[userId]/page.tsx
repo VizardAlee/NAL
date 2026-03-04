@@ -7,7 +7,7 @@ import { notFound, useParams, useRouter } from 'next/navigation';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { doc, collection, query, where, DocumentData, Timestamp, orderBy, limit } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
+import { useAuth, useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
 import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone, MessageSquare, Star, Gavel, Download, UserPlus, Briefcase, Copy, DollarSign } from 'lucide-react';
@@ -164,6 +164,7 @@ const ZakatCountdown = ({ firstDepositDate, lastZakatPaymentDate }: { firstDepos
 export default function UserDetailPage() {
     const { userId } = useParams<{ userId: string }>();
     const firestore = useFirestore();
+    const auth = useAuth();
     const router = useRouter();
     const { user: authUser, loading: authUserLoading } = useUser();
     const [isAddFundOpen, setAddFundOpen] = useState(false);
@@ -238,9 +239,12 @@ export default function UserDetailPage() {
     const isLoading = authUserLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading || clientDealsLoading || clientRepaymentsLoading || (userProfile?.role === 'Marketer' && statsLoading);
 
     const handleInitiateChat = () => {
-        if (!authUser || !userProfile) return;
+        const currentUser = auth?.currentUser;
+        if (!authUser || !userProfile || !currentUser) return;
         startChatTransition(async () => {
+            const authToken = await currentUser.getIdToken();
             const result = await getOrCreateConversation({
+                authToken,
                 adminId: authUser.uid,
                 adminName: authUser.displayName || 'Admin',
                 userId: userProfile.id,

@@ -7,7 +7,7 @@ import { notFound, useParams } from 'next/navigation';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { doc, collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
+import { useAuth, useFirestore } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
 import { FileText, Users, Landmark, Zap, Loader2, UserCheck, HandCoins, CheckCircle, BookOpen } from 'lucide-react';
@@ -79,6 +79,7 @@ const formatDate = (timestamp: Timestamp | Date | undefined) => {
 export default function DealDetailPage() {
     const { dealId } = useParams<{ dealId: string }>();
     const firestore = useFirestore();
+    const auth = useAuth();
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
     const [isFeePending, startFeeTransition] = useTransition();
@@ -181,9 +182,14 @@ export default function DealDetailPage() {
     const handleFundDeal = () => {
         startTransition(async () => {
             try {
+                const currentUser = auth?.currentUser;
+                const headers: HeadersInit = { 'Content-Type': 'application/json' };
+                if (currentUser) {
+                    headers.Authorization = `Bearer ${await currentUser.getIdToken()}`;
+                }
                 const response = await fetch('/api/fund-deal', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     body: JSON.stringify({ dealId }),
                 });
                 const result = await response.json();
