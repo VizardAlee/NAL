@@ -35,9 +35,7 @@ import { format } from 'date-fns';
 import { Deal } from '@/lib/types';
 import { updateDealAction } from './actions';
 import { isDurationShort } from '@/lib/duration-helpers';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
+import { Calendar } from '@/components/ui/calendar';
 import Link from 'next/link';
 
 
@@ -322,14 +320,11 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
                   </FormControl>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <FullCalendar
-                    plugins={[dayGridPlugin, interactionPlugin]}
-                    initialView="dayGridMonth"
-                    selectable={true}
-                    headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
-                    dateClick={(arg: any) => {
-                      form.setValue('startDate', arg.date);
-                    }}
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={(date) => form.setValue('startDate', date)}
+                    initialFocus
                   />
                 </PopoverContent>
               </Popover>

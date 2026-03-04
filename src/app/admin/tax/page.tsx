@@ -11,9 +11,7 @@ import { useMemo, useState } from "react";
 import { startOfDay, endOfDay, format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import FullCalendar from "@fullcalendar/react";
-import dayGridPlugin from "@fullcalendar/daygrid";
-import interactionPlugin from '@fullcalendar/interaction';
+import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
@@ -152,21 +150,17 @@ export default function TaxPage() {
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
-                            <FullCalendar
-                                plugins={[dayGridPlugin, interactionPlugin]}
-                                initialView="dayGridMonth"
-                                selectable={true}
-                                headerToolbar={{
-                                    left: 'prev',
-                                    center: 'title',
-                                    right: 'next'
-                                }}
-                                dateClick={(arg: any) => {
-                                    setStartDate(arg.date);
-                                    if (endDate && arg.date > endDate) {
-                                        setEndDate(arg.date);
+                            <Calendar
+                                mode="single"
+                                selected={startDate ?? undefined}
+                                onSelect={(date) => {
+                                    if (!date) return;
+                                    setStartDate(date);
+                                    if (endDate && date > endDate) {
+                                        setEndDate(date);
                                     }
                                 }}
+                                initialFocus
                             />
                         </PopoverContent>
                     </Popover>
@@ -182,19 +176,15 @@ export default function TaxPage() {
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="end">
-                            <FullCalendar
-                                plugins={[dayGridPlugin, interactionPlugin]}
-                                initialView="dayGridMonth"
-                                selectable={true}
-                                validRange={startDate ? { start: startDate } : undefined}
-                                headerToolbar={{
-                                    left: 'prev',
-                                    center: 'title',
-                                    right: 'next'
+                            <Calendar
+                                mode="single"
+                                selected={endDate ?? undefined}
+                                disabled={(date) => (startDate ? date < startOfDay(startDate) : false)}
+                                onSelect={(date) => {
+                                    if (!date) return;
+                                    setEndDate(date);
                                 }}
-                                dateClick={(arg: any) => {
-                                    setEndDate(arg.date);
-                                }}
+                                initialFocus
                             />
                         </PopoverContent>
                     </Popover>

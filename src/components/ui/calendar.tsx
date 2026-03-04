@@ -5,7 +5,6 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import { DayPicker } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
-import { buttonVariants } from "@/components/ui/button"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
 
@@ -25,23 +24,18 @@ function Calendar({
         caption: "flex justify-center pt-1 relative items-center",
         caption_label: "text-sm font-medium",
         nav: "space-x-1 flex items-center",
-        nav_button_previous: cn(
-          buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 absolute left-1"
-        ),
-        nav_button_next: cn(
-          buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 absolute right-1"
-        ),
-        table: "w-full border-collapse space-y-1",
-        head_row: "flex",
+        nav_button_previous:
+          "h-7 w-7 rounded-md border border-input bg-transparent p-0 opacity-50 hover:bg-accent hover:text-accent-foreground hover:opacity-100 absolute left-1 inline-flex items-center justify-center",
+        nav_button_next:
+          "h-7 w-7 rounded-md border border-input bg-transparent p-0 opacity-50 hover:bg-accent hover:text-accent-foreground hover:opacity-100 absolute right-1 inline-flex items-center justify-center",
+        table: "w-full border-collapse",
+        head_row: "grid grid-cols-7",
         head_cell:
-          "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
-        row: "flex w-full mt-2",
-        cell: "h-9 w-9 text-center text-sm p-0 relative",
+          "h-9 w-9 p-0 text-center text-muted-foreground font-medium text-[0.75rem] flex items-center justify-center",
+        row: "grid grid-cols-7 mt-1",
+        cell: "h-9 w-9 p-0 text-center align-middle relative flex items-center justify-center",
         day: cn(
-          buttonVariants({ variant: "ghost" }),
-          "h-9 w-9 p-0 font-normal aria-selected:opacity-100"
+          "h-9 w-9 p-0 font-normal rounded-md hover:bg-accent hover:text-accent-foreground aria-selected:opacity-100"
         ),
         day_range_end: "day-range-end",
         day_selected:

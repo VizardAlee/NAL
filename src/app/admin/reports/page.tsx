@@ -13,9 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import FullCalendar from "@fullcalendar/react";
-import dayGridPlugin from "@fullcalendar/daygrid";
-import interactionPlugin, { DateClickArg } from '@fullcalendar/interaction';
+import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -390,21 +388,17 @@ export default function ReportsPage() {
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-2" align="start">
-                            <FullCalendar
-                                plugins={[dayGridPlugin, interactionPlugin]}
-                                initialView="dayGridMonth"
-                                selectable={true}
-                                headerToolbar={{
-                                    left: 'prev',
-                                    center: 'title',
-                                    right: 'next'
-                                }}
-                                dateClick={(arg: any) => {
-                                    setStartDate(arg.date);
-                                    if (endDate && arg.date > endDate) {
-                                        setEndDate(arg.date);
+                            <Calendar
+                                mode="single"
+                                selected={startDate ?? undefined}
+                                onSelect={(date) => {
+                                    if (!date) return;
+                                    setStartDate(date);
+                                    if (endDate && date > endDate) {
+                                        setEndDate(date);
                                     }
                                 }}
+                                initialFocus
                             />
                         </PopoverContent>
                     </Popover>
@@ -420,19 +414,15 @@ export default function ReportsPage() {
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-2" align="end">
-                            <FullCalendar
-                                plugins={[dayGridPlugin, interactionPlugin]}
-                                initialView="dayGridMonth"
-                                selectable={true}
-                                validRange={startDate ? { start: startDate } : undefined}
-                                headerToolbar={{
-                                    left: 'prev',
-                                    center: 'title',
-                                    right: 'next'
+                            <Calendar
+                                mode="single"
+                                selected={endDate ?? undefined}
+                                disabled={(date) => (startDate ? date < startOfDay(startDate) : false)}
+                                onSelect={(date) => {
+                                    if (!date) return;
+                                    setEndDate(date);
                                 }}
-                                dateClick={(arg: any) => {
-                                    setEndDate(arg.date);
-                                }}
+                                initialFocus
                             />
                         </PopoverContent>
                     </Popover>

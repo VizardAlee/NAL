@@ -25,9 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
+import { Calendar } from '@/components/ui/calendar';
 
 const formSchema = z.object({
   amount: z.coerce.number().positive({ message: 'Amount must be a positive number.' }),
@@ -186,14 +184,11 @@ export function AddFundForm({ userId }: AddFundFormProps) {
                   </FormControl>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <FullCalendar
-                    plugins={[dayGridPlugin, interactionPlugin]}
-                    initialView="dayGridMonth"
-                    selectable={true}
-                    headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
-                    dateClick={(arg: any) => {
-                      form.setValue('createdAt', arg.date);
-                    }}
+                  <Calendar
+                    mode="single"
+                    selected={field.value}
+                    onSelect={(date) => form.setValue('createdAt', date)}
+                    initialFocus
                   />
                 </PopoverContent>
               </Popover>

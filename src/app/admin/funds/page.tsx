@@ -35,7 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { CalendarIcon } from "lucide-react";
 import { generateAmortizationSchedule } from "@/lib/amortization";
-import { DateRange } from "react-day-picker";
+import { Calendar } from "@/components/ui/calendar";
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -44,9 +44,6 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
 import { useDoc } from "@/firebase/firestore/use-doc";
 import { runOwnerProfitAllocationAction, setOwnershipPartnerActiveAction, upsertOwnershipPartnerAction, upsertOwnerProfitPolicyAction } from "./actions";
 
@@ -500,15 +497,12 @@ function RecognizeAssetForm({ onAssetRecognized }: { onAssetRecognized: () => vo
                                     </FormControl>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0" align="start">
-                                    <FullCalendar
-                                        plugins={[dayGridPlugin, interactionPlugin]}
-                                        initialView="dayGridMonth"
-                                        selectable={true}
-                                        headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
-                                        dateClick={(arg: any) => {
-                                            form.setValue('acquisitionDate', arg.date);
-                                        }}
-                                        validRange={{ end: new Date() }}
+                                    <Calendar
+                                        mode="single"
+                                        selected={field.value}
+                                        onSelect={(date) => form.setValue('acquisitionDate', date)}
+                                        disabled={(date) => date > new Date()}
+                                        initialFocus
                                     />
                                 </PopoverContent>
                             </Popover>
@@ -1851,12 +1845,14 @@ export default function PlatformFundsPage() {
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto p-2" align="start">
-                                            <FullCalendar
-                                                plugins={[dayGridPlugin, interactionPlugin]}
-                                                initialView="dayGridMonth"
-                                                selectable={true}
-                                                headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
-                                                dateClick={(arg: any) => setStartDate(arg.date)}
+                                            <Calendar
+                                                mode="single"
+                                                selected={startDate ?? undefined}
+                                                onSelect={(date) => {
+                                                    if (!date) return;
+                                                    setStartDate(date);
+                                                }}
+                                                initialFocus
                                             />
                                         </PopoverContent>
                                     </Popover>
@@ -1872,13 +1868,15 @@ export default function PlatformFundsPage() {
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto p-2" align="end">
-                                            <FullCalendar
-                                                plugins={[dayGridPlugin, interactionPlugin]}
-                                                initialView="dayGridMonth"
-                                                selectable={true}
-                                                validRange={startDate ? { start: startDate } : undefined}
-                                                headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
-                                                dateClick={(arg: any) => setEndDate(arg.date)}
+                                            <Calendar
+                                                mode="single"
+                                                selected={endDate ?? undefined}
+                                                disabled={(date) => (startDate ? date < startDate : false)}
+                                                onSelect={(date) => {
+                                                    if (!date) return;
+                                                    setEndDate(date);
+                                                }}
+                                                initialFocus
                                             />
                                         </PopoverContent>
                                     </Popover>
