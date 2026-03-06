@@ -25,6 +25,7 @@ import { useAuth, useFirestore } from "@/firebase";
 import { FirebaseError } from "firebase/app";
 import Link from "next/link";
 import { getDefaultRouteForUser } from "@/lib/access-control";
+import { resolvePreferredPortal } from "@/lib/active-portal";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -82,7 +83,8 @@ export function LoginForm() {
         description: "Redirecting to your dashboard...",
       });
 
-      router.push(getDefaultRouteForUser(userData));
+      const preferredPortal = resolvePreferredPortal(userData);
+      router.push(getDefaultRouteForUser(userData, preferredPortal));
 
     } catch (error) {
       console.error("Login Error:", error);
@@ -124,7 +126,7 @@ export function LoginForm() {
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
               control={form.control}
               name="email"

@@ -25,6 +25,8 @@ import { MessagesLink } from "@/components/messages-link";
 import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
 import { DigitalClock } from "@/components/digital-clock";
 import { canAccessPortal, getDefaultRouteForUser } from "@/lib/access-control";
+import { RoleSwitcher } from "@/components/role-switcher";
+import { resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 
 function ClientSkeleton() {
     return (
@@ -109,8 +111,13 @@ export default function ClientLayout({
       router.push('/login');
       return;
     }
-    if (!loading && user && !canAccessPortal(user, 'client')) {
-      router.push(getDefaultRouteForUser(user));
+    if (!loading && user) {
+      if (!canAccessPortal(user, 'client')) {
+        const preferredPortal = resolvePreferredPortal(user);
+        router.push(getDefaultRouteForUser(user, preferredPortal));
+        return;
+      }
+      setStoredActivePortal('client');
     }
   }, [user, loading, router]);
   
@@ -149,6 +156,7 @@ export default function ClientLayout({
                     </Button>
                 </nav>
                 <DigitalClock />
+                <RoleSwitcher currentPortal="client" />
                 <ThemeToggle />
                 <MessagesLink basePath="/client" />
                 <AccountMenu />

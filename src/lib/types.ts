@@ -37,6 +37,7 @@ export type User = AuthUser & DocumentData & {
     name: string;
     email: string;
     role: 'Admin' | 'Investor' | 'Client' | 'Legal' | 'Recovery' | 'Marketer';
+    roles?: Array<'Admin' | 'Investor' | 'Client' | 'Legal' | 'Recovery' | 'Marketer'>;
     accessRole?: AccessRole;
     personas?: Persona[];
     primaryPortal?: PrimaryPortal;

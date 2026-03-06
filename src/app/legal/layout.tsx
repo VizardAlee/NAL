@@ -23,6 +23,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { DigitalClock } from "@/components/digital-clock";
 import { canAccessPortal, getDefaultRouteForUser } from "@/lib/access-control";
+import { RoleSwitcher } from "@/components/role-switcher";
+import { resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 
 function LegalSkeleton() {
     return (
@@ -87,8 +89,13 @@ export default function LegalLayout({
       router.push('/login');
       return;
     }
-    if (!loading && user && !canAccessPortal(user, 'legal')) {
-      router.push(getDefaultRouteForUser(user));
+    if (!loading && user) {
+      if (!canAccessPortal(user, 'legal')) {
+        const preferredPortal = resolvePreferredPortal(user);
+        router.push(getDefaultRouteForUser(user, preferredPortal));
+        return;
+      }
+      setStoredActivePortal('legal');
     }
   }, [user, loading, router]);
   
@@ -114,6 +121,7 @@ export default function LegalLayout({
                 </Button>
             </nav>
             <DigitalClock />
+            <RoleSwitcher currentPortal="legal" />
             <ThemeToggle />
             <AccountMenu />
         </header>

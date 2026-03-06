@@ -149,6 +149,7 @@ function SignupPageContent() {
             ) : (
             <Form {...form}>
                 <form 
+                    method="post"
                     onSubmit={form.handleSubmit(onSubmit)}
                     className="space-y-4"
                 >

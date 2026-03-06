@@ -22,6 +22,8 @@ import { useCompanyLogo } from '@/components/company-logo-provider';
 import { useAuth } from '@/firebase/provider';
 import { useUser } from '@/firebase';
 import { getDefaultRouteForUser, normalizeAccessModel } from '@/lib/access-control';
+import { RoleSwitcher } from '@/components/role-switcher';
+import { resolvePreferredPortal, setStoredActivePortal } from '@/lib/active-portal';
 
 function OwnerSkeleton() {
   return (
@@ -89,8 +91,11 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
     if (!loading && user) {
       const model = normalizeAccessModel(user as any);
       if (model.accessRole !== 'OWNER') {
-        router.push(getDefaultRouteForUser(user as any));
+        const preferredPortal = resolvePreferredPortal(user);
+        router.push(getDefaultRouteForUser(user as any, preferredPortal));
+        return;
       }
+      setStoredActivePortal('owner');
     }
   }, [user, loading, router]);
 
@@ -115,6 +120,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
           </Button>
         </nav>
         <DigitalClock />
+        <RoleSwitcher currentPortal="owner" />
         <ThemeToggle />
         <AccountMenu />
       </header>

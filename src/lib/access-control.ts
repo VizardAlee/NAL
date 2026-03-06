@@ -20,6 +20,7 @@ export type AccessModel = {
 
 type UserLike = {
   role?: LegacyRole | null;
+  roles?: LegacyRole[] | null;
   accessRole?: AccessRole | null;
   personas?: Persona[] | null;
   primaryPortal?: PrimaryPortal | null;
@@ -41,6 +42,37 @@ const PERSONA_TO_PORTAL: Record<Exclude<Persona, 'STAFF_MEMBER'>, Exclude<Primar
   RECOVERY: 'recovery',
   MARKETER: 'marketer',
 };
+
+const PORTAL_ROUTES: Record<PrimaryPortal, string> = {
+  owner: '/owner/dashboard',
+  admin: '/admin/dashboard',
+  investor: '/investor/dashboard',
+  client: '/client/dashboard',
+  legal: '/legal/dashboard',
+  recovery: '/recovery/dashboard',
+  marketer: '/marketer/dashboard',
+};
+
+function uniquePersonas(personas: Persona[]): Persona[] {
+  return [...new Set(personas)];
+}
+
+function toPersona(role: LegacyRole): Persona | null {
+  switch (role) {
+    case 'Investor':
+      return 'INVESTOR';
+    case 'Client':
+      return 'CLIENT';
+    case 'Legal':
+      return 'LEGAL';
+    case 'Recovery':
+      return 'RECOVERY';
+    case 'Marketer':
+      return 'MARKETER';
+    default:
+      return null;
+  }
+}
 
 export function deriveAccessModelFromLegacyRole(role?: LegacyRole | null): AccessModel {
   switch (role) {
@@ -65,7 +97,7 @@ export function normalizeAccessModel(user: UserLike | null | undefined): AccessM
   if (!user) return { accessRole: 'USER', personas: [], primaryPortal: 'client' };
 
   if (user.accessRole) {
-    const personas = Array.isArray(user.personas) ? [...new Set(user.personas)] : [];
+    const personas = Array.isArray(user.personas) ? uniquePersonas(user.personas) : [];
     const primaryPortal =
       user.primaryPortal ||
       (user.accessRole === 'OWNER'
@@ -81,7 +113,35 @@ export function normalizeAccessModel(user: UserLike | null | undefined): AccessM
     };
   }
 
-  return deriveAccessModelFromLegacyRole(user.role);
+  const legacyRoles = (
+    Array.isArray(user.roles) && user.roles.length > 0
+      ? user.roles
+      : user.role
+      ? [user.role]
+      : []
+  ).filter(Boolean) as LegacyRole[];
+
+  if (legacyRoles.length === 0) {
+    return { accessRole: 'USER', personas: [], primaryPortal: 'client' };
+  }
+
+  const hasAdminRole = legacyRoles.includes('Admin');
+  const personas = uniquePersonas(
+    legacyRoles
+      .map((role) => toPersona(role))
+      .filter((value): value is Persona => value !== null)
+  );
+
+  const accessRole: AccessRole = hasAdminRole ? 'ADMIN' : 'USER';
+  const primaryPortal =
+    user.primaryPortal ||
+    (hasAdminRole ? 'admin' : resolvePrimaryPortalFromPersonas(personas));
+
+  return {
+    accessRole,
+    personas,
+    primaryPortal,
+  };
 }
 
 export function resolvePrimaryPortalFromPersonas(personas: Persona[]): PrimaryPortal {
@@ -153,33 +213,54 @@ export function canAccessPortal(user: UserLike | null | undefined, portal: Prima
   return model.personas.includes(portal.toUpperCase() as Persona);
 }
 
-export function getDefaultRouteForUser(user: UserLike | null | undefined): string {
+export function getRouteForPortal(portal: PrimaryPortal): string {
+  return PORTAL_ROUTES[portal];
+}
+
+export function isPrimaryPortal(value: unknown): value is PrimaryPortal {
+  return typeof value === 'string' && value in PORTAL_ROUTES;
+}
+
+export function getAccessiblePortals(user: UserLike | null | undefined): PrimaryPortal[] {
   const model = normalizeAccessModel(user);
+  const explicitPortals: PrimaryPortal[] = model.personas
+    .filter((persona): persona is Exclude<Persona, 'STAFF_MEMBER'> => persona !== 'STAFF_MEMBER')
+    .map((persona) => PERSONA_TO_PORTAL[persona]);
 
   if (model.accessRole === 'OWNER') {
-    return '/owner/dashboard';
+    explicitPortals.push('owner');
   }
 
   if (model.accessRole === 'ADMIN' || model.accessRole === 'STAFF') {
-    return '/admin/dashboard';
+    explicitPortals.push('admin');
   }
 
-  switch (model.primaryPortal) {
-    case 'owner':
-      return '/owner/dashboard';
-    case 'investor':
-      return '/investor/dashboard';
-    case 'client':
-      return '/client/dashboard';
-    case 'legal':
-      return '/legal/dashboard';
-    case 'recovery':
-      return '/recovery/dashboard';
-    case 'marketer':
-      return '/marketer/dashboard';
-    case 'admin':
-      return '/admin/dashboard';
-    default:
-      return '/';
+  if (explicitPortals.length > 0) {
+    return [...new Set(explicitPortals)];
   }
+
+  return [model.primaryPortal];
+}
+
+export function getDefaultRouteForUser(user: UserLike | null | undefined, preferredPortal?: PrimaryPortal | null): string {
+  if (preferredPortal && canAccessPortal(user, preferredPortal)) {
+    return getRouteForPortal(preferredPortal);
+  }
+
+  const model = normalizeAccessModel(user);
+
+  if (model.accessRole === 'OWNER') {
+    return getRouteForPortal('owner');
+  }
+
+  if (model.accessRole === 'ADMIN' || model.accessRole === 'STAFF') {
+    return getRouteForPortal('admin');
+  }
+
+  if (canAccessPortal(user, model.primaryPortal)) {
+    return getRouteForPortal(model.primaryPortal);
+  }
+
+  const firstAccessiblePortal = getAccessiblePortals(user)[0];
+  return firstAccessiblePortal ? getRouteForPortal(firstAccessiblePortal) : '/';
 }

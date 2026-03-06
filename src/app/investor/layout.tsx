@@ -25,6 +25,8 @@ import { MessagesLink } from "@/components/messages-link";
 import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
 import { DigitalClock } from "@/components/digital-clock";
 import { canAccessPortal, getDefaultRouteForUser } from "@/lib/access-control";
+import { RoleSwitcher } from "@/components/role-switcher";
+import { resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 
 function InvestorSkeleton() {
     return (
@@ -119,8 +121,13 @@ export default function InvestorLayout({
       router.push('/login');
       return;
     }
-    if (!loading && user && !canAccessPortal(user, 'investor')) {
-      router.push(getDefaultRouteForUser(user));
+    if (!loading && user) {
+      if (!canAccessPortal(user, 'investor')) {
+        const preferredPortal = resolvePreferredPortal(user);
+        router.push(getDefaultRouteForUser(user, preferredPortal));
+        return;
+      }
+      setStoredActivePortal('investor');
     }
   }, [user, loading, router]);
   
@@ -153,6 +160,7 @@ export default function InvestorLayout({
                     </Button>
                 </nav>
                 <DigitalClock />
+                <RoleSwitcher currentPortal="investor" />
                 <ThemeToggle />
                 <MessagesLink basePath="/investor" />
                 <AccountMenu />

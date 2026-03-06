@@ -23,6 +23,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { DigitalClock } from "@/components/digital-clock";
 import { canAccessPortal, getDefaultRouteForUser } from "@/lib/access-control";
+import { RoleSwitcher } from "@/components/role-switcher";
+import { resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 
 function MarketerSkeleton() {
     return (
@@ -87,8 +89,13 @@ export default function MarketerLayout({
       router.push('/login');
       return;
     }
-    if (!loading && user && !canAccessPortal(user, 'marketer')) {
-      router.push(getDefaultRouteForUser(user));
+    if (!loading && user) {
+      if (!canAccessPortal(user, 'marketer')) {
+        const preferredPortal = resolvePreferredPortal(user);
+        router.push(getDefaultRouteForUser(user, preferredPortal));
+        return;
+      }
+      setStoredActivePortal('marketer');
     }
   }, [user, loading, router]);
   
@@ -114,6 +121,7 @@ export default function MarketerLayout({
                 </Button>
             </nav>
             <DigitalClock />
+            <RoleSwitcher currentPortal="marketer" />
             <ThemeToggle />
             <AccountMenu />
         </header>

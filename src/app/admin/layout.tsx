@@ -39,6 +39,8 @@ import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboardi
 import { DigitalClock } from "@/components/digital-clock";
 import { MessagesLink } from "@/components/messages-link";
 import { canAccessPortal, getDefaultRouteForUser, isReadOnlyOwner } from "@/lib/access-control";
+import { RoleSwitcher } from "@/components/role-switcher";
+import { resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 
 type Notification = {
     id: string;
@@ -267,8 +269,13 @@ export default function AdminLayout({
       router.push('/login');
       return;
     }
-    if (!loading && user && !canAccessPortal(user, 'admin')) {
-      router.push(getDefaultRouteForUser(user));
+    if (!loading && user) {
+      if (!canAccessPortal(user, 'admin')) {
+        const preferredPortal = resolvePreferredPortal(user);
+        router.push(getDefaultRouteForUser(user, preferredPortal));
+        return;
+      }
+      setStoredActivePortal('admin');
     }
   }, [user, loading, router]);
   
@@ -306,6 +313,7 @@ export default function AdminLayout({
                 <SidebarTrigger className="md:hidden" />
             </div>
             <DigitalClock />
+            <RoleSwitcher currentPortal="admin" />
             <ThemeToggle />
             <MessagesLink basePath="/admin" />
             <NotificationBell />
