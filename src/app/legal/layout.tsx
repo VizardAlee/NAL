@@ -24,6 +24,7 @@ import { useCompanyLogo } from "@/components/company-logo-provider";
 import { DigitalClock } from "@/components/digital-clock";
 import { canAccessPortal, getDefaultRouteForUser } from "@/lib/access-control";
 import { RoleSwitcher } from "@/components/role-switcher";
+import { AdminShortcut } from "@/components/admin-shortcut";
 import { resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 import { NotificationBell } from "@/components/notification-bell";
 
@@ -122,6 +123,7 @@ export default function LegalLayout({
                 </Button>
             </nav>
             <DigitalClock />
+            <AdminShortcut currentPortal="legal" />
             <RoleSwitcher currentPortal="legal" />
             <ThemeToggle />
             <NotificationBell historyHref="/legal/notifications" />

@@ -26,6 +26,7 @@ import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboardi
 import { DigitalClock } from "@/components/digital-clock";
 import { canAccessPortal, getDefaultRouteForUser } from "@/lib/access-control";
 import { RoleSwitcher } from "@/components/role-switcher";
+import { AdminShortcut } from "@/components/admin-shortcut";
 import { resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 import { NotificationBell } from "@/components/notification-bell";
 
@@ -179,6 +180,7 @@ export default function InvestorLayout({
                     </Button>
                 </nav>
                 <DigitalClock />
+                <AdminShortcut currentPortal="investor" />
                 <RoleSwitcher currentPortal="investor" />
                 <ThemeToggle />
                 <MessagesLink basePath="/investor" />

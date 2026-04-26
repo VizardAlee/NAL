@@ -23,6 +23,7 @@ import { useAuth } from '@/firebase/provider';
 import { useUser } from '@/firebase';
 import { getDefaultRouteForUser, normalizeAccessModel } from '@/lib/access-control';
 import { RoleSwitcher } from '@/components/role-switcher';
+import { AdminShortcut } from "@/components/admin-shortcut";
 import { resolvePreferredPortal, setStoredActivePortal } from '@/lib/active-portal';
 import { NotificationBell } from '@/components/notification-bell';
 
@@ -121,6 +122,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
           </Button>
         </nav>
         <DigitalClock />
+        <AdminShortcut currentPortal="owner" />
         <RoleSwitcher currentPortal="owner" />
         <ThemeToggle />
         <NotificationBell historyHref="/owner/notifications" />
