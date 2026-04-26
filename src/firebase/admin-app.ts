@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin';
 import { ServiceAccount } from 'firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
 function normalizePrivateKey(raw: string | undefined): string {
     if (!raw) return '';
@@ -42,4 +42,16 @@ export function getAdminApp() {
     });
 }
 
-export const adminDb = getFirestore(getAdminApp());
+function getAdminDb(): Firestore {
+    return getFirestore(getAdminApp());
+}
+
+// Keep existing imports build-safe: Firebase Admin is initialized only when a
+// server action/API route actually touches Firestore, not when Next imports the module.
+export const adminDb = new Proxy({} as Firestore, {
+    get(_target, property, receiver) {
+        const db = getAdminDb();
+        const value = Reflect.get(db, property, receiver);
+        return typeof value === 'function' ? value.bind(db) : value;
+    },
+});

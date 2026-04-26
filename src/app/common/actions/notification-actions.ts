@@ -7,7 +7,9 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { z } from 'zod';
 import { verifyAuthTokenForUser } from '@/lib/server/auth';
 
-const adminDb = getFirestore(getAdminApp());
+function getAdminDb() {
+    return getFirestore(getAdminApp());
+}
 
 // Main function to create an in-app notification
 async function createInAppNotification(
@@ -46,6 +48,7 @@ async function sendPushNotification(
     link: string
 ) {
   try {
+    const adminDb = getAdminDb();
     const userDoc = await adminDb.collection('users').doc(recipientId).get();
     if (!userDoc.exists) return;
 
@@ -104,6 +107,7 @@ export async function notifyAdmins(
     link: string,
     category: NotificationCategory = 'approval'
 ) {
+    const adminDb = getAdminDb();
     const [legacyAdmins, accessRoleAdmins, accessRoleStaff, accessRoleOwners] = await Promise.all([
         adminDb.collection('users').where('role', '==', 'Admin').get(),
         adminDb.collection('users').where('accessRole', '==', 'ADMIN').get(),
@@ -140,6 +144,7 @@ export async function notifyUser(
     link: string,
     category: NotificationCategory = 'system'
 ) {
+    const adminDb = getAdminDb();
     await Promise.all([
         createInAppNotification(adminDb, userId, title, message, link, category),
         sendPushNotification(userId, title, message, link)
@@ -160,6 +165,7 @@ export async function saveFcmToken(input: z.infer<typeof saveFcmTokenSchema>) {
     }
 
     try {
+        const adminDb = getAdminDb();
         const { authToken, userId, token } = validated.data;
         await verifyAuthTokenForUser(authToken, userId);
 
