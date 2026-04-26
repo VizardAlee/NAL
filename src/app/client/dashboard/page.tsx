@@ -23,6 +23,19 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import Image from "next/image";
 import { RepaymentHistory } from "@/components/deals/repayment-history";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { generateAmortizationSchedule } from "@/lib/amortization";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 
 const statusVariant = {
@@ -266,10 +279,26 @@ function DealCard({ deal }: { deal: Deal }) {
                     </span>
                 </div>
                 {deal.status === 'Active' && (
-                    <Button variant="destructive" size="sm" onClick={handleTerminationRequest} disabled={isPendingTermination}>
-                        {isPendingTermination ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldAlert className="mr-2 h-4 w-4" />}
-                        Request Termination
-                    </Button>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm" disabled={isPendingTermination}>
+                                {isPendingTermination ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldAlert className="mr-2 h-4 w-4" />}
+                                Request Termination
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Request deal termination?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This sends a termination request to an administrator for review. Your deal will remain active until the request is approved.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleTerminationRequest}>Submit Request</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 )}
             </CardContent>
             <div className="mt-auto flex-grow">
@@ -319,6 +348,14 @@ type UserProfile = DocumentData & {
     legalDocumentUrl?: string;
 };
 
+type ClientRequest = DocumentData & {
+    id: string;
+    status: 'Pending' | 'Approved' | 'Rejected';
+    requestedAt?: Timestamp;
+    dealName?: string;
+    amount?: number;
+};
+
 export default function ClientDashboard() {
     const firestore = useFirestore();
     const router = useRouter();
@@ -340,9 +377,103 @@ export default function ClientDashboard() {
         dealsQuery as any
     );
 
-    const isLoading = userLoading || dealsLoading || profileLoading;
+    const repaymentsQuery = useMemo(() => {
+        if (!firestore || !user?.uid) return null;
+        return query(collection(firestore, 'repayments'), where('clientId', '==', user.uid));
+    }, [firestore, user?.uid]);
+
+    const dealRequestsQuery = useMemo(() => {
+        if (!firestore || !user?.uid) return null;
+        return query(collection(firestore, 'dealRequests'), where('clientId', '==', user.uid), orderBy('requestedAt', 'desc'));
+    }, [firestore, user?.uid]);
+
+    const terminationRequestsQuery = useMemo(() => {
+        if (!firestore || !user?.uid) return null;
+        return query(collection(firestore, 'terminationRequests'), where('clientId', '==', user.uid), orderBy('requestedAt', 'desc'));
+    }, [firestore, user?.uid]);
+
+    const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery as any);
+    const { data: dealRequests, loading: dealRequestsLoading } = useCollection<ClientRequest>(dealRequestsQuery as any);
+    const { data: terminationRequests, loading: terminationRequestsLoading } = useCollection<ClientRequest>(terminationRequestsQuery as any);
+
+    const isLoading = userLoading || dealsLoading || profileLoading || repaymentsLoading || dealRequestsLoading || terminationRequestsLoading;
 
     const mostRecentDeal = useMemo(() => deals?.[0], [deals]);
+
+    const dashboardMetrics = useMemo<{
+        activePrincipal: number;
+        nextPayment: { amount: number; dueDate: Date; dealName: string } | null;
+        overdueAmount: number;
+        overdueCount: number;
+        pendingRepaymentCount: number;
+        pendingDealRequestCount: number;
+        pendingTerminationCount: number;
+    }>(() => {
+        const activeDeals = deals?.filter((deal) => deal.status === 'Active') || [];
+        const activePrincipal = activeDeals.reduce((sum, deal) => sum + Number(deal.principal || 0), 0);
+        const pendingRepayments = repayments?.filter((repayment) => repayment.status === 'Pending') || [];
+        const approvedOrPendingRepayments = repayments?.filter((repayment) => repayment.status === 'Approved' || repayment.status === 'Pending') || [];
+        const today = new Date();
+
+        let nextPayment: { amount: number; dueDate: Date; dealName: string } | null = null;
+        let overdueAmount = 0;
+        let overdueCount = 0;
+
+        activeDeals.forEach((deal) => {
+            const schedule = generateAmortizationSchedule(deal);
+            schedule.forEach((installment) => {
+                const paid = approvedOrPendingRepayments
+                    .filter((repayment) => repayment.dealId === deal.id && repayment.installmentNumber === installment.installment)
+                    .reduce((sum, repayment) => sum + Number(repayment.amount || 0), 0);
+                const remaining = Math.max(0, installment.payment - paid);
+                if (remaining <= 0.01) return;
+
+                if (installment.dueDate < today) {
+                    overdueAmount += remaining;
+                    overdueCount += 1;
+                    return;
+                }
+
+                if (!nextPayment || installment.dueDate < nextPayment.dueDate) {
+                    nextPayment = { amount: remaining, dueDate: installment.dueDate, dealName: deal.dealName };
+                }
+            });
+        });
+
+        return {
+            activePrincipal,
+            nextPayment,
+            overdueAmount,
+            overdueCount,
+            pendingRepaymentCount: pendingRepayments.length,
+            pendingDealRequestCount: dealRequests?.filter((request) => request.status === 'Pending').length || 0,
+            pendingTerminationCount: terminationRequests?.filter((request) => request.status === 'Pending').length || 0,
+        };
+    }, [dealRequests, deals, repayments, terminationRequests]);
+
+    const pendingRequests = useMemo(() => {
+        return [
+            ...(dealRequests || []).map((request) => ({
+                id: request.id,
+                label: 'Deal Request',
+                title: request.dealName || 'New financing request',
+                status: request.status,
+                requestedAt: request.requestedAt,
+            })),
+            ...(terminationRequests || []).map((request) => ({
+                id: request.id,
+                label: 'Termination',
+                title: request.dealName || 'Termination request',
+                status: request.status,
+                requestedAt: request.requestedAt,
+            })),
+        ]
+            .filter((request) => request.status === 'Pending')
+            .sort((a, b) => (b.requestedAt?.toMillis?.() || 0) - (a.requestedAt?.toMillis?.() || 0))
+            .slice(0, 5);
+    }, [dealRequests, terminationRequests]);
+
+    const formatCurrency = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
 
     if (isLoading) {
         return <DealsSkeleton />;
@@ -389,6 +520,71 @@ export default function ClientDashboard() {
                 )}
 
                 <BankDetailsCard />
+
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Active Principal</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{formatCurrency(dashboardMetrics.activePrincipal)}</div>
+                            <p className="text-xs text-muted-foreground">Across active deals</p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Next Payment</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">
+                                {dashboardMetrics.nextPayment ? formatCurrency(dashboardMetrics.nextPayment.amount) : 'None'}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                {dashboardMetrics.nextPayment ? `${dashboardMetrics.nextPayment.dealName} due ${dashboardMetrics.nextPayment.dueDate.toLocaleDateString()}` : 'No upcoming active installment'}
+                            </p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Overdue</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{formatCurrency(dashboardMetrics.overdueAmount)}</div>
+                            <p className="text-xs text-muted-foreground">{dashboardMetrics.overdueCount} installment(s) past due</p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Pending Items</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">
+                                {dashboardMetrics.pendingRepaymentCount + dashboardMetrics.pendingDealRequestCount + dashboardMetrics.pendingTerminationCount}
+                            </div>
+                            <p className="text-xs text-muted-foreground">Repayments, deal requests, and terminations</p>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {pendingRequests.length > 0 && (
+                    <Alert>
+                        <History className="h-4 w-4" />
+                        <AlertTitle>Pending Requests</AlertTitle>
+                        <AlertDescription>
+                            <div className="mt-3 grid gap-2 md:grid-cols-2">
+                                {pendingRequests.map((request) => (
+                                    <div key={`${request.label}-${request.id}`} className="rounded-md border bg-background p-3">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="font-medium">{request.label}</span>
+                                            <Badge variant="secondary">{request.status}</Badge>
+                                        </div>
+                                        <p className="mt-1 text-sm text-muted-foreground">{request.title}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </AlertDescription>
+                    </Alert>
+                )}
 
                 {userProfile?.legalDocumentUrl && (
                     <Card>

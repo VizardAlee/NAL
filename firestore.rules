@@ -251,15 +251,15 @@ service cloud.firestore {
 
     // Rules for 'notifications'
     match /notifications/{notificationId} {
-        // Allow any authenticated user to create a notification, as long as it's for an Admin.
-        // This is secure because we check the role of the recipient.
-        allow create: if request.auth != null; // Notification creation logic is handled server-side now.
-          
-        // Users can only read/update notifications intended for them
-        allow read, update: if request.auth != null && resource.data.recipientId == request.auth.uid;
+        // Notification creation is handled through trusted server actions/Admin SDK.
+        allow create: if false;
 
-        // Admins can list notifications (to see all, for debugging if needed, but UI filters by recipientId)
-        allow list: if canAdminRead();
+        allow get, list: if request.auth != null
+          && resource.data.recipientId == request.auth.uid;
+
+        allow update: if request.auth != null
+          && resource.data.recipientId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
     }
 
     // Rules for 'platformSettings'

@@ -46,7 +46,8 @@ export async function requestChatWithAdmin(input: z.infer<typeof requestChatSche
     await notifyAdmins(
         'New Chat Request',
         `${userName} (${userRole}) has requested a chat.`,
-        '/admin/approvals/chat-requests'
+        '/admin/approvals/chat-requests',
+        'message'
     );
 
     revalidatePath('/admin/approvals/chat-requests');
@@ -152,7 +153,8 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
             recipientId,
             `New Message from ${senderName}`,
             lastMessage,
-            link
+            link,
+            'message'
         );
     }
 

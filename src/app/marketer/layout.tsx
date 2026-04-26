@@ -25,6 +25,7 @@ import { DigitalClock } from "@/components/digital-clock";
 import { canAccessPortal, getDefaultRouteForUser } from "@/lib/access-control";
 import { RoleSwitcher } from "@/components/role-switcher";
 import { resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
+import { NotificationBell } from "@/components/notification-bell";
 
 function MarketerSkeleton() {
     return (
@@ -123,6 +124,7 @@ export default function MarketerLayout({
             <DigitalClock />
             <RoleSwitcher currentPortal="marketer" />
             <ThemeToggle />
+            <NotificationBell historyHref="/marketer/notifications" />
             <AccountMenu />
         </header>
         <main className="flex-1 p-4 md:p-6">{children}</main>

@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, Clock, CalendarCheck, AlertTriangle } from 'lucide-react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, runTransaction, doc, writeBatch, orderBy, getDocs, addDoc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
@@ -32,7 +32,6 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { usePathname } from 'next/navigation';
 import { runOwnerProfitAllocationAction } from '@/app/admin/funds/actions';
 
 
@@ -64,45 +63,6 @@ type RepaymentRow = Repayment & {
     clientName: string;
     dealName: string;
 }
-
-// New hook to clear notifications when a page is visited
-function useClearNotificationsByPath() {
-    const firestore = useFirestore();
-    const pathname = usePathname();
-    const { user } = useUser();
-
-    useEffect(() => {
-        if (!firestore || !pathname || !user) return;
-
-        const clearNotifications = async () => {
-            try {
-                const notificationsToClearQuery = query(
-                    collection(firestore, 'notifications'),
-                    where('recipientId', '==', user.uid),
-                    where('link', '==', pathname),
-                    where('read', '==', false)
-                );
-                
-                const snapshot = await getDocs(notificationsToClearQuery);
-                if (snapshot.empty) return;
-
-                const batch = writeBatch(firestore);
-                snapshot.docs.forEach(doc => {
-                    batch.update(doc.ref, { read: true });
-                });
-                
-                await batch.commit();
-            } catch (error) {
-                console.error("Failed to clear notifications:", error);
-            }
-        };
-
-        const timer = setTimeout(clearNotifications, 500);
-        return () => clearTimeout(timer);
-
-    }, [firestore, pathname, user]);
-}
-
 function RepaymentsTable({
     repayments,
     isLoading,
@@ -242,9 +202,6 @@ export default function RepaymentsPage() {
     const { toast } = useToast();
     const [approvingId, setApprovingId] = useState<string | null>(null);
     const isMobile = useIsMobile();
-
-    useClearNotificationsByPath();
-
     // Queries for each tab
     const pendingRepaymentsQuery = useMemo(() => firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Pending'), orderBy('lodgedAt', 'asc')) : null, [firestore]);
     const confirmedRepaymentsQuery = useMemo(() => firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Approved'), orderBy('approvedAt', 'desc')) : null, [firestore]);

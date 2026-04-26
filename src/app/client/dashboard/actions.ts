@@ -1,16 +1,19 @@
 
 'use server';
 
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
 import { initializeFirebase } from '@/firebase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { notifyAdmins } from '@/app/common/actions/notification-actions';
 import { adminDb } from '@/firebase/admin-app';
 import { verifyAuthTokenForUser } from '@/lib/server/auth';
+import { generateAmortizationSchedule } from '@/lib/amortization';
+import { Deal } from '@/lib/types';
 
 // --- Lodge Payment Action ---
 const lodgePaymentSchema = z.object({
+  authToken: z.string().min(1, 'Authentication token is required.'),
   dealId: z.string().min(1, "Deal ID is required."),
   amount: z.coerce.number().positive("Amount must be a positive number."),
   userId: z.string().min(1, "User ID is required."),
@@ -41,6 +44,7 @@ export async function lodgePaymentAction(
 ): Promise<LodgePaymentState> {
 
   const validatedFields = lodgePaymentSchema.safeParse({
+    authToken: formData.get('authToken'),
     dealId: formData.get('dealId'),
     amount: formData.get('amount'),
     userId: formData.get('userId'),
@@ -56,38 +60,64 @@ export async function lodgePaymentAction(
     };
   }
 
-  const { dealId, amount, userId, dueDate, installmentNumber } = validatedFields.data;
+  const { authToken, dealId, amount, userId, installmentNumber } = validatedFields.data;
 
   try {
     const firestore = adminDb;
+    await verifyAuthTokenForUser(authToken, userId);
     const lodgedAt = Timestamp.now();
-    const dueDateTimestamp = Timestamp.fromDate(new Date(dueDate));
-    
-    // Server-side validation for partial payment
-    // We don't need to block lodging more than is due, but we can check.
-    // The admin approval process is the final gatekeeper.
-    // For now, we will trust the client-side validation on the form max value.
 
-    const newRepaymentRef = await firestore.collection('repayments').add({
-      dealId,
-      clientId: userId,
-      amount,
-      status: 'Pending',
-      lodgedAt: lodgedAt,
-      dueDate: dueDateTimestamp,
-      installmentNumber,
-    });
+    const repaymentData = await firestore.runTransaction(async (trx) => {
+      const dealRef = firestore.collection('deals').doc(dealId);
+      const dealDoc = await trx.get(dealRef);
 
-    const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
-    await notifyAdmins(
-        'New Repayment Lodged',
-        `A payment of ${formattedAmount} is awaiting approval.`,
-        '/admin/approvals/repayments'
-    );
+      if (!dealDoc.exists) {
+        throw new Error('Deal not found.');
+      }
 
-    revalidatePath('/client/dashboard');
+      const deal = { ...dealDoc.data(), id: dealDoc.id } as Deal;
+      if (deal.clientId !== userId) {
+        throw new Error('You are not allowed to lodge payment for this deal.');
+      }
+      if (deal.status !== 'Active') {
+        throw new Error('Payments can only be lodged for active deals.');
+      }
 
-    const repaymentData: RepaymentData = {
+      const schedule = generateAmortizationSchedule(deal);
+      const installment = schedule.find((item) => item.installment === installmentNumber);
+      if (!installment) {
+        throw new Error('Installment not found for this deal.');
+      }
+
+      const repaymentsQuery = firestore
+        .collection('repayments')
+        .where('dealId', '==', dealId)
+        .where('clientId', '==', userId)
+        .where('installmentNumber', '==', installmentNumber);
+      const existingRepayments = await trx.get(repaymentsQuery);
+      const alreadyLodged = existingRepayments.docs
+        .map((doc) => doc.data())
+        .filter((repayment) => repayment.status === 'Pending' || repayment.status === 'Approved')
+        .reduce((sum, repayment) => sum + Number(repayment.amount || 0), 0);
+      const amountRemaining = Math.max(0, installment.payment - alreadyLodged);
+
+      if (amount > amountRemaining + 0.01) {
+        throw new Error(`Amount exceeds the remaining installment balance of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amountRemaining)}.`);
+      }
+
+      const dueDateTimestamp = Timestamp.fromDate(installment.dueDate);
+      const newRepaymentRef = firestore.collection('repayments').doc();
+      trx.create(newRepaymentRef, {
+        dealId,
+        clientId: userId,
+        amount,
+        status: 'Pending',
+        lodgedAt,
+        dueDate: dueDateTimestamp,
+        installmentNumber,
+      });
+
+      return {
         id: newRepaymentRef.id,
         dealId,
         clientId: userId,
@@ -96,7 +126,18 @@ export async function lodgePaymentAction(
         lodgedAt: { _seconds: lodgedAt.seconds, _nanoseconds: lodgedAt.nanoseconds },
         dueDate: { _seconds: dueDateTimestamp.seconds, _nanoseconds: dueDateTimestamp.nanoseconds },
         installmentNumber,
-    };
+      };
+    });
+
+    const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+    await notifyAdmins(
+        'New Repayment Lodged',
+        `A payment of ${formattedAmount} is awaiting approval.`,
+        '/admin/approvals/repayments',
+        'repayment'
+    );
+
+    revalidatePath('/client/dashboard');
 
     return {
       success: true,
@@ -158,7 +199,8 @@ export async function requestTerminationAction(
         await notifyAdmins(
             'Termination Request',
             `${clientName} requested to terminate the deal "${dealName}".`,
-            '/admin/approvals/terminations'
+            '/admin/approvals/terminations',
+            'approval'
         );
 
         revalidatePath('/client/dashboard');

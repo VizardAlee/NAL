@@ -47,6 +47,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { deleteDealAction } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { EditDealForm } from './edit-deal-form';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 
 const statusVariant = {
@@ -263,6 +271,9 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
 
 export default function DealsPage() {
   const [isCreateDealOpen, setCreateDealOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | Deal['status']>('all');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'principal-desc' | 'principal-asc'>('newest');
   const firestore = useFirestore();
   const { user } = useUser();
 
@@ -272,6 +283,27 @@ export default function DealsPage() {
   }, [firestore, user]);
 
   const { data: deals, loading } = useCollection<Deal>(dealsQuery);
+
+  const visibleDeals = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    return [...(deals || [])]
+      .filter((deal) => {
+        const matchesSearch =
+          !normalizedSearch ||
+          deal.dealName?.toLowerCase().includes(normalizedSearch) ||
+          deal.clientName?.toLowerCase().includes(normalizedSearch);
+        const matchesStatus = statusFilter === 'all' || deal.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'principal-desc') return (Number(b.principal) || 0) - (Number(a.principal) || 0);
+        if (sortBy === 'principal-asc') return (Number(a.principal) || 0) - (Number(b.principal) || 0);
+
+        const aTime = a.createdAt?.toMillis?.() ?? 0;
+        const bTime = b.createdAt?.toMillis?.() ?? 0;
+        return sortBy === 'oldest' ? aTime - bTime : bTime - aTime;
+      });
+  }, [deals, searchTerm, sortBy, statusFilter]);
 
   return (
     <div>
@@ -299,8 +331,39 @@ export default function DealsPage() {
           </DialogContent>
         </Dialog>
       </PageHeader>
+
+      <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_180px]">
+        <Input
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Search by deal or client"
+        />
+        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="Pending">Pending</SelectItem>
+            <SelectItem value="Active">Active</SelectItem>
+            <SelectItem value="Completed">Completed</SelectItem>
+            <SelectItem value="Terminated">Terminated</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Sort deals" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Newest first</SelectItem>
+            <SelectItem value="oldest">Oldest first</SelectItem>
+            <SelectItem value="principal-desc">Highest principal</SelectItem>
+            <SelectItem value="principal-asc">Lowest principal</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
       
-      <DealsTable deals={deals} loading={loading} />
+      <DealsTable deals={visibleDeals} loading={loading} />
     </div>
   );
 }

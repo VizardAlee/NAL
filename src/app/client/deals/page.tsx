@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, ArrowRight } from "lucide-react";
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
@@ -17,6 +17,8 @@ import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ViewPageNav } from "@/components/view-page-nav";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
 const statusVariant = {
@@ -30,6 +32,9 @@ export default function ClientAllDealsPage() {
     const firestore = useFirestore();
     const router = useRouter();
     const { user, loading: userLoading } = useUser();
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'all' | Deal['status']>('all');
+    const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'principal-desc' | 'principal-asc'>('newest');
     const isMobile = useIsMobile();
 
     const dealsQuery = useMemo(() => {
@@ -38,6 +43,23 @@ export default function ClientAllDealsPage() {
     }, [firestore, user?.uid]);
 
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery as any);
+
+    const visibleDeals = useMemo(() => {
+        const normalizedSearch = searchTerm.trim().toLowerCase();
+        return [...(deals || [])]
+            .filter((deal) => {
+                const matchesSearch = !normalizedSearch || deal.dealName?.toLowerCase().includes(normalizedSearch);
+                const matchesStatus = statusFilter === 'all' || deal.status === statusFilter;
+                return matchesSearch && matchesStatus;
+            })
+            .sort((a, b) => {
+                if (sortBy === 'principal-desc') return Number(b.principal || 0) - Number(a.principal || 0);
+                if (sortBy === 'principal-asc') return Number(a.principal || 0) - Number(b.principal || 0);
+                const aTime = a.createdAt?.toMillis?.() || 0;
+                const bTime = b.createdAt?.toMillis?.() || 0;
+                return sortBy === 'oldest' ? aTime - bTime : bTime - aTime;
+            });
+    }, [deals, searchTerm, sortBy, statusFilter]);
     
     const isLoading = userLoading || dealsLoading;
 
@@ -59,8 +81,39 @@ export default function ClientAllDealsPage() {
             >
                 <ViewPageNav homePath="/client/dashboard" />
             </PageHeader>
+
+            <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_180px]">
+                <Input
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder="Search deals"
+                />
+                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="Pending">Pending</SelectItem>
+                        <SelectItem value="Active">Active</SelectItem>
+                        <SelectItem value="Completed">Completed</SelectItem>
+                        <SelectItem value="Terminated">Terminated</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Sort deals" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="newest">Newest first</SelectItem>
+                        <SelectItem value="oldest">Oldest first</SelectItem>
+                        <SelectItem value="principal-desc">Highest principal</SelectItem>
+                        <SelectItem value="principal-asc">Lowest principal</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
             
-            {!deals || deals.length === 0 ? (
+            {visibleDeals.length === 0 ? (
                 <Card className="mt-6 border-dashed">
                     <CardContent className="p-12 text-center">
                         <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
@@ -72,7 +125,7 @@ export default function ClientAllDealsPage() {
                 </Card>
             ) : isMobile ? (
                 <div className="space-y-3">
-                    {deals.map(deal => (
+                    {visibleDeals.map(deal => (
                         <Card key={deal.id} onClick={() => router.push(`/client/deals/${deal.id}`)} className="cursor-pointer">
                             <CardContent className="p-4 space-y-2">
                                 <div className="flex justify-between items-start">
@@ -99,7 +152,7 @@ export default function ClientAllDealsPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {deals.map(deal => (
+                                {visibleDeals.map(deal => (
                                     <TableRow key={deal.id} onClick={() => router.push(`/client/deals/${deal.id}`)} className="cursor-pointer">
                                         <TableCell className="font-medium">{deal.dealName}</TableCell>
                                         <TableCell>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}</TableCell>

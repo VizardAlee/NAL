@@ -76,6 +76,7 @@ export async function initiateChat(
           title: `New message from ${adminName}`,
           message: initialMessage,
           link: userLink,
+          category: 'message',
           recipientId: userId,
           read: false,
           createdAt: now,

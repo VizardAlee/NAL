@@ -22,6 +22,17 @@ import { notFound, useParams } from "next/navigation";
 import { ViewPageNav } from "@/components/view-page-nav";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import Image from "next/image";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type UserProfile = DocumentData & {
     id: string;
@@ -176,10 +187,26 @@ export default function ClientDealDetailPage() {
                             </span>
                         </div>
                         {deal.status === 'Active' && (
-                            <Button variant="destructive" size="sm" onClick={handleTerminationRequest} disabled={isPendingTermination}>
-                                {isPendingTermination ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldAlert className="mr-2 h-4 w-4" />}
-                                Request Termination
-                            </Button>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" size="sm" disabled={isPendingTermination}>
+                                        {isPendingTermination ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldAlert className="mr-2 h-4 w-4" />}
+                                        Request Termination
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Request deal termination?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            This sends a termination request to an administrator for review. Your deal will remain active until the request is approved.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={handleTerminationRequest}>Submit Request</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
                         )}
                     </CardContent>
                 </Card>

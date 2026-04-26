@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { FilePlus, Hourglass, History, FileText, Download, ArrowRight } from 'lucide-react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, writeBatch, doc, getDocs, addDoc, orderBy } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
@@ -22,7 +22,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -50,46 +50,6 @@ type DealRequest = DocumentData & {
   requestedAt: Timestamp;
   processedAt?: Timestamp;
 };
-
-// Hook to clear notifications when a page is visited
-function useClearNotificationsByPath() {
-    const firestore = useFirestore();
-    const pathname = usePathname();
-    const { user } = useUser();
-
-    useEffect(() => {
-        if (!firestore || !pathname || !user) return;
-
-        const clearNotifications = async () => {
-            try {
-                const notificationsToClearQuery = query(
-                    collection(firestore, 'notifications'),
-                    where('recipientId', '==', user.uid),
-                    where('link', '==', pathname),
-                    where('read', '==', false)
-                );
-                
-                const snapshot = await getDocs(notificationsToClearQuery);
-                if (snapshot.empty) return;
-
-                const batch = writeBatch(firestore);
-                snapshot.docs.forEach(doc => {
-                    batch.update(doc.ref, { read: true });
-                });
-                
-                await batch.commit();
-            } catch (error) {
-                console.error("Failed to clear notifications:", error);
-            }
-        };
-
-        const timer = setTimeout(clearNotifications, 500);
-        return () => clearTimeout(timer);
-
-    }, [firestore, pathname, user]);
-}
-
-
 function DealRequestsTable({
     requests,
     isLoading,
@@ -221,8 +181,6 @@ function DealRequestsTable({
 }
 
 export default function DealRequestsPage() {
-    useClearNotificationsByPath();
-
     const firestore = useFirestore();
     const pendingQuery = useMemo(() => firestore ? query(collection(firestore, 'dealRequests'), where('status', '==', 'Pending'), orderBy('requestedAt', 'asc')) : null, [firestore]);
     const processedQuery = useMemo(() => firestore ? query(collection(firestore, 'dealRequests'), where('status', 'in', ['Approved', 'Rejected']), orderBy('processedAt', 'desc')) : null, [firestore]);

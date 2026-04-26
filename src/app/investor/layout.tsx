@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Wallet, Banknote, FlaskConical, HelpCircle, BookOpen } from "lucide-react";
+import { LogOut, Wallet, Banknote, FlaskConical, HelpCircle, BookOpen, History, Settings } from "lucide-react";
 import { Logo } from "@/components/icons";
 import Link from "next/link";
 import { useUser } from "@/firebase";
@@ -27,6 +27,7 @@ import { DigitalClock } from "@/components/digital-clock";
 import { canAccessPortal, getDefaultRouteForUser } from "@/lib/access-control";
 import { RoleSwitcher } from "@/components/role-switcher";
 import { resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
+import { NotificationBell } from "@/components/notification-bell";
 
 function InvestorSkeleton() {
     return (
@@ -145,7 +146,19 @@ export default function InvestorLayout({
                 <span>NAL General Marchant</span>
                 </Link>
                 <div className="flex-1" />
-                <nav className="flex items-center gap-2 text-sm font-medium">
+                <nav className="hidden items-center gap-1 text-sm font-medium md:flex">
+                    <Button variant="ghost" asChild>
+                        <Link href="/investor/dashboard">
+                            <Wallet className="h-4 w-4 mr-2" />
+                            Dashboard
+                        </Link>
+                    </Button>
+                    <Button variant="ghost" asChild>
+                        <Link href="/investor/transactions">
+                            <History className="h-4 w-4 mr-2" />
+                            Transactions
+                        </Link>
+                    </Button>
                     <Button variant="ghost" asChild>
                         <Link href="/investor/financing-modes">
                             <BookOpen className="h-4 w-4 mr-2" />
@@ -158,11 +171,18 @@ export default function InvestorLayout({
                             Analyzer
                         </Link>
                     </Button>
+                    <Button variant="ghost" asChild>
+                        <Link href="/investor/settings">
+                            <Settings className="h-4 w-4 mr-2" />
+                            Settings
+                        </Link>
+                    </Button>
                 </nav>
                 <DigitalClock />
                 <RoleSwitcher currentPortal="investor" />
                 <ThemeToggle />
                 <MessagesLink basePath="/investor" />
+                <NotificationBell historyHref="/investor/notifications" />
                 <AccountMenu />
             </header>
             <main className="flex-1 p-4 md:p-6">{children}</main>

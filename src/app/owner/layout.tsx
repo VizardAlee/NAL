@@ -24,6 +24,7 @@ import { useUser } from '@/firebase';
 import { getDefaultRouteForUser, normalizeAccessModel } from '@/lib/access-control';
 import { RoleSwitcher } from '@/components/role-switcher';
 import { resolvePreferredPortal, setStoredActivePortal } from '@/lib/active-portal';
+import { NotificationBell } from '@/components/notification-bell';
 
 function OwnerSkeleton() {
   return (
@@ -122,6 +123,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
         <DigitalClock />
         <RoleSwitcher currentPortal="owner" />
         <ThemeToggle />
+        <NotificationBell historyHref="/owner/notifications" />
         <AccountMenu />
       </header>
       <main className="flex-1 p-4 md:p-6">{children}</main>

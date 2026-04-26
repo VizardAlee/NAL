@@ -2,10 +2,10 @@
 
 import { notifyAdmins } from '@/app/common/actions/notification-actions';
 import { adminDb } from '@/firebase/admin-app';
-import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { addQuarters, differenceInDays, startOfQuarter } from 'date-fns';
+import { differenceInDays } from 'date-fns';
 import { verifyAuthTokenForUser } from '@/lib/server/auth';
 
 // --- Withdrawal Action ---
@@ -37,6 +37,7 @@ function isDateInWindow(quarters: any[]): { open: boolean; label?: string } {
 
 export async function requestWithdrawalAction(prevState: any, formData: FormData) {
     const validatedFields = withdrawalSchema.safeParse({
+        authToken: formData.get('authToken'),
         amount: formData.get('amount'),
         userId: formData.get('userId'),
         userName: formData.get('userName'),
@@ -119,7 +120,8 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
         await notifyAdmins(
             'Withdrawal Request',
             `${userName} requested a withdrawal of ${formattedAmount}.`,
-            '/admin/approvals/withdrawals'
+            '/admin/approvals/withdrawals',
+            'approval'
         );
 
         revalidatePath('/admin/approvals/withdrawals');
@@ -176,7 +178,8 @@ export async function reinvestAction(input: { authToken: string; amount: number;
         await notifyAdmins(
             'Reinvestment Request',
             `${userName} requested to reinvest ${formattedAmount}.`,
-            '/admin/approvals/reinvestments'
+            '/admin/approvals/reinvestments',
+            'approval'
         );
 
         revalidatePath('/investor/dashboard');
@@ -249,7 +252,8 @@ export async function requestCapitalWithdrawalAction(input: z.infer<typeof capit
         await notifyAdmins(
             'Capital Withdrawal Request',
             `${userName} requested to withdraw uninvested capital of ${formattedAmount}.`,
-            '/admin/approvals/withdrawals'
+            '/admin/approvals/withdrawals',
+            'approval'
         );
 
         revalidatePath('/investor/dashboard');

@@ -43,7 +43,8 @@ export async function requestDealAction(input: z.infer<typeof requestDealSchema>
         await notifyAdmins(
             'New Deal Request',
             `${requestPayload.clientName} has requested a new deal: "${requestPayload.dealName}"`,
-            '/admin/approvals/deal-requests'
+            '/admin/approvals/deal-requests',
+            'approval'
         );
         
         revalidatePath('/client/dashboard');

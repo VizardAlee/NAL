@@ -26,7 +26,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
-import { useUser } from '@/firebase';
+import { useAuth, useUser } from '@/firebase';
 import { lodgePaymentAction } from '@/app/client/dashboard/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Timestamp } from 'firebase/firestore';
@@ -71,8 +71,10 @@ function SubmitLodgePaymentButton() {
 function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { installment: ScheduledPayment, dealId: string, userId: string, onPaymentLodged: (repayment: any) => void }) {
     const [state, formAction] = useActionState(lodgePaymentAction, { success: false, message: '', repayment: null });
     const { toast } = useToast();
+    const auth = useAuth();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [amountToPay, setAmountToPay] = useState(installment.amountRemaining);
+    const [authToken, setAuthToken] = useState('');
 
     useEffect(() => {
         if (state.message && state.success === false) {
@@ -101,8 +103,9 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
     useEffect(() => {
         if(isDialogOpen) {
             setAmountToPay(installment.amountRemaining);
+            auth?.currentUser?.getIdToken().then(setAuthToken).catch(() => setAuthToken(''));
         }
-    }, [isDialogOpen, installment.amountRemaining]);
+    }, [auth, isDialogOpen, installment.amountRemaining]);
     
     return (
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -134,6 +137,7 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
                         />
                     </div>
                     <input type="hidden" name="dealId" value={dealId} />
+                    <input type="hidden" name="authToken" value={authToken} />
                     <input type="hidden" name="userId" value={userId} />
                     <input type="hidden" name="dueDate" value={installment.dueDate.toISOString()} />
                     <input type="hidden" name="installmentNumber" value={installment.installment} />

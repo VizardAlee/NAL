@@ -44,7 +44,8 @@ export async function requestDepositAction(input: { authToken: string; amount: n
     await notifyAdmins(
         'Deposit Request',
         `${userName} requested to deposit ${formattedAmount}.`,
-        '/admin/approvals/deposits'
+        '/admin/approvals/deposits',
+        'approval'
     );
 
     revalidatePath('/investor/dashboard');

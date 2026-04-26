@@ -5,10 +5,10 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle, MessageSquare, Copy, Gavel, BookOpen } from "lucide-react";
+import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle, MessageSquare, Copy, Gavel } from "lucide-react";
 import { useMemo, useState, useTransition } from 'react';
 import { useCollection, useDoc } from '@/firebase';
-import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc } from 'firebase/firestore';
 import { useAuth, useFirestore, useUser } from '@/firebase';
 import { type User } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,6 +17,8 @@ import { Deal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { WithdrawForm } from "./withdraw-form";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
@@ -60,7 +62,7 @@ type FundBatch = DocumentData & {
     details?: string;
 };
 
-type WithdrawalRequest = DocumentData & {
+type InvestorRequest = DocumentData & {
     id: string;
     amount: number;
     status: 'Pending' | 'Approved' | 'Rejected';
@@ -344,6 +346,7 @@ export default function InvestorDashboard() {
     const { user, loading: userLoading } = useUser();
     const [isWithdrawOpen, setWithdrawOpen] = useState(false);
     const [isDepositOpen, setDepositOpen] = useState(false);
+    const [chartRange, setChartRange] = useState<'4w' | '12w' | '52w' | 'all'>('12w');
     const isMobile = useIsMobile();
 
     const userProfileRef = useMemo(() => {
@@ -383,6 +386,16 @@ export default function InvestorDashboard() {
         return query(collection(firestore, 'withdrawalRequests'), where('investorId', '==', user.uid), orderBy('requestedAt', 'desc'), limit(5));
     }, [firestore, user]);
 
+    const depositRequestsQuery = useMemo(() => {
+        if (!firestore || !user?.uid) return null;
+        return query(collection(firestore, 'depositRequests'), where('investorId', '==', user.uid), orderBy('requestedAt', 'desc'), limit(5));
+    }, [firestore, user]);
+
+    const reinvestmentRequestsQuery = useMemo(() => {
+        if (!firestore || !user?.uid) return null;
+        return query(collection(firestore, 'reinvestmentRequests'), where('investorId', '==', user.uid), orderBy('requestedAt', 'desc'), limit(5));
+    }, [firestore, user]);
+
 
     const { data: userProfile, loading: userProfileLoading } = useDoc<UserProfile>(userProfileRef as any);
     const { data: investments, loading: investmentsLoading } = useCollection<Investment>(investmentsQuery);
@@ -390,7 +403,9 @@ export default function InvestorDashboard() {
     const { data: allTransactions, loading: allTransactionsLoading } = useCollection<Transaction>(allTransactionsQuery);
     const { data: recentTransactions, loading: recentTransactionsLoading } = useCollection<Transaction>(recentTransactionsQuery);
     const { data: firstDeposit, loading: firstDepositLoading } = useCollection<Transaction>(firstDepositQuery);
-    const { data: withdrawalRequests, loading: withdrawalRequestsLoading } = useCollection<WithdrawalRequest>(withdrawalRequestsQuery);
+    const { data: withdrawalRequests, loading: withdrawalRequestsLoading } = useCollection<InvestorRequest>(withdrawalRequestsQuery);
+    const { data: depositRequests, loading: depositRequestsLoading } = useCollection<InvestorRequest>(depositRequestsQuery);
+    const { data: reinvestmentRequests, loading: reinvestmentRequestsLoading } = useCollection<InvestorRequest>(reinvestmentRequestsQuery);
 
 
     const investedDealIds = useMemo(() => {
@@ -405,19 +420,22 @@ export default function InvestorDashboard() {
 
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
 
-    const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || firstDepositLoading || withdrawalRequestsLoading;
+    const allDealInvestmentsQuery = useMemo(() => {
+        if (!firestore || investedDealIds.length === 0) return null;
+        return query(collection(firestore, 'investments'), where('dealId', 'in', investedDealIds));
+    }, [firestore, investedDealIds]);
+
+    const { data: allDealInvestments, loading: allDealInvestmentsLoading } = useCollection<Investment>(allDealInvestmentsQuery);
+
+    const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || allDealInvestmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || firstDepositLoading || withdrawalRequestsLoading || depositRequestsLoading || reinvestmentRequestsLoading;
 
     const { longTermProfits, withdrawableBalance, expectedIncome, totalProfitsEarned } = useMemo(() => {
-        if (!allTransactions || !deals || !investments) {
+        if (!allTransactions || !deals || !investments || !allDealInvestments) {
             return { longTermProfits: 0, withdrawableBalance: 0, expectedIncome: 0, totalProfitsEarned: 0 };
         }
 
         const profitTransactions = allTransactions.filter(tx => tx.type === 'ProfitDistribution');
         const totalProfitsEarned = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-        const totalWithdrawnFromProfits = allTransactions
-            .filter(tx => tx.type === 'Withdrawal')
-            .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-
         let totalLongTermProfit = 0;
         let totalShortTermProfit = 0;
         let totalExpectedIncome = 0;
@@ -438,7 +456,7 @@ export default function InvestorDashboard() {
         const activeDeals = deals.filter(d => d.status === 'Active');
         for (const deal of activeDeals) {
             const schedule = generateAmortizationSchedule(deal);
-            const investmentsForDeal = investments.filter(inv => inv.dealId === deal.id);
+            const investmentsForDeal = allDealInvestments.filter(inv => inv.dealId === deal.id);
             const totalInvestedInDeal = investmentsForDeal.reduce((s, i) => s + i.amount, 0);
             const userInvestmentInDeal = investmentsForDeal.filter(inv => inv.investorId === user?.uid).reduce((s, i) => s + i.amount, 0);
 
@@ -460,7 +478,7 @@ export default function InvestorDashboard() {
             expectedIncome: totalExpectedIncome,
             totalProfitsEarned
         };
-    }, [allTransactions, deals, investments, user]);
+    }, [allTransactions, deals, investments, allDealInvestments, user]);
 
 
     const financialMetrics = useMemo(() => {
@@ -489,66 +507,85 @@ export default function InvestorDashboard() {
     }, [allTransactions, fundBatches]);
 
     const withdrawalRules = useMemo(() => {
-        const isLocked = longTermProfits > 0 && (!firstDeposit?.[0] || differenceInDays(new Date(), firstDeposit[0].createdAt.toDate()) < 365);
+        const firstDepositDate = firstDeposit?.[0]?.createdAt?.toDate?.();
+        const longTermUnlockDate = firstDepositDate ? addDays(firstDepositDate, 365) : null;
+        const isLocked = longTermProfits > 0 && (!firstDepositDate || differenceInDays(new Date(), firstDepositDate) < 365);
         const lastWithdrawal = userProfile?.lastWithdrawalDate?.toDate();
-        const cooldownActive = lastWithdrawal ? differenceInDays(new Date(), lastWithdrawal) < 90 : false;
+        const cooldownDaysRemaining = lastWithdrawal ? Math.max(0, 90 - differenceInDays(new Date(), lastWithdrawal)) : 0;
+        const cooldownActive = cooldownDaysRemaining > 0;
 
         const availableForWithdrawal = Math.min(longTermProfits * 0.2, financialMetrics.investableBalance);
 
         return {
             isLocked,
             cooldownActive,
+            cooldownDaysRemaining,
             maxWithdrawal: availableForWithdrawal,
+            longTermUnlockDate,
         };
     }, [longTermProfits, firstDeposit, userProfile, financialMetrics.investableBalance]);
+
+    const pendingRequests = useMemo(() => {
+        const formatAmount = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+        return [
+            ...(depositRequests || []).map((request) => ({ ...request, label: 'Deposit', amountLabel: formatAmount(request.amount) })),
+            ...(withdrawalRequests || []).map((request) => ({ ...request, label: 'Withdrawal', amountLabel: formatAmount(request.amount) })),
+            ...(reinvestmentRequests || []).map((request) => ({ ...request, label: 'Reinvestment', amountLabel: formatAmount(request.amount) })),
+        ]
+            .filter((request) => request.status === 'Pending')
+            .sort((a, b) => (b.requestedAt?.toMillis?.() || 0) - (a.requestedAt?.toMillis?.() || 0))
+            .slice(0, 6);
+    }, [depositRequests, reinvestmentRequests, withdrawalRequests]);
 
     const chartData = useMemo(() => {
         if (!allTransactions || allTransactions.length === 0) return [];
 
-        let runningCapital = 0;
-        let runningProfit = 0;
-        let runningWithdrawn = 0;
+        const sortedTransactions = [...allTransactions].sort((a, b) => a.createdAt.toMillis() - b.createdAt.toMillis());
+        const rangeWeeks = chartRange === '4w' ? 4 : chartRange === '12w' ? 12 : chartRange === '52w' ? 52 : null;
+        const firstWeekStart = startOfWeek(sortedTransactions[0].createdAt.toDate(), { weekStartsOn: 1 });
+        const initialWeekStart = rangeWeeks
+            ? startOfWeek(subWeeks(new Date(), rangeWeeks - 1), { weekStartsOn: 1 })
+            : firstWeekStart;
 
-        const dataByWeek: { [week: string]: number } = {};
-        const weekKeys: string[] = [];
-
-        allTransactions.forEach(tx => {
-            const date = tx.createdAt.toDate();
-            // 'I' gives ISO week number, 'y' gives ISO week-numbering year
-            const weekKey = format(date, 'y-I');
-
-            if (!dataByWeek[weekKey]) {
-                weekKeys.push(weekKey);
-            }
-
-            if (tx.type === 'Deposit') runningCapital += tx.amount;
-            if (tx.type === 'Withdrawal' || tx.type === 'Zakat') runningWithdrawn += Math.abs(tx.amount);
-            if (tx.type === 'ProfitDistribution') runningProfit += tx.amount;
-
-            dataByWeek[weekKey] = (runningCapital + runningProfit) - runningWithdrawn;
-        });
-
-        // Ensure consecutive weeks have the previous week's value if no new transactions
-        weekKeys.sort();
-        for (let i = 1; i < weekKeys.length; i++) {
-            const prevKey = weekKeys[i - 1];
-            const currentKey = weekKeys[i];
-            if (!dataByWeek[currentKey]) {
-                dataByWeek[currentKey] = dataByWeek[prevKey];
-            }
+        const weeks: Date[] = [];
+        for (let cursor = initialWeekStart; cursor <= new Date(); cursor = addDays(cursor, 7)) {
+            weeks.push(cursor);
         }
 
-        const lastFourWeeksKeys = weekKeys.slice(-4);
+        return weeks.map((weekStart) => {
+            const weekEnd = addDays(weekStart, 6);
+            const portfolioValue = sortedTransactions
+                .filter((tx) => tx.createdAt.toDate() <= weekEnd)
+                .reduce((value, tx) => {
+                    if (tx.type === 'Deposit') return value + tx.amount;
+                    if (tx.type === 'Withdrawal' || tx.type === 'Zakat') return value - Math.abs(tx.amount);
+                    if (tx.type === 'ProfitDistribution') return value + tx.amount;
+                    return value;
+                }, 0);
 
-        return lastFourWeeksKeys.map(weekKey => {
-            const [year, weekNum] = weekKey.split('-');
             return {
-                week: `Week ${weekNum} '${year.slice(2)}`,
-                portfolioValue: dataByWeek[weekKey],
+                week: format(weekStart, 'MMM d'),
+                portfolioValue,
             };
         });
+    }, [allTransactions, chartRange]);
 
-    }, [allTransactions]);
+    const dealSummaries = useMemo(() => {
+        if (!deals || !investments || !allDealInvestments) return [];
+        return deals.map((deal) => {
+            const userAmount = investments
+                .filter((investment) => investment.dealId === deal.id)
+                .reduce((sum, investment) => sum + investment.amount, 0);
+            const totalDealInvestment = allDealInvestments
+                .filter((investment) => investment.dealId === deal.id)
+                .reduce((sum, investment) => sum + investment.amount, 0);
+            const ownership = totalDealInvestment > 0 ? userAmount / totalDealInvestment : 0;
+            const expectedProfit = deal.status === 'Active'
+                ? generateAmortizationSchedule(deal).reduce((sum, inst) => sum + inst.interest, 0) * ownership * 0.4
+                : 0;
+            return { deal, userAmount, expectedProfit };
+        });
+    }, [allDealInvestments, deals, investments]);
 
     const handleWithdrawalSuccess = () => {
         setWithdrawOpen(false);
@@ -591,6 +628,27 @@ export default function InvestorDashboard() {
             <div className="mb-8">
                 <BankDetailsCard />
             </div>
+
+            {!isLoading && pendingRequests.length > 0 && (
+                <Alert className="mb-8">
+                    <History className="h-4 w-4" />
+                    <AlertTitle>Pending Requests</AlertTitle>
+                    <AlertDescription>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                            {pendingRequests.map((request) => (
+                                <div key={`${request.label}-${request.id}`} className="rounded-md border bg-background p-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="font-medium">{request.label}</span>
+                                        <Badge variant="secondary">{request.status}</Badge>
+                                    </div>
+                                    <p className="mt-1 text-sm text-muted-foreground">{request.amountLabel}</p>
+                                    <p className="text-xs text-muted-foreground">{formatDate(request.requestedAt)}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </AlertDescription>
+                </Alert>
+            )}
 
             {userProfile && userProfile.legalDocumentUrl && (
                 <div className="mb-8">
@@ -701,10 +759,61 @@ export default function InvestorDashboard() {
                 </Card>
             </div>
 
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">Short-Term Profit</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-xl font-bold">{formatCurrency(withdrawableBalance)}</div>
+                        <p className="text-xs text-muted-foreground">Available for withdrawal or reinvestment.</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">Long-Term Profit Pool</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-xl font-bold">{formatCurrency(longTermProfits)}</div>
+                        <p className="text-xs text-muted-foreground">
+                            {withdrawalRules.isLocked
+                                ? `Locked until ${withdrawalRules.longTermUnlockDate ? format(withdrawalRules.longTermUnlockDate, 'PPP') : 'your first deposit matures'}.`
+                                : `${formatCurrency(withdrawalRules.maxWithdrawal)} is within the 20% long-term rule.`}
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">Withdrawal Cooldown</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-xl font-bold">
+                            {withdrawalRules.cooldownActive ? `${withdrawalRules.cooldownDaysRemaining} days` : 'Open'}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            {withdrawalRules.cooldownActive ? 'Time remaining before another scheduled withdrawal.' : 'No recent withdrawal cooldown is active.'}
+                        </p>
+                    </CardContent>
+                </Card>
+            </div>
+
             <Card className="mt-8">
-                <CardHeader>
-                    <CardTitle>Financial Activity</CardTitle>
-                    <CardDescription>Your portfolio value over the last four weeks.</CardDescription>
+                <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <CardTitle>Financial Activity</CardTitle>
+                        <CardDescription>Your portfolio value across the selected period.</CardDescription>
+                    </div>
+                    <Select value={chartRange} onValueChange={(value) => setChartRange(value as typeof chartRange)}>
+                        <SelectTrigger className="w-full sm:w-40">
+                            <SelectValue placeholder="Chart range" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="4w">4 weeks</SelectItem>
+                            <SelectItem value="12w">12 weeks</SelectItem>
+                            <SelectItem value="52w">52 weeks</SelectItem>
+                            <SelectItem value="all">All time</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </CardHeader>
                 <CardContent className="pl-2">
                     {isLoading ? (
@@ -824,7 +933,7 @@ export default function InvestorDashboard() {
                         </div>
                     ) : isMobile ? (
                         <div className="space-y-3">
-                            {deals && deals.length > 0 ? deals.map((deal) => (
+                            {dealSummaries.length > 0 ? dealSummaries.map(({ deal, userAmount, expectedProfit }) => (
                                 <Card key={deal.id}>
                                     <CardContent className="p-4 space-y-2">
                                         <div className="flex justify-between items-start">
@@ -835,11 +944,14 @@ export default function InvestorDashboard() {
                                             Financing Mode: <span className="font-medium text-foreground">{deal.financingMode || 'Murabaha'}</span>
                                         </div>
                                         <div className="text-sm text-muted-foreground">
-                                            Principal: {formatCurrency(deal.principal)}
+                                            Your investment: {formatCurrency(userAmount)}
                                         </div>
                                         <div className="text-sm text-muted-foreground">
-                                            Profit Rate: {deal.profitRate}%
+                                            Expected profit: {formatCurrency(expectedProfit)}
                                         </div>
+                                        <Button asChild variant="outline" size="sm" className="w-full">
+                                            <Link href={`/investor/transactions?dealId=${deal.id}`}>View related activity</Link>
+                                        </Button>
                                     </CardContent>
                                 </Card>
                             )) : (
@@ -853,23 +965,29 @@ export default function InvestorDashboard() {
                                     <TableRow>
                                         <TableHead>Deal Name</TableHead>
                                         <TableHead>Mode</TableHead>
-                                        <TableHead>Principal</TableHead>
-                                        <TableHead>Profit Rate</TableHead>
+                                        <TableHead>Your Investment</TableHead>
+                                        <TableHead>Expected Profit</TableHead>
                                         <TableHead>Status</TableHead>
+                                        <TableHead className="text-right">Action</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {!isLoading && deals?.map((deal) => (
+                                    {!isLoading && dealSummaries.map(({ deal, userAmount, expectedProfit }) => (
                                         <TableRow key={deal.id}>
                                             <TableCell data-label="Deal Name" className="font-medium">{deal.dealName}</TableCell>
                                             <TableCell data-label="Mode"><Badge variant="outline">{deal.financingMode || 'Murabaha'}</Badge></TableCell>
-                                            <TableCell data-label="Principal">{formatCurrency(deal.principal)}</TableCell>
-                                            <TableCell data-label="Profit Rate">{deal.profitRate}%</TableCell>
+                                            <TableCell data-label="Your Investment">{formatCurrency(userAmount)}</TableCell>
+                                            <TableCell data-label="Expected Profit">{formatCurrency(expectedProfit)}</TableCell>
                                             <TableCell data-label="Status"><Badge variant={deal.status === 'Active' ? 'default' : 'secondary'}>{deal.status}</Badge></TableCell>
+                                            <TableCell className="text-right">
+                                                <Button asChild variant="outline" size="sm">
+                                                    <Link href={`/investor/transactions?dealId=${deal.id}`}>Activity</Link>
+                                                </Button>
+                                            </TableCell>
                                         </TableRow>
                                     ))}
-                                    {!isLoading && deals?.length === 0 && (
-                                        <TableRow><TableCell colSpan={5} className="h-24 text-center">You have not invested in any deals yet.</TableCell></TableRow>
+                                    {!isLoading && dealSummaries.length === 0 && (
+                                        <TableRow><TableCell colSpan={6} className="h-24 text-center">You have not invested in any deals yet.</TableCell></TableRow>
                                     )}
                                 </TableBody>
                             </Table>

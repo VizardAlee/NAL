@@ -22,14 +22,12 @@ import {
   History,
   Settings,
   ChevronDown,
-  Database,
   FilePlus,
   ShieldAlert,
   Wallet,
   RefreshCcw,
   HandCoins,
   MessageSquarePlus,
-  MessageSquare,
   Library,
   Landmark,
 } from "lucide-react";
@@ -38,7 +36,6 @@ import { Badge } from "@/components/ui/badge";
 import { useCollection, useUser } from "@/firebase";
 import { collection, query, where } from "firebase/firestore";
 import { useFirestore } from "@/firebase";
-import { MessageGlow } from "@/components/message-glow";
 
 type MenuItem = {
   href?: string;
@@ -73,6 +70,7 @@ const menuItems: MenuItem[] = [
   { href: "/admin/funds", label: "Funds", icon: Banknote },
   { href: "/admin/reports", label: "Reports", icon: Library },
   { href: "/admin/tax", label: "Tax", icon: Landmark },
+  { href: "/admin/financing-modes", label: "Financing Modes", icon: Library },
   { href: "/admin/analyzer", label: "Analyzer", icon: FlaskConical },
   { href: "/admin/activity", label: "Activity", icon: History },
   { href: "/admin/settings", label: "Settings", icon: Settings },

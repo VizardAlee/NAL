@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, LogOut, Circle, LayoutDashboard, FileText, Users, CheckCircle, Banknote, FlaskConical, History, Settings, Library, MessageSquare, HelpCircle } from "lucide-react";
+import { LogOut, LayoutDashboard, FileText, Users, CheckCircle, Banknote, FlaskConical, History, Settings, Library, MessageSquare, HelpCircle } from "lucide-react";
 import {
   SidebarProvider,
   Sidebar,
@@ -24,68 +24,20 @@ import {
 import { AdminNav } from "@/components/admin-nav";
 import { Logo } from "@/components/icons";
 import Link from "next/link";
-import { useUser, useCollection } from "@/firebase";
+import { useUser } from "@/firebase";
 import { useRouter } from "next/navigation";
-import { useAuth, useFirestore } from "@/firebase/provider";
+import { useAuth } from "@/firebase/provider";
 import { Skeleton } from "@/components/ui/skeleton";
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { collection, query, orderBy, limit, doc, updateDoc, Timestamp, where, writeBatch, getDocs } from "firebase/firestore";
-import { formatDistanceToNow } from 'date-fns';
 import { useCompanyLogo } from "@/components/company-logo-provider";
-import { usePathname } from 'next/navigation';
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
 import { DigitalClock } from "@/components/digital-clock";
 import { MessagesLink } from "@/components/messages-link";
 import { canAccessPortal, getDefaultRouteForUser, isReadOnlyOwner } from "@/lib/access-control";
 import { RoleSwitcher } from "@/components/role-switcher";
 import { resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
-
-type Notification = {
-    id: string;
-    title: string;
-    message: string;
-    link: string;
-    read: boolean;
-    createdAt: Timestamp;
-};
-
-// New hook to clear notifications when a page is visited
-function useClearNotificationsByPath() {
-    const firestore = useFirestore();
-    const pathname = usePathname();
-    const { user } = useUser();
-
-    useEffect(() => {
-        if (!firestore || !pathname || !user) return;
-
-        const clearNotifications = async () => {
-            const notificationsToClearQuery = query(
-                collection(firestore, 'notifications'),
-                where('recipientId', '==', user.uid),
-                where('link', '==', pathname),
-                where('read', '==', false)
-            );
-            
-            const snapshot = await getDocs(notificationsToClearQuery);
-            if (snapshot.empty) return;
-
-            const batch = writeBatch(firestore);
-            snapshot.docs.forEach(doc => {
-                batch.update(doc.ref, { read: true });
-            });
-            
-            await batch.commit();
-        };
-
-        // Debounce or delay slightly to avoid race conditions on rapid navigation
-        const timer = setTimeout(clearNotifications, 500);
-
-        return () => clearTimeout(timer);
-
-    }, [firestore, pathname, user]);
-}
+import { NotificationBell } from "@/components/notification-bell";
 
 
 function AdminSkeleton() {
@@ -111,80 +63,6 @@ function AdminSkeleton() {
         </div>
       </div>
     );
-}
-
-function NotificationBell() {
-    const firestore = useFirestore();
-    const router = useRouter();
-    const { user } = useUser();
-
-    const notificationsQuery = useMemo(() => {
-        if (!firestore || !user) return null;
-        // Fetch only unread notifications that are NOT message notifications
-        return query(
-            collection(firestore, 'notifications'),
-            where('recipientId', '==', user.uid),
-            where('read', '==', false),
-            orderBy('createdAt', 'desc'),
-            limit(20)
-        );
-    }, [firestore, user]);
-
-    const { data: allUnreadNotifications } = useCollection<Notification>(notificationsQuery);
-
-    const notifications = useMemo(() => {
-        // Further filter on the client to exclude message-related notifications
-        return allUnreadNotifications?.filter(n => !n.link.includes('/messages/')) || [];
-    }, [allUnreadNotifications]);
-
-    const handleNotificationClick = async (notification: Notification) => {
-        if (!firestore) return;
-        
-        router.push(notification.link);
-        
-        const notifRef = doc(firestore, 'notifications', notification.id);
-        await updateDoc(notifRef, { read: true });
-    };
-
-    return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full relative">
-                    <Bell className="h-5 w-5" />
-                    {notifications && notifications.length > 0 && (
-                        <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                        </span>
-                    )}
-                    <span className="sr-only">Toggle notifications</span>
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 p-0">
-                <DropdownMenuLabel className="px-2 py-1.5">Notifications</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <ScrollArea className="max-h-96">
-                    <div className="p-1">
-                        {notifications && notifications.length > 0 ? (
-                            notifications.map(n => (
-                                <DropdownMenuItem key={n.id} onClick={() => handleNotificationClick(n)} className="flex items-start gap-3 cursor-pointer">
-                                {!n.read && <Circle className="h-2 w-2 mt-1.5 fill-primary text-primary" />}
-                                {n.read && <div className="w-2 h-2" />}
-                                    <div className="grid gap-1">
-                                        <p className="font-medium">{n.title}</p>
-                                        <p className="text-xs text-muted-foreground">{n.message}</p>
-                                        <p className="text-xs text-muted-foreground">{formatDistanceToNow(n.createdAt.toDate(), { addSuffix: true })}</p>
-                                    </div>
-                                </DropdownMenuItem>
-                            ))
-                        ) : (
-                            <DropdownMenuItem disabled>No new notifications</DropdownMenuItem>
-                        )}
-                    </div>
-                </ScrollArea>
-            </DropdownMenuContent>
-        </DropdownMenu>
-    )
 }
 
 const adminOnboardingSteps = [
@@ -262,8 +140,6 @@ export default function AdminLayout({
   const { logoUrl, loading: logoLoading } = useCompanyLogo();
   const ownerReadOnly = isReadOnlyOwner(user);
 
-  useClearNotificationsByPath();
-
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
@@ -316,7 +192,7 @@ export default function AdminLayout({
             <RoleSwitcher currentPortal="admin" />
             <ThemeToggle />
             <MessagesLink basePath="/admin" />
-            <NotificationBell />
+            <NotificationBell historyHref="/admin/notifications" />
             <AccountMenu />
             </header>
             <main className={`flex-1 p-4 md:p-6 ${ownerReadOnly ? 'owner-readonly' : ''}`}>{children}</main>

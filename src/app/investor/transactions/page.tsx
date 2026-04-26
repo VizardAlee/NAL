@@ -6,8 +6,11 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { History } from "lucide-react";
-import { useMemo, useState } from 'react';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Download, History } from "lucide-react";
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
@@ -16,6 +19,7 @@ import { format } from 'date-fns';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { ViewPageNav } from "@/components/view-page-nav";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSearchParams } from "next/navigation";
 
 type Transaction = DocumentData & {
     id: string;
@@ -28,11 +32,18 @@ type Transaction = DocumentData & {
 };
 
 const ITEMS_PER_PAGE = 15;
+const transactionTypes = ['Deposit', 'Withdrawal', 'Investment', 'Repayment', 'ProfitDistribution', 'Zakat'] as const;
 
-export default function TransactionsPage() {
+function TransactionsContent() {
     const firestore = useFirestore();
     const { user, loading: userLoading } = useUser();
+    const searchParams = useSearchParams();
+    const dealIdFilter = searchParams.get('dealId') || '';
     const [currentPage, setCurrentPage] = useState(1);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [typeFilter, setTypeFilter] = useState<'all' | Transaction['type']>('all');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
     const isMobile = useIsMobile();
 
     const transactionsQuery = useMemo(() => {
@@ -44,22 +55,65 @@ export default function TransactionsPage() {
 
     const isLoading = userLoading || transactionsLoading;
 
+    const filteredTransactions = useMemo(() => {
+        const normalizedSearch = searchTerm.trim().toLowerCase();
+        const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
+        const end = endDate ? new Date(`${endDate}T23:59:59`) : null;
+
+        return (transactions || []).filter((tx) => {
+            const txDate = tx.createdAt.toDate();
+            const matchesDeal = !dealIdFilter || tx.dealId === dealIdFilter;
+            const matchesType = typeFilter === 'all' || tx.type === typeFilter;
+            const matchesSearch =
+                !normalizedSearch ||
+                tx.type.toLowerCase().includes(normalizedSearch) ||
+                tx.dealName?.toLowerCase().includes(normalizedSearch);
+            const matchesStart = !start || txDate >= start;
+            const matchesEnd = !end || txDate <= end;
+            return matchesDeal && matchesType && matchesSearch && matchesStart && matchesEnd;
+        });
+    }, [dealIdFilter, endDate, searchTerm, startDate, transactions, typeFilter]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [dealIdFilter, endDate, searchTerm, startDate, typeFilter]);
+
     const paginatedTransactions = useMemo(() => {
-        if (!transactions) return [];
         const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-        return transactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-    }, [transactions, currentPage]);
+        return filteredTransactions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    }, [filteredTransactions, currentPage]);
 
     const totalPages = useMemo(() => {
-        if (!transactions) return 0;
-        return Math.ceil(transactions.length / ITEMS_PER_PAGE);
-    }, [transactions]);
+        return Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE);
+    }, [filteredTransactions]);
 
 
     const formatDate = (timestamp: Timestamp | Date | undefined) => {
         if (!timestamp) return 'N/A';
         const parsedDate = timestamp instanceof Timestamp ? timestamp.toDate() : timestamp;
         try { return format(parsedDate, 'PPP p'); } catch { return 'Invalid Date'; }
+    };
+
+    const formatCurrency = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+
+    const handleExport = () => {
+        const headers = ['Date', 'Type', 'Details', 'Amount'];
+        const rows = filteredTransactions.map((tx) => [
+            formatDate(tx.createdAt),
+            tx.type,
+            tx.dealName || '',
+            tx.amount.toString(),
+        ]);
+        const csv = [headers, ...rows]
+            .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+            .join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'investor-transactions.csv';
+        link.click();
+        URL.revokeObjectURL(url);
     };
 
     const renderContent = () => {
@@ -90,7 +144,7 @@ export default function TransactionsPage() {
                                 <div className="flex justify-between items-start">
                                     <Badge variant={tx.amount > 0 ? 'secondary' : 'outline'}>{tx.type}</Badge>
                                     <p className={`font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
-                                        {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                        {tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount)}
                                     </p>
                                 </div>
                                 <p className="text-sm text-muted-foreground">{tx.dealName || 'N/A'}</p>
@@ -123,7 +177,7 @@ export default function TransactionsPage() {
                                     </TableCell>
                                     <TableCell>{tx.dealName || 'N/A'}</TableCell>
                                     <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-primary' : 'text-foreground'}`}>
-                                        {tx.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(tx.amount)}
+                                        {tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount)}
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -137,12 +191,43 @@ export default function TransactionsPage() {
     return (
         <div>
             <PageHeader
-                title="Transaction History"
+                title={dealIdFilter ? "Filtered Transactions" : "Transaction History"}
                 description="A complete record of all your financial activities on the platform."
                 icon={History}
             >
                 <ViewPageNav homePath="/investor/dashboard" />
             </PageHeader>
+
+            <div className="mb-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_160px_160px_auto]">
+                <Input
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder="Search by type or deal"
+                />
+                <Select value={typeFilter} onValueChange={(value) => setTypeFilter(value as typeof typeFilter)}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All types</SelectItem>
+                        {transactionTypes.map((type) => (
+                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+                <Button variant="outline" onClick={handleExport} disabled={filteredTransactions.length === 0}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                </Button>
+            </div>
+
+            {dealIdFilter && (
+                <div className="mb-4 rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                    Showing activity for selected deal ID: <span className="font-medium text-foreground">{dealIdFilter}</span>
+                </div>
+            )}
 
             {renderContent()}
 
@@ -166,5 +251,13 @@ export default function TransactionsPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function TransactionsPage() {
+    return (
+        <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+            <TransactionsContent />
+        </Suspense>
     );
 }

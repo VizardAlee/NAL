@@ -32,7 +32,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { canWriteAdmin, normalizeAccessModel } from '@/lib/access-control';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
 
 
 type User = DocumentData & {
@@ -147,6 +147,7 @@ function UsersTable({ users, loading }: { users: User[] | null, loading: boolean
 
 export default function UsersPage() {
   const [isCreateUserOpen, setCreateUserOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const firestore = useFirestore();
   const { user } = useUser();
 
@@ -158,21 +159,42 @@ export default function UsersPage() {
   const { data: users, loading } = useCollection<User>(usersQuery);
   const canInvite = canWriteAdmin(user);
 
+  const searchableUsers = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const allUsers = users || [];
+
+    if (!normalizedSearch) return allUsers;
+
+    return allUsers.filter((u) => {
+      const model = normalizeAccessModel(u);
+      return [
+        u.name,
+        u.email,
+        u.role,
+        model.accessRole,
+        model.primaryPortal,
+        ...(model.personas || []),
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch));
+    });
+  }, [searchTerm, users]);
+
   const filteredUsers = useMemo(() => {
-    const owners = users?.filter(u => normalizeAccessModel(u).accessRole === 'OWNER') || [];
-    const staff = users?.filter(u => normalizeAccessModel(u).accessRole === 'STAFF' || normalizeAccessModel(u).personas.includes('STAFF_MEMBER')) || [];
+    const owners = searchableUsers.filter(u => normalizeAccessModel(u).accessRole === 'OWNER');
+    const staff = searchableUsers.filter(u => normalizeAccessModel(u).accessRole === 'STAFF' || normalizeAccessModel(u).personas.includes('STAFF_MEMBER'));
     return {
-      all: users,
+      all: searchableUsers,
       owners,
       staff,
-      admin: users?.filter(u => u.role === 'Admin') || [],
-      investor: users?.filter(u => u.role === 'Investor') || [],
-      client: users?.filter(u => u.role === 'Client') || [],
-      legal: users?.filter(u => u.role === 'Legal') || [],
-      recovery: users?.filter(u => u.role === 'Recovery') || [],
-      marketer: users?.filter(u => u.role === 'Marketer') || [],
+      admin: searchableUsers.filter(u => u.role === 'Admin'),
+      investor: searchableUsers.filter(u => u.role === 'Investor'),
+      client: searchableUsers.filter(u => u.role === 'Client'),
+      legal: searchableUsers.filter(u => u.role === 'Legal'),
+      recovery: searchableUsers.filter(u => u.role === 'Recovery'),
+      marketer: searchableUsers.filter(u => u.role === 'Marketer'),
     }
-  }, [users]);
+  }, [searchableUsers]);
 
   const handleUserCreated = () => {
     // Keep dialog open after link generation so admin can copy/share the invite URL.
@@ -205,17 +227,25 @@ export default function UsersPage() {
         )}
       </PageHeader>
 
+      <div className="mb-4">
+        <Input
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Search users by name, email, role, or persona"
+        />
+      </div>
+
       <Tabs defaultValue="all" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-9">
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="owners">Owners</TabsTrigger>
-          <TabsTrigger value="staff">Staff</TabsTrigger>
-          <TabsTrigger value="admin">Admins</TabsTrigger>
-          <TabsTrigger value="investor">Investors</TabsTrigger>
-          <TabsTrigger value="client">Clients</TabsTrigger>
-          <TabsTrigger value="marketer">Marketers</TabsTrigger>
-          <TabsTrigger value="legal">Legal</TabsTrigger>
-          <TabsTrigger value="recovery">Recovery</TabsTrigger>
+        <TabsList className="flex h-auto w-full justify-start overflow-x-auto">
+          <TabsTrigger value="all">All ({filteredUsers.all.length})</TabsTrigger>
+          <TabsTrigger value="owners">Owners ({filteredUsers.owners.length})</TabsTrigger>
+          <TabsTrigger value="staff">Staff ({filteredUsers.staff.length})</TabsTrigger>
+          <TabsTrigger value="admin">Admins ({filteredUsers.admin.length})</TabsTrigger>
+          <TabsTrigger value="investor">Investors ({filteredUsers.investor.length})</TabsTrigger>
+          <TabsTrigger value="client">Clients ({filteredUsers.client.length})</TabsTrigger>
+          <TabsTrigger value="marketer">Marketers ({filteredUsers.marketer.length})</TabsTrigger>
+          <TabsTrigger value="legal">Legal ({filteredUsers.legal.length})</TabsTrigger>
+          <TabsTrigger value="recovery">Recovery ({filteredUsers.recovery.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="all" className="mt-4">
           <UsersTable users={filteredUsers.all} loading={loading} />

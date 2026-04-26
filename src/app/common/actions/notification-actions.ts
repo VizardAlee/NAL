@@ -4,6 +4,8 @@
 import { getAdminApp } from '@/firebase/admin-app';
 import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
+import { z } from 'zod';
+import { verifyAuthTokenForUser } from '@/lib/server/auth';
 
 const adminDb = getFirestore(getAdminApp());
 
@@ -13,7 +15,8 @@ async function createInAppNotification(
     recipientId: string,
     title: string,
     message: string,
-    link: string
+    link: string,
+    category: NotificationCategory = 'system'
 ) {
     const notificationRef = firestore.collection('notifications').doc();
     await notificationRef.set({
@@ -21,10 +24,19 @@ async function createInAppNotification(
         title,
         message,
         link,
+        category,
         read: false,
         createdAt: Timestamp.now(),
     });
 }
+
+type NotificationCategory =
+    | 'approval'
+    | 'message'
+    | 'repayment'
+    | 'overdue'
+    | 'system'
+    | 'request-status';
 
 // Main function to send a push notification
 async function sendPushNotification(
@@ -44,7 +56,7 @@ async function sendPushNotification(
 
     const messaging = getMessaging(getAdminApp());
     
-    const message = {
+    const multicastMessage = {
       notification: {
         title: title,
         body: body,
@@ -61,7 +73,25 @@ async function sendPushNotification(
       tokens: userData.fcmTokens,
     };
 
-    await messaging.sendEachForMulticast(message);
+    const response = await messaging.sendEachForMulticast(multicastMessage);
+    const invalidTokens = response.responses
+      .map((result, index) => {
+        const code = result.error?.code;
+        if (
+          code === 'messaging/invalid-registration-token' ||
+          code === 'messaging/registration-token-not-registered'
+        ) {
+          return userData.fcmTokens[index];
+        }
+        return null;
+      })
+      .filter((token): token is string => Boolean(token));
+
+    if (invalidTokens.length > 0) {
+      await adminDb.collection('users').doc(recipientId).update({
+        fcmTokens: FieldValue.arrayRemove(...invalidTokens),
+      });
+    }
   } catch (error) {
     console.error(`Failed to send push notification to ${recipientId}:`, error);
   }
@@ -71,7 +101,8 @@ async function sendPushNotification(
 export async function notifyAdmins(
     title: string,
     message: string,
-    link: string
+    link: string,
+    category: NotificationCategory = 'approval'
 ) {
     const [legacyAdmins, accessRoleAdmins, accessRoleStaff, accessRoleOwners] = await Promise.all([
         adminDb.collection('users').where('role', '==', 'Admin').get(),
@@ -91,7 +122,7 @@ export async function notifyAdmins(
     if (adminIds.length === 0) return;
 
     const inAppPromises = adminIds.map(adminId => 
-        createInAppNotification(adminDb, adminId, title, message, link)
+        createInAppNotification(adminDb, adminId, title, message, link, category)
     );
 
     const pushPromises = adminIds.map(adminId => 
@@ -106,20 +137,32 @@ export async function notifyUser(
     userId: string,
     title: string,
     message: string,
-    link: string
+    link: string,
+    category: NotificationCategory = 'system'
 ) {
     await Promise.all([
-        createInAppNotification(adminDb, userId, title, message, link),
+        createInAppNotification(adminDb, userId, title, message, link, category),
         sendPushNotification(userId, title, message, link)
     ]);
 }
 
+const saveFcmTokenSchema = z.object({
+    authToken: z.string().min(1),
+    userId: z.string().min(1),
+    token: z.string().min(1),
+});
+
 // Action to save a user's FCM token
-export async function saveFcmToken(userId: string, token: string) {
-    if (!userId || !token) {
-        return { success: false, message: 'Invalid user ID or token.' };
+export async function saveFcmToken(input: z.infer<typeof saveFcmTokenSchema>) {
+    const validated = saveFcmTokenSchema.safeParse(input);
+    if (!validated.success) {
+        return { success: false, message: 'Invalid notification token request.' };
     }
+
     try {
+        const { authToken, userId, token } = validated.data;
+        await verifyAuthTokenForUser(authToken, userId);
+
         const userRef = adminDb.collection('users').doc(userId);
         await userRef.update({
             fcmTokens: FieldValue.arrayUnion(token)

@@ -72,7 +72,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                 });
 
                 if (currentToken) {
-                    await saveFcmToken(user.uid, currentToken);
+                    const authToken = await user.getIdToken();
+                    await saveFcmToken({ authToken, userId: user.uid, token: currentToken });
                     toast({ title: 'Success', description: 'Browser notifications have been enabled.' });
                 } else {
                      toast({ variant: 'destructive', title: 'Error', description: 'Could not get notification token. Please try again.' });
@@ -90,17 +91,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         if (typeof window !== 'undefined' && 'serviceWorker' in navigator && app && messagingSupported) {
             const messaging = getMessaging(app);
             const unsubscribe = onMessage(messaging, (payload) => {
-                console.log('Foreground message received.', payload);
                 const notificationTitle = payload.notification?.title || 'New Notification';
-                const notificationOptions = {
-                    body: payload.notification?.body,
-                    icon: payload.notification?.icon,
-                };
-                new Notification(notificationTitle, notificationOptions);
+                const description = payload.notification?.body || 'Open notifications to view details.';
+                toast({ title: notificationTitle, description });
             });
             return () => unsubscribe();
         }
-    }, [app, messagingSupported]);
+    }, [app, messagingSupported, toast]);
 
     return (
         <NotificationContext.Provider value={{ permission, requestPermission, isSubscribing }}>

@@ -4,7 +4,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LayoutDashboard, Users, AlertTriangle, Activity, Briefcase, DollarSign, Zap, TrendingUp, HandCoins, ShieldOff, PiggyBank, FilePlus, Wallet } from "lucide-react";
-import { Area, AreaChart, Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { collection, query, Timestamp, DocumentData, where, orderBy, limit } from "firebase/firestore";
@@ -12,8 +12,9 @@ import { useFirestore } from "@/firebase";
 import { useMemo } from "react";
 import { format, subDays, startOfMonth, subMonths, formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Deal } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 const chartConfig = {
     tvl: {
@@ -78,6 +79,7 @@ type TerminationRequest = DocumentData & {
     id: string;
     dealName: string;
     clientName: string;
+    clientId: string;
     processedAt: Timestamp;
     status: 'Approved';
 };
@@ -90,6 +92,7 @@ type MergedActivity = {
     timestamp: string;
     type: string;
     createdAt: Date;
+    href: string;
 };
 
 const activityIcons: { [key: string]: React.ElementType } = {
@@ -201,15 +204,14 @@ export default function AdminDashboardPage() {
       );
     }, [firestore]);
 
-    const thirtyDaysAgo = useMemo(() => subDays(new Date(), 30), []);
-    const overdueDealsQuery = useMemo(() => {
+    const overdueRepaymentsQuery = useMemo(() => {
       if (!firestore) return null;
       return query(
-        collection(firestore, 'deals'),
-        where('status', '==', 'Active'),
-        where('createdAt', '<', Timestamp.fromDate(thirtyDaysAgo))
+        collection(firestore, 'repayments'),
+        where('status', '==', 'Pending'),
+        where('dueDate', '<', Timestamp.fromDate(now))
       );
-    }, [firestore, thirtyDaysAgo]);
+    }, [firestore, now]);
 
 
     const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
@@ -222,11 +224,9 @@ export default function AdminDashboardPage() {
     const { data: recentTerminations, loading: terminationsLoading } = useCollection<TerminationRequest>(terminationsQuery);
     const { data: allRecentFundBatches, loading: recentBatchesLoading } = useCollection<FundBatch>(recentFundBatchesQuery);
     const { data: earningsTransactions, loading: earningsLoading } = useCollection<Transaction>(earningsQuery);
-    const { data: overdueDeals, loading: overdueDealsLoading } = useCollection<Deal>(overdueDealsQuery);
+    const { data: overdueRepayments, loading: overdueRepaymentsLoading } = useCollection<DocumentData>(overdueRepaymentsQuery);
     
-    const allUsersResult = useCollection<User>(usersQuery); 
-
-    const isLoading = [fundBatchesLoading, usersLoading, transactionsLoading, dealRequestsLoading, depositRequestsLoading, withdrawalRequestsLoading, reinvestmentRequestsLoading, terminationsLoading, recentBatchesLoading, earningsLoading, overdueDealsLoading, allUsersResult.loading].some(Boolean);
+    const isLoading = [fundBatchesLoading, usersLoading, transactionsLoading, dealRequestsLoading, depositRequestsLoading, withdrawalRequestsLoading, reinvestmentRequestsLoading, terminationsLoading, recentBatchesLoading, earningsLoading, overdueRepaymentsLoading].some(Boolean);
 
     const chartData = useMemo(() => {
         const today = new Date();
@@ -249,12 +249,12 @@ export default function AdminDashboardPage() {
         }
 
         return Object.keys(monthlyData)
-            .map(month => ({
-                month: format(new Date(month + '-02'), 'MMM'), // Add day to avoid TZ issues
-                tvl: monthlyData[month]
+            .sort()
+            .map(monthKey => ({
+                month: format(new Date(monthKey + '-02'), 'MMM'), // Add day to avoid TZ issues
+                monthKey,
+                tvl: monthlyData[monthKey]
             }))
-            .sort((a, b) => new Date(a.month).getMonth() - new Date(b.month).getMonth())
-            .reverse();
     }, [fundBatches]);
 
     const platformEarnings = useMemo(() => {
@@ -262,8 +262,8 @@ export default function AdminDashboardPage() {
     }, [earningsTransactions]);
 
     const recentActivities = useMemo(() => {
-        if (!allUsersResult.data) return [];
-        const userMap = new Map(allUsersResult.data.map(u => [u.id, u.name]));
+        if (!users) return [];
+        const userMap = new Map(users.map(u => [u.id, u.name]));
         
         const activities: MergedActivity[] = [];
         
@@ -288,6 +288,7 @@ export default function AdminDashboardPage() {
                 createdAt: tx.createdAt.toDate(),
                 timestamp: formatDistanceToNow(tx.createdAt.toDate(), { addSuffix: true }),
                 type: tx.type,
+                href: tx.userId === 'platform' ? '/admin/funds' : `/admin/users/${tx.userId}`,
             });
         });
 
@@ -300,6 +301,7 @@ export default function AdminDashboardPage() {
                 createdAt: req.requestedAt.toDate(),
                 timestamp: formatDistanceToNow(req.requestedAt.toDate(), { addSuffix: true }),
                 type: 'DealRequest',
+                href: `/admin/approvals/deal-requests/${req.id}`,
             });
         });
         
@@ -312,6 +314,7 @@ export default function AdminDashboardPage() {
                 createdAt: req.requestedAt.toDate(),
                 timestamp: formatDistanceToNow(req.requestedAt.toDate(), { addSuffix: true }),
                 type: 'DepositRequest',
+                href: '/admin/approvals/deposits',
             });
         });
 
@@ -324,6 +327,7 @@ export default function AdminDashboardPage() {
                 createdAt: req.requestedAt.toDate(),
                 timestamp: formatDistanceToNow(req.requestedAt.toDate(), { addSuffix: true }),
                 type: 'WithdrawalRequest',
+                href: '/admin/approvals/withdrawals',
             });
         });
 
@@ -336,6 +340,7 @@ export default function AdminDashboardPage() {
                 createdAt: req.requestedAt.toDate(),
                 timestamp: formatDistanceToNow(req.requestedAt.toDate(), { addSuffix: true }),
                 type: 'ReinvestmentRequest',
+                href: '/admin/approvals/reinvestments',
             });
         });
 
@@ -348,6 +353,7 @@ export default function AdminDashboardPage() {
                 createdAt: term.processedAt.toDate(),
                 timestamp: formatDistanceToNow(term.processedAt.toDate(), { addSuffix: true }),
                 type: 'Termination',
+                href: `/admin/users/${term.clientId}`,
             });
         });
 
@@ -361,6 +367,7 @@ export default function AdminDashboardPage() {
                     createdAt: batch.createdAt.toDate(),
                     timestamp: formatDistanceToNow(batch.createdAt.toDate(), { addSuffix: true }),
                     type: 'FundBatchCreation',
+                    href: batch.sourceId === 'platform' ? '/admin/funds' : `/admin/users/${batch.sourceId}`,
                 });
             }
         });
@@ -373,7 +380,7 @@ export default function AdminDashboardPage() {
         depositRequests,
         withdrawalRequests,
         reinvestmentRequests,
-        allUsersResult.data,
+        users,
         recentTerminations,
         allRecentFundBatches,
     ]);
@@ -460,7 +467,8 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
         <div className="grid gap-6 sm:grid-cols-2 lg:col-span-3 lg:grid-cols-3">
-            <Card>
+            <Link href="/admin/reports" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Platform Earnings</CardTitle>
                 <span className="text-muted-foreground font-bold text-lg">₦</span>
@@ -470,7 +478,9 @@ export default function AdminDashboardPage() {
                 <div className="text-xs text-muted-foreground">Total accumulated earnings</div>
             </CardContent>
             </Card>
-            <Card>
+            </Link>
+            <Link href="/admin/users" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Active Users</CardTitle>
                 <Users className="h-4 w-4 text-muted-foreground" />
@@ -484,16 +494,19 @@ export default function AdminDashboardPage() {
                 <div className="text-xs text-muted-foreground">Total users on the platform</div>
             </CardContent>
             </Card>
-            <Card>
+            </Link>
+            <Link href="/admin/approvals/repayments" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
                 <AlertTriangle className="h-4 w-4 text-destructive" />
             </CardHeader>
             <CardContent>
-                {overdueDealsLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{overdueDeals?.length ?? 0}</div>}
-                <div className="text-xs text-muted-foreground">Active deals older than 30 days</div>
+                {overdueRepaymentsLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{overdueRepayments?.length ?? 0}</div>}
+                <div className="text-xs text-muted-foreground">Pending repayments past due date</div>
             </CardContent>
             </Card>
+            </Link>
         </div>
       </div>
 
@@ -502,6 +515,9 @@ export default function AdminDashboardPage() {
           <CardTitle className="flex items-center gap-2">
             <Activity className="h-5 w-5" />
             Recent Activity
+            <Button asChild variant="outline" size="sm" className="ml-auto">
+              <Link href="/admin/activity">View all</Link>
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -518,7 +534,7 @@ export default function AdminDashboardPage() {
               {!isLoading && recentActivities.map((activity) => {
                 const Icon = activityIcons[activity.type] || activityIcons['default'];
                 return (
-                    <div key={activity.id} className="flex items-start gap-4">
+                    <Link key={activity.id} href={activity.href} className="flex items-start gap-4 rounded-md p-2 -m-2 transition-colors hover:bg-muted/50">
                       <Avatar className="h-9 w-9 border hidden md:flex">
                         <AvatarImage src={`https://picsum.photos/seed/${activity.userId}/128/128`} />
                         <AvatarFallback>{activity.user.charAt(0)}</AvatarFallback>
@@ -535,7 +551,7 @@ export default function AdminDashboardPage() {
                        <div className="hidden md:flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
                             <Icon className="h-5 w-5 text-muted-foreground" />
                        </div>
-                    </div>
+                    </Link>
                 )
               })}
               {!isLoading && recentActivities.length === 0 && (

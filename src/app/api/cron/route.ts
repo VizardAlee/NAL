@@ -159,7 +159,8 @@ async function processRecoveryTasks() {
                         deal.clientId,
                         'Upcoming Payment Reminder',
                         `Your payment of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(installment.payment)} for "${deal.dealName}" is due in 3 days.`,
-                        '/client/dashboard'
+                        '/client/dashboard',
+                        'repayment'
                     );
 
                     tasksCreated++;
@@ -188,7 +189,8 @@ async function processRecoveryTasks() {
                         await notifyAdmins(
                             'Overdue Payment Alert',
                             `${clientLabel} is ${daysPastDue} day(s) overdue on ${formattedAmount} for "${deal.dealName}".`,
-                            '/admin/approvals/repayments'
+                            '/admin/approvals/repayments',
+                            'overdue'
                         );
 
                         await alertRef.set({

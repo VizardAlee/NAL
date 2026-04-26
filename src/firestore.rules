@@ -8,54 +8,77 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
-    function isAdmin() {
-      return request.auth != null 
+    function hasRole(role) {
+      return request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+
+    function hasAccessRole(accessRole) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && (
+          ('accessRole' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data)
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accessRole == accessRole
+        );
+    }
+
+    function isAdmin() {
+      return hasRole('Admin') || hasAccessRole('ADMIN');
+    }
+
+    function isOwnerRole() {
+      return hasAccessRole('OWNER');
+    }
+
+    function isStaffRole() {
+      return hasAccessRole('STAFF');
+    }
+
+    function canAdminRead() {
+      return isAdmin() || isOwnerRole();
+    }
+
+    function canManageOwnerAssignments(userId) {
+      return request.auth != null
+        && (isAdmin() || isOwnerRole())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accessRole', 'updatedAt']);
     }
 
     function isClient() {
-      return request.auth != null 
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Client';
+      return hasRole('Client');
     }
     
     function isInvestor() {
-      return request.auth != null 
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Investor';
+      return hasRole('Investor');
     }
 
     function isLegal() {
-      return request.auth != null 
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Legal';
+      return hasRole('Legal');
     }
     
     function isRecovery() {
-       return request.auth != null 
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Recovery';
+       return hasRole('Recovery');
     }
     
     function isMarketer() {
-       return request.auth != null 
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Marketer';
+       return hasRole('Marketer');
     }
 
     // Rules for the 'users' collection
     match /users/{userId} {
       // Admins can get any user. Owners can get their own data. Legal/Marketer can read their own.
-      allow get: if isAdmin() || isOwner(userId) || isLegal();
+      allow get: if canAdminRead() || isOwner(userId) || isLegal();
       // Admins and Legal can list all users.
-      allow list: if isAdmin() || isLegal();
+      allow list: if canAdminRead() || isLegal();
       
       // Allow any unauthenticated or authenticated user to create a new user document (e.g., during signup).
       allow create: if true;
 
       // Only the user themself or an Admin can update a user document.
-      allow update: if isAdmin() || (isOwner(userId) && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phoneNumber']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['legalDocumentUrl'])));
+      allow update: if isAdmin()
+        || canManageOwnerAssignments(userId)
+        || (isOwner(userId) && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phoneNumber']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['legalDocumentUrl'])));
 
       // Only admins can delete users.
       allow delete: if isAdmin();
@@ -64,12 +87,12 @@ service cloud.firestore {
     // Rules for the 'recoveryTasks' collection
     match /recoveryTasks/{taskId} {
       // Recovery users can see tasks assigned to them or unassigned. Legal and Admin can see all.
-      allow list: if isAdmin() || isLegal() || 
+      allow list: if canAdminRead() || isLegal() || 
                     (isRecovery() && resource.data.status == 'Due_Recovery' && 
                       (!('assigneeId' in resource.data) || resource.data.assigneeId == request.auth.uid));
                       
       // Admins can read all tasks. Legal can read escalated tasks. Recovery can read tasks they can list.
-      allow get, read: if isAdmin() || 
+      allow get, read: if canAdminRead() || 
                     (isLegal() && resource.data.status == 'Escalated_Legal') || 
                     (isRecovery() && resource.data.status == 'Due_Recovery' && 
                       (!('assigneeId' in resource.data) || resource.data.assigneeId == request.auth.uid));
@@ -79,7 +102,7 @@ service cloud.firestore {
       
       // Rules for the 'logs' sub-collection
       match /logs/{logId} {
-      	allow read, list: if isAdmin() || isLegal() || isRecovery();
+      	allow read, list: if canAdminRead() || isLegal() || isRecovery();
         // Allow creating a log if the user is an Admin, or a Recovery/Legal user for the correct task status.
         allow create: if isAdmin() || 
         							 (isRecovery() && get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data.status == 'Due_Recovery') ||
@@ -92,11 +115,11 @@ service cloud.firestore {
     match /deals/{dealId} {
         // Admins, Investors, and Legal can list all deals. Marketers can see deals they are linked to.
         // Clients can see deals they are associated with.
-        allow list: if isAdmin() || isInvestor() || isLegal() || (isMarketer() && resource.data.marketerId == request.auth.uid) || (isClient() && resource.data.clientId == request.auth.uid);
+        allow list: if canAdminRead() || isInvestor() || isLegal() || (isMarketer() && resource.data.marketerId == request.auth.uid) || (isClient() && resource.data.clientId == request.auth.uid);
         
         // Admins, Investors, Legal can get any single deal.
         // Clients can only get deals they are associated with.
-        allow get: if isAdmin() || isInvestor() || isLegal() || (isClient() && resource.data.clientId == request.auth.uid);
+        allow get: if canAdminRead() || isInvestor() || isLegal() || (isClient() && resource.data.clientId == request.auth.uid);
         
         // Only Admins can create, update or delete deals
         allow create, update, delete: if isAdmin();
@@ -105,7 +128,8 @@ service cloud.firestore {
     // Rules for the 'dealRequests' collection
     match /dealRequests/{dealRequestId} {
         // Admins can read/update all requests.
-        allow get, list, update: if isAdmin();
+        allow get, list: if canAdminRead();
+        allow update: if isAdmin();
         // Clients can create their own requests and read them.
         allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
         allow read: if isClient() && resource.data.clientId == request.auth.uid;
@@ -114,7 +138,8 @@ service cloud.firestore {
     // Rules for the 'depositRequests' collection
     match /depositRequests/{depositRequestId} {
         // Admins can read/update all requests.
-        allow get, list, update: if isAdmin();
+        allow get, list: if canAdminRead();
+        allow update: if isAdmin();
         // Investors can create their own requests and read them.
         allow create: if isInvestor() && request.resource.data.investorId == request.auth.uid;
         allow read: if isInvestor() && resource.data.investorId == request.auth.uid;
@@ -126,7 +151,7 @@ service cloud.firestore {
       // Admins can write.
       allow write: if isAdmin();
       // Admins can read all. Investors can read their own investments. Legal can read all.
-      allow read, list: if isAdmin() || (isInvestor() && resource.data.investorId == request.auth.uid) || isLegal();
+      allow read, list: if canAdminRead() || (isInvestor() && resource.data.investorId == request.auth.uid) || isLegal();
     }
     
     // Rules for 'fundBatches' and 'transactions'
@@ -134,7 +159,7 @@ service cloud.firestore {
         // Admin can do anything
         allow write: if isAdmin();
         // Investor can read their own fund batches, Admins can read all.
-        allow read: if isAdmin() || (isInvestor() && resource.data.sourceId == request.auth.uid);
+        allow read: if canAdminRead() || (isInvestor() && resource.data.sourceId == request.auth.uid);
     }
 
     match /transactions/{transactionId} {
@@ -142,13 +167,13 @@ service cloud.firestore {
         allow write: if isAdmin();
         // Investor/Client/Marketer can read their own transactions, Admins can read all.
         // Legal can read all.
-        allow read, list: if isAdmin() || (isOwner(resource.data.userId)) || isLegal();
+        allow read, list: if canAdminRead() || (isOwner(resource.data.userId)) || isLegal();
     }
 
     // Rules for 'repayments'
     match /repayments/{repaymentId} {
       // Admins can read and update all repayments. Legal can read all.
-      allow get, list: if isAdmin() || isLegal();
+      allow get, list: if canAdminRead() || isLegal();
       allow update: if isAdmin();
       // Clients can create their own repayments and read their own.
       allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
@@ -158,19 +183,19 @@ service cloud.firestore {
     // Rules for 'withdrawalRequests'
     match /withdrawalRequests/{requestId} {
       // Admins can read and update any request
-      allow get, update, list: if isAdmin();
+      allow get, list: if canAdminRead();
+      allow update: if isAdmin();
 
-      // Investors can create their own requests
-      allow create: if isInvestor() && request.resource.data.investorId == request.auth.uid;
-
-      // Investors can read their own requests
-      allow read: if isInvestor() && resource.data.investorId == request.auth.uid;
+      // All users (Investors/Owners) use investorId as the primary field for their requests
+      allow create: if (isInvestor() || isOwnerRole()) && request.resource.data.investorId == request.auth.uid;
+      allow read: if (isInvestor() || isOwnerRole()) && resource.data.investorId == request.auth.uid;
     }
 
     // Rules for 'reinvestmentRequests'
     match /reinvestmentRequests/{requestId} {
       // Admins can read and update any request
-      allow get, update, list: if isAdmin();
+      allow get, list: if canAdminRead();
+      allow update: if isAdmin();
 
       // Investors can create their own requests
       allow create: if isInvestor() && request.resource.data.investorId == request.auth.uid;
@@ -182,7 +207,8 @@ service cloud.firestore {
     // Rules for 'terminationRequests'
     match /terminationRequests/{requestId} {
       // Admins can read and update any request
-      allow get, update, list: if isAdmin();
+      allow get, list: if canAdminRead();
+      allow update: if isAdmin();
       
       // Clients can create their own requests and read them
       allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
@@ -192,25 +218,48 @@ service cloud.firestore {
     // Rules for 'administrativeTransactions' and 'assets'
     match /administrativeTransactions/{transactionId} {
         // Only admins can read or write administrative transactions.
-        allow read, write: if isAdmin();
+        allow read: if canAdminRead();
+        allow write: if isAdmin();
     }
 
     match /assets/{assetId} {
         // Only admins can read or write assets.
-        allow read, write: if isAdmin();
+        allow read: if canAdminRead();
+        allow write: if isAdmin();
+    }
+
+    match /interAccountLoans/{loanId} {
+        // Owners can view; only admins can mutate loan ledger.
+        allow read: if canAdminRead();
+        allow write: if isAdmin();
+    }
+
+    match /platformPolicies/{policyId} {
+        allow read: if canAdminRead();
+        allow write: if isAdmin();
+    }
+
+    match /ownershipPartners/{partnerId} {
+        allow read: if canAdminRead();
+        allow write: if isAdmin();
+    }
+
+    match /ownerProfitAllocations/{allocationId} {
+        allow read: if canAdminRead();
+        allow write: if isAdmin();
     }
 
     // Rules for 'notifications'
     match /notifications/{notificationId} {
-        // Allow any authenticated user to create a notification, as long as it's for an Admin.
-        // This is secure because we check the role of the recipient.
-        allow create: if request.auth != null; // Notification creation logic is handled server-side now.
-          
-        // Users can only read/update notifications intended for them
-        allow read, update: if request.auth != null && resource.data.recipientId == request.auth.uid;
+        // Notification creation is handled through trusted server actions/Admin SDK.
+        allow create: if false;
 
-        // Admins can list notifications (to see all, for debugging if needed, but UI filters by recipientId)
-        allow list: if isAdmin();
+        allow get, list: if request.auth != null
+          && resource.data.recipientId == request.auth.uid;
+
+        allow update: if request.auth != null
+          && resource.data.recipientId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
     }
 
     // Rules for 'platformSettings'
@@ -226,7 +275,8 @@ service cloud.firestore {
     // Rules for 'chatRequests' collection
     match /chatRequests/{requestId} {
       // Admins can read, list and delete all requests.
-      allow get, list, delete: if isAdmin();
+      allow get, list: if canAdminRead();
+      allow delete: if isAdmin();
       // Authenticated users can create their own chat requests.
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
     }
@@ -234,7 +284,8 @@ service cloud.firestore {
     // Rules for 'conversations' collection
     match /conversations/{conversationId} {
         // Admins can do everything.
-        allow create, get, list, update: if isAdmin();
+        allow get, list: if canAdminRead();
+        allow create, update: if isAdmin();
 
         // Regular users can only read/list/update conversations they are a part of.
         allow get, list, update: if request.auth != null
