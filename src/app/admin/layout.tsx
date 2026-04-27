@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, LayoutDashboard, FileText, Users, CheckCircle, Banknote, FlaskConical, History, Settings, Library, MessageSquare, HelpCircle } from "lucide-react";
+import { LogOut, LayoutDashboard, FileText, Users, CheckCircle, HelpCircle, Shield } from "lucide-react";
 import {
   SidebarProvider,
   Sidebar,
@@ -195,6 +195,19 @@ export default function AdminLayout({
             <NotificationBell historyHref="/admin/notifications" />
             <AccountMenu />
             </header>
+            {ownerReadOnly && (
+              <div className="border-b bg-amber-50 px-4 py-2 text-sm text-amber-900 md:px-6">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    <span>You are viewing the Admin portal as an Owner. Admin actions are read-only.</span>
+                  </div>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/owner/dashboard">Return to Owner Console</Link>
+                  </Button>
+                </div>
+              </div>
+            )}
             <main className={`flex-1 p-4 md:p-6 ${ownerReadOnly ? 'owner-readonly' : ''}`}>{children}</main>
         </SidebarInset>
         </SidebarProvider>

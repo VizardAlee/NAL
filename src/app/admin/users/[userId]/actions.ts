@@ -1,11 +1,17 @@
 
 'use server';
 
-import { adminDb } from '@/firebase/admin-app';
+import { adminDb, getAdminApp } from '@/firebase/admin-app';
+import { getAuth } from 'firebase-admin/auth';
 import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
-import { normalizeAccessModel } from '@/lib/access-control';
+import {
+  normalizeAccessModel,
+  resolvePrimaryPortalFromPersonas,
+  toLegacyRoleFromAccess,
+  type AccessRole,
+} from '@/lib/access-control';
 
 
 const payZakatSchema = z.object({
@@ -161,9 +167,30 @@ export async function updateAccessRoleAction(input: z.infer<typeof updateAccessR
       return { success: false, message: 'Cannot remove the last owner.' };
     }
 
+    const updatedModel = {
+      accessRole: newAccessRole as AccessRole,
+      personas: targetModel.personas,
+      primaryPortal:
+        newAccessRole === 'OWNER'
+          ? 'owner'
+          : newAccessRole === 'ADMIN' || newAccessRole === 'STAFF'
+          ? 'admin'
+          : resolvePrimaryPortalFromPersonas(targetModel.personas),
+    };
+    const updatedRole = toLegacyRoleFromAccess(updatedModel);
+
     await targetRef.update({
-      accessRole: newAccessRole,
+      role: updatedRole,
+      accessRole: updatedModel.accessRole,
+      personas: updatedModel.personas,
+      primaryPortal: updatedModel.primaryPortal,
       updatedAt: FieldValue.serverTimestamp(),
+    });
+    await getAuth(getAdminApp()).setCustomUserClaims(targetUserId, {
+      role: updatedRole,
+      accessRole: updatedModel.accessRole,
+      personas: updatedModel.personas,
+      primaryPortal: updatedModel.primaryPortal,
     });
 
     await adminDb.collection('transactions').add({

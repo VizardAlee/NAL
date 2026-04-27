@@ -47,6 +47,11 @@ function AccountMenu() {
   const auth = useAuth();
   const router = useRouter();
 
+  const handleOpenAdmin = () => {
+    setStoredActivePortal('admin');
+    router.push('/admin/dashboard');
+  };
+
   const handleLogout = async () => {
     if (auth) await auth.signOut();
     router.push('/login');
@@ -65,11 +70,9 @@ function AccountMenu() {
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Owner Account</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/admin/dashboard" className="flex items-center gap-2 cursor-pointer">
-            <Shield className="h-4 w-4" />
-            <span>Open Admin (Read-only)</span>
-          </Link>
+        <DropdownMenuItem onClick={handleOpenAdmin} className="flex items-center gap-2 cursor-pointer">
+          <Shield className="h-4 w-4" />
+          <span>Open Admin (Read-only)</span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2 cursor-pointer">
           <LogOut className="h-4 w-4" />

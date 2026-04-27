@@ -229,6 +229,7 @@ export function getAccessiblePortals(user: UserLike | null | undefined): Primary
 
   if (model.accessRole === 'OWNER') {
     explicitPortals.push('owner');
+    explicitPortals.push('admin');
   }
 
   if (model.accessRole === 'ADMIN' || model.accessRole === 'STAFF') {
