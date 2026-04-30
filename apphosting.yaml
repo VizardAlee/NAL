@@ -3,3 +3,14 @@ env:
     value: studio-1298078893-e7941
     availability:
       - RUNTIME
+
+  - variable: NEXT_PUBLIC_APP_URL
+    value: https://nalgm.com
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: APP_URL
+    value: https://nalgm.com
+    availability:
+      - RUNTIME

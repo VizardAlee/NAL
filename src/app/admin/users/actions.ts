@@ -12,6 +12,15 @@ import {
   toLegacyRoleFromAccess,
 } from '@/lib/access-control';
 
+function getInviteBaseUrl() {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    process.env.FIREBASE_APP_HOSTING_URL ||
+    'http://localhost:9002'
+  ).replace(/\/$/, '');
+}
+
 const inviteSchema = z.object({
   email: z.string().email(),
   accessRole: z.enum(['OWNER', 'ADMIN', 'STAFF', 'USER']),
@@ -66,7 +75,7 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
       .get();
     if (!existingInvite.empty) {
       const token = existingInvite.docs[0].id;
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:9002';
+      const baseUrl = getInviteBaseUrl();
       return {
         success: true,
         message: 'A pending invite already exists for this email.',
@@ -87,7 +96,7 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
       createdByName: inviterName,
     });
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:9002';
+    const baseUrl = getInviteBaseUrl();
     return {
       success: true,
       message: 'Invite link generated successfully.',
