@@ -213,6 +213,10 @@ export function canAccessPortal(user: UserLike | null | undefined, portal: Prima
   return model.personas.includes(portal.toUpperCase() as Persona);
 }
 
+export function hasPersona(user: UserLike | null | undefined, persona: Persona): boolean {
+  return normalizeAccessModel(user).personas.includes(persona);
+}
+
 export function getRouteForPortal(portal: PrimaryPortal): string {
   return PORTAL_ROUTES[portal];
 }

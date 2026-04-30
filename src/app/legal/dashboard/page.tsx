@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { addRecoveryLogAction } from '@/app/recovery/dashboard/actions';
+import { hasPersona, type LegacyRole, type Persona } from "@/lib/access-control";
 
 
 type RecoveryTask = DocumentData & {
@@ -44,7 +45,8 @@ type User = DocumentData & {
     name: string;
     email: string;
     phoneNumber?: string;
-    role: 'Client' | 'Investor';
+    role?: LegacyRole;
+    personas?: Persona[];
 };
 
 type Log = DocumentData & {
@@ -182,7 +184,7 @@ export default function LegalDashboardPage() {
 
     const usersQuery = useMemo(() => {
         if (!firestore) return null;
-        return query(collection(firestore, 'users'), where('role', 'in', ['Client', 'Investor']));
+        return query(collection(firestore, 'users'));
     }, [firestore]);
 
     const { data: legalTasks, loading: tasksLoading } = useCollection<RecoveryTask>(legalTasksQuery);
@@ -192,10 +194,15 @@ export default function LegalDashboardPage() {
 
     const filteredUsers = useMemo(() => {
         if (!users) return [];
-        return users.filter(user =>
-            user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            user.email.toLowerCase().includes(searchTerm.toLowerCase())
-        );
+        const normalizedSearch = searchTerm.toLowerCase();
+        return users.filter(user => {
+            const isRelevantPersona = hasPersona(user, 'CLIENT') || hasPersona(user, 'INVESTOR');
+            if (!isRelevantPersona) return false;
+            return (
+                user.name.toLowerCase().includes(normalizedSearch) ||
+                user.email.toLowerCase().includes(normalizedSearch)
+            );
+        });
     }, [users, searchTerm]);
 
     const handleUserClick = (userId: string) => {

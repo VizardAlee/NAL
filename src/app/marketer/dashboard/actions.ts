@@ -2,6 +2,7 @@
 'use server';
 
 import { adminDb } from '@/firebase/admin-app';
+import { hasPersona } from '@/lib/access-control';
 
 export async function getMarketerStats(marketerId: string, referralCode: string) {
   if (!referralCode) {
@@ -13,8 +14,8 @@ export async function getMarketerStats(marketerId: string, referralCode: string)
     const referredUsersQuery = adminDb.collection('users').where('referredByCode', '==', referralCode);
     const referredUsersSnapshot = await referredUsersQuery.get();
 
-    const referredClients = referredUsersSnapshot.docs.filter(doc => doc.data().role === 'Client');
-    const referredInvestors = referredUsersSnapshot.docs.filter(doc => doc.data().role === 'Investor');
+    const referredClients = referredUsersSnapshot.docs.filter(doc => hasPersona(doc.data(), 'CLIENT'));
+    const referredInvestors = referredUsersSnapshot.docs.filter(doc => hasPersona(doc.data(), 'INVESTOR'));
 
     // 2. Calculate total capital from referred investors
     let totalInvestorCapital = 0;

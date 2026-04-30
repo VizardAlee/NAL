@@ -25,7 +25,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useState, useMemo, useTransition, useEffect } from 'react';
 import { CalendarIcon, Loader2, BookOpen } from 'lucide-react';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { FirebaseError } from 'firebase/app';
 import { useCollection } from '@/firebase/firestore/use-collection';
@@ -37,6 +37,7 @@ import { updateDealAction } from './actions';
 import { isDurationShort } from '@/lib/duration-helpers';
 import { Calendar } from '@/components/ui/calendar';
 import Link from 'next/link';
+import { hasPersona, type LegacyRole, type Persona } from '@/lib/access-control';
 
 
 const formSchema = z.object({
@@ -61,8 +62,9 @@ type EditDealFormProps = {
 type Client = {
   id: string;
   name: string;
-  role: 'Client';
+  role?: LegacyRole;
   email: string;
+  personas?: Persona[];
 };
 
 export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
@@ -72,10 +74,14 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
 
   const clientsQuery = useMemo(() => {
     if (!firestore) return null;
-    return query(collection(firestore, 'users'), where('role', '==', 'Client'));
+    return query(collection(firestore, 'users'));
   }, [firestore]);
 
-  const { data: clients, loading: clientsLoading } = useCollection<Client>(clientsQuery);
+  const { data: allUsers, loading: clientsLoading } = useCollection<Client>(clientsQuery);
+  const clients = useMemo(
+    () => (allUsers || []).filter((user) => hasPersona(user, 'CLIENT')),
+    [allUsers]
+  );
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),

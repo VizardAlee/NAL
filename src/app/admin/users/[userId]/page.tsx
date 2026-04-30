@@ -37,7 +37,7 @@ import { Progress } from '@/components/ui/progress';
 import { LegalDocumentUploader } from './legal-document-uploader';
 import Image from 'next/image';
 import { getMarketerStats } from '@/app/marketer/dashboard/actions';
-import { canManageOwners, isReadOnlyOwner, normalizeAccessModel } from '@/lib/access-control';
+import { canManageOwners, hasPersona, isReadOnlyOwner, normalizeAccessModel } from '@/lib/access-control';
 
 type UserProfile = DocumentData & {
     id: string;
@@ -184,9 +184,12 @@ export default function UserDetailPage() {
     }, [firestore, userId]);
 
     const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userRef);
+    const hasInvestorPersona = userProfile ? hasPersona(userProfile, 'INVESTOR') : false;
+    const hasClientPersona = userProfile ? hasPersona(userProfile, 'CLIENT') : false;
+    const hasMarketerPersona = userProfile ? hasPersona(userProfile, 'MARKETER') : false;
 
     useEffect(() => {
-        if (userProfile && userProfile.role === 'Marketer' && userProfile.referralCode) {
+        if (userProfile && hasMarketerPersona && userProfile.referralCode) {
             setStatsLoading(true);
             getMarketerStats(userProfile.id, userProfile.referralCode).then(result => {
                 if (result.success) {
@@ -194,10 +197,10 @@ export default function UserDetailPage() {
                 }
                 setStatsLoading(false);
             });
-        } else if (userProfile && userProfile.role !== 'Marketer') {
+        } else if (userProfile && !hasMarketerPersona) {
             setStatsLoading(false);
         }
-    }, [userProfile]);
+    }, [hasMarketerPersona, userProfile]);
 
     const fundBatchesQuery = useMemo(() => {
         if (!firestore || !userId) return null;
@@ -205,14 +208,14 @@ export default function UserDetailPage() {
     }, [firestore, userId]);
 
     const clientDealsQuery = useMemo(() => {
-        if (!firestore || !userId || userProfile?.role !== 'Client') return null;
+        if (!firestore || !userId || !hasClientPersona) return null;
         return query(collection(firestore, 'deals'), where('clientId', '==', userId), orderBy('createdAt', 'desc'));
-    }, [firestore, userId, userProfile?.role]);
+    }, [firestore, hasClientPersona, userId]);
 
     const clientRepaymentsQuery = useMemo(() => {
-        if (!firestore || !userId || userProfile?.role !== 'Client') return null;
+        if (!firestore || !userId || !hasClientPersona) return null;
         return query(collection(firestore, 'repayments'), where('clientId', '==', userId), where('status', '==', 'Approved'));
-    }, [firestore, userId, userProfile?.role]);
+    }, [firestore, hasClientPersona, userId]);
 
     const allTransactionsQuery = useMemo(() => {
         if (!firestore || !userId) return null;
@@ -237,7 +240,7 @@ export default function UserDetailPage() {
     const { data: firstDeposit, loading: firstDepositLoading } = useCollection<Transaction>(firstDepositQuery);
     const { data: zakatSettings, loading: zakatLoading } = useDoc<{ nisab: number }>(zakatSettingsRef);
 
-    const isLoading = authUserLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading || clientDealsLoading || clientRepaymentsLoading || (userProfile?.role === 'Marketer' && statsLoading);
+    const isLoading = authUserLoading || profileLoading || fundBatchesLoading || transactionsLoading || firstDepositLoading || zakatLoading || clientDealsLoading || clientRepaymentsLoading || (hasMarketerPersona && statsLoading);
 
     const handleInitiateChat = () => {
         const currentUser = auth?.currentUser;
@@ -304,7 +307,7 @@ export default function UserDetailPage() {
     const { isZakatEligible, zakatAmount } = useMemo(() => {
         if (!userProfile) return { isZakatEligible: false, isZakatPayable: false, zakatAmount: 0 };
 
-        if (userProfile.role !== 'Investor') {
+        if (!hasInvestorPersona) {
             return { isZakatEligible: false, isZakatPayable: false, zakatAmount: 0 };
         }
 
@@ -313,7 +316,7 @@ export default function UserDetailPage() {
         const amount = financialMetrics.portfolioValue * 0.025;
 
         return { isZakatEligible: isEligible, zakatAmount: amount };
-    }, [financialMetrics, zakatSettings, userProfile]);
+    }, [financialMetrics, hasInvestorPersona, zakatSettings, userProfile]);
 
 
     const processedFundBatches = useMemo(() => {
@@ -467,7 +470,7 @@ export default function UserDetailPage() {
                         </Card>
                     )}
 
-                    {userProfile.role === 'Investor' && (
+                    {hasInvestorPersona && (
                         <Card>
                             <CardHeader>
                                 <CardTitle className="text-sm font-medium">Total Capital Introduced</CardTitle>
@@ -481,7 +484,7 @@ export default function UserDetailPage() {
                         </Card>
                     )}
 
-                    {userProfile.role === 'Client' && clientPerformanceMetrics && (
+                    {hasClientPersona && clientPerformanceMetrics && (
                         <Card>
                             <CardHeader>
                                 <CardTitle className="text-sm font-medium">Total Deal Value</CardTitle>
@@ -496,7 +499,7 @@ export default function UserDetailPage() {
                     )}
 
 
-                    {userProfile.role === 'Marketer' && (
+                    {hasMarketerPersona && (
                         <Card>
                             <CardHeader>
                                 <CardTitle className="text-base">Marketer Details</CardTitle>
@@ -525,7 +528,7 @@ export default function UserDetailPage() {
                     )}
 
 
-                    {userProfile.role === 'Client' && clientPerformanceMetrics && (
+                    {hasClientPersona && clientPerformanceMetrics && (
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-base"><Star className="h-5 w-5 text-primary" /> Client Credit Score</CardTitle>
@@ -546,7 +549,7 @@ export default function UserDetailPage() {
                         </Card>
                     )}
 
-                    {userProfile.role === 'Investor' && (
+                    {hasInvestorPersona && (
                         <Card>
                             <CardHeader>
                                 <div className="flex justify-between items-center">
@@ -563,7 +566,7 @@ export default function UserDetailPage() {
                         </Card>
                     )}
 
-                    {userProfile.role === 'Investor' && (
+                    {hasInvestorPersona && (
                         <Card>
                             <CardHeader>
                                 <div className="flex justify-between items-center">
@@ -594,7 +597,7 @@ export default function UserDetailPage() {
                         </Card>
                     )}
 
-                    {userProfile.role === 'Investor' && isZakatEligible && (
+                    {hasInvestorPersona && isZakatEligible && (
                         <Card>
                             <CardHeader>
                                 <CardTitle className="text-sm font-medium">Zakat Payment</CardTitle>
@@ -616,7 +619,7 @@ export default function UserDetailPage() {
                 </div>
 
                 <div className="lg:col-span-2 space-y-6">
-                    {userProfile.role === 'Marketer' && (
+                    {hasMarketerPersona && (
                         <Card>
                             <CardHeader>
                                 <CardTitle>Marketer Performance</CardTitle>
@@ -697,7 +700,7 @@ export default function UserDetailPage() {
                         </CardContent>
                     </Card>
 
-                    {userProfile.role === 'Investor' && (
+                    {hasInvestorPersona && (
                         <>
                             <Card>
                                 <CardHeader>
@@ -868,7 +871,7 @@ export default function UserDetailPage() {
                             </Card>
                         </>
                     )}
-                    {userProfile.role === 'Client' && (
+                    {hasClientPersona && (
                         <>
                             <Card>
                                 <CardHeader>

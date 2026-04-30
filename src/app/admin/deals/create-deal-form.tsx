@@ -25,7 +25,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useState, useMemo, useEffect } from 'react';
 import { CalendarIcon, Loader2, BookOpen } from 'lucide-react';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query } from 'firebase/firestore';
 import { useFirestore, useFirebaseApp } from '@/firebase';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -35,6 +35,7 @@ import { isDurationShort } from '@/lib/duration-helpers';
 import { Calendar } from '@/components/ui/calendar';
 import Link from 'next/link';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { hasPersona, type LegacyRole, type Persona } from '@/lib/access-control';
 
 
 const formSchema = z.object({
@@ -59,14 +60,16 @@ type CreateDealFormProps = {
 type Client = {
   id: string;
   name: string;
-  role: 'Client';
+  role?: LegacyRole;
   email: string;
+  personas?: Persona[];
 };
 
 type Marketer = {
   id: string;
   name: string;
-  role: 'Marketer';
+  role?: LegacyRole;
+  personas?: Persona[];
 }
 
 export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
@@ -77,16 +80,24 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
 
   const clientsQuery = useMemo(() => {
     if (!firestore) return null;
-    return query(collection(firestore, 'users'), where('role', '==', 'Client'));
+    return query(collection(firestore, 'users'));
   }, [firestore]);
 
   const marketersQuery = useMemo(() => {
     if (!firestore) return null;
-    return query(collection(firestore, 'users'), where('role', '==', 'Marketer'));
+    return query(collection(firestore, 'users'));
   }, [firestore]);
 
-  const { data: clients, loading: clientsLoading } = useCollection<Client>(clientsQuery);
-  const { data: marketers, loading: marketersLoading } = useCollection<Marketer>(marketersQuery);
+  const { data: allUsersForClients, loading: clientsLoading } = useCollection<Client>(clientsQuery);
+  const { data: allUsersForMarketers, loading: marketersLoading } = useCollection<Marketer>(marketersQuery);
+  const clients = useMemo(
+    () => (allUsersForClients || []).filter((user) => hasPersona(user, 'CLIENT')),
+    [allUsersForClients]
+  );
+  const marketers = useMemo(
+    () => (allUsersForMarketers || []).filter((user) => hasPersona(user, 'MARKETER')),
+    [allUsersForMarketers]
+  );
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),

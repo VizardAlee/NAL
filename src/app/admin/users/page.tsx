@@ -31,7 +31,7 @@ import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { canWriteAdmin, normalizeAccessModel } from '@/lib/access-control';
+import { canWriteAdmin, hasPersona, normalizeAccessModel } from '@/lib/access-control';
 import { Input } from '@/components/ui/input';
 
 
@@ -187,12 +187,12 @@ export default function UsersPage() {
       all: searchableUsers,
       owners,
       staff,
-      admin: searchableUsers.filter(u => u.role === 'Admin'),
-      investor: searchableUsers.filter(u => u.role === 'Investor'),
-      client: searchableUsers.filter(u => u.role === 'Client'),
-      legal: searchableUsers.filter(u => u.role === 'Legal'),
-      recovery: searchableUsers.filter(u => u.role === 'Recovery'),
-      marketer: searchableUsers.filter(u => u.role === 'Marketer'),
+      admin: searchableUsers.filter(u => normalizeAccessModel(u).accessRole === 'ADMIN'),
+      investor: searchableUsers.filter(u => hasPersona(u, 'INVESTOR')),
+      client: searchableUsers.filter(u => hasPersona(u, 'CLIENT')),
+      legal: searchableUsers.filter(u => hasPersona(u, 'LEGAL')),
+      recovery: searchableUsers.filter(u => hasPersona(u, 'RECOVERY')),
+      marketer: searchableUsers.filter(u => hasPersona(u, 'MARKETER')),
     }
   }, [searchableUsers]);
 

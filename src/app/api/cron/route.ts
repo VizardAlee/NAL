@@ -5,6 +5,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { addDays, differenceInDays, startOfDay, isBefore, isEqual } from 'date-fns';
 import { processOwnerProfitAllocations } from '@/lib/server/owner-profit';
 import { notifyAdmins, notifyUser } from '@/app/common/actions/notification-actions';
+import { hasPersona } from '@/lib/access-control';
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -22,11 +23,12 @@ async function processZakat() {
         return { processed: 0, skipped: 0, errors: 0, details: ['Zakat processing skipped: Nisab not set or is zero.'] };
     }
 
-    const usersSnapshot = await adminDb.collection('users').where('role', '==', 'Investor').get();
+    const usersSnapshot = await adminDb.collection('users').get();
+    const investorDocs = usersSnapshot.docs.filter((doc) => hasPersona(doc.data(), 'INVESTOR'));
     let processedCount = 0, errorCount = 0, skippedCount = 0;
     const details = [];
 
-    for (const userDoc of usersSnapshot.docs) {
+    for (const userDoc of investorDocs) {
         const user = userDoc.data();
         const userId = userDoc.id;
 
@@ -239,12 +241,13 @@ async function processMarketerRatings() {
   let errors = 0;
   const details = [];
 
-  const marketersSnapshot = await adminDb.collection('users').where('role', '==', 'Marketer').get();
-  if (marketersSnapshot.empty) {
+  const usersSnapshot = await adminDb.collection('users').get();
+  const marketers = usersSnapshot.docs.filter((doc) => hasPersona(doc.data(), 'MARKETER'));
+  if (marketers.length === 0) {
     return { processed: 0, errors: 0, details: ['No marketers found.'] };
   }
 
-  for (const marketerDoc of marketersSnapshot.docs) {
+  for (const marketerDoc of marketers) {
     const marketer = marketerDoc.data();
     const marketerId = marketerDoc.id;
     let totalPayments = 0;
@@ -252,8 +255,10 @@ async function processMarketerRatings() {
     let totalDeals = 0;
 
     try {
-      const referredClientsSnapshot = await adminDb.collection('users').where('referredByCode', '==', marketer.referralCode).where('role', '==', 'Client').get();
-      const referredClientIds = referredClientsSnapshot.docs.map(doc => doc.id);
+      const referredClientsSnapshot = await adminDb.collection('users').where('referredByCode', '==', marketer.referralCode).get();
+      const referredClientIds = referredClientsSnapshot.docs
+        .filter((doc) => hasPersona(doc.data(), 'CLIENT'))
+        .map(doc => doc.id);
 
       const dealsToScore: Set<string> = new Set();
       referredClientIds.forEach(id => dealsToScore.add(id));

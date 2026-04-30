@@ -111,6 +111,9 @@ const activityIcons: { [key: string]: React.ElementType } = {
     'default': Activity
 }
 
+const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+
 export default function AdminDashboardPage() {
     const firestore = useFirestore();
     const now = useMemo(() => new Date(), []);
@@ -204,6 +207,14 @@ export default function AdminDashboardPage() {
       );
     }, [firestore]);
 
+    const investorDepositsQuery = useMemo(() => {
+      if (!firestore) return null;
+      return query(
+        collection(firestore, 'transactions'),
+        where('type', '==', 'Deposit')
+      );
+    }, [firestore]);
+
     const overdueRepaymentsQuery = useMemo(() => {
       if (!firestore) return null;
       return query(
@@ -224,9 +235,10 @@ export default function AdminDashboardPage() {
     const { data: recentTerminations, loading: terminationsLoading } = useCollection<TerminationRequest>(terminationsQuery);
     const { data: allRecentFundBatches, loading: recentBatchesLoading } = useCollection<FundBatch>(recentFundBatchesQuery);
     const { data: earningsTransactions, loading: earningsLoading } = useCollection<Transaction>(earningsQuery);
+    const { data: investorDeposits, loading: investorDepositsLoading } = useCollection<Transaction>(investorDepositsQuery);
     const { data: overdueRepayments, loading: overdueRepaymentsLoading } = useCollection<DocumentData>(overdueRepaymentsQuery);
     
-    const isLoading = [fundBatchesLoading, usersLoading, transactionsLoading, dealRequestsLoading, depositRequestsLoading, withdrawalRequestsLoading, reinvestmentRequestsLoading, terminationsLoading, recentBatchesLoading, earningsLoading, overdueRepaymentsLoading].some(Boolean);
+    const isLoading = [fundBatchesLoading, usersLoading, transactionsLoading, dealRequestsLoading, depositRequestsLoading, withdrawalRequestsLoading, reinvestmentRequestsLoading, terminationsLoading, recentBatchesLoading, earningsLoading, investorDepositsLoading, overdueRepaymentsLoading].some(Boolean);
 
     const chartData = useMemo(() => {
         const today = new Date();
@@ -260,6 +272,10 @@ export default function AdminDashboardPage() {
     const platformEarnings = useMemo(() => {
         return earningsTransactions?.reduce((sum, tx) => sum + tx.amount, 0) || 0;
     }, [earningsTransactions]);
+
+    const totalInvestmentsReceived = useMemo(() => {
+        return investorDeposits?.reduce((sum, tx) => sum + Math.max(0, Number(tx.amount) || 0), 0) || 0;
+    }, [investorDeposits]);
 
     const recentActivities = useMemo(() => {
         if (!users) return [];
@@ -466,7 +482,19 @@ export default function AdminDashboardPage() {
             )}
           </CardContent>
         </Card>
-        <div className="grid gap-6 sm:grid-cols-2 lg:col-span-3 lg:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2 lg:col-span-3 lg:grid-cols-4">
+            <Link href="/admin/funds" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Investments Received</CardTitle>
+                <PiggyBank className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                {investorDepositsLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{formatCurrency(totalInvestmentsReceived)}</div>}
+                <div className="text-xs text-muted-foreground">Total approved investor capital</div>
+            </CardContent>
+            </Card>
+            </Link>
             <Link href="/admin/reports" className="block">
             <Card className="h-full transition-colors hover:bg-muted/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -474,7 +502,7 @@ export default function AdminDashboardPage() {
                 <span className="text-muted-foreground font-bold text-lg">₦</span>
             </CardHeader>
             <CardContent>
-                {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(platformEarnings)}</div>}
+                {earningsLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{formatCurrency(platformEarnings)}</div>}
                 <div className="text-xs text-muted-foreground">Total accumulated earnings</div>
             </CardContent>
             </Card>
