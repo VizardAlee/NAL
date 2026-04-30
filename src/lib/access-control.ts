@@ -250,12 +250,14 @@ export function getDefaultRouteForUser(user: UserLike | null | undefined, prefer
 
   const model = normalizeAccessModel(user);
 
-  if (model.accessRole === 'OWNER') {
-    return getRouteForPortal('owner');
-  }
-
-  if (model.accessRole === 'ADMIN' || model.accessRole === 'STAFF') {
-    return getRouteForPortal('admin');
+  switch (model.accessRole) {
+    case 'OWNER':
+      return getRouteForPortal('owner');
+    case 'ADMIN':
+    case 'STAFF':
+      return getRouteForPortal('admin');
+    default:
+      break;
   }
 
   if (canAccessPortal(user, model.primaryPortal)) {

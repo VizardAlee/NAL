@@ -55,6 +55,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { canWriteAdmin } from '@/lib/access-control';
 
 
 const statusVariant = {
@@ -64,7 +65,7 @@ const statusVariant = {
   Terminated: 'destructive',
 } as const;
 
-function DealActions({ deal, onActionStart, onActionEnd }: { deal: Deal, onActionStart: () => void, onActionEnd: () => void }) {
+function DealActions({ deal, canManage, onActionStart, onActionEnd }: { deal: Deal, canManage: boolean, onActionStart: () => void, onActionEnd: () => void }) {
     const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [isEditDialogOpen, setEditDialogOpen] = useState(false);
     const { toast } = useToast();
@@ -81,7 +82,7 @@ function DealActions({ deal, onActionStart, onActionEnd }: { deal: Deal, onActio
         onActionEnd();
     };
 
-    if (deal.status !== 'Pending') {
+    if (!canManage || deal.status !== 'Pending') {
         return null;
     }
 
@@ -108,10 +109,10 @@ function DealActions({ deal, onActionStart, onActionEnd }: { deal: Deal, onActio
                     <Button variant="destructive" size="sm"><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the deal "{deal.dealName}".
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the deal &quot;{deal.dealName}&quot;.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -125,7 +126,7 @@ function DealActions({ deal, onActionStart, onActionEnd }: { deal: Deal, onActio
 }
 
 
-function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean }) {
+function DealsTable({ deals, loading, canManage }: { deals: Deal[] | null, loading: boolean, canManage: boolean }) {
   const router = useRouter();
   const isMobile = useIsMobile();
   const [isActionPending, startTransition] = useTransition();
@@ -141,8 +142,8 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
       return format(timestamp.toDate(), 'PPP');
     }
     try {
-      return format(new Date(timestamp as any), 'PPP');
-    } catch (e) {
+      return format(timestamp instanceof Date ? timestamp : new Date(timestamp), 'PPP');
+    } catch {
       return 'Invalid Date';
     }
   };
@@ -190,7 +191,7 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
   if (!deals || deals.length === 0) {
     return (
        <div className="p-4 py-12 text-center text-sm text-muted-foreground border rounded-lg">
-          No deals found. Create one to get started.
+          {canManage ? 'No deals found. Create one to get started.' : 'No deals found.'}
       </div>
     );
   }
@@ -214,6 +215,7 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
                  <div className="pt-3 border-t">
                     <DealActions 
                         deal={deal} 
+                        canManage={canManage}
                         onActionStart={() => startTransition(() => {})} 
                         onActionEnd={() => {}}
                     />
@@ -254,11 +256,12 @@ function DealsTable({ deals, loading }: { deals: Deal[] | null, loading: boolean
                 {formatDate(deal.createdAt)}
               </TableCell>
               <TableCell>
-                 <DealActions 
+                  <DealActions 
                     deal={deal} 
+                    canManage={canManage}
                     onActionStart={() => startTransition(() => {})} 
                     onActionEnd={() => {}}
-                />
+                  />
               </TableCell>
             </TableRow>
           ))}
@@ -276,6 +279,7 @@ export default function DealsPage() {
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'principal-desc' | 'principal-asc'>('newest');
   const firestore = useFirestore();
   const { user } = useUser();
+  const canManageDeals = canWriteAdmin(user);
 
   const dealsQuery = useMemo(() => {
     if (!firestore || !user) return null;
@@ -312,24 +316,26 @@ export default function DealsPage() {
         description="Create, view, and manage all financing deals."
         icon={FileText}
       >
-        <Dialog open={isCreateDealOpen} onOpenChange={setCreateDealOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Create Deal
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-h-[90vh]">
-            <DialogHeader>
-              <DialogTitle>Create New Deal</DialogTitle>
-            </DialogHeader>
-            <ScrollArea className="max-h-[80vh] p-0">
-                <div className="p-6">
-                    <CreateDealForm onDealCreated={() => setCreateDealOpen(false)} />
-                </div>
-            </ScrollArea>
-          </DialogContent>
-        </Dialog>
+        {canManageDeals && (
+          <Dialog open={isCreateDealOpen} onOpenChange={setCreateDealOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Create Deal
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[90vh]">
+              <DialogHeader>
+                <DialogTitle>Create New Deal</DialogTitle>
+              </DialogHeader>
+              <ScrollArea className="max-h-[80vh] p-0">
+                  <div className="p-6">
+                      <CreateDealForm onDealCreated={() => setCreateDealOpen(false)} />
+                  </div>
+              </ScrollArea>
+            </DialogContent>
+          </Dialog>
+        )}
       </PageHeader>
 
       <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_180px]">
@@ -363,7 +369,7 @@ export default function DealsPage() {
         </Select>
       </div>
       
-      <DealsTable deals={visibleDeals} loading={loading} />
+      <DealsTable deals={visibleDeals} loading={loading} canManage={canManageDeals} />
     </div>
   );
 }

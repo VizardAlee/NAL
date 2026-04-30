@@ -37,6 +37,7 @@ type FundBatch = DocumentData & {
     createdAt: Timestamp;
     tenureValue: number;
     tenureUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
+    specialInvestment?: boolean;
 };
 
 const DURATION_IN_DAYS = {
@@ -176,7 +177,12 @@ export default function DealDetailPage() {
                     type: isShortTermBatch ? 'Short-Term' : 'Long-Term',
                 }
             })
-            .filter(batch => batch.isEligible);
+            .filter(batch => batch.isEligible)
+            .sort((a, b) => {
+                const specialDelta = Number(Boolean(b.specialInvestment)) - Number(Boolean(a.specialInvestment));
+                if (specialDelta !== 0) return specialDelta;
+                return a.createdAt.toMillis() - b.createdAt.toMillis();
+            });
     }, [deal, fundBatches, users]);
 
     const handleFundDeal = () => {
@@ -302,7 +308,10 @@ export default function DealDetailPage() {
                                                 <div className="flex justify-between items-start">
                                                     <div>
                                                         <p className="font-medium">{batch.sourceName}</p>
-                                                        <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
+                                                        <div className="mt-1 flex flex-wrap gap-1">
+                                                            {batch.specialInvestment && <Badge variant="default">Special</Badge>}
+                                                            <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
+                                                        </div>
                                                         <p className="text-xs text-muted-foreground mt-1">{format(batch.createdAt.toDate(), 'PPP')}</p>
                                                     </div>
                                                     <div className="text-right">
@@ -319,7 +328,8 @@ export default function DealDetailPage() {
                                         <TableHeader>
                                             <TableRow>
                                                 <TableHead>Source</TableHead>
-                                                <TableHead>Type</TableHead>
+                                                    <TableHead>Priority</TableHead>
+                                                    <TableHead>Type</TableHead>
                                                 <TableHead>Date Added</TableHead>
                                                 <TableHead className="text-right">Available Capital</TableHead>
                                             </TableRow>
@@ -328,6 +338,9 @@ export default function DealDetailPage() {
                                             {eligibleFundBatches.map(batch => (
                                                 <TableRow key={batch.id}>
                                                     <TableCell data-label="Source">{batch.sourceName}</TableCell>
+                                                    <TableCell data-label="Priority">
+                                                        {batch.specialInvestment ? <Badge>Special</Badge> : <Badge variant="outline">Standard</Badge>}
+                                                    </TableCell>
                                                     <TableCell data-label="Type">
                                                         <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
                                                     </TableCell>
@@ -335,7 +348,7 @@ export default function DealDetailPage() {
                                                     <TableCell data-label="Available Capital" className="text-right font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.remainingAmount)}</TableCell>
                                                 </TableRow>
                                             ))}
-                                            {eligibleFundBatches.length === 0 && <TableRow><TableCell colSpan={4} className="h-24 text-center">No eligible fund batches found.</TableCell></TableRow>}
+                                            {eligibleFundBatches.length === 0 && <TableRow><TableCell colSpan={5} className="h-24 text-center">No eligible fund batches found.</TableCell></TableRow>}
                                         </TableBody>
                                     </Table>
                                 )}

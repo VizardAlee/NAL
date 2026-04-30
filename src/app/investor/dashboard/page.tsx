@@ -60,6 +60,7 @@ type FundBatch = DocumentData & {
     tenureValue: number;
     tenureUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
     details?: string;
+    specialInvestment?: boolean;
 };
 
 type InvestorRequest = DocumentData & {
@@ -328,6 +329,7 @@ function UninvestedCapitalCard({ batches, user }: { batches: FundBatch[] | null,
                             <div>
                                 <p className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</p>
                                 <p className="text-xs text-muted-foreground">Deposited on {format(batch.createdAt.toDate(), 'PPP')}</p>
+                                {batch.specialInvestment && <Badge className="mt-1">Special priority</Badge>}
                             </div>
                             <Button size="sm" onClick={() => handleWithdraw(batch.id)} disabled={pendingWithdrawal === batch.id}>
                                 {pendingWithdrawal === batch.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wallet className="mr-2 h-4 w-4" />}

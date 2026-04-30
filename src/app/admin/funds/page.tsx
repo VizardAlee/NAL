@@ -46,6 +46,19 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useDoc } from "@/firebase/firestore/use-doc";
 import { runOwnerProfitAllocationAction, setOwnershipPartnerActiveAction, upsertOwnershipPartnerAction, upsertOwnerProfitPolicyAction } from "./actions";
+import { canWriteAdmin } from "@/lib/access-control";
+
+type OwnerAllocationRunResult = Awaited<ReturnType<typeof runOwnerProfitAllocationAction>>;
+
+function getOwnerAllocationRunMessage(result: OwnerAllocationRunResult) {
+    if (result.success) {
+        const processed = 'processed' in result ? result.processed ?? 0 : 0;
+        const skipped = 'skipped' in result ? result.skipped ?? 0 : 0;
+        return `Processed ${processed}, skipped ${skipped}.`;
+    }
+
+    return 'message' in result && result.message ? result.message : 'Failed to run owner allocation.';
+}
 
 
 type PlatformFundBatch = DocumentData & {
@@ -1279,6 +1292,7 @@ export default function PlatformFundsPage() {
     const { user } = useUser();
     const { toast } = useToast();
     const isMobile = useIsMobile();
+    const canManageFunds = canWriteAdmin(user);
     const [isDialogOpen, setDialogOpen] = useState<{ [key: string]: boolean }>({});
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedTx, setSelectedTx] = useState<AdministrativeTransaction | null>(null);
@@ -1403,21 +1417,6 @@ export default function PlatformFundsPage() {
 
     const safeAdminDebtToPlatform = Number.isFinite(metrics.adminDebtToPlatform) ? metrics.adminDebtToPlatform : 0;
 
-    useEffect(() => {
-        if (!user?.uid) return;
-        startAllocating(async () => {
-            const result = await runOwnerProfitAllocationAction({ includeHistorical: false, limit: 100 });
-            if (!result.success) {
-                console.error("Owner profit auto-allocation run failed:", result);
-                toast({
-                    variant: 'destructive',
-                    title: 'Owner auto-allocation failed',
-                    description: (result as any).message || 'Could not process owner allocations automatically.',
-                });
-            }
-        });
-    }, [user?.uid, toast]);
-
     const filteredAdminTransactions = useMemo(() => {
         if (!adminTransactions) return [];
         let filtered = adminTransactions;
@@ -1477,52 +1476,56 @@ export default function PlatformFundsPage() {
                     <CardDescription>
                         Automatic split of platform earnings into retained earnings and owner reinvestible capital.
                     </CardDescription>
-                    <div className="flex flex-wrap gap-2 pt-2">
-                        <Dialog open={isDialogOpen['ownerPolicy']} onOpenChange={(isOpen) => isOpen ? openDialog('ownerPolicy') : closeDialog('ownerPolicy')}>
-                            <DialogTrigger asChild><Button size="sm" variant="outline"><Settings className="mr-2 h-4 w-4" />Policy</Button></DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader><DialogTitle>Owner Profit Policy</DialogTitle></DialogHeader>
-                                <OwnerProfitPolicyForm actorId={user?.uid} policy={ownerPolicy || null} onComplete={() => closeDialog('ownerPolicy')} />
-                            </DialogContent>
-                        </Dialog>
-                        <Dialog open={isDialogOpen['ownerPartner']} onOpenChange={(isOpen) => isOpen ? openDialog('ownerPartner') : closeDialog('ownerPartner')}>
-                            <DialogTrigger asChild><Button size="sm" variant="outline"><Users className="mr-2 h-4 w-4" />Add/Update Partner</Button></DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader><DialogTitle>Ownership Partner</DialogTitle></DialogHeader>
-                                <OwnershipPartnerForm actorId={user?.uid} users={ownerSelectableUsers} onComplete={() => closeDialog('ownerPartner')} />
-                            </DialogContent>
-                        </Dialog>
-                        <Dialog open={isDialogOpen['ownerBackfill']} onOpenChange={(isOpen) => isOpen ? openDialog('ownerBackfill') : closeDialog('ownerBackfill')}>
-                            <DialogTrigger asChild><Button size="sm" variant="outline"><History className="mr-2 h-4 w-4" />Backfill Historical</Button></DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader><DialogTitle>Owner Allocation Backfill</DialogTitle></DialogHeader>
-                                <OwnerAllocationRunForm onComplete={() => closeDialog('ownerBackfill')} />
-                            </DialogContent>
-                        </Dialog>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={isAllocating}
-                            onClick={() => {
-                                startAllocating(async () => {
-                                    const result = await runOwnerProfitAllocationAction({ includeHistorical: false, limit: 500 });
-                                    if (!result.success) {
-                                        console.error("Owner profit allocation run failed:", result);
-                                    }
-                                    toast({
-                                        variant: result.success ? 'default' : 'destructive',
-                                        title: result.success ? 'Owner allocation run complete' : 'Owner allocation run failed',
-                                        description: result.success
-                                            ? `Processed ${(result as any).processed ?? 0}, skipped ${(result as any).skipped ?? 0}.`
-                                            : (result as any).message || 'Failed to run owner allocation.',
+                    {canManageFunds ? (
+                        <div className="flex flex-wrap gap-2 pt-2">
+                            <Dialog open={isDialogOpen['ownerPolicy']} onOpenChange={(isOpen) => isOpen ? openDialog('ownerPolicy') : closeDialog('ownerPolicy')}>
+                                <DialogTrigger asChild><Button size="sm" variant="outline"><Settings className="mr-2 h-4 w-4" />Policy</Button></DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader><DialogTitle>Owner Profit Policy</DialogTitle></DialogHeader>
+                                    <OwnerProfitPolicyForm actorId={user?.uid} policy={ownerPolicy || null} onComplete={() => closeDialog('ownerPolicy')} />
+                                </DialogContent>
+                            </Dialog>
+                            <Dialog open={isDialogOpen['ownerPartner']} onOpenChange={(isOpen) => isOpen ? openDialog('ownerPartner') : closeDialog('ownerPartner')}>
+                                <DialogTrigger asChild><Button size="sm" variant="outline"><Users className="mr-2 h-4 w-4" />Add/Update Partner</Button></DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader><DialogTitle>Ownership Partner</DialogTitle></DialogHeader>
+                                    <OwnershipPartnerForm actorId={user?.uid} users={ownerSelectableUsers} onComplete={() => closeDialog('ownerPartner')} />
+                                </DialogContent>
+                            </Dialog>
+                            <Dialog open={isDialogOpen['ownerBackfill']} onOpenChange={(isOpen) => isOpen ? openDialog('ownerBackfill') : closeDialog('ownerBackfill')}>
+                                <DialogTrigger asChild><Button size="sm" variant="outline"><History className="mr-2 h-4 w-4" />Backfill Historical</Button></DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader><DialogTitle>Owner Allocation Backfill</DialogTitle></DialogHeader>
+                                    <OwnerAllocationRunForm onComplete={() => closeDialog('ownerBackfill')} />
+                                </DialogContent>
+                            </Dialog>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={isAllocating}
+                                onClick={() => {
+                                    startAllocating(async () => {
+                                        const result = await runOwnerProfitAllocationAction({ includeHistorical: false, limit: 500 });
+                                        if (!result.success) {
+                                            console.error("Owner profit allocation run failed:", result);
+                                        }
+                                        toast({
+                                            variant: result.success ? 'default' : 'destructive',
+                                            title: result.success ? 'Owner allocation run complete' : 'Owner allocation run failed',
+                                            description: getOwnerAllocationRunMessage(result),
+                                        });
                                     });
-                                });
-                            }}
-                        >
-                            {isAllocating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Run Allocation
-                        </Button>
-                    </div>
+                                }}
+                            >
+                                {isAllocating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Run Allocation
+                            </Button>
+                        </div>
+                    ) : (
+                        <p className="pt-2 text-sm text-muted-foreground">
+                            Owner access is read-only. Allocation policy and partner changes require an admin account.
+                        </p>
+                    )}
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-3">
@@ -1559,24 +1562,26 @@ export default function PlatformFundsPage() {
                                                     <Badge variant={partner.active ? 'default' : 'secondary'}>{partner.active ? 'Active' : 'Inactive'}</Badge>
                                                 </div>
                                             </div>
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={async () => {
-                                                    const result = await setOwnershipPartnerActiveAction({
-                                                        userId: partner.userId,
-                                                        active: !partner.active,
-                                                        actorId: user?.uid || '',
-                                                    });
-                                                    toast({
-                                                        variant: result.success ? 'default' : 'destructive',
-                                                        title: result.success ? 'Updated' : 'Update failed',
-                                                        description: result.message,
-                                                    });
-                                                }}
-                                            >
-                                                {partner.active ? 'Deactivate' : 'Activate'}
-                                            </Button>
+                                            {canManageFunds && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={async () => {
+                                                        const result = await setOwnershipPartnerActiveAction({
+                                                            userId: partner.userId,
+                                                            active: !partner.active,
+                                                            actorId: user?.uid || '',
+                                                        });
+                                                        toast({
+                                                            variant: result.success ? 'default' : 'destructive',
+                                                            title: result.success ? 'Updated' : 'Update failed',
+                                                            description: result.message,
+                                                        });
+                                                    }}
+                                                >
+                                                    {partner.active ? 'Deactivate' : 'Activate'}
+                                                </Button>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 ))
@@ -1590,7 +1595,7 @@ export default function PlatformFundsPage() {
                                         <TableHead>Partner</TableHead>
                                         <TableHead>Share Units</TableHead>
                                         <TableHead>Status</TableHead>
-                                        <TableHead className="text-right">Action</TableHead>
+                                        {canManageFunds && <TableHead className="text-right">Action</TableHead>}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -1610,26 +1615,28 @@ export default function PlatformFundsPage() {
                                                 <TableCell>{partner.displayName}</TableCell>
                                                 <TableCell>{partner.shareUnits.toLocaleString()}</TableCell>
                                                 <TableCell><Badge variant={partner.active ? 'default' : 'secondary'}>{partner.active ? 'Active' : 'Inactive'}</Badge></TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={async () => {
-                                                            const result = await setOwnershipPartnerActiveAction({
-                                                                userId: partner.userId,
-                                                                active: !partner.active,
-                                                                actorId: user?.uid || '',
-                                                            });
-                                                            toast({
-                                                                variant: result.success ? 'default' : 'destructive',
-                                                                title: result.success ? 'Updated' : 'Update failed',
-                                                                description: result.message,
-                                                            });
-                                                        }}
-                                                    >
-                                                        {partner.active ? 'Deactivate' : 'Activate'}
-                                                    </Button>
-                                                </TableCell>
+                                                {canManageFunds && (
+                                                    <TableCell className="text-right">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={async () => {
+                                                                const result = await setOwnershipPartnerActiveAction({
+                                                                    userId: partner.userId,
+                                                                    active: !partner.active,
+                                                                    actorId: user?.uid || '',
+                                                                });
+                                                                toast({
+                                                                    variant: result.success ? 'default' : 'destructive',
+                                                                    title: result.success ? 'Updated' : 'Update failed',
+                                                                    description: result.message,
+                                                                });
+                                                            }}
+                                                        >
+                                                            {partner.active ? 'Deactivate' : 'Activate'}
+                                                        </Button>
+                                                    </TableCell>
+                                                )}
                                             </TableRow>
                                         ))
                                     )}
@@ -1903,13 +1910,17 @@ export default function PlatformFundsPage() {
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                                 <div className="flex-grow" />
-                                <Dialog open={isDialogOpen['deposit']} onOpenChange={(isOpen) => isOpen ? openDialog('deposit') : closeDialog('deposit')}><DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2 h-4 w-4" />Add Funds</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Add Funds to Admin Account</DialogTitle></DialogHeader><AdminTransactionForm type="AdminDeposit" onTransactionComplete={() => closeDialog('deposit')} /></DialogContent></Dialog>
-                                <Dialog open={isDialogOpen['expense']} onOpenChange={(isOpen) => isOpen ? openDialog('expense') : closeDialog('expense')}><DialogTrigger asChild><Button size="sm" variant="outline"><MinusCircle className="mr-2 h-4 w-4" />Record Expense</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Record an Expense</DialogTitle></DialogHeader><AdminTransactionForm type="Expense" onTransactionComplete={() => closeDialog('expense')} /></DialogContent></Dialog>
-                                <Dialog open={isDialogOpen['staffPayout']} onOpenChange={(isOpen) => isOpen ? openDialog('staffPayout') : closeDialog('staffPayout')}><DialogTrigger asChild><Button size="sm" variant="outline"><DollarSign className="mr-2 h-4 w-4" />Record Staff Payout</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Record Staff Salary Payout</DialogTitle></DialogHeader><AdminTransactionForm type="StaffPayout" onTransactionComplete={() => closeDialog('staffPayout')} /></DialogContent></Dialog>
-                                <Dialog open={isDialogOpen['borrowFromEarnings']} onOpenChange={(isOpen) => isOpen ? openDialog('borrowFromEarnings') : closeDialog('borrowFromEarnings')}><DialogTrigger asChild><Button size="sm" variant="outline"><HandCoins className="mr-2 h-4 w-4" />Borrow from Earnings</Button></DialogTrigger><DialogContent><BorrowFromEarningsForm maxBorrowAmount={Math.max(0, metrics.platformEarnings)} onComplete={() => closeDialog('borrowFromEarnings')} /></DialogContent></Dialog>
-                                <Dialog open={isDialogOpen['repayEarningsLoan']} onOpenChange={(isOpen) => isOpen ? openDialog('repayEarningsLoan') : closeDialog('repayEarningsLoan')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Repay Earnings Loan</Button></DialogTrigger><DialogContent><RepayPlatformLoanForm maxAdminBalance={Math.max(0, metrics.administrativeBalance)} loans={activeInterAccountLoans} onComplete={() => closeDialog('repayEarningsLoan')} /></DialogContent></Dialog>
-                                <Dialog open={isDialogOpen['transferToInvestible']} onOpenChange={(isOpen) => isOpen ? openDialog('transferToInvestible') : closeDialog('transferToInvestible')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Fund Investible</Button></DialogTrigger><DialogContent><TransferFundsForm direction="toInvestible" maxAmount={metrics.administrativeBalance} onTransferComplete={() => closeDialog('transferToInvestible')} /></DialogContent></Dialog>
-                                <Dialog open={isDialogOpen['transferFromInvestible']} onOpenChange={(isOpen) => isOpen ? openDialog('transferFromInvestible') : closeDialog('transferFromInvestible')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Withdraw to Admin</Button></DialogTrigger><DialogContent><TransferFundsForm direction="fromInvestible" maxAmount={metrics.investibleCapital} onTransferComplete={() => closeDialog('transferFromInvestible')} /></DialogContent></Dialog>
+                                {canManageFunds && (
+                                    <>
+                                        <Dialog open={isDialogOpen['deposit']} onOpenChange={(isOpen) => isOpen ? openDialog('deposit') : closeDialog('deposit')}><DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2 h-4 w-4" />Add Funds</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Add Funds to Admin Account</DialogTitle></DialogHeader><AdminTransactionForm type="AdminDeposit" onTransactionComplete={() => closeDialog('deposit')} /></DialogContent></Dialog>
+                                        <Dialog open={isDialogOpen['expense']} onOpenChange={(isOpen) => isOpen ? openDialog('expense') : closeDialog('expense')}><DialogTrigger asChild><Button size="sm" variant="outline"><MinusCircle className="mr-2 h-4 w-4" />Record Expense</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Record an Expense</DialogTitle></DialogHeader><AdminTransactionForm type="Expense" onTransactionComplete={() => closeDialog('expense')} /></DialogContent></Dialog>
+                                        <Dialog open={isDialogOpen['staffPayout']} onOpenChange={(isOpen) => isOpen ? openDialog('staffPayout') : closeDialog('staffPayout')}><DialogTrigger asChild><Button size="sm" variant="outline"><DollarSign className="mr-2 h-4 w-4" />Record Staff Payout</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Record Staff Salary Payout</DialogTitle></DialogHeader><AdminTransactionForm type="StaffPayout" onTransactionComplete={() => closeDialog('staffPayout')} /></DialogContent></Dialog>
+                                        <Dialog open={isDialogOpen['borrowFromEarnings']} onOpenChange={(isOpen) => isOpen ? openDialog('borrowFromEarnings') : closeDialog('borrowFromEarnings')}><DialogTrigger asChild><Button size="sm" variant="outline"><HandCoins className="mr-2 h-4 w-4" />Borrow from Earnings</Button></DialogTrigger><DialogContent><BorrowFromEarningsForm maxBorrowAmount={Math.max(0, metrics.platformEarnings)} onComplete={() => closeDialog('borrowFromEarnings')} /></DialogContent></Dialog>
+                                        <Dialog open={isDialogOpen['repayEarningsLoan']} onOpenChange={(isOpen) => isOpen ? openDialog('repayEarningsLoan') : closeDialog('repayEarningsLoan')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Repay Earnings Loan</Button></DialogTrigger><DialogContent><RepayPlatformLoanForm maxAdminBalance={Math.max(0, metrics.administrativeBalance)} loans={activeInterAccountLoans} onComplete={() => closeDialog('repayEarningsLoan')} /></DialogContent></Dialog>
+                                        <Dialog open={isDialogOpen['transferToInvestible']} onOpenChange={(isOpen) => isOpen ? openDialog('transferToInvestible') : closeDialog('transferToInvestible')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Fund Investible</Button></DialogTrigger><DialogContent><TransferFundsForm direction="toInvestible" maxAmount={metrics.administrativeBalance} onTransferComplete={() => closeDialog('transferToInvestible')} /></DialogContent></Dialog>
+                                        <Dialog open={isDialogOpen['transferFromInvestible']} onOpenChange={(isOpen) => isOpen ? openDialog('transferFromInvestible') : closeDialog('transferFromInvestible')}><DialogTrigger asChild><Button size="sm" variant="outline"><ArrowRightLeft className="mr-2 h-4 w-4" />Withdraw to Admin</Button></DialogTrigger><DialogContent><TransferFundsForm direction="fromInvestible" maxAmount={metrics.investibleCapital} onTransferComplete={() => closeDialog('transferFromInvestible')} /></DialogContent></Dialog>
+                                    </>
+                                )}
                             </div>
                         </CardHeader>
                         <CardContent className="p-0">
@@ -1955,8 +1966,12 @@ export default function PlatformFundsPage() {
                             <CardTitle>Asset Management</CardTitle>
                             <CardDescription>Record, track, and manage all platform-owned assets.</CardDescription>
                             <div className="flex flex-wrap gap-2 pt-2">
-                                <Dialog open={isDialogOpen['acquireAsset']} onOpenChange={(isOpen) => isOpen ? openDialog('acquireAsset') : closeDialog('acquireAsset')}><DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2 h-4 w-4" />Acquire Asset</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Record New Asset Purchase</DialogTitle></DialogHeader><AdminTransactionForm type="AssetAcquisition" onTransactionComplete={() => closeDialog('acquireAsset')} /></DialogContent></Dialog>
-                                <Dialog open={isDialogOpen['recognizeAsset']} onOpenChange={(isOpen) => isOpen ? openDialog('recognizeAsset') : closeDialog('recognizeAsset')}><DialogTrigger asChild><Button size="sm" variant="outline"><Star className="mr-2 h-4 w-4" />Recognize Existing Asset</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Log an Existing Asset</DialogTitle><DialogDescription>Use this to add an asset to the books without creating a new financial transaction.</DialogDescription></DialogHeader><RecognizeAssetForm onAssetRecognized={() => closeDialog('recognizeAsset')} /></DialogContent></Dialog>
+                                {canManageFunds && (
+                                    <>
+                                        <Dialog open={isDialogOpen['acquireAsset']} onOpenChange={(isOpen) => isOpen ? openDialog('acquireAsset') : closeDialog('acquireAsset')}><DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2 h-4 w-4" />Acquire Asset</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Record New Asset Purchase</DialogTitle></DialogHeader><AdminTransactionForm type="AssetAcquisition" onTransactionComplete={() => closeDialog('acquireAsset')} /></DialogContent></Dialog>
+                                        <Dialog open={isDialogOpen['recognizeAsset']} onOpenChange={(isOpen) => isOpen ? openDialog('recognizeAsset') : closeDialog('recognizeAsset')}><DialogTrigger asChild><Button size="sm" variant="outline"><Star className="mr-2 h-4 w-4" />Recognize Existing Asset</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Log an Existing Asset</DialogTitle><DialogDescription>Use this to add an asset to the books without creating a new financial transaction.</DialogDescription></DialogHeader><RecognizeAssetForm onAssetRecognized={() => closeDialog('recognizeAsset')} /></DialogContent></Dialog>
+                                    </>
+                                )}
                             </div>
                         </CardHeader>
                         <CardContent>
@@ -1970,10 +1985,12 @@ export default function PlatformFundsPage() {
                                                 <p className="text-sm text-muted-foreground">Cost: {formatCurrency(asset.acquisitionCost)}</p>
                                                 <p className="text-xs text-muted-foreground">Acquired: {asset.acquisitionDate ? format(asset.acquisitionDate.toDate(), 'PPP') : 'Pending...'}</p>
                                                 <div className="pt-2 border-t">
-                                                    <Dialog open={isDialogOpen[`sell-mobile-${asset.id}`]} onOpenChange={(isOpen) => isOpen ? openDialog(`sell-mobile-${asset.id}`) : closeDialog(`sell-mobile-${asset.id}`)}>
-                                                        <DialogTrigger asChild><Button size="sm" variant="outline" className="w-full"><DollarSign className="mr-2 h-4 w-4" />Sell</Button></DialogTrigger>
-                                                        <DialogContent><DialogHeader><DialogTitle>Record Sale of {asset.description}</DialogTitle></DialogHeader><SellAssetForm asset={asset} onAssetSold={() => closeDialog(`sell-mobile-${asset.id}`)} /></DialogContent>
-                                                    </Dialog>
+                                                    {canManageFunds && (
+                                                        <Dialog open={isDialogOpen[`sell-mobile-${asset.id}`]} onOpenChange={(isOpen) => isOpen ? openDialog(`sell-mobile-${asset.id}`) : closeDialog(`sell-mobile-${asset.id}`)}>
+                                                            <DialogTrigger asChild><Button size="sm" variant="outline" className="w-full"><DollarSign className="mr-2 h-4 w-4" />Sell</Button></DialogTrigger>
+                                                            <DialogContent><DialogHeader><DialogTitle>Record Sale of {asset.description}</DialogTitle></DialogHeader><SellAssetForm asset={asset} onAssetSold={() => closeDialog(`sell-mobile-${asset.id}`)} /></DialogContent>
+                                                        </Dialog>
+                                                    )}
                                                 </div>
                                             </CardContent>
                                         </Card>
@@ -1983,17 +2000,19 @@ export default function PlatformFundsPage() {
                             ) : (
                                 <div className="rounded-md border">
                                     <Table>
-                                        <TableHeader><TableRow><TableHead>Asset</TableHead><TableHead>Acquisition Date</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                                        <TableHeader><TableRow><TableHead>Asset</TableHead><TableHead>Acquisition Date</TableHead><TableHead className="text-right">Cost</TableHead>{canManageFunds && <TableHead className="text-right">Action</TableHead>}</TableRow></TableHeader>
                                         <TableBody>
                                             {isLoading ? (Array.from({ length: 2 }).map((_, i) => <TableRow key={i}><TableCell><Skeleton className="h-5 w-32" /></TableCell><TableCell><Skeleton className="h-5 w-24" /></TableCell><TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell><TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell></TableRow>))
                                                 : (assets?.filter(a => a.status === 'Held').length || 0) > 0 ? assets?.filter(a => a.status === 'Held').map(asset => (
                                                     <TableRow key={asset.id}><TableCell>{asset.description}</TableCell><TableCell>{asset.acquisitionDate ? format(asset.acquisitionDate.toDate(), 'PPP') : 'Pending...'}</TableCell><TableCell className="text-right">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(asset.acquisitionCost)}</TableCell>
-                                                        <TableCell className="text-right">
-                                                            <Dialog open={isDialogOpen[`sell-${asset.id}`]} onOpenChange={(isOpen) => isOpen ? openDialog(`sell-${asset.id}`) : closeDialog(`sell-${asset.id}`)}>
-                                                                <DialogTrigger asChild><Button size="sm" variant="outline"><DollarSign className="mr-2 h-4 w-4" />Sell</Button></DialogTrigger>
-                                                                <DialogContent><DialogHeader><DialogTitle>Record Sale of {asset.description}</DialogTitle></DialogHeader><SellAssetForm asset={asset} onAssetSold={() => closeDialog(`sell-${asset.id}`)} /></DialogContent>
-                                                            </Dialog>
-                                                        </TableCell>
+                                                        {canManageFunds && (
+                                                            <TableCell className="text-right">
+                                                                <Dialog open={isDialogOpen[`sell-${asset.id}`]} onOpenChange={(isOpen) => isOpen ? openDialog(`sell-${asset.id}`) : closeDialog(`sell-${asset.id}`)}>
+                                                                    <DialogTrigger asChild><Button size="sm" variant="outline"><DollarSign className="mr-2 h-4 w-4" />Sell</Button></DialogTrigger>
+                                                                    <DialogContent><DialogHeader><DialogTitle>Record Sale of {asset.description}</DialogTitle></DialogHeader><SellAssetForm asset={asset} onAssetSold={() => closeDialog(`sell-${asset.id}`)} /></DialogContent>
+                                                                </Dialog>
+                                                            </TableCell>
+                                                        )}
                                                     </TableRow>
                                                 )) : <TableRow><TableCell colSpan={4} className="h-24 text-center">No assets are currently held.</TableCell></TableRow>}
                                         </TableBody>

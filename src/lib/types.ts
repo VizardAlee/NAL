@@ -29,6 +29,7 @@ export type Investment = DocumentData & {
   dealId: string;
   amount: number;
   createdAt: Timestamp;
+  specialInvestment?: boolean;
 };
 
 // This combines the Firebase Auth user with our Firestore user data

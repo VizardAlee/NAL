@@ -57,6 +57,7 @@ type Investment = {
     investorId: string;
     amount: number;
     dealId: string;
+    specialInvestment?: boolean;
 }
 
 type RepaymentRow = Repayment & {
@@ -290,6 +291,7 @@ export default function RepaymentsPage() {
                             createdAt: now,
                             tenureValue: 0, // Mark as immediately available, or could use original tenure
                             tenureUnit: 'Days',
+                            specialInvestment: Boolean(investment.specialInvestment),
                             details: `Returned principal from ${repayment.dealName}`
                         });
                     }

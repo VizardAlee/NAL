@@ -26,12 +26,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const formSchema = z.object({
   amount: z.coerce.number().positive({ message: 'Amount must be a positive number.' }),
   tenureValue: z.coerce.number().positive().int({ message: 'Tenure must be a positive number.' }),
   tenureUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   createdAt: z.date().optional(),
+  specialInvestment: z.boolean().default(false),
 });
 
 type AddFundFormProps = {
@@ -49,6 +51,7 @@ export function AddFundForm({ userId }: AddFundFormProps) {
       amount: 50000,
       tenureValue: 12,
       tenureUnit: 'Months',
+      specialInvestment: false,
     },
   });
 
@@ -71,6 +74,7 @@ export function AddFundForm({ userId }: AddFundFormProps) {
         remainingAmount: values.amount,
         tenureValue: values.tenureValue,
         tenureUnit: values.tenureUnit,
+        specialInvestment: values.specialInvestment,
         createdAt: timestamp,
       });
 
@@ -196,6 +200,23 @@ export function AddFundForm({ userId }: AddFundFormProps) {
                 Leave blank to use the current date.
               </FormDescription>
               <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="specialInvestment"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start gap-3 rounded-md border p-4">
+              <FormControl>
+                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>Special investment priority</FormLabel>
+                <FormDescription>
+                  Use this fund batch before standard eligible batches when funding deals.
+                </FormDescription>
+              </div>
             </FormItem>
           )}
         />

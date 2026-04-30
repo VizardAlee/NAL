@@ -23,6 +23,7 @@ interface FundBatch {
     tenureValue: number;
     tenureUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
     createdAt: admin.firestore.Timestamp;
+    specialInvestment?: boolean;
 }
 
 const DURATION_IN_DAYS = {
@@ -141,6 +142,12 @@ export async function POST(request: NextRequest) {
                     const remainingTenureInDays = differenceInDays(expiryDate, today);
                     return remainingTenureInDays >= (dealDurationInDays - 5);
                 }
+            }).sort((a, b) => {
+                const aData = a.data() as FundBatch;
+                const bData = b.data() as FundBatch;
+                const specialDelta = Number(Boolean(bData.specialInvestment)) - Number(Boolean(aData.specialInvestment));
+                if (specialDelta !== 0) return specialDelta;
+                return aData.createdAt.toMillis() - bData.createdAt.toMillis();
             });
             
             // Do not throw error for insufficient funds, just use what's available
@@ -169,6 +176,7 @@ export async function POST(request: NextRequest) {
                     dealId: dealId,
                     amount: amountToDeduct,
                     createdAt: transactionTimestamp,
+                    specialInvestment: Boolean(batchData.specialInvestment),
                 });
 
                 // Create a corresponding 'Investment' transaction

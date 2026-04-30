@@ -23,6 +23,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Checkbox } from '@/components/ui/checkbox';
 
 type ReinvestmentRequest = DocumentData & {
   id: string;
@@ -42,14 +43,24 @@ function ReinvestmentsTable({
     requests: ReinvestmentRequest[],
     isLoading: boolean,
     showActionButtons: boolean,
-    onProcessRequest?: (request: ReinvestmentRequest, newStatus: 'Approved' | 'Rejected') => void
+    onProcessRequest?: (request: ReinvestmentRequest, newStatus: 'Approved' | 'Rejected', specialInvestment?: boolean) => void
 }) {
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const [specialRequestIds, setSpecialRequestIds] = useState<Set<string>>(new Set());
     const isMobile = useIsMobile();
 
     const handleProcessClick = (request: ReinvestmentRequest, newStatus: 'Approved' | 'Rejected') => {
         setProcessingId(request.id);
-        onProcessRequest?.(request, newStatus);
+        onProcessRequest?.(request, newStatus, specialRequestIds.has(request.id));
+    };
+
+    const setSpecial = (requestId: string, checked: boolean) => {
+        setSpecialRequestIds((current) => {
+            const next = new Set(current);
+            if (checked) next.add(requestId);
+            else next.delete(requestId);
+            return next;
+        });
     };
 
     if (isLoading) {
@@ -109,7 +120,15 @@ function ReinvestmentsTable({
                                 {!showActionButtons && <Badge variant={request.status === 'Approved' ? 'default' : 'destructive'}>{request.status}</Badge>}
                             </div>
                             {showActionButtons && (
-                                <div className="flex justify-end gap-2 pt-2 border-t">
+                                <div className="space-y-3 pt-2 border-t">
+                                    <label className="flex items-center gap-2 text-sm">
+                                        <Checkbox
+                                            checked={specialRequestIds.has(request.id)}
+                                            onCheckedChange={(checked) => setSpecial(request.id, checked === true)}
+                                        />
+                                        Special investment priority
+                                    </label>
+                                    <div className="flex justify-end gap-2">
                                      <Button
                                         size="sm"
                                         variant="outline"
@@ -127,6 +146,7 @@ function ReinvestmentsTable({
                                         {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
                                         Approve
                                     </Button>
+                                    </div>
                                 </div>
                             )}
                         </CardContent>
@@ -145,6 +165,7 @@ function ReinvestmentsTable({
                             <TableHead>Investor</TableHead>
                             <TableHead>Amount</TableHead>
                             <TableHead>Date Requested</TableHead>
+                            {showActionButtons && <TableHead>Priority</TableHead>}
                             {showActionButtons ? <TableHead className="text-right">Actions</TableHead> : <TableHead>Status</TableHead>}
                         </TableRow>
                     </TableHeader>
@@ -154,6 +175,17 @@ function ReinvestmentsTable({
                                 <TableCell data-label="Investor" className="font-medium">{request.investorName}</TableCell>
                                 <TableCell data-label="Amount">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.amount)}</TableCell>
                                 <TableCell data-label="Date Requested">{format(request.requestedAt.toDate(), 'PPP')}</TableCell>
+                                {showActionButtons && (
+                                    <TableCell data-label="Priority">
+                                        <label className="flex items-center gap-2 text-sm">
+                                            <Checkbox
+                                                checked={specialRequestIds.has(request.id)}
+                                                onCheckedChange={(checked) => setSpecial(request.id, checked === true)}
+                                            />
+                                            Special
+                                        </label>
+                                    </TableCell>
+                                )}
                                 {showActionButtons ? (
                                     <TableCell data-label="Actions" className="text-right space-x-2">
                                         <Button
@@ -200,7 +232,7 @@ export default function ReinvestmentsPage() {
     
     const isLoading = pendingLoading || processedLoading;
 
-    const handleProcessRequest = async (request: ReinvestmentRequest, newStatus: 'Approved' | 'Rejected') => {
+    const handleProcessRequest = async (request: ReinvestmentRequest, newStatus: 'Approved' | 'Rejected', specialInvestment = false) => {
         if (!firestore) return;
         setProcessingId(request.id);
         
@@ -246,6 +278,7 @@ export default function ReinvestmentsPage() {
                     // A default tenure is set here. In a more complex app, this could be configurable.
                     tenureValue: 10, 
                     tenureUnit: 'Years',
+                    specialInvestment,
                 });
             }
 

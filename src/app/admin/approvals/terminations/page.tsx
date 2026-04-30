@@ -321,6 +321,7 @@ export default function TerminationsPage() {
                                 createdAt: now,
                                 tenureValue: 10, // Default long tenure for returned principal
                                 tenureUnit: 'Years',
+                                specialInvestment: Boolean(investment.specialInvestment),
                                 details: `Returned principal from terminated deal: ${deal.dealName}`
                             });
                         }

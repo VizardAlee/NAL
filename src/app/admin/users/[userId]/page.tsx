@@ -62,6 +62,7 @@ type FundBatch = DocumentData & {
     createdAt: Timestamp;
     tenureValue: number;
     tenureUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
+    specialInvestment?: boolean;
 };
 
 type Transaction = DocumentData & {
@@ -717,6 +718,7 @@ export default function UserDetailPage() {
                                                         <div>
                                                             <p className="font-medium">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(batch.amount)}</p>
                                                             <p className="text-xs text-muted-foreground">{formatDate(batch.createdAt)}</p>
+                                                            {batch.specialInvestment && <Badge className="mt-1">Special</Badge>}
                                                         </div>
                                                         <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
                                                     </div>
@@ -733,6 +735,7 @@ export default function UserDetailPage() {
                                             <TableHeader>
                                                 <TableRow>
                                                     <TableHead>Date</TableHead>
+                                                    <TableHead>Priority</TableHead>
                                                     <TableHead>Type</TableHead>
                                                     <TableHead>Total Amount</TableHead>
                                                     <TableHead className="text-right">Investible Balance</TableHead>
@@ -742,6 +745,9 @@ export default function UserDetailPage() {
                                                 {paginatedFundBatches?.map(batch => (
                                                     <TableRow key={batch.id}>
                                                         <TableCell data-label="Date">{formatDate(batch.createdAt)}</TableCell>
+                                                        <TableCell data-label="Priority">
+                                                            {batch.specialInvestment ? <Badge>Special</Badge> : <Badge variant="outline">Standard</Badge>}
+                                                        </TableCell>
                                                         <TableCell data-label="Type">
                                                             <Badge variant={batch.type === 'Long-Term' ? 'default' : 'secondary'}>{batch.type}</Badge>
                                                         </TableCell>
@@ -751,7 +757,7 @@ export default function UserDetailPage() {
                                                 ))}
                                                 {!paginatedFundBatches?.length && (
                                                     <TableRow>
-                                                        <TableCell colSpan={4} className="h-24 text-center">
+                                                        <TableCell colSpan={5} className="h-24 text-center">
                                                             No fund batches found.
                                                         </TableCell>
                                                     </TableRow>
