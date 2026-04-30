@@ -66,12 +66,30 @@ function canUseApplicationDefaultCredentials() {
     );
 }
 
+function isManagedRuntime() {
+    return Boolean(process.env.K_SERVICE);
+}
+
+function initializeWithApplicationDefaultCredentials() {
+    return admin.initializeApp({
+        projectId:
+            readEnv('FIREBASE_PROJECT_ID') ||
+            process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+            process.env.GOOGLE_CLOUD_PROJECT ||
+            process.env.GCLOUD_PROJECT,
+    });
+}
+
 // This function ensures the Firebase Admin app is initialized only once,
 // which is crucial in a serverless environment like Next.js.
 export function getAdminApp() {
     // If the app is already initialized, return the existing instance.
     if (admin.apps.length > 0) {
         return admin.apps[0]!;
+    }
+
+    if (isManagedRuntime()) {
+        return initializeWithApplicationDefaultCredentials();
     }
 
     const serviceAccount = getServiceAccount();
@@ -82,9 +100,7 @@ export function getAdminApp() {
     }
 
     if (canUseApplicationDefaultCredentials()) {
-        return admin.initializeApp({
-            projectId: readEnv('FIREBASE_PROJECT_ID') || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        });
+        return initializeWithApplicationDefaultCredentials();
     }
 
     throw new Error(

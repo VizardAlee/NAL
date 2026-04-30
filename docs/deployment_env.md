@@ -1,10 +1,28 @@
 # Deployment Environment
 
-Server actions that create invites, write protected admin records, fund deals, or send notifications use the Firebase Admin SDK. These actions need Admin SDK credentials in the deployed server runtime.
+Server actions that create invites, write protected admin records, fund deals, or send notifications use the Firebase Admin SDK. In Firebase App Hosting, the app should use the backend's managed service account through Application Default Credentials.
 
-## Required Production Variables
+## Firebase App Hosting
 
-Set either this single JSON variable:
+The deployed App Hosting runtime only needs the project ID in `apphosting.yaml`:
+
+```yaml
+env:
+  - variable: FIREBASE_PROJECT_ID
+    value: studio-1298078893-e7941
+    availability:
+      - RUNTIME
+```
+
+The App Hosting backend service account must have access to the Firebase services used by server actions. The backend currently runs as:
+
+```text
+firebase-app-hosting-compute@studio-1298078893-e7941.iam.gserviceaccount.com
+```
+
+## Local Development
+
+For local development outside Firebase App Hosting, set either this single JSON variable:
 
 ```text
 FIREBASE_SERVICE_ACCOUNT_JSON
@@ -19,34 +37,3 @@ FIREBASE_PRIVATE_KEY
 ```
 
 `FIREBASE_PRIVATE_KEY` must include the full private key, including the `BEGIN PRIVATE KEY` and `END PRIVATE KEY` lines. It may use escaped newlines (`\n`) or real newlines.
-
-## Firebase App Hosting
-
-Firebase App Hosting supports runtime variables and Cloud Secret Manager references through `apphosting.yaml`. Keep private keys in Secret Manager, not in git.
-
-Example:
-
-```yaml
-env:
-  - variable: FIREBASE_PROJECT_ID
-    value: studio-1298078893-e7941
-    availability:
-      - RUNTIME
-  - variable: FIREBASE_CLIENT_EMAIL
-    secret: firebaseClientEmail
-    availability:
-      - RUNTIME
-  - variable: FIREBASE_PRIVATE_KEY
-    secret: firebasePrivateKey
-    availability:
-      - RUNTIME
-```
-
-Create the secrets with:
-
-```bash
-firebase apphosting:secrets:set firebaseClientEmail
-firebase apphosting:secrets:set firebasePrivateKey
-```
-
-Then redeploy the backend so the live site receives the runtime variables.
