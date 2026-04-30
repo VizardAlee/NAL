@@ -435,6 +435,43 @@ export default function UserDetailPage() {
                         </CardHeader>
                     </Card>
 
+                    {(hasInvestorPersona || hasClientPersona || hasMarketerPersona) && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-base">Persona Views</CardTitle>
+                                <CardDescription>
+                                    Open the profile sections tied to this user's active personas.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="grid gap-2">
+                                {hasInvestorPersona && (
+                                    <Button asChild variant="outline" className="justify-start">
+                                        <a href="#investor-view">
+                                            <Landmark className="mr-2 h-4 w-4" />
+                                            Investor View
+                                        </a>
+                                    </Button>
+                                )}
+                                {hasClientPersona && (
+                                    <Button asChild variant="outline" className="justify-start">
+                                        <a href="#client-view">
+                                            <FileText className="mr-2 h-4 w-4" />
+                                            Client View
+                                        </a>
+                                    </Button>
+                                )}
+                                {hasMarketerPersona && (
+                                    <Button asChild variant="outline" className="justify-start">
+                                        <a href="#marketer-view">
+                                            <UserPlus className="mr-2 h-4 w-4" />
+                                            Marketer View
+                                        </a>
+                                    </Button>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+
                     {canEditOwners && (
                         <Card>
                             <CardHeader>
@@ -471,7 +508,7 @@ export default function UserDetailPage() {
                     )}
 
                     {hasInvestorPersona && (
-                        <Card>
+                        <Card id="investor-view" className="scroll-mt-24">
                             <CardHeader>
                                 <CardTitle className="text-sm font-medium">Total Capital Introduced</CardTitle>
                                 <CardDescription>The cumulative sum of all deposits made by this investor.</CardDescription>
@@ -485,7 +522,7 @@ export default function UserDetailPage() {
                     )}
 
                     {hasClientPersona && clientPerformanceMetrics && (
-                        <Card>
+                        <Card id="client-view" className="scroll-mt-24">
                             <CardHeader>
                                 <CardTitle className="text-sm font-medium">Total Deal Value</CardTitle>
                                 <CardDescription>The sum of the principal from all deals for this client.</CardDescription>
@@ -500,7 +537,7 @@ export default function UserDetailPage() {
 
 
                     {hasMarketerPersona && (
-                        <Card>
+                        <Card id="marketer-view" className="scroll-mt-24">
                             <CardHeader>
                                 <CardTitle className="text-base">Marketer Details</CardTitle>
                             </CardHeader>
