@@ -1,9 +1,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import * as admin from 'firebase-admin';
-import { ServiceAccount } from 'firebase-admin';
 import { differenceInDays } from 'date-fns';
 import { getAuthErrorStatus, verifyAdminOrOwner } from '@/lib/server/auth';
+import { getAdminApp } from '@/firebase/admin-app';
 
 // Defines the shape of the data for a Deal document
 interface Deal {
@@ -39,38 +39,6 @@ function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): numb
 }
 
 const TWELVE_MONTHS_IN_DAYS = 12 * DURATION_IN_DAYS.Months;
-
-function normalizePrivateKey(raw: string | undefined): string {
-    if (!raw) return '';
-    const trimmed = raw.trim();
-    const unquoted =
-        (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-        (trimmed.startsWith("'") && trimmed.endsWith("'"))
-            ? trimmed.slice(1, -1)
-            : trimmed;
-    return unquoted.replace(/\\n/g, '\n');
-}
-
-const serviceAccount: ServiceAccount | undefined = process.env.FIREBASE_CLIENT_EMAIL
-  ? {
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
-    }
-  : undefined;
-
-function getAdminApp() {
-    const apps = admin.apps;
-    if (!apps.length) {
-        if (!serviceAccount?.projectId) {
-            throw new Error('Firebase Admin SDK environment variables are not set.');
-        }
-        return admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount),
-        });
-    }
-    return apps[0]!;
-}
 
 export async function POST(request: NextRequest) {
     const { dealId } = await request.json();

@@ -2,6 +2,10 @@ import * as admin from 'firebase-admin';
 import { ServiceAccount } from 'firebase-admin';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
+function readEnv(name: string): string | undefined {
+    return process.env[name] || process.env[name.toLowerCase()];
+}
+
 function normalizePrivateKey(raw: string | undefined): string {
     if (!raw) return '';
     const trimmed = raw.trim();
@@ -13,15 +17,54 @@ function normalizePrivateKey(raw: string | undefined): string {
     return unquoted.replace(/\\n/g, '\n');
 }
 
-// This configuration is now more robust, checking for the existence of credentials
-// and ensuring the private key's newlines are correctly parsed.
-const serviceAccount: ServiceAccount | undefined = process.env.FIREBASE_CLIENT_EMAIL
-    ? {
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
+function parseServiceAccountJson(raw: string | undefined): ServiceAccount | undefined {
+    if (!raw) return undefined;
+
+    try {
+        const parsed = JSON.parse(raw);
+        return {
+            projectId: parsed.project_id || parsed.projectId,
+            clientEmail: parsed.client_email || parsed.clientEmail,
+            privateKey: normalizePrivateKey(parsed.private_key || parsed.privateKey),
+        };
+    } catch {
+        return undefined;
     }
-    : undefined;
+}
+
+function getServiceAccount(): ServiceAccount | undefined {
+    const jsonAccount = parseServiceAccountJson(readEnv('FIREBASE_SERVICE_ACCOUNT_JSON'));
+    if (jsonAccount?.projectId && jsonAccount.clientEmail && jsonAccount.privateKey) {
+        return jsonAccount;
+    }
+
+    const projectId =
+        readEnv('FIREBASE_PROJECT_ID') ||
+        process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+        process.env.GOOGLE_CLOUD_PROJECT ||
+        process.env.GCLOUD_PROJECT;
+    const clientEmail = readEnv('FIREBASE_CLIENT_EMAIL');
+    const privateKey = normalizePrivateKey(readEnv('FIREBASE_PRIVATE_KEY'));
+
+    if (!projectId || !clientEmail || !privateKey) {
+        return undefined;
+    }
+
+    return {
+        projectId,
+        clientEmail,
+        privateKey,
+    };
+}
+
+function canUseApplicationDefaultCredentials() {
+    return Boolean(
+        process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+        process.env.GOOGLE_CLOUD_PROJECT ||
+        process.env.GCLOUD_PROJECT ||
+        process.env.K_SERVICE
+    );
+}
 
 // This function ensures the Firebase Admin app is initialized only once,
 // which is crucial in a serverless environment like Next.js.
@@ -31,15 +74,22 @@ export function getAdminApp() {
         return admin.apps[0]!;
     }
 
-    // Validate that the necessary environment variables are set.
-    if (!serviceAccount?.projectId) {
-        throw new Error('Firebase Admin SDK environment variables are not set. Ensure FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY are configured.');
+    const serviceAccount = getServiceAccount();
+    if (serviceAccount) {
+        return admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+        });
     }
 
-    // Initialize the app with the service account credentials.
-    return admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-    });
+    if (canUseApplicationDefaultCredentials()) {
+        return admin.initializeApp({
+            projectId: readEnv('FIREBASE_PROJECT_ID') || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        });
+    }
+
+    throw new Error(
+        'Firebase Admin SDK credentials are not configured. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in the server runtime, or set FIREBASE_SERVICE_ACCOUNT_JSON.'
+    );
 }
 
 function getAdminDb(): Firestore {
