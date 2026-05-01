@@ -2,23 +2,22 @@
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useCollection } from "@/firebase/firestore/use-collection";
 import { useFirestore } from "@/firebase";
 import { collection, query, where, DocumentData, Timestamp } from "firebase/firestore";
-import { Landmark, Loader2, CalendarIcon, Info } from "lucide-react";
+import { Landmark, Loader2, CalendarIcon, Info, AlertTriangle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { startOfDay, endOfDay, format } from "date-fns";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Transaction = DocumentData & {
     type: 'PlatformEarning';
@@ -40,11 +39,22 @@ const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(value);
 };
 
+const SMALL_COMPANY_TURNOVER_THRESHOLD = 50_000_000;
+const SMALL_COMPANY_FIXED_ASSET_THRESHOLD = 250_000_000;
+const STANDARD_COMPANY_CIT_RATE = 0.30;
+const DEVELOPMENT_LEVY_RATE = 0.04;
+const MINIMUM_ETR_RATE = 0.15;
+const MINIMUM_ETR_TURNOVER_THRESHOLD = 20_000_000_000;
+const VAT_RATE = 0.075;
+
 export default function TaxPage() {
     const firestore = useFirestore();
     const [startDate, setStartDate] = useState<Date | null>(null);
     const [endDate, setEndDate] = useState<Date | null>(null);
-    const isMobile = useIsMobile();
+    const [fixedAssets, setFixedAssets] = useState<number | null>(null);
+    const [isProfessionalService, setIsProfessionalService] = useState(false);
+    const [isNonResidentCompany, setIsNonResidentCompany] = useState(false);
+    const [isMneGroupEntity, setIsMneGroupEntity] = useState(false);
 
     const transactionsQuery = useMemo(() => {
         if (!firestore) return null;
@@ -78,54 +88,44 @@ export default function TaxPage() {
         const expenses = adminTransactions?.filter(tx => tx.type === 'Expense').reduce((sum, tx) => sum + Math.abs(tx.amount), 0) || 0;
 
         const totalRevenue = platformEarnings + managementFees;
-        const assessableProfit = Math.max(0, totalRevenue - expenses);
+        const estimatedTotalProfits = Math.max(0, totalRevenue - expenses);
+        const qualifiesAsSmallCompany =
+            totalRevenue <= SMALL_COMPANY_TURNOVER_THRESHOLD &&
+            fixedAssets !== null &&
+            fixedAssets <= SMALL_COMPANY_FIXED_ASSET_THRESHOLD &&
+            !isProfessionalService;
 
-        // LLC Tax Rules (Nigeria Finance Act)
-        // Turnover Thresholds for CIT:
-        // Small (< 25M): 0%
-        // Medium (25M - 100M): 20%
-        // Large (> 100M): 30%
-        // Tertiary Education Tax (EDT): 3% of assessable profit (Small companies exempt)
+        const citRate = qualifiesAsSmallCompany ? 0 : STANDARD_COMPANY_CIT_RATE;
+        const developmentLevyRate = qualifiesAsSmallCompany || isNonResidentCompany ? 0 : DEVELOPMENT_LEVY_RATE;
+        const category = qualifiesAsSmallCompany ? "Small Company" : "Standard Company";
 
-        let citRate = 0;
-        let edtRate = 0;
-        let category = "Small Company";
+        const companyIncomeTax = estimatedTotalProfits * citRate;
+        const developmentLevy = estimatedTotalProfits * developmentLevyRate;
+        const totalTaxDue = companyIncomeTax + developmentLevy;
+        const profitAfterTax = estimatedTotalProfits - totalTaxDue;
 
-        if (totalRevenue >= 100000000) {
-            citRate = 0.30;
-            edtRate = 0.03;
-            category = "Large Company";
-        } else if (totalRevenue >= 25000000) {
-            citRate = 0.20;
-            edtRate = 0.03;
-            category = "Medium Company";
-        } else {
-            citRate = 0;
-            edtRate = 0; // Small companies are typically exempt from EDT
-            category = "Small Company";
-        }
-
-        const educationTax = assessableProfit * edtRate;
-        const chargeableIncome = Math.max(0, assessableProfit - educationTax);
-        const companyIncomeTax = chargeableIncome * citRate;
-        const totalTaxDue = educationTax + companyIncomeTax;
-        const profitAfterTax = assessableProfit - totalTaxDue;
+        const minimumEtrApplies = isMneGroupEntity || totalRevenue >= MINIMUM_ETR_TURNOVER_THRESHOLD;
+        const minimumEtrBenchmark = minimumEtrApplies ? estimatedTotalProfits * MINIMUM_ETR_RATE : 0;
+        const potentialMinimumEtrTopUp = minimumEtrApplies ? Math.max(0, minimumEtrBenchmark - companyIncomeTax) : 0;
 
         return {
             totalRevenue,
             expenses,
-            assessableProfit,
-            educationTax,
+            estimatedTotalProfits,
+            developmentLevy,
             companyIncomeTax,
-            chargeableIncome,
             totalTaxDue,
             profitAfterTax,
             citRate,
-            edtRate,
-            category
+            developmentLevyRate,
+            category,
+            qualifiesAsSmallCompany,
+            minimumEtrApplies,
+            minimumEtrBenchmark,
+            potentialMinimumEtrTopUp
         };
 
-    }, [earningsTransactions, adminTransactions]);
+    }, [earningsTransactions, adminTransactions, fixedAssets, isProfessionalService, isNonResidentCompany, isMneGroupEntity]);
 
     const formatDateDisplay = (dateValue: Date | null) => {
         return dateValue ? format(dateValue, "LLL dd, y") : <span>Pick a date</span>;
@@ -134,8 +134,8 @@ export default function TaxPage() {
     return (
         <div>
             <PageHeader
-                title="Corporate Tax (LLC)"
-                description="Calculate Companies Income Tax (CIT) and Tertiary Education Tax (EDT)."
+                title="Corporate Tax"
+                description="Estimate Nigerian Companies Income Tax and Development Levy under the Nigeria Tax Act 2025."
                 icon={Landmark}
             >
                 <div className="flex flex-col sm:flex-row gap-2">
@@ -197,6 +197,68 @@ export default function TaxPage() {
                 </div>
             ) : (
                 <div className="grid gap-6">
+                    <Alert>
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>Compliance estimate only</AlertTitle>
+                        <AlertDescription className="text-xs">
+                            This screen estimates headline corporate tax from platform records. Final filings still need audited accounts, capital allowances, WHT credits, VAT records, exemptions, and professional tax review.
+                        </AlertDescription>
+                    </Alert>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">Company Tax Profile</CardTitle>
+                            <CardDescription>These assumptions affect small-company exemption and levy treatment.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="fixedAssets">Fixed assets</Label>
+                                <Input
+                                    id="fixedAssets"
+                                    type="number"
+                                    min="0"
+                                    placeholder="Enter current fixed assets"
+                                    value={fixedAssets ?? ''}
+                                    onChange={(event) => {
+                                        const value = event.target.value;
+                                        setFixedAssets(value === '' ? null : Math.max(0, Number(value) || 0));
+                                    }}
+                                />
+                                <p className="text-xs text-muted-foreground">Required before the app treats the company as small.</p>
+                            </div>
+                            <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+                                <Checkbox
+                                    checked={isProfessionalService}
+                                    onCheckedChange={(checked) => setIsProfessionalService(checked === true)}
+                                />
+                                <span>
+                                    <span className="block font-medium">Professional service business</span>
+                                    <span className="text-xs text-muted-foreground">Professional services do not qualify as small companies.</span>
+                                </span>
+                            </label>
+                            <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+                                <Checkbox
+                                    checked={isNonResidentCompany}
+                                    onCheckedChange={(checked) => setIsNonResidentCompany(checked === true)}
+                                />
+                                <span>
+                                    <span className="block font-medium">Non-resident company</span>
+                                    <span className="text-xs text-muted-foreground">Development Levy does not apply to non-resident companies.</span>
+                                </span>
+                            </label>
+                            <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+                                <Checkbox
+                                    checked={isMneGroupEntity}
+                                    onCheckedChange={(checked) => setIsMneGroupEntity(checked === true)}
+                                />
+                                <span>
+                                    <span className="block font-medium">MNE group entity</span>
+                                    <span className="text-xs text-muted-foreground">May trigger minimum effective tax review.</span>
+                                </span>
+                            </label>
+                        </CardContent>
+                    </Card>
+
                     <div className="grid gap-6 md:grid-cols-3">
                         <Card>
                             <CardHeader className="pb-2">
@@ -209,11 +271,11 @@ export default function TaxPage() {
                         </Card>
                         <Card>
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-medium">Assessable Profit</CardTitle>
+                                <CardTitle className="text-sm font-medium">Estimated Total Profits</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="text-2xl font-bold">{formatCurrency(taxCalculations.assessableProfit)}</div>
-                                <p className="text-xs text-muted-foreground mt-1">Revenue minus Expenses</p>
+                                <div className="text-2xl font-bold">{formatCurrency(taxCalculations.estimatedTotalProfits)}</div>
+                                <p className="text-xs text-muted-foreground mt-1">Revenue minus recorded expenses</p>
                             </CardContent>
                         </Card>
                         <Card className="border-primary bg-primary/5">
@@ -231,7 +293,7 @@ export default function TaxPage() {
                         <Card>
                             <CardHeader>
                                 <CardTitle>Calculation Breakdown</CardTitle>
-                                <CardDescription>Detailed tax computation for Limited Liability Companies.</CardDescription>
+                                <CardDescription>Estimated company tax computation using current Nigeria Tax Act 2025 rates.</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <Table>
@@ -241,24 +303,20 @@ export default function TaxPage() {
                                             <TableCell className="text-right">{formatCurrency(taxCalculations.totalRevenue)}</TableCell>
                                         </TableRow>
                                         <TableRow>
-                                            <TableCell>Allowable Expenses</TableCell>
+                                            <TableCell>Recorded Expenses</TableCell>
                                             <TableCell className="text-right text-destructive">- {formatCurrency(taxCalculations.expenses)}</TableCell>
                                         </TableRow>
                                         <TableRow className="font-medium bg-muted/30">
-                                            <TableCell>Assessable Profit</TableCell>
-                                            <TableCell className="text-right">{formatCurrency(taxCalculations.assessableProfit)}</TableCell>
+                                            <TableCell>Estimated Total Profits</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(taxCalculations.estimatedTotalProfits)}</TableCell>
                                         </TableRow>
                                         <TableRow>
-                                            <TableCell>Tertiary Education Tax (EDT) @ {taxCalculations.edtRate * 100}%</TableCell>
-                                            <TableCell className="text-right text-destructive">- {formatCurrency(taxCalculations.educationTax)}</TableCell>
-                                        </TableRow>
-                                        <TableRow className="text-muted-foreground text-xs italic">
-                                            <TableCell>Chargeable Income (Profit after EDT)</TableCell>
-                                            <TableCell className="text-right">{formatCurrency(taxCalculations.chargeableIncome)}</TableCell>
-                                        </TableRow>
-                                        <TableRow>
-                                            <TableCell>Company Income Tax (CIT) @ {taxCalculations.citRate * 100}%</TableCell>
+                                            <TableCell>Companies Income Tax (CIT) @ {taxCalculations.citRate * 100}%</TableCell>
                                             <TableCell className="text-right text-destructive">- {formatCurrency(taxCalculations.companyIncomeTax)}</TableCell>
+                                        </TableRow>
+                                        <TableRow>
+                                            <TableCell>Development Levy @ {taxCalculations.developmentLevyRate * 100}%</TableCell>
+                                            <TableCell className="text-right text-destructive">- {formatCurrency(taxCalculations.developmentLevy)}</TableCell>
                                         </TableRow>
                                         <TableRow className="font-bold border-t-2">
                                             <TableCell>Net Profit After Tax</TableCell>
@@ -274,14 +332,26 @@ export default function TaxPage() {
                                 <Info className="h-4 w-4" />
                                 <AlertTitle>Company Categorization</AlertTitle>
                                 <AlertDescription className="text-xs space-y-2">
-                                    <p>Based on current Nigerian tax laws:</p>
+                                    <p>Based on the Nigeria Tax Act 2025:</p>
                                     <ul className="list-disc pl-4 space-y-1">
-                                        <li><strong>Small Company:</strong> Turnover &lt; ₦25M. CIT Rate: 0%. Exempt from EDT.</li>
-                                        <li><strong>Medium Company:</strong> Turnover ₦25M - ₦100M. CIT Rate: 20%. EDT Rate: 3%.</li>
-                                        <li><strong>Large Company:</strong> Turnover &gt; ₦100M. CIT Rate: 30%. EDT Rate: 3%.</li>
+                                        <li><strong>Small Company:</strong> turnover not above ₦50M, fixed assets not above ₦250M, and not a professional service business. CIT: 0%. Development Levy: 0%.</li>
+                                        <li><strong>Other Companies:</strong> CIT: 30% of estimated total profits.</li>
+                                        <li><strong>Development Levy:</strong> 4% of assessable profits, except small companies and non-resident companies.</li>
+                                        <li><strong>VAT:</strong> taxable supplies remain subject to VAT at {VAT_RATE * 100}%, but VAT is not calculated here because this page is based on income records, not VAT invoices.</li>
                                     </ul>
                                 </AlertDescription>
                             </Alert>
+
+                            {taxCalculations.minimumEtrApplies && (
+                                <Alert>
+                                    <AlertTriangle className="h-4 w-4" />
+                                    <AlertTitle>Minimum Effective Tax Review Required</AlertTitle>
+                                    <AlertDescription className="text-xs space-y-2">
+                                        <p>This company may be subject to the 15% minimum effective tax rule because it is marked as an MNE group entity or turnover is at least ₦20B.</p>
+                                        <p>Indicative 15% benchmark: <strong>{formatCurrency(taxCalculations.minimumEtrBenchmark)}</strong>. Possible top-up before detailed covered-tax adjustments: <strong>{formatCurrency(taxCalculations.potentialMinimumEtrTopUp)}</strong>.</p>
+                                    </AlertDescription>
+                                </Alert>
+                            )}
 
                             <Card>
                                 <CardHeader>
@@ -293,11 +363,11 @@ export default function TaxPage() {
                                         <span className="font-semibold">{formatCurrency(taxCalculations.companyIncomeTax)}</span>
                                     </div>
                                     <div className="flex justify-between items-center">
-                                        <span className="text-sm text-muted-foreground">EDT (Education Tax)</span>
-                                        <span className="font-semibold">{formatCurrency(taxCalculations.educationTax)}</span>
+                                        <span className="text-sm text-muted-foreground">Development Levy</span>
+                                        <span className="font-semibold">{formatCurrency(taxCalculations.developmentLevy)}</span>
                                     </div>
                                     <div className="pt-2 border-t flex justify-between items-center font-bold">
-                                        <span>Total Corporate Tax Due</span>
+                                        <span>Estimated Corporate Tax Due</span>
                                         <span className="text-primary">{formatCurrency(taxCalculations.totalTaxDue)}</span>
                                     </div>
                                 </CardContent>
