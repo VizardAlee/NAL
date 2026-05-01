@@ -30,12 +30,16 @@ import {
   MessageSquarePlus,
   Library,
   Landmark,
+  MoreHorizontal,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { useCollection, useUser } from "@/firebase";
 import { collection, query, where } from "firebase/firestore";
 import { useFirestore } from "@/firebase";
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type MenuItem = {
   href?: string;
@@ -50,7 +54,7 @@ type MenuItem = {
   notificationCollection?: string;
 };
 
-const menuItems: MenuItem[] = [
+export const adminMenuItems: MenuItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/deals", label: "Deals", icon: FileText },
   { href: "/admin/users", label: "Users", icon: Users },
@@ -75,6 +79,16 @@ const menuItems: MenuItem[] = [
   { href: "/admin/activity", label: "Activity", icon: History },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
+
+const primaryMobileItems = adminMenuItems.slice(0, 4);
+const moreMobileItems = adminMenuItems.slice(4);
+
+function isItemActive(pathname: string, item: MenuItem) {
+  if (item.href) {
+    return pathname === item.href || pathname.startsWith(`${item.href}/`);
+  }
+  return item.subItems?.some((sub) => pathname === sub.href || pathname.startsWith(`${sub.href}/`)) ?? false;
+}
 
 function NotificationBadge({ collectionName }: { collectionName: string }) {
   const firestore = useFirestore();
@@ -113,7 +127,7 @@ export function AdminNav() {
   const [openCollapsibles, setOpenCollapsibles] = React.useState<string[]>([]);
 
   React.useEffect(() => {
-    const activeCollapsible = menuItems.find(item => item.subItems?.some(sub => pathname.startsWith(sub.href)));
+    const activeCollapsible = adminMenuItems.find(item => item.subItems?.some(sub => pathname.startsWith(sub.href)));
     if (activeCollapsible) {
       setOpenCollapsibles(prev => [...new Set([...prev, activeCollapsible.label])]);
     }
@@ -121,7 +135,7 @@ export function AdminNav() {
 
   return (
     <SidebarMenu>
-      {menuItems.map((item) =>
+      {adminMenuItems.map((item) =>
         item.subItems ? (
           <SidebarMenuItem key={item.label}>
             <Collapsible
@@ -191,5 +205,160 @@ export function AdminNav() {
         )
       )}
     </SidebarMenu>
+  );
+}
+
+export function AdminMobileNav() {
+  const pathname = usePathname();
+  const moreActive = moreMobileItems.some((item) => isItemActive(pathname, item));
+
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
+      <div className="mx-auto grid max-w-md grid-cols-5 items-end gap-1">
+        {primaryMobileItems.map((item) => {
+          const Icon = item.icon;
+          const active = isItemActive(pathname, item);
+
+          if (item.subItems) {
+            return (
+              <Sheet key={item.label}>
+                <SheetTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className={cn(
+                      "relative h-14 flex-col gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground",
+                      active && "bg-primary/10 text-primary"
+                    )}
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span className="leading-none">{item.label}</span>
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="bottom" className="max-h-[80svh] rounded-t-lg px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-5">
+                  <SheetHeader className="text-left">
+                    <SheetTitle>{item.label}</SheetTitle>
+                  </SheetHeader>
+                  <div className="mt-4 grid gap-2 overflow-y-auto">
+                    {item.subItems.map((subItem) => {
+                      const SubIcon = subItem.icon;
+                      const subActive = pathname === subItem.href || pathname.startsWith(`${subItem.href}/`);
+
+                      return (
+                        <SheetClose key={subItem.href} asChild>
+                          <Link
+                            href={subItem.href}
+                            className={cn(
+                              "flex min-h-12 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground",
+                              subActive ? "bg-primary/10 text-primary" : "hover:bg-muted hover:text-foreground"
+                            )}
+                          >
+                            {SubIcon && <SubIcon className="h-5 w-5 shrink-0" />}
+                            <span>{subItem.label}</span>
+                            {subItem.notificationCollection && <NotificationBadge collectionName={subItem.notificationCollection} />}
+                          </Link>
+                        </SheetClose>
+                      );
+                    })}
+                  </div>
+                </SheetContent>
+              </Sheet>
+            );
+          }
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href!}
+              className={cn(
+                "flex h-14 flex-col items-center justify-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground",
+                active && "bg-primary/10 text-primary"
+              )}
+            >
+              <Icon className="h-5 w-5" />
+              <span className="leading-none">{item.label}</span>
+            </Link>
+          );
+        })}
+
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              className={cn(
+                "h-14 flex-col gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground",
+                moreActive && "bg-primary/10 text-primary"
+              )}
+            >
+              <MoreHorizontal className="h-5 w-5" />
+              <span className="leading-none">More</span>
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="max-h-[82svh] rounded-t-lg px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-5">
+            <SheetHeader className="text-left">
+              <SheetTitle>More</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4 grid gap-4 overflow-y-auto">
+              <div className="grid gap-2">
+                {moreMobileItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = isItemActive(pathname, item);
+
+                  if (item.subItems) {
+                    return (
+                      <div key={item.label} className="grid gap-2">
+                        <div className="flex items-center gap-3 px-3 py-2 text-sm font-semibold text-foreground">
+                          <Icon className="h-5 w-5" />
+                          <span>{item.label}</span>
+                        </div>
+                        <div className="grid gap-1 pl-5">
+                          {item.subItems.map((subItem) => {
+                            const SubIcon = subItem.icon;
+                            const subActive = pathname === subItem.href || pathname.startsWith(`${subItem.href}/`);
+
+                            return (
+                              <SheetClose key={subItem.href} asChild>
+                                <Link
+                                  href={subItem.href}
+                                  className={cn(
+                                    "flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground",
+                                    subActive ? "bg-primary/10 text-primary" : "hover:bg-muted hover:text-foreground"
+                                  )}
+                                >
+                                  {SubIcon && <SubIcon className="h-4 w-4 shrink-0" />}
+                                  <span>{subItem.label}</span>
+                                  {subItem.notificationCollection && <NotificationBadge collectionName={subItem.notificationCollection} />}
+                                </Link>
+                              </SheetClose>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <SheetClose key={item.href} asChild>
+                      <Link
+                        href={item.href!}
+                        className={cn(
+                          "flex min-h-12 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground",
+                          active ? "bg-primary/10 text-primary" : "hover:bg-muted hover:text-foreground"
+                        )}
+                      >
+                        <Icon className="h-5 w-5 shrink-0" />
+                        <span>{item.label}</span>
+                        {item.notificationCollection && <NotificationBadge collectionName={item.notificationCollection} />}
+                      </Link>
+                    </SheetClose>
+                  );
+                })}
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+    </nav>
   );
 }

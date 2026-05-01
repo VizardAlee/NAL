@@ -21,7 +21,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar";
-import { AdminNav } from "@/components/admin-nav";
+import { AdminMobileNav, AdminNav } from "@/components/admin-nav";
 import { Logo } from "@/components/icons";
 import Link from "next/link";
 import { useUser } from "@/firebase";
@@ -182,14 +182,20 @@ export default function AdminLayout({
             </SidebarFooter>
         </Sidebar>
         <SidebarInset>
-            <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+            <header className="sticky top-0 z-10 flex h-16 items-center gap-2 border-b bg-background px-3 md:gap-4 md:px-6">
             <SidebarTrigger className="hidden md:flex" />
-            <div className="flex-1">
-                {/* Mobile sidebar trigger */}
-                <SidebarTrigger className="md:hidden" />
+            <div className="flex flex-1 items-center gap-2">
+                <Link href="/admin/dashboard" className="flex items-center gap-2 md:hidden">
+                  <Logo imageUrl={logoUrl} className="h-7 w-7 text-primary" />
+                  <span className="text-sm font-bold font-headline text-primary">NAL</span>
+                </Link>
             </div>
-            <DigitalClock />
-            <RoleSwitcher currentPortal="admin" />
+            <div className="hidden sm:block">
+              <DigitalClock />
+            </div>
+            <div className="hidden sm:block">
+              <RoleSwitcher currentPortal="admin" />
+            </div>
             <ThemeToggle />
             <MessagesLink basePath="/admin" />
             <NotificationBell historyHref="/admin/notifications" />
@@ -208,7 +214,8 @@ export default function AdminLayout({
                 </div>
               </div>
             )}
-            <main className={`flex-1 p-4 md:p-6 ${ownerReadOnly ? 'owner-readonly' : ''}`}>{children}</main>
+            <main className={`flex-1 p-4 pb-24 md:p-6 ${ownerReadOnly ? 'owner-readonly' : ''}`}>{children}</main>
+            <AdminMobileNav />
         </SidebarInset>
         </SidebarProvider>
     </OnboardingTourProvider>
