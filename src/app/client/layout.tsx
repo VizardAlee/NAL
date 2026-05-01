@@ -15,7 +15,7 @@ import { LogOut, FileText, PlusCircle, FlaskConical, HelpCircle, BookOpen, Histo
 import { Logo } from "@/components/icons";
 import Link from "next/link";
 import { useUser } from "@/firebase";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/firebase/provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import React, { useEffect } from "react";
@@ -29,6 +29,7 @@ import { RoleSwitcher } from "@/components/role-switcher";
 import { AdminShortcut } from "@/components/admin-shortcut";
 import { resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 import { NotificationBell } from "@/components/notification-bell";
+import { cn } from "@/lib/utils";
 
 function ClientSkeleton() {
     return (
@@ -60,6 +61,43 @@ const clientOnboardingSteps = [
     description: "Need new financing? Use the 'Request a Deal' button to submit a new proposal for review by our administrative team.",
   },
 ];
+
+const clientNavItems = [
+  { href: "/client/dashboard", label: "Home", icon: FileText },
+  { href: "/client/deals", label: "Deals", icon: History },
+  { href: "/client/deals/request", label: "Request", icon: PlusCircle },
+  { href: "/client/financing-modes", label: "Modes", icon: BookOpen },
+  { href: "/client/settings", label: "Settings", icon: Settings },
+];
+
+function ClientMobileNav() {
+  const pathname = usePathname();
+
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
+      <div className="mx-auto grid max-w-md grid-cols-5 items-end gap-1">
+        {clientNavItems.map((item) => {
+          const Icon = item.icon;
+          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex h-14 flex-col items-center justify-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground",
+                active && "bg-primary/10 text-primary"
+              )}
+            >
+              <Icon className="h-5 w-5" />
+              <span className="leading-none">{item.label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
 
 function AccountMenu() {
     const { user } = useUser();
@@ -131,10 +169,13 @@ export default function ClientLayout({
   return (
     <OnboardingTourProvider steps={clientOnboardingSteps} storageKey="hasSeenClientTour">
         <div className="flex min-h-screen w-full flex-col">
-            <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
-                <Link href="/client/dashboard" className="flex items-center gap-2 font-bold font-headline text-primary">
+            <header className="sticky top-0 z-10 flex h-16 items-center gap-2 border-b bg-background px-3 md:gap-4 md:px-6">
+                <Link href="/client/dashboard" className="flex min-w-0 items-center gap-2 font-bold font-headline text-primary">
                 <Logo imageUrl={logoUrl} className="h-7 w-7" />
-                <span>NAL General Marchant</span>
+                <span className="text-sm md:text-base">
+                  <span className="md:hidden">NAL</span>
+                  <span className="hidden md:inline">NAL General Marchant</span>
+                </span>
                 </Link>
                 <div className="flex-1" />
                 <nav className="hidden items-center gap-1 text-sm font-medium md:flex">
@@ -169,15 +210,22 @@ export default function ClientLayout({
                         </Link>
                     </Button>
                 </nav>
-                <DigitalClock />
-                <AdminShortcut currentPortal="client" />
+                <div className="hidden lg:block">
+                  <DigitalClock />
+                </div>
+                <div className="hidden sm:block">
+                  <AdminShortcut currentPortal="client" />
+                </div>
                 <RoleSwitcher currentPortal="client" />
-                <ThemeToggle />
+                <div className="hidden sm:block">
+                  <ThemeToggle />
+                </div>
                 <MessagesLink basePath="/client" />
                 <NotificationBell historyHref="/client/notifications" />
                 <AccountMenu />
             </header>
-            <main className="flex-1 p-4 md:p-6">{children}</main>
+            <main className="flex-1 p-4 pb-24 md:p-6">{children}</main>
+            <ClientMobileNav />
         </div>
     </OnboardingTourProvider>
   );
