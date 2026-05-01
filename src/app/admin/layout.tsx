@@ -193,9 +193,7 @@ export default function AdminLayout({
             <div className="hidden sm:block">
               <DigitalClock />
             </div>
-            <div className="hidden sm:block">
-              <RoleSwitcher currentPortal="admin" />
-            </div>
+            <RoleSwitcher currentPortal="admin" />
             <ThemeToggle />
             <MessagesLink basePath="/admin" />
             <NotificationBell historyHref="/admin/notifications" />
