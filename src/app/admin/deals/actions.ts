@@ -9,6 +9,7 @@ import { z } from 'zod';
 const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
   clientId: z.string({ required_error: 'Please select a client.' }),
+  marketerId: z.string().optional(),
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
   managementFeeRate: z.coerce.number().min(0, { message: 'Management fee rate cannot be negative.' }),
@@ -19,6 +20,50 @@ const formSchema = z.object({
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   startDate: z.date().optional(),
 });
+
+export async function createDealAction(clientName: string, values: z.infer<typeof formSchema>) {
+    const validated = formSchema.safeParse(values);
+    if (!validated.success) {
+        return {
+            success: false,
+            message: 'Invalid data provided for deal creation.',
+            details: validated.error.flatten(),
+        };
+    }
+
+    const { principal, managementFeeRate, startDate, ...restOfData } = validated.data;
+    const managementFeeAmount = (principal * managementFeeRate) / 100;
+
+    try {
+        const dealRef = await adminDb.collection('deals').add({
+            ...restOfData,
+            clientName,
+            principal,
+            managementFeeRate,
+            managementFeeAmount,
+            managementFeePaid: false,
+            status: 'Pending',
+            createdAt: FieldValue.serverTimestamp(),
+            startDate: startDate || FieldValue.serverTimestamp(),
+        });
+
+        revalidatePath('/admin/deals');
+
+        return {
+            success: true,
+            message: 'Deal created successfully.',
+            dealId: dealRef.id,
+        };
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'An unknown error occurred while creating the deal.';
+        console.error('Create Deal Action Error:', error);
+        return {
+            success: false,
+            message,
+            details: error instanceof Error ? { name: error.name, message: error.message } : { error: String(error) },
+        };
+    }
+}
 
 
 export async function updateDealAction(dealId: string, clientName: string, values: z.infer<typeof formSchema>) {

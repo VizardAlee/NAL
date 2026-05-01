@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useState, useMemo, useEffect } from 'react';
 import { CalendarIcon, Loader2, BookOpen } from 'lucide-react';
 import { collection, query } from 'firebase/firestore';
-import { useFirestore, useFirebaseApp } from '@/firebase';
+import { useFirestore } from '@/firebase';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -34,8 +34,26 @@ import { format } from 'date-fns';
 import { isDurationShort } from '@/lib/duration-helpers';
 import { Calendar } from '@/components/ui/calendar';
 import Link from 'next/link';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import { hasPersona, type LegacyRole, type Persona } from '@/lib/access-control';
+import { createDealAction } from './actions';
+
+type CallableError = Error & {
+  code?: string;
+  details?: unknown;
+  customData?: unknown;
+};
+
+function getDealCreationErrorMessage(error: unknown) {
+  const callableError = error as CallableError;
+  const details = callableError.details || callableError.customData;
+  const parts = [
+    callableError.code ? `Code: ${callableError.code}` : null,
+    callableError.message ? `Message: ${callableError.message}` : null,
+    details ? `Details: ${JSON.stringify(details)}` : null,
+  ].filter(Boolean);
+
+  return parts.join(' | ') || 'An unknown error occurred.';
+}
 
 
 const formSchema = z.object({
@@ -76,7 +94,6 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const firestore = useFirestore();
-  const app = useFirebaseApp();
 
   const clientsQuery = useMemo(() => {
     if (!firestore) return null;
@@ -140,17 +157,12 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
     }
 
     try {
-      const functions = getFunctions(app);
-      const createDeal = httpsCallable(functions, 'createDeal');
-
       const payload = {
         ...values,
-        clientName: selectedClient.name,
-        startDate: values.startDate ? values.startDate.toISOString() : undefined,
+        marketerId: values.marketerId || undefined,
       };
 
-      const result = await createDeal(payload);
-      const data = result.data as { success: boolean; message: string };
+      const data = await createDealAction(selectedClient.name, payload);
 
       if (data.success) {
         toast({
@@ -159,11 +171,29 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
         });
         onDealCreated();
       } else {
-        throw new Error(data.message);
+        const description = [
+          data.message,
+          'details' in data && data.details ? JSON.stringify(data.details) : null,
+        ].filter(Boolean).join(' | ');
+        const attemptedPayload = {
+          ...values,
+          marketerId: values.marketerId || undefined,
+          clientName: selectedClient.name,
+          startDate: values.startDate ? values.startDate.toISOString() : undefined,
+        };
+        console.error(`Deal Creation Failed: ${description}\n${JSON.stringify({ description, attemptedPayload }, null, 2)}`);
+        toast({ variant: 'destructive', title: 'Deal Creation Failed', description });
       }
-    } catch (error: any) {
-      console.error('Deal Creation Error:', error);
-      toast({ variant: 'destructive', title: 'Deal Creation Failed', description: error.message || 'An unknown error occurred.' });
+    } catch (error: unknown) {
+      const description = getDealCreationErrorMessage(error);
+      const attemptedPayload = {
+        ...values,
+        marketerId: values.marketerId || undefined,
+        clientName: selectedClient.name,
+        startDate: values.startDate ? values.startDate.toISOString() : undefined,
+      };
+      console.error(`Deal Creation Error: ${description}\n${JSON.stringify({ description, attemptedPayload }, null, 2)}`);
+      toast({ variant: 'destructive', title: 'Deal Creation Failed', description });
     } finally {
       setIsLoading(false);
     }

@@ -92,6 +92,10 @@ export function getAdminApp() {
         return initializeWithApplicationDefaultCredentials();
     }
 
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        return initializeWithApplicationDefaultCredentials();
+    }
+
     const serviceAccount = getServiceAccount();
     if (serviceAccount) {
         return admin.initializeApp({

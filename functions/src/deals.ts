@@ -1,6 +1,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { logger } from "firebase-functions";
 import { z } from "zod";
 
 const createDealSchema = z.object({
@@ -24,6 +25,23 @@ function isAdminCaller(token: admin.auth.DecodedIdToken | undefined): boolean {
     return token.role === 'Admin' || token.accessRole === 'ADMIN';
 }
 
+function getErrorDetails(error: unknown) {
+    if (error instanceof Error) {
+        const firebaseError = error as Error & { code?: string };
+        return {
+            code: firebaseError.code || 'unknown',
+            message: firebaseError.message,
+            name: firebaseError.name,
+        };
+    }
+
+    return {
+        code: 'unknown',
+        message: String(error),
+        name: 'NonError',
+    };
+}
+
 export const createDeal = onCall(
   {
     cors: [
@@ -41,7 +59,15 @@ export const createDeal = onCall(
     
     const validated = createDealSchema.safeParse(request.data);
     if (!validated.success) {
-        throw new HttpsError('invalid-argument', 'Invalid data provided for deal creation.');
+        logger.warn('createDeal validation failed', {
+            issues: validated.error.flatten(),
+            callerUid: request.auth?.uid,
+        });
+        throw new HttpsError(
+            'invalid-argument',
+            'Invalid data provided for deal creation.',
+            validated.error.flatten()
+        );
     }
     
     const { principal, managementFeeRate, startDate, ...restOfData } = validated.data;
@@ -61,8 +87,20 @@ export const createDeal = onCall(
     try {
         const newDealRef = await admin.firestore().collection('deals').add(dealData);
         return { success: true, message: 'Deal created successfully.', dealId: newDealRef.id };
-    } catch (error: any) {
-        throw new HttpsError('internal', error.message || 'An unknown error occurred while creating the deal.');
+    } catch (error: unknown) {
+        const details = getErrorDetails(error);
+        logger.error('createDeal failed while writing deal', {
+            ...details,
+            callerUid: request.auth?.uid,
+            clientId: validated.data.clientId,
+            financingMode: validated.data.financingMode,
+            principal: validated.data.principal,
+        });
+        throw new HttpsError(
+            'internal',
+            details.message || 'An unknown error occurred while creating the deal.',
+            details
+        );
     }
   }
 );
