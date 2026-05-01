@@ -43,7 +43,7 @@ import { NotificationBell } from "@/components/notification-bell";
 function AdminSkeleton() {
     return (
       <div className="flex h-screen w-full">
-        <div className="hidden md:flex flex-col w-64 border-r p-4 gap-4">
+        <div className="hidden lg:flex flex-col w-64 border-r p-4 gap-4">
             <Skeleton className="h-10 w-full" />
             <div className="flex flex-col gap-2 mt-4">
               <Skeleton className="h-8 w-full" />
@@ -182,25 +182,27 @@ export default function AdminLayout({
             </SidebarFooter>
         </Sidebar>
         <SidebarInset>
-            <header className="sticky top-0 z-10 flex h-16 items-center gap-2 border-b bg-background px-3 md:gap-4 md:px-6">
-            <SidebarTrigger className="hidden md:flex" />
+            <header className="sticky top-0 z-10 flex h-16 items-center gap-2 border-b bg-background px-3 lg:gap-4 lg:px-6">
+            <SidebarTrigger className="hidden lg:flex" />
             <div className="flex flex-1 items-center gap-2">
-                <Link href="/admin/dashboard" className="flex items-center gap-2 md:hidden">
+                <Link href="/admin/dashboard" className="flex items-center gap-2 lg:hidden">
                   <Logo imageUrl={logoUrl} className="h-7 w-7 text-primary" />
                   <span className="text-sm font-bold font-headline text-primary">NAL</span>
                 </Link>
             </div>
-            <div className="hidden sm:block">
+            <div className="hidden lg:block">
               <DigitalClock />
             </div>
             <RoleSwitcher currentPortal="admin" />
-            <ThemeToggle />
+            <div className="hidden lg:block">
+              <ThemeToggle />
+            </div>
             <MessagesLink basePath="/admin" />
             <NotificationBell historyHref="/admin/notifications" />
             <AccountMenu />
             </header>
             {ownerReadOnly && (
-              <div className="border-b bg-amber-50 px-4 py-2 text-sm text-amber-900 md:px-6">
+              <div className="border-b bg-amber-50 px-4 py-2 text-sm text-amber-900 lg:px-6">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Shield className="h-4 w-4" />
@@ -212,7 +214,7 @@ export default function AdminLayout({
                 </div>
               </div>
             )}
-            <main className={`flex-1 p-4 pb-24 md:p-6 ${ownerReadOnly ? 'owner-readonly' : ''}`}>{children}</main>
+            <main className={`flex-1 p-4 pb-24 lg:p-6 ${ownerReadOnly ? 'owner-readonly' : ''}`}>{children}</main>
             <AdminMobileNav />
         </SidebarInset>
         </SidebarProvider>

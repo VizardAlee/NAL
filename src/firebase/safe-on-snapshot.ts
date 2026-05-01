@@ -25,13 +25,6 @@ export function safeOnSnapshot<T = DocumentData>(
     query as any,
     next,
     (err) => {
-      // Completely silence the specific logout permission error.
-      // This happens when the user signs out and active listeners lose their authentication.
-      if (err.code === 'permission-denied') {
-        // We do nothing here to prevent the error from propagating to the console or our custom hooks.
-        return;
-      }
-      // For all other errors, call the provided error handler.
       error?.(err);
     },
     complete

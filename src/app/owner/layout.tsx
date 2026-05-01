@@ -110,13 +110,16 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="flex min-h-screen w-full flex-col">
-      <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
-        <Link href="/owner/dashboard" className="flex items-center gap-2 font-bold font-headline text-primary">
+      <header className="sticky top-0 z-10 flex h-16 items-center gap-2 border-b bg-background px-3 lg:gap-4 lg:px-6">
+        <Link href="/owner/dashboard" className="flex min-w-0 items-center gap-2 font-bold font-headline text-primary">
           <Logo imageUrl={logoUrl} className="h-7 w-7" />
-          <span>Owner Console</span>
+          <span className="text-sm lg:text-base">
+            <span className="lg:hidden">NAL</span>
+            <span className="hidden lg:inline">Owner Console</span>
+          </span>
         </Link>
         <div className="flex-1" />
-        <nav className="flex items-center gap-2 text-sm font-medium">
+        <nav className="hidden items-center gap-2 text-sm font-medium lg:flex">
           <Button variant="ghost" asChild>
             <Link href="/owner/dashboard">
               <LayoutDashboard className="mr-2 h-4 w-4" />
@@ -124,14 +127,20 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
             </Link>
           </Button>
         </nav>
-        <DigitalClock />
-        <AdminShortcut currentPortal="owner" />
+        <div className="hidden lg:block">
+          <DigitalClock />
+        </div>
+        <div className="hidden lg:block">
+          <AdminShortcut currentPortal="owner" />
+        </div>
         <RoleSwitcher currentPortal="owner" />
-        <ThemeToggle />
+        <div className="hidden lg:block">
+          <ThemeToggle />
+        </div>
         <NotificationBell historyHref="/owner/notifications" />
         <AccountMenu />
       </header>
-      <main className="flex-1 p-4 md:p-6">{children}</main>
+      <main className="flex-1 p-4 lg:p-6">{children}</main>
     </div>
   );
 }

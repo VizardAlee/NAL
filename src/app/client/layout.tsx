@@ -74,7 +74,7 @@ function ClientMobileNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden">
       <div className="mx-auto grid max-w-md grid-cols-5 items-end gap-1">
         {clientNavItems.map((item) => {
           const Icon = item.icon;
@@ -169,16 +169,16 @@ export default function ClientLayout({
   return (
     <OnboardingTourProvider steps={clientOnboardingSteps} storageKey="hasSeenClientTour">
         <div className="flex min-h-screen w-full flex-col">
-            <header className="sticky top-0 z-10 flex h-16 items-center gap-2 border-b bg-background px-3 md:gap-4 md:px-6">
+            <header className="sticky top-0 z-10 flex h-16 items-center gap-2 border-b bg-background px-3 lg:gap-4 lg:px-6">
                 <Link href="/client/dashboard" className="flex min-w-0 items-center gap-2 font-bold font-headline text-primary">
                 <Logo imageUrl={logoUrl} className="h-7 w-7" />
-                <span className="text-sm md:text-base">
-                  <span className="md:hidden">NAL</span>
-                  <span className="hidden md:inline">NAL General Marchant</span>
+                <span className="text-sm lg:text-base">
+                  <span className="lg:hidden">NAL</span>
+                  <span className="hidden lg:inline">NAL General Marchant</span>
                 </span>
                 </Link>
                 <div className="flex-1" />
-                <nav className="hidden items-center gap-1 text-sm font-medium md:flex">
+                <nav className="hidden items-center gap-1 text-sm font-medium lg:flex">
                     <Button variant="ghost" asChild>
                         <Link href="/client/dashboard">
                             <FileText className="h-4 w-4 mr-2" />
@@ -213,18 +213,18 @@ export default function ClientLayout({
                 <div className="hidden lg:block">
                   <DigitalClock />
                 </div>
-                <div className="hidden sm:block">
+                <div className="hidden lg:block">
                   <AdminShortcut currentPortal="client" />
                 </div>
                 <RoleSwitcher currentPortal="client" />
-                <div className="hidden sm:block">
+                <div className="hidden lg:block">
                   <ThemeToggle />
                 </div>
                 <MessagesLink basePath="/client" />
                 <NotificationBell historyHref="/client/notifications" />
                 <AccountMenu />
             </header>
-            <main className="flex-1 p-4 pb-24 md:p-6">{children}</main>
+            <main className="flex-1 p-4 pb-24 lg:p-6">{children}</main>
             <ClientMobileNav />
         </div>
     </OnboardingTourProvider>

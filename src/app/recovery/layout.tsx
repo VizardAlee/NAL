@@ -108,13 +108,16 @@ export default function RecoveryLayout({
 
   return (
     <div className="flex min-h-screen w-full flex-col">
-        <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
-            <Link href="/recovery/dashboard" className="flex items-center gap-2 font-bold font-headline text-primary">
+        <header className="sticky top-0 z-10 flex h-16 items-center gap-2 border-b bg-background px-3 lg:gap-4 lg:px-6">
+            <Link href="/recovery/dashboard" className="flex min-w-0 items-center gap-2 font-bold font-headline text-primary">
                 <Logo imageUrl={logoUrl} className="h-7 w-7" />
-                <span>NAL General Marchant</span>
+                <span className="text-sm lg:text-base">
+                  <span className="lg:hidden">NAL</span>
+                  <span className="hidden lg:inline">NAL General Marchant</span>
+                </span>
             </Link>
             <div className="flex-1" />
-            <nav className="flex items-center gap-2 text-sm font-medium">
+            <nav className="hidden items-center gap-2 text-sm font-medium lg:flex">
                 <Button variant="ghost" asChild>
                     <Link href="/recovery/dashboard">
                         <Gavel className="h-4 w-4 mr-2" />
@@ -122,14 +125,20 @@ export default function RecoveryLayout({
                     </Link>
                 </Button>
             </nav>
-            <DigitalClock />
-            <AdminShortcut currentPortal="recovery" />
+            <div className="hidden lg:block">
+              <DigitalClock />
+            </div>
+            <div className="hidden lg:block">
+              <AdminShortcut currentPortal="recovery" />
+            </div>
             <RoleSwitcher currentPortal="recovery" />
-            <ThemeToggle />
+            <div className="hidden lg:block">
+              <ThemeToggle />
+            </div>
             <NotificationBell historyHref="/recovery/notifications" />
             <AccountMenu />
         </header>
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="flex-1 p-4 lg:p-6">{children}</main>
     </div>
   );
 }

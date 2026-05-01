@@ -11,7 +11,22 @@ service cloud.firestore {
     function hasRole(role) {
       return request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+        && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role
+          || (
+            'roles' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles.hasAny([role])
+          )
+        );
+    }
+
+    function hasPersona(persona) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && (
+          'personas' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.personas.hasAny([persona])
+        );
     }
 
     function hasAccessRole(accessRole) {
@@ -46,23 +61,23 @@ service cloud.firestore {
     }
 
     function isClient() {
-      return hasRole('Client');
+      return hasRole('Client') || hasPersona('CLIENT');
     }
     
     function isInvestor() {
-      return hasRole('Investor');
+      return hasRole('Investor') || hasPersona('INVESTOR');
     }
 
     function isLegal() {
-      return hasRole('Legal');
+      return hasRole('Legal') || hasPersona('LEGAL');
     }
     
     function isRecovery() {
-       return hasRole('Recovery');
+       return hasRole('Recovery') || hasPersona('RECOVERY');
     }
     
     function isMarketer() {
-       return hasRole('Marketer');
+       return hasRole('Marketer') || hasPersona('MARKETER');
     }
 
     // Rules for the 'users' collection
