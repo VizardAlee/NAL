@@ -22,7 +22,7 @@ const createDealSchema = z.object({
 
 function isAdminCaller(token: admin.auth.DecodedIdToken | undefined): boolean {
     if (!token) return false;
-    return token.role === 'Admin' || token.accessRole === 'ADMIN';
+    return token.role === 'Admin' || ['OWNER', 'ADMIN', 'STAFF'].includes(token.accessRole as string);
 }
 
 function getErrorDetails(error: unknown) {

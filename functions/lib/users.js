@@ -12,6 +12,27 @@ const createUserSchema = zod_1.z.object({
     role: zod_1.z.enum(['Investor', 'Client', 'Marketer', 'Admin', 'Legal', 'Recovery']),
     referralCode: zod_1.z.string().optional(),
 });
+function deriveAccessModel(role) {
+    switch (role) {
+        case 'Admin':
+            return { accessRole: 'ADMIN', personas: [], primaryPortal: 'admin' };
+        case 'Investor':
+            return { accessRole: 'USER', personas: ['INVESTOR'], primaryPortal: 'investor' };
+        case 'Client':
+            return { accessRole: 'USER', personas: ['CLIENT'], primaryPortal: 'client' };
+        case 'Legal':
+            return { accessRole: 'USER', personas: ['LEGAL'], primaryPortal: 'legal' };
+        case 'Recovery':
+            return { accessRole: 'USER', personas: ['RECOVERY'], primaryPortal: 'recovery' };
+        case 'Marketer':
+            return { accessRole: 'USER', personas: ['MARKETER'], primaryPortal: 'marketer' };
+    }
+}
+function isAdminCaller(token) {
+    if (!token)
+        return false;
+    return token.role === 'Admin' || ['OWNER', 'ADMIN', 'STAFF'].includes(token.accessRole);
+}
 // Helper function to generate a unique referral code
 function generateReferralCode(name) {
     const namePart = name.split(' ')[0].toUpperCase().substring(0, 4).padEnd(4, 'X');
@@ -19,15 +40,15 @@ function generateReferralCode(name) {
     return `MARK-${namePart}-${randomPart}`;
 }
 exports.createUser = (0, https_1.onCall)(async (request) => {
-    // Optional: Add authentication check to ensure only admins can call this
-    // if (!request.auth || request.auth.token.role !== 'Admin') {
-    //     throw new HttpsError('unauthenticated', 'The function must be called by an authenticated admin.');
-    // }
+    if (!isAdminCaller(request.auth?.token)) {
+        throw new https_1.HttpsError('unauthenticated', 'The function must be called by an authenticated admin.');
+    }
     const validated = createUserSchema.safeParse(request.data);
     if (!validated.success) {
         throw new https_1.HttpsError('invalid-argument', 'Invalid data provided.');
     }
     const { name, email, password, role, phoneNumber, referralCode } = validated.data;
+    const accessModel = deriveAccessModel(role);
     try {
         const userRecord = await admin.auth().createUser({
             email,
@@ -35,8 +56,12 @@ exports.createUser = (0, https_1.onCall)(async (request) => {
             displayName: name,
             emailVerified: true,
         });
-        await admin.auth().setCustomUserClaims(userRecord.uid, { role });
-        const userData = { name, email, role };
+        await admin.auth().setCustomUserClaims(userRecord.uid, {
+            role,
+            accessRole: accessModel.accessRole,
+            personas: accessModel.personas,
+        });
+        const userData = { name, email, role, ...accessModel };
         if (phoneNumber)
             userData.phoneNumber = phoneNumber;
         if (referralCode)

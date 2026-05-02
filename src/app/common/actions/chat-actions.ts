@@ -2,11 +2,12 @@
 'use server';
 
 import { getAdminApp } from '@/firebase/admin-app';
-import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp, FieldValue, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { notifyAdmins, notifyUser } from './notification-actions';
 import { verifyAuthToken, verifyAuthTokenForUser } from '@/lib/server/auth';
+import { canViewAdmin, normalizeAccessModel } from '@/lib/access-control';
 
 
 const requestChatSchema = z.object({
@@ -15,6 +16,52 @@ const requestChatSchema = z.object({
   userName: z.string().min(1),
   userRole: z.enum(['Investor', 'Client']),
 });
+
+const listContactAdminsSchema = z.object({
+  authToken: z.string().min(1),
+});
+
+export async function listContactAdmins(input: z.infer<typeof listContactAdminsSchema>) {
+  const validated = listContactAdminsSchema.safeParse(input);
+  if (!validated.success) {
+    return { success: false, message: 'Invalid admin list request.', admins: [] };
+  }
+
+  const adminDb = getFirestore(getAdminApp());
+
+  try {
+    await verifyAuthToken(validated.data.authToken);
+
+    const [legacyAdmins, accessRoleAdmins, accessRoleStaff, accessRoleOwners] = await Promise.all([
+      adminDb.collection('users').where('role', '==', 'Admin').get(),
+      adminDb.collection('users').where('accessRole', '==', 'ADMIN').get(),
+      adminDb.collection('users').where('accessRole', '==', 'STAFF').get(),
+      adminDb.collection('users').where('accessRole', '==', 'OWNER').get(),
+    ]);
+
+    const adminDocs = new Map<string, QueryDocumentSnapshot>();
+    [...legacyAdmins.docs, ...accessRoleAdmins.docs, ...accessRoleStaff.docs, ...accessRoleOwners.docs].forEach((doc) => {
+      if (canViewAdmin(doc.data() as any)) {
+        adminDocs.set(doc.id, doc);
+      }
+    });
+
+    const admins = Array.from(adminDocs.values())
+      .map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name || data.email || 'Administrator',
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return { success: true, admins };
+  } catch (error) {
+    console.error('LIST CONTACT ADMINS ERROR:', error);
+    return { success: false, message: 'Failed to load administrators.', admins: [] };
+  }
+}
 
 export async function requestChatWithAdmin(input: z.infer<typeof requestChatSchema>) {
   const validated = requestChatSchema.safeParse(input);
@@ -138,14 +185,15 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
     
     for (const recipientId of recipients) {
         const recipientDoc = await firestore.collection('users').doc(recipientId).get();
-        const recipientRole = recipientDoc.data()?.role || 'Unknown';
+        const recipientData = recipientDoc.data();
+        const recipientAccess = normalizeAccessModel(recipientData as any);
 
         let link = '/';
-        if (recipientRole === 'Admin') {
+        if (canViewAdmin(recipientData as any)) {
             link = `/admin/messages/${conversationId}`;
-        } else if (recipientRole === 'Investor') {
+        } else if (recipientAccess.personas.includes('INVESTOR') || recipientAccess.primaryPortal === 'investor') {
             link = `/investor/messages/${conversationId}`;
-        } else if (recipientRole === 'Client') {
+        } else if (recipientAccess.personas.includes('CLIENT') || recipientAccess.primaryPortal === 'client') {
             link = `/client/messages/${conversationId}`;
         }
 

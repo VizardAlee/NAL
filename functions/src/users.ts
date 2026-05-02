@@ -12,6 +12,28 @@ const createUserSchema = z.object({
     referralCode: z.string().optional(),
 });
 
+function deriveAccessModel(role: z.infer<typeof createUserSchema>['role']) {
+    switch (role) {
+        case 'Admin':
+            return { accessRole: 'ADMIN', personas: [], primaryPortal: 'admin' };
+        case 'Investor':
+            return { accessRole: 'USER', personas: ['INVESTOR'], primaryPortal: 'investor' };
+        case 'Client':
+            return { accessRole: 'USER', personas: ['CLIENT'], primaryPortal: 'client' };
+        case 'Legal':
+            return { accessRole: 'USER', personas: ['LEGAL'], primaryPortal: 'legal' };
+        case 'Recovery':
+            return { accessRole: 'USER', personas: ['RECOVERY'], primaryPortal: 'recovery' };
+        case 'Marketer':
+            return { accessRole: 'USER', personas: ['MARKETER'], primaryPortal: 'marketer' };
+    }
+}
+
+function isAdminCaller(token: admin.auth.DecodedIdToken | undefined): boolean {
+    if (!token) return false;
+    return token.role === 'Admin' || ['OWNER', 'ADMIN', 'STAFF'].includes(token.accessRole as string);
+}
+
 // Helper function to generate a unique referral code
 function generateReferralCode(name: string): string {
     const namePart = name.split(' ')[0].toUpperCase().substring(0, 4).padEnd(4, 'X');
@@ -20,10 +42,9 @@ function generateReferralCode(name: string): string {
 }
 
 export const createUser = onCall(async (request) => {
-    // Optional: Add authentication check to ensure only admins can call this
-    // if (!request.auth || request.auth.token.role !== 'Admin') {
-    //     throw new HttpsError('unauthenticated', 'The function must be called by an authenticated admin.');
-    // }
+    if (!isAdminCaller(request.auth?.token)) {
+        throw new HttpsError('unauthenticated', 'The function must be called by an authenticated admin.');
+    }
     
     const validated = createUserSchema.safeParse(request.data);
     if (!validated.success) {
@@ -31,6 +52,7 @@ export const createUser = onCall(async (request) => {
     }
     
     const { name, email, password, role, phoneNumber, referralCode } = validated.data;
+    const accessModel = deriveAccessModel(role);
     
     try {
         const userRecord = await admin.auth().createUser({
@@ -40,9 +62,13 @@ export const createUser = onCall(async (request) => {
             emailVerified: true,
         });
 
-        await admin.auth().setCustomUserClaims(userRecord.uid, { role });
+        await admin.auth().setCustomUserClaims(userRecord.uid, {
+            role,
+            accessRole: accessModel.accessRole,
+            personas: accessModel.personas,
+        });
 
-        const userData: any = { name, email, role };
+        const userData: any = { name, email, role, ...accessModel };
         if (phoneNumber) userData.phoneNumber = phoneNumber;
         if (referralCode) userData.referredByCode = referralCode;
 

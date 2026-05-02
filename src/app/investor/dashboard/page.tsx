@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle, MessageSquare, Copy, Gavel } from "lucide-react";
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc } from 'firebase/firestore';
 import { useAuth, useFirestore, useUser } from '@/firebase';
@@ -27,7 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DepositForm } from "./deposit-form";
-import { getOrCreateConversation } from "@/app/common/actions/chat-actions";
+import { getOrCreateConversation, listContactAdmins } from "@/app/common/actions/chat-actions";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { generateAmortizationSchedule } from "@/lib/amortization";
@@ -207,21 +207,48 @@ function BankDetailsCard() {
 }
 
 function ContactAdminSheet() {
-    const firestore = useFirestore();
     const auth = useAuth();
     const router = useRouter();
     const { user } = useUser();
     const { toast } = useToast();
+    const [admins, setAdmins] = useState<Array<{ id: string; name: string }>>([]);
+    const [loading, setLoading] = useState(true);
     const [isPending, startTransition] = useTransition();
 
-    const adminsQuery = useMemo(() => {
-        if (!firestore || !user) return null;
-        return query(collection(firestore, 'users'), where('role', '==', 'Admin'));
-    }, [firestore, user]);
+    useEffect(() => {
+        let cancelled = false;
 
-    const { data: admins, loading } = useCollection<UserProfile>(adminsQuery);
+        async function loadAdmins() {
+            const currentUser = auth?.currentUser;
+            if (!currentUser || !user) {
+                setLoading(false);
+                return;
+            }
 
-    const handleSelectAdmin = (admin: UserProfile) => {
+            setLoading(true);
+            const authToken = await currentUser.getIdToken();
+            const result = await listContactAdmins({ authToken });
+
+            if (cancelled) return;
+            if (result.success) {
+                setAdmins(result.admins);
+            } else {
+                toast({
+                    variant: 'destructive',
+                    title: 'Unable to load admins',
+                    description: result.message,
+                });
+            }
+            setLoading(false);
+        }
+
+        loadAdmins();
+        return () => {
+            cancelled = true;
+        };
+    }, [auth, toast, user]);
+
+    const handleSelectAdmin = (admin: { id: string; name: string }) => {
         const currentUser = auth?.currentUser;
         if (!user?.displayName || !currentUser) return;
         startTransition(async () => {
@@ -260,6 +287,7 @@ function ContactAdminSheet() {
                 </SheetHeader>
                 <div className="py-4 space-y-3">
                     {loading && <p>Loading admins...</p>}
+                    {!loading && admins.length === 0 && <p className="text-sm text-muted-foreground">No administrators are available right now.</p>}
                     {admins?.map(admin => (
                         <Button
                             key={admin.id}

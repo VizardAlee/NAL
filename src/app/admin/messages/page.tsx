@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCollection, useUser, useFirestore } from '@/firebase';
-import { collection, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, Timestamp } from 'firebase/firestore';
 import { PageHeader } from '@/components/page-header';
 import { MessageSquare } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { canViewAdmin } from '@/lib/access-control';
 
 
 type Conversation = {
@@ -29,7 +30,8 @@ type Conversation = {
 type UserProfile = {
     id: string;
     name: string;
-    role: 'Admin' | 'Client' | 'Investor';
+    role?: 'Admin' | 'Client' | 'Investor';
+    accessRole?: 'OWNER' | 'ADMIN' | 'STAFF' | 'USER';
 };
 
 function ConversationList({ conversations, currentUserId }: { conversations: Conversation[] | null, currentUserId: string }) {
@@ -92,7 +94,7 @@ export default function AdminMessagesPage() {
 
     const allAdminsQuery = useMemo(() => {
         if (!firestore) return null;
-        return query(collection(firestore, 'users'), where('role', '==', 'Admin'));
+        return query(collection(firestore, 'users'));
     }, [firestore]);
 
     const allConversationsQuery = useMemo(() => {
@@ -112,7 +114,7 @@ export default function AdminMessagesPage() {
 
     const otherAdmins = useMemo(() => {
         if (!allAdmins || !adminUser) return [];
-        return allAdmins.filter(a => a.id !== adminUser.uid);
+        return allAdmins.filter(a => a.id !== adminUser.uid && canViewAdmin(a));
     }, [allAdmins, adminUser]);
 
     if (isLoading || !adminUser) {

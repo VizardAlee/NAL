@@ -5,6 +5,7 @@ import { adminDb, getAdminApp } from '@/firebase/admin-app';
 import { getAuth } from 'firebase-admin/auth';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
+import { normalizeAccessModel } from '@/lib/access-control';
 
 const setRoleSchema = z.object({
     role: z.enum(['Investor', 'Client']),
@@ -32,14 +33,24 @@ export async function setRoleAction(
 
     const { role, userId } = validated.data;
     const auth = getAuth(getAdminApp());
+    const accessModel = normalizeAccessModel({ role });
 
     try {
         // 1. Set Custom Claim for Security Rules
-        await auth.setCustomUserClaims(userId, { role });
+        await auth.setCustomUserClaims(userId, {
+            role,
+            accessRole: accessModel.accessRole,
+            personas: accessModel.personas,
+        });
 
         // 2. Update Firestore Document
         const userDocRef = adminDb.collection('users').doc(userId);
-        await userDocRef.update({ role });
+        await userDocRef.update({
+            role,
+            accessRole: accessModel.accessRole,
+            personas: accessModel.personas,
+            primaryPortal: accessModel.primaryPortal,
+        });
 
         // Revalidate paths that show user data
         revalidatePath('/admin/users');

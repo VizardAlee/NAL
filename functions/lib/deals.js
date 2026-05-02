@@ -23,7 +23,7 @@ const createDealSchema = zod_1.z.object({
 function isAdminCaller(token) {
     if (!token)
         return false;
-    return token.role === 'Admin' || token.accessRole === 'ADMIN';
+    return token.role === 'Admin' || ['OWNER', 'ADMIN', 'STAFF'].includes(token.accessRole);
 }
 function getErrorDetails(error) {
     if (error instanceof Error) {
