@@ -138,6 +138,28 @@ body {
     pointer-events: none;
   }
 
+  .home-dashboard-preview {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1.25rem;
+    border: 1px solid hsla(var(--primary) / 0.16);
+    background:
+      linear-gradient(145deg, hsla(var(--card) / 0.96), hsla(var(--background) / 0.86)),
+      radial-gradient(32rem 18rem at 90% 0%, hsla(var(--accent) / 0.16), transparent 65%);
+    box-shadow:
+      0 28px 80px hsla(var(--primary) / 0.18),
+      inset 0 1px 0 hsla(0 0% 100% / 0.45);
+    backdrop-filter: blur(14px);
+  }
+
+  .home-dashboard-preview::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, transparent 25%, hsla(var(--accent) / 0.12), transparent 72%);
+    pointer-events: none;
+  }
+
   .home-feature-card {
     animation: home-fade-up 0.7s ease both;
   }
@@ -145,6 +167,14 @@ body {
   .home-feature-card:hover {
     transform: translateY(-6px);
     transition: transform 0.25s ease;
+  }
+
+  .home-feature-visual {
+    min-height: 12rem;
+    padding: 1rem;
+    background:
+      linear-gradient(145deg, hsla(var(--primary) / 0.08), hsla(var(--accent) / 0.12)),
+      hsl(var(--muted));
   }
 
   .home-float-card {

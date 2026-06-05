@@ -6,15 +6,11 @@ import { ArrowRight, Bot, CheckCircle, LineChart, ShieldCheck, Sparkles, Users, 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Logo } from "@/components/icons";
-import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { StatsCounter } from "@/components/stats-counter";
 import { Animated } from "@/components/animated";
 
-const featureImages = PlaceHolderImages.filter(img => ['feature-investor', 'feature-client', 'feature-admin'].includes(img.id));
-const heroImage = PlaceHolderImages.find(img => img.id === 'hero-image');
-const aiImage = PlaceHolderImages.find(img => img.id === 'ai-analyzer');
 const trustPoints = [
   { icon: ShieldCheck, label: "Role-Based Security" },
   { icon: Wallet, label: "Structured Fund Flow" },
@@ -48,39 +44,28 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Image Section */}
-      <section className="w-full bg-background py-0">
-        <div className="container flex justify-start">
-          <Image
-            src="/business_hub.png"
-            alt="Descriptive write-up"
-            width={240}
-            height={40}
-            className="object-contain max-w-sm w-full h-auto"
-          />
-        </div>
-      </section>
-
       <main className="flex-1">
-        <section className="container py-12 sm:py-24 md:py-32">
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-            <div className="flex flex-col justify-center space-y-6">
-              <Animated
-                as="h1"
-                className="text-4xl font-bold tracking-tighter font-headline sm:text-5xl xl:text-6xl/none animate-in fade-in slide-in-from-bottom-4 duration-1000"
-              >
-                The Central Hub for Your Financing Ecosystem
-              </Animated>
-              <Animated
-                as="p"
-                className="max-w-[600px] text-muted-foreground md:text-xl animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-200"
-              >
-                NAL General Marchant connects investors, clients, and administrators on a single platform to manage financing deals with unparalleled efficiency and insight.
-              </Animated>
-              <Animated className="flex flex-col gap-4 sm:flex-row animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
+        <section className="container py-10 sm:py-16 md:py-20">
+          <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[0.95fr_1.05fr]">
+            <div className="flex flex-col justify-center space-y-7">
+              <Image
+                src="/business_hub.png"
+                alt="Business Hub"
+                width={360}
+                height={141}
+                priority
+                className="h-auto w-[240px] object-contain sm:w-[320px] md:w-[360px]"
+              />
+              <h1 className="max-w-3xl text-4xl font-bold tracking-tighter font-headline sm:text-5xl xl:text-6xl/none">
+                Financing Operations, Funds, and Repayments in One Command Center
+              </h1>
+              <p className="max-w-[620px] text-muted-foreground md:text-xl">
+                NAL General Marchant gives investors, clients, and administrators one secure workspace to manage financing deals, approvals, repayments, and portfolio movement.
+              </p>
+              <div className="flex flex-col gap-4 sm:flex-row">
                 <Button size="lg" asChild>
-                  <Link href="/signup">
-                    Get Started
+                  <Link href="/login">
+                    Enter Platform <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
                 <Button size="lg" variant="outline" asChild>
@@ -88,8 +73,8 @@ export default function Home() {
                     Learn More
                   </Link>
                 </Button>
-              </Animated>
-              <div className="grid grid-cols-1 gap-2 pt-2 sm:grid-cols-2">
+              </div>
+              <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-3">
                 {trustPoints.map((point) => (
                   <div key={point.label} className="inline-flex items-center justify-start gap-2 text-sm text-muted-foreground">
                     <point.icon className="h-4 w-4 text-primary" />
@@ -98,32 +83,9 @@ export default function Home() {
                 ))}
               </div>
             </div>
-            <Animated className="flex items-center justify-center animate-in fade-in zoom-in-95 duration-1000 delay-200">
-              {heroImage && (
-                <div className="home-image-frame relative">
-                  <Image
-                    src={heroImage.imageUrl}
-                    alt={heroImage.description}
-                    data-ai-hint={heroImage.imageHint}
-                    width={720}
-                    height={480}
-                    className="h-[320px] w-full rounded-2xl object-cover sm:h-[420px]"
-                  />
-                  <Card className="home-float-card absolute -bottom-6 -left-2 w-44 border-primary/20 bg-card/90 shadow-lg backdrop-blur sm:w-52">
-                    <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground">Repayment Status</p>
-                      <p className="mt-1 text-lg font-semibold">Real-Time</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="home-float-card absolute -right-2 -top-6 w-44 border-accent/40 bg-card/90 shadow-lg backdrop-blur sm:w-52">
-                    <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground">Funding Engine</p>
-                      <p className="mt-1 text-lg font-semibold">FIFO Ready</p>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-            </Animated>
+            <div className="flex items-center justify-center">
+              <ProductHeroPreview />
+            </div>
           </div>
         </section>
 
@@ -146,7 +108,7 @@ export default function Home() {
                   icon={<LineChart className="h-8 w-8 text-accent" />} 
                   title="Investor Dashboard" 
                   description="View your portfolio, reinvest funds, and track earnings. Deploy capital into new financing deals as they become available." 
-                  image={featureImages.find(img => img.id === 'feature-investor')}
+                  variant="investor"
                 />
               </Animated>
                <Animated delay={350}>
@@ -154,7 +116,7 @@ export default function Home() {
                   icon={<Users className="h-8 w-8 text-accent" />} 
                   title="Client Dashboard" 
                   description="Manage your financing deals. Track loan status, view your repayment schedule, and easily lodge payments for confirmation." 
-                  image={featureImages.find(img => img.id === 'feature-client')}
+                  variant="client"
                 />
               </Animated>
               <Animated delay={500}>
@@ -162,7 +124,7 @@ export default function Home() {
                   icon={<CheckCircle className="h-8 w-8 text-accent" />} 
                   title="Admin Control Panel" 
                   description="Get a platform-wide view. Oversee all deals, manage users, approve financial requests, and activate new deals." 
-                  image={featureImages.find(img => img.id === 'feature-admin')}
+                  variant="admin"
                 />
               </Animated>
             </div>
@@ -184,18 +146,7 @@ export default function Home() {
               </Button>
             </Animated>
             <Animated as="div" className="flex items-center justify-center" delay={400}>
-              {aiImage && (
-                <div className="home-image-frame home-image-pulse">
-                  <Image
-                    src={aiImage.imageUrl}
-                    alt={aiImage.description}
-                    data-ai-hint={aiImage.imageHint}
-                    width={700}
-                    height={460}
-                    className="h-[300px] w-full rounded-2xl object-cover sm:h-[380px]"
-                  />
-                </div>
-              )}
+              <AnalyzerPreview />
             </Animated>
           </div>
         </section>
@@ -234,7 +185,7 @@ export default function Home() {
                 <h4 className="font-semibold text-sm">Platform</h4>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li><Link href="/login" className="hover:text-primary transition-colors">Login</Link></li>
-                  <li><Link href="/signup" className="hover:text-primary transition-colors">Get Started</Link></li>
+                  <li><Link href="/login" className="hover:text-primary transition-colors">Request Access</Link></li>
                 </ul>
               </div>
               <div className="space-y-3">
@@ -267,19 +218,12 @@ export default function Home() {
   );
 }
 
-function FeatureCard({ icon, title, description, image }: { icon: React.ReactNode, title: string, description: string, image?: { imageUrl: string, description: string, imageHint: string } }) {
+type FeatureVariant = 'investor' | 'client' | 'admin';
+
+function FeatureCard({ icon, title, description, variant }: { icon: React.ReactNode, title: string, description: string, variant: FeatureVariant }) {
   return (
     <Card className="home-feature-card overflow-hidden border-white/50 bg-card/90 shadow-md backdrop-blur h-full">
-      {image && (
-        <Image
-          src={image.imageUrl}
-          alt={image.description}
-          data-ai-hint={image.imageHint}
-          width={600}
-          height={400}
-          className="w-full h-48 object-cover"
-        />
-      )}
+      <FeatureVisual variant={variant} />
       <CardHeader>
         <div className="flex items-center justify-center gap-4">
           {icon}
@@ -290,5 +234,198 @@ function FeatureCard({ icon, title, description, image }: { icon: React.ReactNod
         <p className="text-center text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function FeatureVisual({ variant }: { variant: FeatureVariant }) {
+  if (variant === 'investor') {
+    return (
+      <div className="home-feature-visual">
+        <div className="flex items-end gap-2">
+          {[42, 58, 46, 76, 62, 88].map((height, index) => (
+            <span key={index} className="w-full rounded-t bg-primary/80" style={{ height }} />
+          ))}
+        </div>
+        <div className="mt-4 flex items-center justify-between rounded-md bg-background/80 p-3">
+          <span className="text-xs text-muted-foreground">Portfolio yield</span>
+          <span className="text-sm font-semibold text-primary">+18.4%</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === 'client') {
+    return (
+      <div className="home-feature-visual">
+        <div className="space-y-3">
+          {['Principal', 'Markup', 'Next repayment'].map((label, index) => (
+            <div key={label}>
+              <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                <span>{label}</span>
+                <span>{[72, 44, 58][index]}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-background">
+                <div className="h-2 rounded-full bg-primary" style={{ width: `${[72, 44, 58][index]}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 rounded-md border bg-background/70 p-3 text-xs text-muted-foreground">
+          Due date confirmed
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="home-feature-visual">
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          ['Deals', '24'],
+          ['Users', '118'],
+          ['Requests', '7'],
+          ['Funds', '₦42M'],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-md bg-background/80 p-3">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="text-lg font-semibold">{value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AnalyzerPreview() {
+  return (
+    <div className="home-dashboard-preview home-image-pulse w-full max-w-xl">
+      <div className="border-b px-5 py-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-primary">AI Deal Analyzer</p>
+          <span className="rounded-full bg-accent/15 px-3 py-1 text-xs font-medium text-primary">Risk Review</span>
+        </div>
+      </div>
+      <div className="grid gap-4 p-5">
+        <div className="rounded-md border bg-background/80 p-4">
+          <p className="text-xs text-muted-foreground">Proposal summary</p>
+          <p className="mt-2 text-lg font-semibold">Inventory financing for approved client</p>
+          <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+            <div className="rounded-md bg-muted/60 p-3">
+              <p className="text-xs text-muted-foreground">Viability</p>
+              <p className="font-semibold text-primary">Strong</p>
+            </div>
+            <div className="rounded-md bg-muted/60 p-3">
+              <p className="text-xs text-muted-foreground">Risk</p>
+              <p className="font-semibold">Medium</p>
+            </div>
+            <div className="rounded-md bg-muted/60 p-3">
+              <p className="text-xs text-muted-foreground">Tenor</p>
+              <p className="font-semibold">90 days</p>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-md border bg-background/80 p-4">
+          <p className="text-sm font-semibold">Recommended checks</p>
+          <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+            <p>• Confirm collateral documentation</p>
+            <p>• Review repayment source history</p>
+            <p>• Match markup against risk profile</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProductHeroPreview() {
+  const approvalRows = [
+    { label: 'Client repayment', value: '₦4.8M', status: 'Due Today' },
+    { label: 'Investor funding', value: '₦18.2M', status: 'Queued' },
+    { label: 'Deal approval', value: '₦32.0M', status: 'Review' },
+  ];
+
+  return (
+    <div className="home-dashboard-preview w-full max-w-2xl">
+      <div className="flex items-center justify-between border-b border-border/70 px-4 py-3 sm:px-5">
+        <div className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-destructive/70" />
+          <span className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+          <span className="h-2.5 w-2.5 rounded-full bg-accent" />
+        </div>
+        <div className="rounded-full border bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
+          Live Operations
+        </div>
+      </div>
+      <div className="grid gap-4 p-4 sm:p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-primary">NAL Command Center</p>
+            <h2 className="mt-1 text-2xl font-bold tracking-tight font-headline sm:text-3xl">₦128.4M Active Flow</h2>
+          </div>
+          <div className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">
+            96% visibility
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-md border bg-background/80 p-3">
+            <p className="text-xs text-muted-foreground">Active Deals</p>
+            <p className="mt-1 text-xl font-semibold">24</p>
+          </div>
+          <div className="rounded-md border bg-background/80 p-3">
+            <p className="text-xs text-muted-foreground">Pending Approvals</p>
+            <p className="mt-1 text-xl font-semibold">7</p>
+          </div>
+          <div className="rounded-md border bg-background/80 p-3">
+            <p className="text-xs text-muted-foreground">Repayments</p>
+            <p className="mt-1 text-xl font-semibold">₦9.6M</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[1fr_0.82fr]">
+          <div className="rounded-md border bg-background/80 p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm font-semibold">Fund Allocation</p>
+              <span className="text-xs text-muted-foreground">FIFO</span>
+            </div>
+            <div className="space-y-3">
+              {[
+                ['Investor pool', '82%'],
+                ['Client repayments', '64%'],
+                ['Platform earnings', '48%'],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                    <span>{label}</span>
+                    <span>{value}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted">
+                    <div className="h-2 rounded-full bg-primary" style={{ width: value }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-md border bg-background/80 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-semibold">Approvals</p>
+              <span className="rounded-full bg-accent/15 px-2 py-1 text-xs font-medium text-primary">Today</span>
+            </div>
+            <div className="space-y-3">
+              {approvalRows.map((row) => (
+                <div key={row.label} className="flex items-center justify-between gap-3 rounded-md bg-muted/50 p-2">
+                  <div>
+                    <p className="text-xs font-medium">{row.label}</p>
+                    <p className="text-xs text-muted-foreground">{row.status}</p>
+                  </div>
+                  <p className="text-sm font-semibold">{row.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

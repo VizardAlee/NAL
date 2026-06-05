@@ -3,8 +3,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useInView } from 'react-intersection-observer';
-import { Users, Briefcase, Banknote, Loader2 } from 'lucide-react';
-import { Skeleton } from './ui/skeleton';
+import { Users, Briefcase, Banknote, ShieldCheck, GitBranch, FileCheck2 } from 'lucide-react';
 import { getPublicStats } from '@/app/actions';
 
 interface Stats {
@@ -67,6 +66,20 @@ const StatCard = ({ icon: Icon, value, label, inView, isCurrency = false }: { ic
   );
 };
 
+const platformHighlights = [
+  { icon: ShieldCheck, value: 'Invite-Only', label: 'Controlled Access' },
+  { icon: GitBranch, value: 'FIFO', label: 'Structured Fund Flow' },
+  { icon: FileCheck2, value: 'Audit Trail', label: 'Approval Records' },
+];
+
+const HighlightCard = ({ icon: Icon, value, label }: { icon: React.ElementType, value: string, label: string }) => (
+  <div className="rounded-md border bg-background/80 p-6 text-center shadow-sm">
+    <Icon className="mx-auto mb-3 h-8 w-8 text-primary" />
+    <p className="text-2xl font-bold font-headline tracking-tight text-primary">{value}</p>
+    <p className="mt-1 text-sm text-muted-foreground">{label}</p>
+  </div>
+);
+
 export function StatsCounter() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,19 +107,17 @@ export function StatsCounter() {
   return (
     <section ref={ref} className="w-full py-12 md:py-24 bg-muted/50">
       <div className="container">
-        <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
-          {loading || !stats ? (
-             <>
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-32 w-full" />
-             </>
-          ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 md:gap-8">
+          {!loading && stats && (stats.totalInvestments > 0 || stats.totalDealsFunded > 0) ? (
             <>
               <StatCard icon={Users} value={stats.totalUsers} label="Total Users" inView={inView} />
               <StatCard icon={Banknote} value={stats.totalInvestments} label="Total Investments" inView={inView} isCurrency />
               <StatCard icon={Briefcase} value={stats.totalDealsFunded} label="Total Deals Funded" inView={inView} isCurrency />
             </>
+          ) : (
+            platformHighlights.map((highlight) => (
+              <HighlightCard key={highlight.label} {...highlight} />
+            ))
           )}
         </div>
       </div>
