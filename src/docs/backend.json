@@ -582,13 +582,26 @@
       "properties": {
         "periodStart": { "type": "string", "format": "date-time", "description": "The start date of the calculation period." },
         "periodEnd": { "type": "string", "format": "date-time", "description": "The end date of the calculation period." },
-        "grossProfit": { "type": "number", "description": "The gross profit for the period." },
-        "educationTax": { "type": "number", "description": "The calculated Tertiary Education Tax (EDT)." },
+        "totalRevenue": { "type": "number", "description": "The gross turnover used for the tax estimate." },
+        "expenses": { "type": "number", "description": "Recorded business expenses for the period." },
+        "profitBeforeTax": { "type": "number", "description": "Book profit before tax adjustments." },
+        "adjustedProfit": { "type": "number", "description": "Profit after add-backs and exempt-income adjustments." },
+        "assessableProfit": { "type": "number", "description": "Assessable profit used for Development Levy." },
+        "totalProfits": { "type": "number", "description": "Taxable total profits used for Companies Income Tax (CIT)." },
+        "developmentLevy": { "type": "number", "description": "The calculated Development Levy under the 2026 Nigerian Tax Act." },
         "companyIncomeTax": { "type": "number", "description": "The calculated Company Income Tax (CIT)." },
+        "minimumEtrTopUp": { "type": "number", "description": "Estimated minimum effective tax top-up, where applicable." },
+        "whtCredits": { "type": "number", "description": "Withholding tax credits applied against corporate tax due." },
+        "corporateTaxPayable": { "type": "number", "description": "Estimated corporate tax payable after WHT credits." },
+        "outputVat": { "type": "number", "description": "Output VAT from taxable supplies." },
+        "inputVat": { "type": "number", "description": "Input VAT recoverable from qualifying purchases." },
+        "vatPayable": { "type": "number", "description": "Estimated VAT payable." },
+        "vatRecoverable": { "type": "number", "description": "Estimated excess input VAT recoverable." },
         "profitAfterTax": { "type": "number", "description": "The final profit after all taxes." },
+        "lawBasis": { "type": "string", "description": "The law basis used for the estimate." },
         "createdAt": { "type": "string", "format": "date-time", "description": "When this record was generated." }
       },
-      "required": ["periodStart", "periodEnd", "grossProfit", "educationTax", "companyIncomeTax", "createdAt"]
+      "required": ["totalRevenue", "assessableProfit", "totalProfits", "developmentLevy", "companyIncomeTax", "createdAt"]
     },
     "recoveryTask": {
       "title": "Recovery Task",

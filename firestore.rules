@@ -264,6 +264,11 @@ service cloud.firestore {
         allow write: if isAdmin();
     }
 
+    match /taxRecords/{taxRecordId} {
+        allow read: if canAdminRead();
+        allow write: if isAdmin();
+    }
+
     // Rules for 'notifications'
     match /notifications/{notificationId} {
         // Notification creation is handled through trusted server actions/Admin SDK.
