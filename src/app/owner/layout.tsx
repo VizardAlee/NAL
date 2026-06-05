@@ -24,7 +24,7 @@ import { useUser } from '@/firebase';
 import { getDefaultRouteForUser, normalizeAccessModel } from '@/lib/access-control';
 import { RoleSwitcher } from '@/components/role-switcher';
 import { AdminShortcut } from "@/components/admin-shortcut";
-import { resolvePreferredPortal, setStoredActivePortal } from '@/lib/active-portal';
+import { clearStoredActivePortal, resolvePreferredPortal, setStoredActivePortal } from '@/lib/active-portal';
 import { NotificationBell } from '@/components/notification-bell';
 
 function OwnerSkeleton() {
@@ -48,12 +48,15 @@ function AccountMenu() {
   const router = useRouter();
 
   const handleOpenAdmin = () => {
-    setStoredActivePortal('admin');
+    setStoredActivePortal('admin', user?.uid);
     router.push('/admin/dashboard');
   };
 
   const handleLogout = async () => {
-    if (auth) await auth.signOut();
+    if (auth) {
+      clearStoredActivePortal(user?.uid);
+      await auth.signOut();
+    }
     router.push('/login');
   };
 
@@ -96,11 +99,11 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
     if (!loading && user) {
       const model = normalizeAccessModel(user as any);
       if (model.accessRole !== 'OWNER') {
-        const preferredPortal = resolvePreferredPortal(user);
+        const preferredPortal = resolvePreferredPortal(user, user.uid);
         router.push(getDefaultRouteForUser(user as any, preferredPortal));
         return;
       }
-      setStoredActivePortal('owner');
+      setStoredActivePortal('owner', user.uid);
     }
   }, [user, loading, router]);
 

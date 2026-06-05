@@ -27,7 +27,7 @@ import { DigitalClock } from "@/components/digital-clock";
 import { canAccessPortal, getDefaultRouteForUser } from "@/lib/access-control";
 import { RoleSwitcher } from "@/components/role-switcher";
 import { AdminShortcut } from "@/components/admin-shortcut";
-import { resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
+import { clearStoredActivePortal, resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 import { NotificationBell } from "@/components/notification-bell";
 import { cn } from "@/lib/utils";
 
@@ -109,6 +109,7 @@ function AccountMenu() {
 
     const handleLogout = async () => {
         if (auth) {
+            clearStoredActivePortal(user?.uid);
             await auth.signOut();
         }
         router.push('/login');
@@ -163,11 +164,11 @@ export default function InvestorLayout({
     }
     if (!loading && user) {
       if (!canAccessPortal(user, 'investor')) {
-        const preferredPortal = resolvePreferredPortal(user);
+        const preferredPortal = resolvePreferredPortal(user, user.uid);
         router.push(getDefaultRouteForUser(user, preferredPortal));
         return;
       }
-      setStoredActivePortal('investor');
+      setStoredActivePortal('investor', user.uid);
     }
   }, [user, loading, router]);
   

@@ -36,7 +36,7 @@ import { DigitalClock } from "@/components/digital-clock";
 import { MessagesLink } from "@/components/messages-link";
 import { canAccessPortal, getDefaultRouteForUser, isReadOnlyOwner } from "@/lib/access-control";
 import { RoleSwitcher } from "@/components/role-switcher";
-import { resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
+import { clearStoredActivePortal, resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 import { NotificationBell } from "@/components/notification-bell";
 
 
@@ -96,6 +96,7 @@ function AccountMenu() {
 
     const handleLogout = async () => {
         if (auth) {
+            clearStoredActivePortal(user?.uid);
             await auth.signOut();
         }
         router.push('/login');
@@ -147,11 +148,11 @@ export default function AdminLayout({
     }
     if (!loading && user) {
       if (!canAccessPortal(user, 'admin')) {
-        const preferredPortal = resolvePreferredPortal(user);
+        const preferredPortal = resolvePreferredPortal(user, user.uid);
         router.push(getDefaultRouteForUser(user, preferredPortal));
         return;
       }
-      setStoredActivePortal('admin');
+      setStoredActivePortal('admin', user.uid);
     }
   }, [user, loading, router]);
   

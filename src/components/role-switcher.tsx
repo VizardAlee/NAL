@@ -44,7 +44,7 @@ export function RoleSwitcher({ currentPortal }: RoleSwitcherProps) {
 
   const handleSwitch = (portal: PrimaryPortal) => {
     if (portal === currentPortal) return;
-    setStoredActivePortal(portal);
+    setStoredActivePortal(portal, user?.uid);
     router.push(getRouteForPortal(portal));
   };
 

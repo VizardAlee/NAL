@@ -83,7 +83,7 @@ export function LoginForm() {
         description: "Redirecting to your dashboard...",
       });
 
-      const preferredPortal = resolvePreferredPortal(userData);
+      const preferredPortal = resolvePreferredPortal(userData, user.uid);
       router.push(getDefaultRouteForUser(userData, preferredPortal));
 
     } catch (error) {

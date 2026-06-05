@@ -34,7 +34,7 @@ export function AdminShortcut({ currentPortal }: AdminShortcutProps) {
   }
 
   const handleGoToAdmin = () => {
-    setStoredActivePortal('admin');
+    setStoredActivePortal('admin', user?.uid);
     router.push(getRouteForPortal('admin'));
   };
 
