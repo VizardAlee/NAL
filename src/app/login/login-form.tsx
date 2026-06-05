@@ -14,7 +14,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -123,6 +123,7 @@ export function LoginForm() {
     <Card>
       <CardHeader>
         <CardTitle className="font-headline text-2xl">Login</CardTitle>
+        <CardDescription>Enter your credentials to access your workspace.</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>

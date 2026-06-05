@@ -213,7 +213,7 @@ export function AdminMobileNav() {
   const moreActive = moreMobileItems.some((item) => isItemActive(pathname, item));
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/90 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-14px_36px_hsla(var(--primary)/0.14)] backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 lg:hidden">
       <div className="mx-auto grid max-w-md grid-cols-5 items-end gap-1">
         {primaryMobileItems.map((item) => {
           const Icon = item.icon;
@@ -227,8 +227,8 @@ export function AdminMobileNav() {
                     type="button"
                     variant="ghost"
                     className={cn(
-                      "relative h-14 flex-col gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground",
-                      active && "bg-primary/10 text-primary"
+                      "relative h-14 flex-col gap-1 rounded-md px-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground",
+                      active && "bg-primary/10 text-primary shadow-sm shadow-primary/10"
                     )}
                   >
                     <Icon className="h-5 w-5" />
@@ -249,8 +249,8 @@ export function AdminMobileNav() {
                           <Link
                             href={subItem.href}
                             className={cn(
-                              "flex min-h-12 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground",
-                              subActive ? "bg-primary/10 text-primary" : "hover:bg-muted hover:text-foreground"
+                              "flex min-h-12 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors",
+                              subActive ? "bg-primary/10 text-primary shadow-sm shadow-primary/10" : "hover:bg-muted/70 hover:text-foreground"
                             )}
                           >
                             {SubIcon && <SubIcon className="h-5 w-5 shrink-0" />}
@@ -271,8 +271,8 @@ export function AdminMobileNav() {
               key={item.href}
               href={item.href!}
               className={cn(
-                "flex h-14 flex-col items-center justify-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground",
-                active && "bg-primary/10 text-primary"
+                "flex h-14 flex-col items-center justify-center gap-1 rounded-md px-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground",
+                active && "bg-primary/10 text-primary shadow-sm shadow-primary/10"
               )}
             >
               <Icon className="h-5 w-5" />
@@ -287,8 +287,8 @@ export function AdminMobileNav() {
               type="button"
               variant="ghost"
               className={cn(
-                "h-14 flex-col gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground",
-                moreActive && "bg-primary/10 text-primary"
+                "h-14 flex-col gap-1 rounded-md px-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground",
+                moreActive && "bg-primary/10 text-primary shadow-sm shadow-primary/10"
               )}
             >
               <MoreHorizontal className="h-5 w-5" />
@@ -322,8 +322,8 @@ export function AdminMobileNav() {
                                 <Link
                                   href={subItem.href}
                                   className={cn(
-                                    "flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground",
-                                    subActive ? "bg-primary/10 text-primary" : "hover:bg-muted hover:text-foreground"
+                                    "flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors",
+                                    subActive ? "bg-primary/10 text-primary shadow-sm shadow-primary/10" : "hover:bg-muted/70 hover:text-foreground"
                                   )}
                                 >
                                   {SubIcon && <SubIcon className="h-4 w-4 shrink-0" />}
@@ -343,8 +343,8 @@ export function AdminMobileNav() {
                       <Link
                         href={item.href!}
                         className={cn(
-                          "flex min-h-12 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground",
-                          active ? "bg-primary/10 text-primary" : "hover:bg-muted hover:text-foreground"
+                          "flex min-h-12 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors",
+                          active ? "bg-primary/10 text-primary shadow-sm shadow-primary/10" : "hover:bg-muted/70 hover:text-foreground"
                         )}
                       >
                         <Icon className="h-5 w-5 shrink-0" />

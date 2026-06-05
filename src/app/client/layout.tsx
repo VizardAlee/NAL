@@ -74,7 +74,7 @@ function ClientMobileNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/90 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-14px_36px_hsla(var(--primary)/0.14)] backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 lg:hidden">
       <div className="mx-auto grid max-w-md grid-cols-5 items-end gap-1">
         {clientNavItems.map((item) => {
           const Icon = item.icon;
@@ -85,8 +85,8 @@ function ClientMobileNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex h-14 flex-col items-center justify-center gap-1 rounded-md px-1 text-[11px] font-medium text-muted-foreground",
-                active && "bg-primary/10 text-primary"
+                "flex h-14 flex-col items-center justify-center gap-1 rounded-md px-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground",
+                active && "bg-primary/10 text-primary shadow-sm shadow-primary/10"
               )}
             >
               <Icon className="h-5 w-5" />
@@ -168,8 +168,8 @@ export default function ClientLayout({
 
   return (
     <OnboardingTourProvider steps={clientOnboardingSteps} storageKey="hasSeenClientTour">
-        <div className="flex min-h-screen w-full flex-col">
-            <header className="sticky top-0 z-10 flex h-16 items-center gap-2 border-b bg-background px-3 lg:gap-4 lg:px-6">
+        <div className="app-shell flex w-full flex-col">
+            <header className="app-topbar sticky top-0 z-10 flex h-16 items-center gap-2 px-3 lg:gap-4 lg:px-6">
                 <Link href="/client/dashboard" className="flex min-w-0 items-center gap-2 font-bold font-headline text-primary">
                 <Logo imageUrl={logoUrl} className="h-7 w-7" />
                 <span className="text-sm lg:text-base">
@@ -224,7 +224,7 @@ export default function ClientLayout({
                 <NotificationBell historyHref="/client/notifications" />
                 <AccountMenu />
             </header>
-            <main className="flex-1 p-4 pb-24 lg:p-6">{children}</main>
+            <main className="app-content flex-1 p-4 pb-24 lg:p-6">{children}</main>
             <ClientMobileNav />
         </div>
     </OnboardingTourProvider>

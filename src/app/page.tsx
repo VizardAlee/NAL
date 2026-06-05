@@ -302,7 +302,7 @@ function AnalyzerPreview() {
       <div className="border-b px-5 py-4">
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold text-primary">AI Deal Analyzer</p>
-          <span className="rounded-full bg-accent/15 px-3 py-1 text-xs font-medium text-primary">Risk Review</span>
+          <span className="rounded-full bg-accent/20 px-3 py-1 text-xs font-medium text-primary">Risk Review</span>
         </div>
       </div>
       <div className="grid gap-4 p-5">
@@ -410,7 +410,7 @@ function ProductHeroPreview() {
           <div className="rounded-md border bg-background/80 p-4">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-semibold">Approvals</p>
-              <span className="rounded-full bg-accent/15 px-2 py-1 text-xs font-medium text-primary">Today</span>
+              <span className="rounded-full bg-accent/20 px-2 py-1 text-xs font-medium text-primary">Today</span>
             </div>
             <div className="space-y-3">
               {approvalRows.map((row) => (

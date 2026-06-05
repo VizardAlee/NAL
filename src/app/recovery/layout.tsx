@@ -107,8 +107,8 @@ export default function RecoveryLayout({
   }
 
   return (
-    <div className="flex min-h-screen w-full flex-col">
-        <header className="sticky top-0 z-10 flex h-16 items-center gap-2 border-b bg-background px-3 lg:gap-4 lg:px-6">
+    <div className="app-shell flex w-full flex-col">
+        <header className="app-topbar sticky top-0 z-10 flex h-16 items-center gap-2 px-3 lg:gap-4 lg:px-6">
             <Link href="/recovery/dashboard" className="flex min-w-0 items-center gap-2 font-bold font-headline text-primary">
                 <Logo imageUrl={logoUrl} className="h-7 w-7" />
                 <span className="text-sm lg:text-base">
@@ -138,7 +138,7 @@ export default function RecoveryLayout({
             <NotificationBell historyHref="/recovery/notifications" />
             <AccountMenu />
         </header>
-        <main className="flex-1 p-4 lg:p-6">{children}</main>
+        <main className="app-content flex-1 p-4 lg:p-6">{children}</main>
     </div>
   );
 }

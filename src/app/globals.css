@@ -13,24 +13,24 @@ body {
 
 @layer base {
   :root {
-    --background: 220 20% 98%;
+    --background: 210 33% 98%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 148 55% 21%;
+    --primary: 151 58% 22%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96.1%;
+    --secondary: 150 28% 94%;
     --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 210 28% 95%;
+    --muted-foreground: 216 18% 43%;
     --accent: 88 50% 52%;
     --accent-foreground: 148 55% 11%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --border: 214 30% 88%;
+    --input: 214 30% 88%;
     --ring: 148 55% 21%;
     --chart-1: hsl(var(--primary));
     --chart-2: hsl(var(--accent));
@@ -38,48 +38,48 @@ body {
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 100%;
+    --sidebar-background: 150 24% 97%;
     --sidebar-foreground: 222 47% 11%;
     --sidebar-primary: 148 55% 21%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 29% 96%;
+    --sidebar-accent: 150 25% 91%;
     --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 214 32% 91%;
+    --sidebar-border: 150 18% 86%;
     --sidebar-ring: 148 55% 21%;
   }
   .dark {
-    --background: 220 25% 10%;
-    --foreground: 210 40% 98%;
-    --card: 220 25% 12%;
-    --card-foreground: 210 40% 98%;
-    --popover: 220 25% 10%;
+    --background: 154 28% 7%;
+    --foreground: 150 28% 94%;
+    --card: 154 24% 10%;
+    --card-foreground: 150 28% 94%;
+    --popover: 154 24% 9%;
     --popover-foreground: 210 40% 98%;
-    --primary: 148 55% 31%;
+    --primary: 151 56% 38%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 20% 15%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 220 20% 15%;
-    --muted-foreground: 215 25% 55%;
-    --accent: 88 50% 52%;
-    --accent-foreground: 148 55% 11%;
+    --secondary: 154 18% 15%;
+    --secondary-foreground: 150 28% 94%;
+    --muted: 154 18% 15%;
+    --muted-foreground: 150 12% 65%;
+    --accent: 88 48% 58%;
+    --accent-foreground: 154 40% 8%;
     --destructive: 0 63% 31%;
     --destructive-foreground: 210 40% 98%;
-    --border: 220 20% 20%;
-    --input: 220 20% 20%;
-    --ring: 148 55% 31%;
+    --border: 154 16% 22%;
+    --input: 154 16% 22%;
+    --ring: 151 56% 42%;
     --chart-1: hsl(var(--primary));
     --chart-2: hsl(var(--accent));
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --sidebar-background: 220 25% 10%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 148 55% 31%;
+    --sidebar-background: 154 28% 8%;
+    --sidebar-foreground: 150 28% 92%;
+    --sidebar-primary: 151 56% 38%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 20% 15%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 220 20% 15%;
-    --sidebar-ring: 148 55% 31%;
+    --sidebar-accent: 154 22% 14%;
+    --sidebar-accent-foreground: 150 28% 94%;
+    --sidebar-border: 154 16% 20%;
+    --sidebar-ring: 151 56% 42%;
   }
 }
 
@@ -89,6 +89,18 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+    background:
+      radial-gradient(55rem 35rem at 6% -12%, hsla(var(--primary) / 0.09), transparent 60%),
+      radial-gradient(45rem 35rem at 100% 0%, hsla(var(--accent) / 0.08), transparent 62%),
+      hsl(var(--background));
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  .dark body {
+    background:
+      radial-gradient(60rem 42rem at 10% -10%, hsla(var(--primary) / 0.16), transparent 62%),
+      radial-gradient(50rem 36rem at 100% 0%, hsla(var(--accent) / 0.08), transparent 64%),
+      hsl(var(--background));
   }
 }
 
@@ -119,6 +131,34 @@ body {
 }
 
 @layer utilities {
+  .app-shell {
+    @apply min-h-screen bg-transparent;
+  }
+
+  .app-topbar {
+    @apply border-b bg-background/80 shadow-sm shadow-primary/5 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75;
+  }
+
+  .app-content {
+    @apply mx-auto w-full max-w-[1600px];
+  }
+
+  .surface-panel {
+    @apply border bg-card/95 shadow-sm shadow-primary/5 backdrop-blur;
+  }
+
+  .auth-shell {
+    @apply relative flex min-h-screen flex-col items-center justify-center overflow-hidden p-4;
+  }
+
+  .auth-lockup {
+    @apply mb-8 flex justify-center;
+  }
+
+  .auth-brand {
+    @apply flex items-center gap-3 rounded-lg border bg-card/80 px-3 py-2 text-primary shadow-sm shadow-primary/5 backdrop-blur transition-colors hover:bg-card;
+  }
+
   .home-gradient-bg {
     background:
       radial-gradient(55rem 55rem at 15% -10%, hsla(var(--primary) / 0.2), transparent 60%),

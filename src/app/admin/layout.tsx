@@ -182,7 +182,7 @@ export default function AdminLayout({
             </SidebarFooter>
         </Sidebar>
         <SidebarInset>
-            <header className="sticky top-0 z-10 flex h-16 items-center gap-2 border-b bg-background px-3 lg:gap-4 lg:px-6">
+            <header className="app-topbar sticky top-0 z-10 flex h-16 items-center gap-2 px-3 lg:gap-4 lg:px-6">
             <SidebarTrigger className="hidden lg:flex" />
             <div className="flex flex-1 items-center gap-2">
                 <Link href="/admin/dashboard" className="flex items-center gap-2 lg:hidden">
@@ -202,7 +202,7 @@ export default function AdminLayout({
             <AccountMenu />
             </header>
             {ownerReadOnly && (
-              <div className="border-b bg-amber-50 px-4 py-2 text-sm text-amber-900 lg:px-6">
+              <div className="border-b bg-amber-50/90 px-4 py-2 text-sm text-amber-900 shadow-sm backdrop-blur dark:border-amber-400/20 dark:bg-amber-500/10 dark:text-amber-100 lg:px-6">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Shield className="h-4 w-4" />
@@ -214,7 +214,7 @@ export default function AdminLayout({
                 </div>
               </div>
             )}
-            <main className={`flex-1 p-4 pb-24 lg:p-6 ${ownerReadOnly ? 'owner-readonly' : ''}`}>{children}</main>
+            <main className={`app-content flex-1 p-4 pb-24 lg:p-6 ${ownerReadOnly ? 'owner-readonly' : ''}`}>{children}</main>
             <AdminMobileNav />
         </SidebarInset>
         </SidebarProvider>

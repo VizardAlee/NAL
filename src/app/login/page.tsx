@@ -10,12 +10,12 @@ export default function LoginPage() {
   const { logoUrl } = useCompanyLogo();
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex justify-center">
-          <Link href="/" className="flex items-center space-x-2 text-primary">
-            <Logo imageUrl={logoUrl} className="h-8 w-8" />
-            <span className="text-2xl font-bold font-headline">
+    <div className="auth-shell">
+      <div className="w-full max-w-md">
+        <div className="auth-lockup">
+          <Link href="/" className="auth-brand">
+            <Logo imageUrl={logoUrl} className="h-9 w-9" />
+            <span className="text-xl font-bold font-headline sm:text-2xl">
               NAL General Marchant
             </span>
           </Link>

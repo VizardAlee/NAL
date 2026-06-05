@@ -115,12 +115,12 @@ function SignupPageContent() {
 
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex justify-center">
-          <Link href="/" className="flex items-center space-x-2 text-primary">
-            <Logo imageUrl={logoUrl} className="h-8 w-8" />
-            <span className="text-2xl font-bold font-headline">
+    <div className="auth-shell">
+      <div className="w-full max-w-md">
+        <div className="auth-lockup">
+          <Link href="/" className="auth-brand">
+            <Logo imageUrl={logoUrl} className="h-9 w-9" />
+            <span className="text-xl font-bold font-headline sm:text-2xl">
               NAL General Marchant
             </span>
           </Link>
@@ -139,7 +139,7 @@ function SignupPageContent() {
                 Validating invite...
               </div>
             ) : !inviteState.valid ? (
-              <div className="space-y-3 rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm">
+              <div className="space-y-3 rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm shadow-sm">
                 <p className="font-medium text-destructive">Invite Required</p>
                 <p className="text-muted-foreground">{inviteState.message || 'This signup link is not valid.'}</p>
                 <Button asChild variant="outline" className="w-full">
@@ -260,7 +260,7 @@ function SignupPageContent() {
 export default function SignupPage() {
   return (
     <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="auth-shell">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     }>

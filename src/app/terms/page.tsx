@@ -10,8 +10,8 @@ export default function TermsOfUsePage() {
   const { logoUrl } = useCompanyLogo();
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="app-shell">
+      <header className="app-topbar sticky top-0 z-50 w-full">
         <div className="container flex h-16 items-center">
           <Link href="/" className="mr-6 flex items-center space-x-2">
             <Logo imageUrl={logoUrl} className="h-6 w-6 text-primary" />
@@ -27,13 +27,13 @@ export default function TermsOfUsePage() {
         </div>
       </header>
 
-      <main className="container max-w-4xl py-12 md:py-24">
-        <div className="space-y-6">
+      <main className="app-content px-4 py-10 md:py-16">
+        <div className="surface-panel mx-auto max-w-4xl space-y-6 rounded-lg p-6 sm:p-8 lg:p-10">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
               <Gavel className="h-6 w-6 text-primary" />
             </div>
-            <h1 className="text-4xl font-bold tracking-tight font-headline">Terms of Use</h1>
+            <h1 className="text-3xl font-bold tracking-tight font-headline sm:text-4xl">Terms of Use</h1>
           </div>
           <p className="text-muted-foreground italic">Last Updated: March 2024</p>
 
