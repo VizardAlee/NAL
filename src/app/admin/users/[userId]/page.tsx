@@ -28,6 +28,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ViewPageNav } from '@/components/view-page-nav';
 import { payZakatAction, updateAccessRoleAction } from './actions';
+import { getRequiredIdToken } from '@/firebase/auth-token';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
@@ -37,7 +38,8 @@ import { Progress } from '@/components/ui/progress';
 import { LegalDocumentUploader } from './legal-document-uploader';
 import Image from 'next/image';
 import { getMarketerStats } from '@/app/marketer/dashboard/actions';
-import { canManageOwners, hasPersona, isReadOnlyOwner, normalizeAccessModel } from '@/lib/access-control';
+import { canWriteAdmin, hasPersona, isReadOnlyOwner, normalizeAccessModel } from '@/lib/access-control';
+import { isZakatApplicable } from '@/lib/zakat-eligibility';
 
 type UserProfile = DocumentData & {
     id: string;
@@ -52,6 +54,7 @@ type UserProfile = DocumentData & {
     accessRole?: 'OWNER' | 'ADMIN' | 'STAFF' | 'USER';
     personas?: ('INVESTOR' | 'CLIENT' | 'LEGAL' | 'RECOVERY' | 'MARKETER' | 'STAFF_MEMBER')[];
     primaryPortal?: 'owner' | 'admin' | 'investor' | 'client' | 'legal' | 'recovery' | 'marketer';
+    isMuslim?: boolean;
 };
 
 type FundBatch = DocumentData & {
@@ -307,7 +310,7 @@ export default function UserDetailPage() {
     const { isZakatEligible, zakatAmount } = useMemo(() => {
         if (!userProfile) return { isZakatEligible: false, isZakatPayable: false, zakatAmount: 0 };
 
-        if (!hasInvestorPersona) {
+        if (!isZakatApplicable(userProfile)) {
             return { isZakatEligible: false, isZakatPayable: false, zakatAmount: 0 };
         }
 
@@ -316,7 +319,7 @@ export default function UserDetailPage() {
         const amount = financialMetrics.portfolioValue * 0.025;
 
         return { isZakatEligible: isEligible, zakatAmount: amount };
-    }, [financialMetrics, hasInvestorPersona, zakatSettings, userProfile]);
+    }, [financialMetrics, zakatSettings, userProfile]);
 
 
     const processedFundBatches = useMemo(() => {
@@ -369,7 +372,7 @@ export default function UserDetailPage() {
     const viewerAccess = normalizeAccessModel(authUser as any);
     const targetAccess = normalizeAccessModel(userProfile as any);
     const ownerReadOnly = isReadOnlyOwner(authUser as any);
-    const canEditOwners = canManageOwners(authUser as any);
+    const canEditOwners = canWriteAdmin(authUser as any);
 
     const handleCopyCode = (code: string) => {
         navigator.clipboard.writeText(code);
@@ -380,6 +383,7 @@ export default function UserDetailPage() {
         if (!authUser?.uid || !userProfile?.id) return;
         startRoleUpdateTransition(async () => {
             const result = await updateAccessRoleAction({
+                authToken: await getRequiredIdToken(),
                 actorId: authUser.uid,
                 targetUserId: userProfile.id,
                 newAccessRole: newRole,
@@ -423,6 +427,15 @@ export default function UserDetailPage() {
                                     {targetAccess.personas.map((persona) => (
                                         <Badge key={`${userProfile.id}-${persona}`} variant="outline">{persona}</Badge>
                                     ))}
+                                    {hasInvestorPersona && (
+                                        <Badge variant="secondary">
+                                            {userProfile.isMuslim === true
+                                                ? 'Muslim'
+                                                : userProfile.isMuslim === false
+                                                ? 'Non-Muslim'
+                                                : 'Religion unclassified'}
+                                        </Badge>
+                                    )}
                                     {isZakatEligible && <Badge variant="default">Zakat Eligible</Badge>}
                                 </div>
                                 {userProfile.phoneNumber && (

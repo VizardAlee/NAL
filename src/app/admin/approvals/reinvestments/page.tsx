@@ -19,6 +19,8 @@ import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { processReinvestmentRequestAction } from '@/app/admin/approvals/actions';
+import { getRequiredIdToken } from '@/firebase/auth-token';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -233,56 +235,9 @@ export default function ReinvestmentsPage() {
     const isLoading = pendingLoading || processedLoading;
 
     const handleProcessRequest = async (request: ReinvestmentRequest, newStatus: 'Approved' | 'Rejected', specialInvestment = false) => {
-        if (!firestore) return;
         setProcessingId(request.id);
-        
         try {
-            const batch = writeBatch(firestore);
-            const requestRef = doc(firestore, 'reinvestmentRequests', request.id);
-
-            batch.update(requestRef, {
-                status: newStatus,
-                processedAt: Timestamp.now()
-            });
-
-            if (newStatus === 'Approved') {
-                const timestamp = Timestamp.now();
-                
-                // 1. Create a "Withdrawal" transaction to zero out the profit from the withdrawable balance
-                const withdrawalTxRef = doc(collection(firestore, 'transactions'));
-                batch.set(withdrawalTxRef, {
-                    userId: request.investorId,
-                    type: 'Withdrawal',
-                    amount: -request.amount, // Negative to subtract from balance
-                    createdAt: timestamp,
-                    details: 'Profit Reinvestment',
-                });
-
-                // 2. Create a new "Deposit" transaction for the reinvested amount as new capital
-                const depositTxRef = doc(collection(firestore, 'transactions'));
-                batch.set(depositTxRef, {
-                    userId: request.investorId,
-                    type: 'Deposit',
-                    amount: request.amount,
-                    createdAt: timestamp,
-                    details: 'Profit Reinvestment',
-                });
-
-                // 3. Create a new fundBatch for the reinvested amount
-                const fundBatchRef = doc(collection(firestore, 'fundBatches'));
-                batch.set(fundBatchRef, {
-                    sourceId: request.investorId,
-                    amount: request.amount,
-                    remainingAmount: request.amount,
-                    createdAt: timestamp,
-                    // A default tenure is set here. In a more complex app, this could be configurable.
-                    tenureValue: 10, 
-                    tenureUnit: 'Years',
-                    specialInvestment,
-                });
-            }
-
-            await batch.commit();
+            await processReinvestmentRequestAction({ authToken: await getRequiredIdToken(), requestId: request.id, decision: newStatus, specialInvestment });
 
             toast({
                 title: `Request ${newStatus}`,

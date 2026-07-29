@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bot, Loader2, BarChart, Shield, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useIdToken } from '@/firebase/auth-token';
 
 const initialState = {
   message: "",
@@ -28,6 +29,7 @@ function SubmitButton() {
 }
 
 export function AnalyzerForm() {
+  const authToken = useIdToken();
   const [state, formAction] = useActionState(getAnalysis, initialState);
   const { toast } = useToast();
 
@@ -45,6 +47,7 @@ export function AnalyzerForm() {
   return (
     <div className="grid gap-8 md:grid-cols-2">
       <form action={formAction} className="space-y-4">
+        <input type="hidden" name="authToken" value={authToken} />
         <Textarea
           name="proposalDetails"
           placeholder="Paste the full details of the financing proposal here. Include information about the business, funding amount, use of funds, repayment terms, and any other relevant data..."

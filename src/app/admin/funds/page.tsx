@@ -47,6 +47,7 @@ import {
 import { useDoc } from "@/firebase/firestore/use-doc";
 import { runOwnerProfitAllocationAction, setOwnershipPartnerActiveAction, upsertOwnershipPartnerAction, upsertOwnerProfitPolicyAction } from "./actions";
 import { canWriteAdmin } from "@/lib/access-control";
+import { getRequiredIdToken } from '@/firebase/auth-token';
 
 type OwnerAllocationRunResult = Awaited<ReturnType<typeof runOwnerProfitAllocationAction>>;
 
@@ -1076,7 +1077,7 @@ function OwnerProfitPolicyForm({
     const onSubmit = (values: z.infer<typeof ownerPolicySchema>) => {
         if (!actorId) return;
         startTransition(async () => {
-            const result = await upsertOwnerProfitPolicyAction({ ...values, actorId });
+            const result = await upsertOwnerProfitPolicyAction({ authToken: await getRequiredIdToken(), ...values, actorId });
             toast({
                 variant: result.success ? 'default' : 'destructive',
                 title: result.success ? 'Saved' : 'Save failed',
@@ -1159,7 +1160,7 @@ function OwnershipPartnerForm({
     const onSubmit = (values: z.infer<typeof ownerPartnerSchema>) => {
         if (!actorId) return;
         startTransition(async () => {
-            const result = await upsertOwnershipPartnerAction({ ...values, actorId });
+            const result = await upsertOwnershipPartnerAction({ authToken: await getRequiredIdToken(), ...values, actorId });
             toast({
                 variant: result.success ? 'default' : 'destructive',
                 title: result.success ? 'Saved' : 'Save failed',
@@ -1239,7 +1240,7 @@ function OwnerAllocationRunForm({ onComplete }: { onComplete: () => void }) {
 
     const onSubmit = (values: z.infer<typeof allocationRunSchema>) => {
         startTransition(async () => {
-            const result = await runOwnerProfitAllocationAction(values);
+            const result = await runOwnerProfitAllocationAction({ authToken: await getRequiredIdToken(), ...values });
             if (!result.success) {
                 console.error("Owner allocation backfill failed:", result);
             }
@@ -1505,7 +1506,7 @@ export default function PlatformFundsPage() {
                                 disabled={isAllocating}
                                 onClick={() => {
                                     startAllocating(async () => {
-                                        const result = await runOwnerProfitAllocationAction({ includeHistorical: false, limit: 500 });
+                                        const result = await runOwnerProfitAllocationAction({ authToken: await getRequiredIdToken(), includeHistorical: false, limit: 500 });
                                         if (!result.success) {
                                             console.error("Owner profit allocation run failed:", result);
                                         }
@@ -1568,6 +1569,7 @@ export default function PlatformFundsPage() {
                                                     variant="outline"
                                                     onClick={async () => {
                                                         const result = await setOwnershipPartnerActiveAction({
+                                                            authToken: await getRequiredIdToken(),
                                                             userId: partner.userId,
                                                             active: !partner.active,
                                                             actorId: user?.uid || '',
@@ -1622,6 +1624,7 @@ export default function PlatformFundsPage() {
                                                             variant="outline"
                                                             onClick={async () => {
                                                                 const result = await setOwnershipPartnerActiveAction({
+                                                                    authToken: await getRequiredIdToken(),
                                                                     userId: partner.userId,
                                                                     active: !partner.active,
                                                                     actorId: user?.uid || '',

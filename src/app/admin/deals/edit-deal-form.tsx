@@ -38,6 +38,7 @@ import { isDurationShort } from '@/lib/duration-helpers';
 import { Calendar } from '@/components/ui/calendar';
 import Link from 'next/link';
 import { hasPersona, type LegacyRole, type Persona } from '@/lib/access-control';
+import { getRequiredIdToken } from '@/firebase/auth-token';
 
 
 const formSchema = z.object({
@@ -111,7 +112,7 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
         return;
       }
 
-      const result = await updateDealAction(deal.id, selectedClient.name, values);
+      const result = await updateDealAction(await getRequiredIdToken(), deal.id, selectedClient.name, values);
 
       if (result.success) {
         toast({

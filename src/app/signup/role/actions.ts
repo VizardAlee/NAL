@@ -6,11 +6,23 @@ import { getAuth } from 'firebase-admin/auth';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { normalizeAccessModel } from '@/lib/access-control';
+import { verifyAuthTokenForUser } from '@/lib/server/auth';
 
-const setRoleSchema = z.object({
-    role: z.enum(['Investor', 'Client']),
-    userId: z.string().min(1, 'User ID is required.'),
-});
+const setRoleSchema = z
+    .object({
+        role: z.enum(['Investor', 'Client']),
+        userId: z.string().min(1, 'User ID is required.'),
+        isMuslim: z.enum(['true', 'false']).optional(),
+    })
+    .superRefine((data, ctx) => {
+        if (data.role === 'Investor' && !data.isMuslim) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['isMuslim'],
+                message: 'Select Muslim or non-Muslim.',
+            });
+        }
+    });
 
 type ActionResponse = {
     success: boolean;
@@ -25,13 +37,15 @@ export async function setRoleAction(
     const validated = setRoleSchema.safeParse({
         role: formData.get('role'),
         userId: formData.get('userId'),
+        isMuslim: formData.get('isMuslim') || undefined,
     });
 
     if (!validated.success) {
         return { success: false, message: 'Invalid data provided. Please try again.' };
     }
 
-    const { role, userId } = validated.data;
+    const { role, userId, isMuslim } = validated.data;
+    await verifyAuthTokenForUser(String(formData.get('authToken') || ''), userId);
     const auth = getAuth(getAdminApp());
     const accessModel = normalizeAccessModel({ role });
 
@@ -45,12 +59,16 @@ export async function setRoleAction(
 
         // 2. Update Firestore Document
         const userDocRef = adminDb.collection('users').doc(userId);
-        await userDocRef.update({
+        const profileUpdate: Record<string, unknown> = {
             role,
             accessRole: accessModel.accessRole,
             personas: accessModel.personas,
             primaryPortal: accessModel.primaryPortal,
-        });
+        };
+        if (role === 'Investor') {
+            profileUpdate.isMuslim = isMuslim === 'true';
+        }
+        await userDocRef.update(profileUpdate);
 
         // Revalidate paths that show user data
         revalidatePath('/admin/users');

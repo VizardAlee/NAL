@@ -4,6 +4,7 @@
 import { adminDb } from '@/firebase/admin-app';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { verifyAdminWrite } from '@/lib/server/auth';
 
 const bankDetailsSchema = z.object({
   bankName: z.string().min(2, { message: 'Bank name is required.' }),
@@ -12,6 +13,7 @@ const bankDetailsSchema = z.object({
 });
 
 export async function setBankDetailsAction(prevState: any, formData: FormData) {
+  await verifyAdminWrite(String(formData.get('authToken') || ''));
   const validated = bankDetailsSchema.safeParse({
     bankName: formData.get('bankName'),
     accountName: formData.get('accountName'),
@@ -37,4 +39,3 @@ export async function setBankDetailsAction(prevState: any, formData: FormData) {
   }
 }
 
-    

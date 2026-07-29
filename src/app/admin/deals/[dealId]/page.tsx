@@ -222,7 +222,7 @@ export default function DealDetailPage() {
     const handleApproveFee = () => {
         if (!deal) return;
         startFeeTransition(async () => {
-            const result = await approveManagementFeeAction(deal.id);
+            const result = await approveManagementFeeAction(await auth!.currentUser!.getIdToken(), deal.id);
             if (result.success) {
                 toast({ title: 'Success', description: result.message });
             } else {

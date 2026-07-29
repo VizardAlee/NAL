@@ -56,6 +56,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { canWriteAdmin } from '@/lib/access-control';
+import { getRequiredIdToken } from '@/firebase/auth-token';
 
 
 const statusVariant = {
@@ -72,7 +73,7 @@ function DealActions({ deal, canManage, onActionStart, onActionEnd }: { deal: De
 
     const handleDelete = async () => {
         onActionStart();
-        const result = await deleteDealAction(deal.id);
+        const result = await deleteDealAction(await getRequiredIdToken(), deal.id);
         if (result.success) {
             toast({ title: 'Success', description: result.message });
             setDeleteDialogOpen(false);

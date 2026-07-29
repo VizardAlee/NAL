@@ -3,6 +3,7 @@
 
 import { analyzeFinancingProposal } from "@/ai/flows/analyze-financing-proposal";
 import { z } from "zod";
+import { verifyAdminWrite } from '@/lib/server/auth';
 
 const analyzeSchema = z.object({
   proposalDetails: z.string().min(50, { message: "Proposal details must be at least 50 characters." }),
@@ -15,6 +16,7 @@ type State = {
 };
 
 export async function getAnalysis(prevState: any, formData: FormData): Promise<State> {
+  await verifyAdminWrite(String(formData.get('authToken') || ''));
   const validatedFields = analyzeSchema.safeParse({
     proposalDetails: formData.get('proposalDetails'),
   });

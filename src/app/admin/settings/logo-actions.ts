@@ -4,12 +4,14 @@
 import { adminDb } from '@/firebase/admin-app';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
+import { verifyAdminWrite } from '@/lib/server/auth';
 
 const logoSchema = z.object({
   logoUrl: z.string().startsWith('data:image/'),
 });
 
 export async function setLogoAction(prevState: any, formData: FormData) {
+    await verifyAdminWrite(String(formData.get('authToken') || ''));
     const validated = logoSchema.safeParse({
         logoUrl: formData.get('logoUrl'),
     });

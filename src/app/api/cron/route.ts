@@ -6,6 +6,7 @@ import { addDays, differenceInDays, startOfDay, isBefore, isEqual } from 'date-f
 import { processOwnerProfitAllocations } from '@/lib/server/owner-profit';
 import { notifyAdmins, notifyUser } from '@/app/common/actions/notification-actions';
 import { hasPersona } from '@/lib/access-control';
+import { isZakatApplicable } from '@/lib/zakat-eligibility';
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -24,7 +25,7 @@ async function processZakat() {
     }
 
     const usersSnapshot = await adminDb.collection('users').get();
-    const investorDocs = usersSnapshot.docs.filter((doc) => hasPersona(doc.data(), 'INVESTOR'));
+    const investorDocs = usersSnapshot.docs.filter((doc) => isZakatApplicable(doc.data()));
     let processedCount = 0, errorCount = 0, skippedCount = 0;
     const details = [];
 
@@ -70,6 +71,11 @@ async function processZakat() {
 
             await adminDb.runTransaction(async (transaction) => {
                 let amountToDeduct = zakatAmount;
+                const currentUserSnapshot = await transaction.get(userDoc.ref);
+                if (!currentUserSnapshot.exists || !isZakatApplicable(currentUserSnapshot.data())) {
+                    throw new Error('Zakat applies only to investors explicitly registered as Muslim.');
+                }
+
                 const fundBatchesQuery = adminDb.collection('fundBatches').where('sourceId', '==', userId).where('remainingAmount', '>', 0).orderBy('createdAt', 'asc');
                 const userBatches = await transaction.get(fundBatchesQuery);
                 

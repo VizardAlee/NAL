@@ -12,9 +12,12 @@ import {
   toLegacyRoleFromAccess,
   type AccessRole,
 } from '@/lib/access-control';
+import { verifyAdminWrite } from '@/lib/server/auth';
+import { isZakatApplicable } from '@/lib/zakat-eligibility';
 
 
 const payZakatSchema = z.object({
+  authToken: z.string().min(1),
   userId: z.string().min(1),
   zakatAmount: z.coerce.number().positive(),
   investibleBalance: z.coerce.number(),
@@ -26,7 +29,8 @@ export async function payZakatAction(input: z.infer<typeof payZakatSchema>) {
     return { success: false, message: 'Invalid data provided for Zakat payment.' };
   }
 
-  const { userId, zakatAmount, investibleBalance } = validated.data;
+  const { authToken, userId, zakatAmount, investibleBalance } = validated.data;
+  await verifyAdminWrite(authToken);
   
   if (investibleBalance < zakatAmount) {
       return { success: false, message: 'Insufficient investible balance to pay Zakat.' };
@@ -38,6 +42,11 @@ export async function payZakatAction(input: z.infer<typeof payZakatSchema>) {
     // Use a transaction to ensure atomicity
     await firestore.runTransaction(async (transaction) => {
         let amountToDeduct = zakatAmount;
+        const userRef = firestore.collection('users').doc(userId);
+        const userSnapshot = await transaction.get(userRef);
+        if (!userSnapshot.exists || !isZakatApplicable(userSnapshot.data())) {
+            throw new Error('Zakat applies only to investors explicitly registered as Muslim.');
+        }
 
         // 1. Find the user's fund batches, oldest first, that have a remaining balance
         const fundBatchesQuery = firestore.collection('fundBatches')
@@ -79,7 +88,6 @@ export async function payZakatAction(input: z.infer<typeof payZakatSchema>) {
         });
 
         // 4. Update the user's last Zakat payment date in their user document
-        const userRef = firestore.collection('users').doc(userId);
         transaction.update(userRef, {
             lastZakatPaymentDate: FieldValue.serverTimestamp()
         });
@@ -94,6 +102,7 @@ export async function payZakatAction(input: z.infer<typeof payZakatSchema>) {
 }
 
 const uploadDocumentSchema = z.object({
+    authToken: z.string().min(1),
     userId: z.string().min(1),
     documentUrl: z.string().startsWith('data:'),
 });
@@ -104,7 +113,8 @@ export async function uploadLegalDocumentAction(input: z.infer<typeof uploadDocu
         return { success: false, message: 'Invalid document data provided.' };
     }
 
-    const { userId, documentUrl } = validated.data;
+    const { authToken, userId, documentUrl } = validated.data;
+    await verifyAdminWrite(authToken);
     try {
         const userRef = adminDb.collection('users').doc(userId);
         await userRef.update({
@@ -121,6 +131,7 @@ export async function uploadLegalDocumentAction(input: z.infer<typeof uploadDocu
 }
 
 const updateAccessRoleSchema = z.object({
+  authToken: z.string().min(1),
   actorId: z.string().min(1),
   targetUserId: z.string().min(1),
   newAccessRole: z.enum(['OWNER', 'ADMIN', 'STAFF', 'USER']),
@@ -132,9 +143,13 @@ export async function updateAccessRoleAction(input: z.infer<typeof updateAccessR
     return { success: false, message: 'Invalid role update request.' };
   }
 
-  const { actorId, targetUserId, newAccessRole } = validated.data;
+  const { authToken, actorId, targetUserId, newAccessRole } = validated.data;
 
   try {
+    const verifiedActor = await verifyAdminWrite(authToken);
+    if (verifiedActor.uid !== actorId) {
+      return { success: false, message: 'Invalid actor identity.' };
+    }
     const actorRef = adminDb.collection('users').doc(actorId);
     const targetRef = adminDb.collection('users').doc(targetUserId);
     const [actorSnap, targetSnap] = await Promise.all([actorRef.get(), targetRef.get()]);

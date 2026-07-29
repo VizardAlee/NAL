@@ -11,6 +11,15 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useIdToken } from '@/firebase/auth-token';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
 function RoleButton({ role, children }: { role: 'Investor' | 'Client', children: React.ReactNode }) {
     const { pending } = useFormStatus();
@@ -26,6 +35,7 @@ export default function RoleSelectionPage() {
     const { toast } = useToast();
     const router = useRouter();
     const { user, loading } = useUser();
+    const authToken = useIdToken();
 
     useEffect(() => {
         if (!loading && !user) {
@@ -69,6 +79,22 @@ export default function RoleSelectionPage() {
                 <CardContent>
                     <form action={formAction} className="space-y-4">
                         <input type="hidden" name="userId" value={user.uid} />
+                        <input type="hidden" name="authToken" value={authToken} />
+                        <div className="space-y-2 rounded-md border p-4">
+                            <Label htmlFor="isMuslim">Investor religious classification</Label>
+                            <Select name="isMuslim">
+                                <SelectTrigger id="isMuslim">
+                                    <SelectValue placeholder="Select Muslim or non-Muslim" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="true">Muslim</SelectItem>
+                                    <SelectItem value="false">Non-Muslim</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-sm text-muted-foreground">
+                                Required only when registering as an investor. Zakat applies only to Muslim investors.
+                            </p>
+                        </div>
                         <RoleButton role="Investor">
                             <Briefcase className="mr-3 h-6 w-6" />
                             I am an Investor

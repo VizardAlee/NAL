@@ -5,6 +5,7 @@ import { adminDb } from '@/firebase/admin-app';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { verifyAdminWrite } from '@/lib/server/auth';
 
 const formSchema = z.object({
   dealName: z.string().min(3),
@@ -17,11 +18,13 @@ const formSchema = z.object({
 });
 
 export async function approveDealAction(
+    authToken: string,
     requestId: string,
     clientId: string,
     clientName: string,
     values: z.infer<typeof formSchema>
 ) {
+  await verifyAdminWrite(authToken);
   if (!requestId) return { success: false, message: 'Request ID is missing.' };
 
   const validated = formSchema.safeParse(values);
@@ -30,28 +33,17 @@ export async function approveDealAction(
   }
 
   try {
-    const batch = adminDb.batch();
     const requestRef = adminDb.collection('dealRequests').doc(requestId);
-    
-    // 1. Update the original request
-    batch.update(requestRef, {
-      status: 'Approved',
-      processedAt: FieldValue.serverTimestamp(),
+    await adminDb.runTransaction(async (transaction) => {
+      const requestSnapshot = await transaction.get(requestRef);
+      if (!requestSnapshot.exists || requestSnapshot.data()?.status !== 'Pending') {
+        throw new Error('This deal request has already been processed.');
+      }
+      transaction.update(requestRef, { status: 'Approved', processedAt: FieldValue.serverTimestamp() });
+      const newDealRef = adminDb.collection('deals').doc();
+      const now = Timestamp.now();
+      transaction.set(newDealRef, { ...validated.data, clientId, clientName, status: 'Pending', createdAt: now, startDate: now });
     });
-
-    // 2. Create the new deal with potentially modified values
-    const newDealRef = adminDb.collection('deals').doc();
-    const now = Timestamp.now();
-    batch.set(newDealRef, {
-      ...validated.data,
-      clientId,
-      clientName,
-      status: 'Pending', // New deals start as Pending until funded
-      createdAt: now,
-      startDate: now, // Default start date to now, can be edited later
-    });
-
-    await batch.commit();
 
     revalidatePath('/admin/approvals/deal-requests');
     revalidatePath('/admin/deals');
@@ -62,14 +54,18 @@ export async function approveDealAction(
   }
 }
 
-export async function rejectDealAction(requestId: string) {
+export async function rejectDealAction(authToken: string, requestId: string) {
+  await verifyAdminWrite(authToken);
   if (!requestId) return { success: false, message: 'Request ID is missing.' };
 
   try {
     const requestRef = adminDb.collection('dealRequests').doc(requestId);
-    await requestRef.update({
-      status: 'Rejected',
-      processedAt: FieldValue.serverTimestamp(),
+    await adminDb.runTransaction(async (transaction) => {
+      const requestSnapshot = await transaction.get(requestRef);
+      if (!requestSnapshot.exists || requestSnapshot.data()?.status !== 'Pending') {
+        throw new Error('This deal request has already been processed.');
+      }
+      transaction.update(requestRef, { status: 'Rejected', processedAt: FieldValue.serverTimestamp() });
     });
 
     revalidatePath('/admin/approvals/deal-requests');

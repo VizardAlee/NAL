@@ -36,6 +36,7 @@ import { Calendar } from '@/components/ui/calendar';
 import Link from 'next/link';
 import { hasPersona, type LegacyRole, type Persona } from '@/lib/access-control';
 import { createDealAction } from './actions';
+import { getRequiredIdToken } from '@/firebase/auth-token';
 
 type CallableError = Error & {
   code?: string;
@@ -162,7 +163,7 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
         marketerId: values.marketerId || undefined,
       };
 
-      const data = await createDealAction(selectedClient.name, payload);
+      const data = await createDealAction(await getRequiredIdToken(), selectedClient.name, payload);
 
       if (data.success) {
         toast({

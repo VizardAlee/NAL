@@ -87,13 +87,13 @@ service cloud.firestore {
       // Admins and Legal can list all users.
       allow list: if canAdminRead() || isLegal();
       
-      // Allow any unauthenticated or authenticated user to create a new user document (e.g., during signup).
-      allow create: if true;
+      // User profiles and access fields are created only by trusted server code.
+      allow create: if false;
 
       // Only the user themself or an Admin can update a user document.
       allow update: if isAdmin()
         || canManageOwnerAssignments(userId)
-        || (isOwner(userId) && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phoneNumber']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['legalDocumentUrl'])));
+        || (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens', 'name', 'phoneNumber']));
 
       // Only admins can delete users.
       allow delete: if isAdmin();
@@ -307,8 +307,9 @@ service cloud.firestore {
         allow get, list: if canAdminRead();
         allow create, update: if isAdmin();
 
-        // Regular users can only read/list/update conversations they are a part of.
-        allow get, list, update: if request.auth != null
+        // Regular users can read conversations they participate in. Conversation
+        // metadata is mutated only by trusted server actions to prevent participant spoofing.
+        allow get, list: if request.auth != null
             && 'participantIds' in resource.data
             && request.auth.uid in resource.data.participantIds;
     }
@@ -316,9 +317,14 @@ service cloud.firestore {
     // Rules for 'messages' subcollection
     match /conversations/{conversationId}/messages/{messageId} {
         // Users can read/create messages only if they are a participant in the parent conversation.
-        allow read, create: if request.auth != null
+        allow read: if request.auth != null
             && exists(/databases/$(database)/documents/conversations/$(conversationId))
             && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+
+        allow create: if request.auth != null
+            && exists(/databases/$(database)/documents/conversations/$(conversationId))
+            && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
+            && request.resource.data.senderId == request.auth.uid;
     }
   }
 }

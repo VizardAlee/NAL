@@ -19,6 +19,8 @@ import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { processWithdrawalRequestAction } from '@/app/admin/approvals/actions';
+import { getRequiredIdToken } from '@/firebase/auth-token';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -222,68 +224,9 @@ export default function WithdrawalsPage() {
     const isLoading = pendingLoading || processedLoading;
 
     const handleProcessRequest = async (request: WithdrawalRequest, newStatus: 'Approved' | 'Rejected') => {
-        if (!firestore) return;
         setProcessingId(request.id);
-
         try {
-            await runTransaction(firestore, async (transaction) => {
-                const requestRef = doc(firestore, 'withdrawalRequests', request.id);
-                const requestDoc = await transaction.get(requestRef);
-
-                if (!requestDoc.exists()) {
-                    throw new Error("Withdrawal request not found.");
-                }
-
-                if (requestDoc.data().status !== 'Pending') {
-                    throw new Error("This request has already been processed.");
-                }
-
-                transaction.update(requestRef, {
-                    status: newStatus,
-                    processedAt: Timestamp.now()
-                });
-
-                if (newStatus === 'Approved') {
-                    const resolvedUserId = request.investorId || request.userId;
-                    if (!resolvedUserId) throw new Error('Cannot determine user ID for this withdrawal request.');
-
-                    // 1. Create the negative transaction
-                    const transactionRef = doc(collection(firestore, 'transactions'));
-                    transaction.set(transactionRef, {
-                        userId: resolvedUserId,
-                        type: 'Withdrawal',
-                        amount: -Math.abs(request.amount),
-                        createdAt: Timestamp.now(),
-                    });
-
-                    // 2. Deduct from fund batches FIFO
-                    const batchesQuery = query(
-                        collection(firestore, 'fundBatches'),
-                        where('sourceId', '==', resolvedUserId),
-                        where('remainingAmount', '>', 0),
-                        orderBy('createdAt', 'asc')
-                    );
-
-                    const batchesSnap = await getDocs(batchesQuery);
-                    let remainingToDeduct = Math.abs(request.amount);
-
-                    for (const batchDoc of batchesSnap.docs) {
-                        if (remainingToDeduct <= 0) break;
-                        const batchData = batchDoc.data();
-                        const available = batchData.remainingAmount;
-                        const deduction = Math.min(available, remainingToDeduct);
-
-                        transaction.update(batchDoc.ref, {
-                            remainingAmount: increment(-deduction)
-                        });
-                        remainingToDeduct -= deduction;
-                    }
-
-                    if (remainingToDeduct > 0.01) {
-                        throw new Error(`Insufficient investible balance. Could not deduct full withdrawal amount (Remaining: ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(remainingToDeduct)}).`);
-                    }
-                }
-            });
+            await processWithdrawalRequestAction({ authToken: await getRequiredIdToken(), requestId: request.id, decision: newStatus });
 
             toast({
                 title: `Request ${newStatus}`,

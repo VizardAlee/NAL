@@ -11,6 +11,15 @@ const createUserSchema = zod_1.z.object({
     phoneNumber: zod_1.z.string().optional(),
     role: zod_1.z.enum(['Investor', 'Client', 'Marketer', 'Admin', 'Legal', 'Recovery']),
     referralCode: zod_1.z.string().optional(),
+    isMuslim: zod_1.z.boolean().optional(),
+}).superRefine((data, ctx) => {
+    if (data.role === 'Investor' && typeof data.isMuslim !== 'boolean') {
+        ctx.addIssue({
+            code: zod_1.z.ZodIssueCode.custom,
+            path: ['isMuslim'],
+            message: 'Investor religious classification is required.',
+        });
+    }
 });
 function deriveAccessModel(role) {
     switch (role) {
@@ -47,7 +56,7 @@ exports.createUser = (0, https_1.onCall)(async (request) => {
     if (!validated.success) {
         throw new https_1.HttpsError('invalid-argument', 'Invalid data provided.');
     }
-    const { name, email, password, role, phoneNumber, referralCode } = validated.data;
+    const { name, email, password, role, phoneNumber, referralCode, isMuslim } = validated.data;
     const accessModel = deriveAccessModel(role);
     try {
         const userRecord = await admin.auth().createUser({
@@ -66,6 +75,8 @@ exports.createUser = (0, https_1.onCall)(async (request) => {
             userData.phoneNumber = phoneNumber;
         if (referralCode)
             userData.referredByCode = referralCode;
+        if (role === 'Investor')
+            userData.isMuslim = isMuslim;
         if (role === 'Marketer') {
             userData.referralCode = generateReferralCode(name);
             userData.rating = 0;

@@ -4,6 +4,17 @@ Server actions that create invites, write protected admin records, fund deals, o
 
 ## Firebase App Hosting
 
+The web client forces Firestore long-polling by default because it is more
+reliable behind buffering proxies, VPNs, antivirus products, and restrictive
+mobile networks. On a deployment where normal Firestore streaming has been
+verified as reliable, set:
+
+```text
+NEXT_PUBLIC_FIRESTORE_FORCE_LONG_POLLING=false
+```
+
+This setting is public client configuration and is not a secret.
+
 The deployed App Hosting runtime only needs the project ID in `apphosting.yaml`:
 
 ```yaml

@@ -5,6 +5,7 @@ import { adminDb } from '@/firebase/admin-app';
 import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { verifyAdminWrite } from '@/lib/server/auth';
 
 const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
@@ -21,7 +22,8 @@ const formSchema = z.object({
   startDate: z.date().optional(),
 });
 
-export async function createDealAction(clientName: string, values: z.infer<typeof formSchema>) {
+export async function createDealAction(authToken: string, clientName: string, values: z.infer<typeof formSchema>) {
+    await verifyAdminWrite(authToken);
     const validated = formSchema.safeParse(values);
     if (!validated.success) {
         return {
@@ -66,7 +68,8 @@ export async function createDealAction(clientName: string, values: z.infer<typeo
 }
 
 
-export async function updateDealAction(dealId: string, clientName: string, values: z.infer<typeof formSchema>) {
+export async function updateDealAction(authToken: string, dealId: string, clientName: string, values: z.infer<typeof formSchema>) {
+    await verifyAdminWrite(authToken);
     if (!dealId) {
         return { success: false, message: 'Deal ID is missing.' };
     }
@@ -100,7 +103,8 @@ export async function updateDealAction(dealId: string, clientName: string, value
 }
 
 
-export async function deleteDealAction(dealId: string) {
+export async function deleteDealAction(authToken: string, dealId: string) {
+    await verifyAdminWrite(authToken);
     if (!dealId) {
         return { success: false, message: 'Deal ID is missing.' };
     }
@@ -124,43 +128,28 @@ export async function deleteDealAction(dealId: string) {
     }
 }
 
-export async function approveManagementFeeAction(dealId: string) {
+export async function approveManagementFeeAction(authToken: string, dealId: string) {
+    await verifyAdminWrite(authToken);
     if (!dealId) return { success: false, message: 'Deal ID is missing.' };
     
     try {
         const dealRef = adminDb.collection('deals').doc(dealId);
-        const dealDoc = await dealRef.get();
-        if (!dealDoc.exists) {
-            return { success: false, message: 'Deal not found.'};
-        }
-        const dealData = dealDoc.data();
-        if (!dealData) {
-            return { success: false, message: 'Deal data is missing.' };
-        }
-        const { dealName, feeAmount, clientId, clientName } = dealData;
-        const managementFeeAmount = dealData.managementFeeAmount || 0;
-        
-        if (managementFeeAmount <= 0) return { success: false, message: 'Fee amount is invalid.' };
-
-        const batch = adminDb.batch();
-        
-        // 1. Mark the fee as paid on the deal
-        batch.update(dealRef, { managementFeePaid: true });
-
-        // 2. Create an administrative transaction for the income
-        const adminTxRef = adminDb.collection('administrativeTransactions').doc();
-        batch.set(adminTxRef, {
-            type: 'ManagementFee',
-            amount: managementFeeAmount,
-            description: `Management fee for deal: ${dealData.dealName}`,
-            createdAt: FieldValue.serverTimestamp(),
-            dealId: dealId,
-            dealName: dealData.dealName,
-            clientId: dealData.clientId,
-            clientName: dealData.clientName,
+        await adminDb.runTransaction(async (transaction) => {
+            const dealDoc = await transaction.get(dealRef);
+            if (!dealDoc.exists) throw new Error('Deal not found.');
+            const dealData = dealDoc.data()!;
+            const managementFeeAmount = Number(dealData.managementFeeAmount || 0);
+            if (managementFeeAmount <= 0) throw new Error('Fee amount is invalid.');
+            if (dealData.managementFeePaid === true) throw new Error('Management fee has already been approved.');
+            transaction.update(dealRef, { managementFeePaid: true });
+            transaction.set(adminDb.collection('administrativeTransactions').doc(), {
+                type: 'ManagementFee', amount: managementFeeAmount,
+                description: `Management fee for deal: ${dealData.dealName}`,
+                createdAt: FieldValue.serverTimestamp(), dealId,
+                dealName: dealData.dealName, clientId: dealData.clientId, clientName: dealData.clientName,
+                sourceRequestId: `management-fee:${dealId}`,
+            });
         });
-        
-        await batch.commit();
         
         revalidatePath(`/admin/deals/${dealId}`);
         revalidatePath('/admin/funds');

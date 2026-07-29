@@ -19,6 +19,8 @@ import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { processDepositRequestAction } from '@/app/admin/approvals/actions';
+import { getRequiredIdToken } from '@/firebase/auth-token';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -233,45 +235,9 @@ export default function DepositsPage() {
     const isLoading = pendingLoading || processedLoading;
 
     const handleProcessRequest = async (request: DepositRequest, newStatus: 'Approved' | 'Rejected', specialInvestment = false) => {
-        if (!firestore) return;
         setProcessingId(request.id);
-        
         try {
-            const batch = writeBatch(firestore);
-            const requestRef = doc(firestore, 'depositRequests', request.id);
-
-            batch.update(requestRef, {
-                status: newStatus,
-                processedAt: Timestamp.now()
-            });
-
-            if (newStatus === 'Approved') {
-                 const now = Timestamp.now();
-                // Create a fund batch for the investor
-                const fundBatchRef = doc(collection(firestore, 'fundBatches'));
-                batch.set(fundBatchRef, {
-                    sourceId: request.investorId,
-                    amount: request.amount,
-                    remainingAmount: request.amount,
-                    createdAt: now,
-                    // Default tenure for new deposits, could be made configurable later
-                    tenureValue: 10,
-                    tenureUnit: 'Years',
-                    specialInvestment,
-                });
-
-                // Create a 'Deposit' transaction
-                const transactionRef = doc(collection(firestore, 'transactions'));
-                batch.set(transactionRef, {
-                    userId: request.investorId,
-                    type: 'Deposit',
-                    amount: request.amount,
-                    createdAt: now,
-                    details: 'Investor Deposit'
-                });
-            }
-
-            await batch.commit();
+            await processDepositRequestAction({ authToken: await getRequiredIdToken(), requestId: request.id, decision: newStatus, specialInvestment });
 
             toast({
                 title: `Request ${newStatus}`,

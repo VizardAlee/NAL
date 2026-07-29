@@ -23,8 +23,10 @@ import { setBankDetailsAction } from './bank-details-actions';
 import { useNotification } from "@/components/notification-provider";
 import { setOwnerWithdrawalWindowAction } from './actions';
 import { PlusCircle, Trash2, CalendarRange } from 'lucide-react';
+import { useIdToken } from '@/firebase/auth-token';
 
 function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoading: boolean }) {
+    const authToken = useIdToken();
     const { toast } = useToast();
     const [toastShown, setToastShown] = useState(false);
     const [state, formAction, isPending] = useActionState(setNisabAction, { success: false, message: '' });
@@ -57,6 +59,7 @@ function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoadin
                     <Skeleton className="h-10 w-64" />
                 ) : (
                     <form action={formAction} className="flex items-end gap-4">
+                        <input type="hidden" name="authToken" value={authToken} />
                         <div className="relative">
                             <label htmlFor="nisab" className="block text-sm font-medium text-muted-foreground mb-1">Nisab Amount (NGN)</label>
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pt-3">₦</span>
@@ -81,6 +84,7 @@ function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoadin
 }
 
 function BankDetailsForm({ currentDetails, isLoading }: { currentDetails: any, isLoading: boolean }) {
+    const authToken = useIdToken();
     const { toast } = useToast();
     const [state, formAction, isPending] = useActionState(setBankDetailsAction, { success: false, message: '' });
 
@@ -109,6 +113,7 @@ function BankDetailsForm({ currentDetails, isLoading }: { currentDetails: any, i
                     </div>
                 ) : (
                     <form action={formAction} className="space-y-4 max-w-md">
+                        <input type="hidden" name="authToken" value={authToken} />
                         <div>
                             <label htmlFor="bankName" className="block text-sm font-medium text-muted-foreground mb-1">Bank Name</label>
                             <Input id="bankName" name="bankName" defaultValue={currentDetails?.bankName} placeholder="e.g., Guaranty Trust Bank" />
@@ -134,6 +139,7 @@ function BankDetailsForm({ currentDetails, isLoading }: { currentDetails: any, i
 
 
 function CompanyLogoForm() {
+    const authToken = useIdToken();
     const { logoUrl, loading } = useCompanyLogo();
     const [preview, setPreview] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -181,6 +187,7 @@ function CompanyLogoForm() {
             <CardContent>
                 {loading ? <Skeleton className="h-32 w-32 rounded-lg" /> : (
                     <form action={formAction} className="space-y-4">
+                        <input type="hidden" name="authToken" value={authToken} />
                         <div className="flex flex-col sm:flex-row items-center gap-6">
                             <Image
                                 src={preview || logoUrl || '/placeholder.svg'}
@@ -244,6 +251,7 @@ function NotificationSettingsCard() {
 type Quarter = { label: string; startDate: string; endDate: string };
 
 function OwnerWithdrawalWindowForm({ currentQuarters, isLoading }: { currentQuarters: Quarter[] | undefined; isLoading: boolean }) {
+    const authToken = useIdToken();
     const { toast } = useToast();
     const [quarters, setQuarters] = useState<Quarter[]>([]);
     const [state, formAction, isPending] = useActionState(setOwnerWithdrawalWindowAction, { success: false, message: '' });
@@ -301,6 +309,7 @@ function OwnerWithdrawalWindowForm({ currentQuarters, isLoading }: { currentQuar
                     </div>
                 ) : (
                     <form action={formAction} onSubmit={handleSubmit} className="space-y-4">
+                        <input type="hidden" name="authToken" value={authToken} />
                         <input type="hidden" name="quarters" defaultValue={JSON.stringify(quarters)} />
                         {quarters.length === 0 && (
                             <p className="text-sm text-muted-foreground">No withdrawal windows configured. Add one below.</p>

@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import { addRecoveryLogAction } from './actions';
 import { useToast } from "@/hooks/use-toast";
+import { getRequiredIdToken } from '@/firebase/auth-token';
 
 
 type RecoveryTask = DocumentData & {
@@ -57,6 +58,7 @@ function LogEntryForm({ taskId, authorId, authorName }: { taskId: string, author
 
         startTransition(async () => {
             const result = await addRecoveryLogAction({
+                authToken: await getRequiredIdToken(),
                 taskId,
                 logText: text,
                 authorId,

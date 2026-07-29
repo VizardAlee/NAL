@@ -63,6 +63,7 @@ export async function signUpWithEmailAction(
             accessRole?: AccessRole;
             personas?: Persona[];
             primaryPortal?: PrimaryPortal;
+            isMuslim?: boolean;
             status: 'Pending' | 'Used';
         };
         if (!inviteData || inviteData.status !== 'Pending') {
@@ -80,6 +81,13 @@ export async function signUpWithEmailAction(
             primaryPortal: inviteData.primaryPortal,
         });
         const role = toLegacyRoleFromAccess(accessModel);
+        const isInvestor = accessModel.personas.includes('INVESTOR');
+        if (isInvestor && typeof inviteData.isMuslim !== 'boolean') {
+            return {
+                success: false,
+                message: 'This investor invite is missing the Muslim/non-Muslim classification. Ask an administrator to regenerate it.',
+            };
+        }
 
         const userExists = await auth.getUserByEmail(email).catch(() => null);
         if (userExists) {
@@ -100,6 +108,7 @@ export async function signUpWithEmailAction(
             accessRole: accessModel.accessRole,
             personas: accessModel.personas,
             primaryPortal: accessModel.primaryPortal,
+            ...(isInvestor ? { isMuslim: inviteData.isMuslim } : {}),
         });
 
         // 3. Create user document in Firestore with the selected role
@@ -156,6 +165,7 @@ export async function getInviteDetailsAction(inviteToken: string): Promise<{
     accessRole?: AccessRole;
     personas?: Persona[];
     primaryPortal?: PrimaryPortal;
+    isMuslim?: boolean;
     message?: string;
 }> {
     if (!inviteToken) return { valid: false, message: 'Missing invite token.' };
@@ -175,6 +185,7 @@ export async function getInviteDetailsAction(inviteToken: string): Promise<{
             accessRole?: AccessRole;
             personas?: Persona[];
             primaryPortal?: PrimaryPortal;
+            isMuslim?: boolean;
             status: 'Pending' | 'Used';
         };
         if (!inviteData || inviteData.status !== 'Pending') {
@@ -194,6 +205,7 @@ export async function getInviteDetailsAction(inviteToken: string): Promise<{
             accessRole: accessModel.accessRole,
             personas: accessModel.personas,
             primaryPortal: accessModel.primaryPortal,
+            isMuslim: inviteData.isMuslim,
         };
     } catch (error: any) {
         return { valid: false, message: error.message || 'Failed to validate invite link.' };

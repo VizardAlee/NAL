@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as admin from 'firebase-admin';
 import { differenceInDays } from 'date-fns';
-import { getAuthErrorStatus, verifyAdminOrOwner } from '@/lib/server/auth';
+import { getAuthErrorStatus, verifyAdminWrite } from '@/lib/server/auth';
 import { getAdminApp } from '@/firebase/admin-app';
 
 // Defines the shape of the data for a Deal document
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     let finalAmountFunded = 0;
 
     try {
-        await verifyAdminOrOwner(authToken);
+        await verifyAdminWrite(authToken);
 
         await firestore.runTransaction(async (transaction) => {
             const dealRef = firestore.collection('deals').doc(dealId);

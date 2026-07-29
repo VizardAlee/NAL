@@ -41,6 +41,7 @@ type InviteState = {
   accessRole?: string;
   personas?: string[];
   primaryPortal?: string;
+  isMuslim?: boolean;
   message?: string;
 };
 
@@ -85,6 +86,7 @@ function SignupPageContent() {
           accessRole: result.accessRole,
           personas: result.personas,
           primaryPortal: result.primaryPortal,
+          isMuslim: result.isMuslim,
         });
         form.setValue('email', result.email || '');
         form.setValue('inviteToken', inviteToken);
@@ -180,6 +182,11 @@ function SignupPageContent() {
                                 {inviteState.personas && inviteState.personas.length > 0 && (
                                   <span className="ml-2 text-muted-foreground">
                                     ({inviteState.personas.join(', ')})
+                                  </span>
+                                )}
+                                {inviteState.personas?.includes('INVESTOR') && typeof inviteState.isMuslim === 'boolean' && (
+                                  <span className="ml-2 text-muted-foreground">
+                                    · {inviteState.isMuslim ? 'Muslim' : 'Non-Muslim'}
                                   </span>
                                 )}
                             </FormDescription>

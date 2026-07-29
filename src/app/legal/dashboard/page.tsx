@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { addRecoveryLogAction } from '@/app/recovery/dashboard/actions';
+import { getRequiredIdToken } from '@/firebase/auth-token';
 import { hasPersona, type LegacyRole, type Persona } from "@/lib/access-control";
 
 
@@ -69,6 +70,7 @@ function LogEntryForm({ taskId, authorId, authorName }: { taskId: string, author
 
         startTransition(async () => {
             const result = await addRecoveryLogAction({
+                authToken: await getRequiredIdToken(),
                 taskId,
                 logText: text,
                 authorId,

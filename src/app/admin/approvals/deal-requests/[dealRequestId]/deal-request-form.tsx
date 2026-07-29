@@ -29,6 +29,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { approveDealAction, rejectDealAction } from './actions';
 import { useRouter } from 'next/navigation';
 import { isDurationShort } from '@/lib/duration-helpers';
+import { getRequiredIdToken } from '@/firebase/auth-token';
 
 const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
@@ -75,7 +76,7 @@ export function DealRequestForm({ dealRequest }: DealRequestFormProps) {
 
   async function onApprove(values: z.infer<typeof formSchema>) {
     startApproveTransition(async () => {
-      const result = await approveDealAction(dealRequest.id, dealRequest.clientId, dealRequest.clientName, values);
+      const result = await approveDealAction(await getRequiredIdToken(), dealRequest.id, dealRequest.clientId, dealRequest.clientName, values);
       if (result.success) {
         toast({ title: 'Success', description: result.message });
         router.push('/admin/approvals/deal-requests');
@@ -87,7 +88,7 @@ export function DealRequestForm({ dealRequest }: DealRequestFormProps) {
 
   async function onReject() {
       startRejectTransition(async () => {
-          const result = await rejectDealAction(dealRequest.id);
+          const result = await rejectDealAction(await getRequiredIdToken(), dealRequest.id);
           if(result.success) {
               toast({title: "Request Rejected", description: result.message});
               router.push('/admin/approvals/deal-requests');

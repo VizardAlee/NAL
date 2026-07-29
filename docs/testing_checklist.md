@@ -2,6 +2,15 @@
 
 Use this checklist before releases, after large feature changes, and whenever Firebase rules, auth, payments, deals, or role access changes. Mark each item as `Pass`, `Fail`, `Blocked`, or `N/A`, and record the test account, browser/device, and notes for every failure.
 
+## Automated release gate
+
+Run `npm run verify` before starting manual staging checks. The command must pass typechecking, linting, finance unit tests, Firestore emulator security/concurrency tests, and the production build. CI runs the same gate on every pull request and push to `main`. Do not deploy by bypassing a failed gate.
+
+- [ ] Record the successful CI run and Git commit for this release.
+- [ ] Confirm the Firestore rules tests include privilege escalation, ledger writes, messaging spoofing, and concurrent approval coverage.
+- [ ] Confirm the production build performs type and lint validation rather than skipping them.
+- [ ] Complete the backup/restore, monitoring, and rollback preparation in `docs/operations_runbook.md`.
+
 ## 1. Test Setup
 
 - [ ] Confirm `.env` / Firebase config values point to the intended test or staging project.
@@ -328,4 +337,3 @@ Use this checklist before releases, after large feature changes, and whenever Fi
 - [ ] Known failures are documented with issue links or owner names.
 - [ ] Test data cleanup plan is complete.
 - [ ] Version, commit SHA, environment, and tester name are recorded.
-

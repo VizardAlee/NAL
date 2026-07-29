@@ -28,15 +28,26 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useFirebaseApp } from '@/firebase';
 
 
-const formSchema = z.object({
-  name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
-  email: z.string().email({ message: 'Invalid email address.' }),
-  password: z
-    .string()
-    .min(8, { message: 'Password must be at least 8 characters.' }),
-  phoneNumber: z.string().optional(),
-  role: z.enum(['Investor', 'Client', 'Marketer', 'Admin', 'Legal', 'Recovery'], { required_error: 'Role is required.' }),
-});
+const formSchema = z
+  .object({
+    name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
+    email: z.string().email({ message: 'Invalid email address.' }),
+    password: z
+      .string()
+      .min(8, { message: 'Password must be at least 8 characters.' }),
+    phoneNumber: z.string().optional(),
+    role: z.enum(['Investor', 'Client', 'Marketer', 'Admin', 'Legal', 'Recovery'], { required_error: 'Role is required.' }),
+    isMuslim: z.boolean().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.role === 'Investor' && typeof data.isMuslim !== 'boolean') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['isMuslim'],
+        message: 'Select Muslim or non-Muslim for an investor.',
+      });
+    }
+  });
 
 type CreateUserFormProps = {
   onUserCreated: () => void;
@@ -165,6 +176,32 @@ export function CreateUserForm({ onUserCreated }: CreateUserFormProps) {
             </FormItem>
           )}
         />
+        {form.watch('role') === 'Investor' && (
+          <FormField
+            control={form.control}
+            name="isMuslim"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Investor religious classification</FormLabel>
+                <Select
+                  onValueChange={(value) => field.onChange(value === 'true')}
+                  value={typeof field.value === 'boolean' ? String(field.value) : undefined}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Muslim or non-Muslim" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="true">Muslim</SelectItem>
+                    <SelectItem value="false">Non-Muslim</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Create User

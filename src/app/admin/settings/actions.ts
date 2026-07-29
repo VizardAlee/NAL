@@ -3,6 +3,7 @@
 
 import { adminDb } from '@/firebase/admin-app';
 import { z } from 'zod';
+import { verifyAdminWrite } from '@/lib/server/auth';
 
 const withdrawalQuarterSchema = z.object({
     label: z.string().min(1),
@@ -19,6 +20,7 @@ const nisabSchema = z.object({
 });
 
 export async function setNisabAction(prevState: any, formData: FormData) {
+    await verifyAdminWrite(String(formData.get('authToken') || ''));
     const validated = nisabSchema.safeParse({
         nisab: formData.get('nisab'),
     });
@@ -39,6 +41,7 @@ export async function setNisabAction(prevState: any, formData: FormData) {
 }
 
 export async function setOwnerWithdrawalWindowAction(prevState: any, formData: FormData) {
+    await verifyAdminWrite(String(formData.get('authToken') || ''));
     const rawJson = formData.get('quarters');
     let parsed;
     try {

@@ -6,6 +6,8 @@ import {
   Persona,
   PrimaryPortal,
   canViewAdmin,
+  canWriteAdmin,
+  hasPersona,
 } from '@/lib/access-control';
 
 type AuthError = Error & { status?: number };
@@ -56,6 +58,53 @@ export async function verifyAdminOrOwner(authToken: string): Promise<DecodedIdTo
   };
 
   if (!canViewAdmin(accessSource)) {
+    throw createAuthError('Forbidden: insufficient permissions.', 403);
+  }
+  return decoded;
+}
+
+async function getVerifiedAccess(authToken: string) {
+  const decoded = await verifyAuthToken(authToken);
+  const { firestore } = initializeFirebase();
+  const userSnapshot = await firestore.collection('users').doc(decoded.uid).get();
+  if (!userSnapshot.exists) {
+    throw createAuthError('Forbidden: user profile not found.', 403);
+  }
+
+  const userProfile = userSnapshot.data() || {};
+  return {
+    decoded,
+    accessSource: {
+      role: (userProfile.role ?? decoded.role) as LegacyRole | null | undefined,
+      roles: userProfile.roles as LegacyRole[] | null | undefined,
+      accessRole: (userProfile.accessRole ?? decoded.accessRole) as AccessRole | null | undefined,
+      personas: userProfile.personas as Persona[] | null | undefined,
+      primaryPortal: userProfile.primaryPortal as PrimaryPortal | null | undefined,
+    },
+  };
+}
+
+/** Require a full ADMIN account for any privileged mutation. Owners and staff are read-only. */
+export async function verifyAdminWrite(authToken: string): Promise<DecodedIdToken> {
+  const { decoded, accessSource } = await getVerifiedAccess(authToken);
+  if (!canWriteAdmin(accessSource)) {
+    throw createAuthError('Forbidden: administrator write access required.', 403);
+  }
+  return decoded;
+}
+
+/** Require a user with the named operational persona. Admins may perform operational work. */
+export async function verifyPersonaOrAdmin(authToken: string, persona: Persona): Promise<DecodedIdToken> {
+  const { decoded, accessSource } = await getVerifiedAccess(authToken);
+  if (!canWriteAdmin(accessSource) && !hasPersona(accessSource, persona)) {
+    throw createAuthError('Forbidden: insufficient permissions.', 403);
+  }
+  return decoded;
+}
+
+export async function verifyAnyPersonaOrAdmin(authToken: string, personas: Persona[]): Promise<DecodedIdToken> {
+  const { decoded, accessSource } = await getVerifiedAccess(authToken);
+  if (!canWriteAdmin(accessSource) && !personas.some((persona) => hasPersona(accessSource, persona))) {
     throw createAuthError('Forbidden: insufficient permissions.', 403);
   }
   return decoded;

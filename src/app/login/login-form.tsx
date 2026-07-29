@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { signInWithEmailAndPassword, type User } from "firebase/auth";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { useAuth, useFirestore } from "@/firebase";
 import { FirebaseError } from "firebase/app";
@@ -36,6 +36,7 @@ export function LoginForm() {
   const { toast } = useToast();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState("");
   const auth = useAuth();
   const firestore = useFirestore();
 
@@ -49,6 +50,7 @@ export function LoginForm() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
+    setLoginError("");
     if (!auth || !firestore) {
       toast({
         variant: "destructive",
@@ -87,27 +89,48 @@ export function LoginForm() {
       router.push(getDefaultRouteForUser(userData, preferredPortal));
 
     } catch (error) {
-      console.error("Login Error:", error);
-      let errorMessage = "An unknown error occurred.";
+      let errorMessage = "An unexpected error occurred. Please try again.";
+      let expectedLoginFailure = false;
+
       if (error instanceof FirebaseError) {
          switch (error.code) {
           case 'auth/user-not-found':
           case 'auth/wrong-password':
           case 'auth/invalid-credential':
-            errorMessage = 'Invalid email or password. If this keeps happening, verify you are using the same Firebase project where this account was created.';
+            expectedLoginFailure = true;
+            errorMessage = 'Invalid email or password. Check your details or use “Forgot your password?” below.';
             break;
           case 'auth/invalid-email':
+            expectedLoginFailure = true;
             errorMessage = 'Please enter a valid email address.';
             break;
           case 'auth/user-disabled':
+            expectedLoginFailure = true;
             errorMessage = 'This account has been disabled.';
             break;
+          case 'auth/too-many-requests':
+            expectedLoginFailure = true;
+            errorMessage = 'Too many unsuccessful attempts. Wait a few minutes or reset your password.';
+            break;
+          case 'auth/network-request-failed':
+            expectedLoginFailure = true;
+            errorMessage = 'Authentication could not reach Firebase. Check your connection and try again.';
+            break;
           default:
-            errorMessage = `An unexpected error occurred. Please try again.`;
+            errorMessage = 'Authentication failed unexpectedly. Please try again.';
         }
       } else if (error instanceof Error) {
          errorMessage = error.message;
       }
+
+      // Incorrect credentials are normal form validation, not application
+      // exceptions. Logging them with console.error makes the Next.js
+      // development overlay report a false application error.
+      if (!expectedLoginFailure) {
+        console.warn("Unexpected login failure:", error);
+      }
+
+      setLoginError(errorMessage);
       
       toast({
         variant: "destructive",
@@ -158,6 +181,15 @@ export function LoginForm() {
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Login <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
+            {loginError && (
+              <p
+                role="alert"
+                aria-live="polite"
+                className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+              >
+                {loginError}
+              </p>
+            )}
           </form>
         </Form>
         <div className="mt-4 text-center text-sm">

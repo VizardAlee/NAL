@@ -10,6 +10,7 @@ import { Loader2, FileUp, FileCheck, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { uploadLegalDocumentAction } from './actions';
 import Image from 'next/image';
+import { getRequiredIdToken } from '@/firebase/auth-token';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
@@ -71,7 +72,7 @@ export function LegalDocumentUploader({ userId }: { userId: string }) {
         }
         
         startTransition(async () => {
-            const result = await uploadLegalDocumentAction({ userId, documentUrl });
+            const result = await uploadLegalDocumentAction({ authToken: await getRequiredIdToken(), userId, documentUrl });
             if (result.success) {
                 toast({ title: 'Success', description: result.message });
                 setFile(null);

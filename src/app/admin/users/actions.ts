@@ -11,6 +11,7 @@ import {
   resolvePrimaryPortalFromPersonas,
   toLegacyRoleFromAccess,
 } from '@/lib/access-control';
+import { verifyAdminWrite } from '@/lib/server/auth';
 
 function getInviteBaseUrl() {
   return (
@@ -21,14 +22,26 @@ function getInviteBaseUrl() {
   ).replace(/\/$/, '');
 }
 
-const inviteSchema = z.object({
-  email: z.string().email(),
-  accessRole: z.enum(['OWNER', 'ADMIN', 'STAFF', 'USER']),
-  personas: z.array(z.enum(['INVESTOR', 'CLIENT', 'LEGAL', 'RECOVERY', 'MARKETER', 'STAFF_MEMBER'])).default([]),
-  primaryPortal: z.enum(['owner', 'admin', 'investor', 'client', 'legal', 'recovery', 'marketer']).optional(),
-  inviterId: z.string().min(1),
-  inviterName: z.string().min(1),
-});
+const inviteSchema = z
+  .object({
+    authToken: z.string().min(1),
+    email: z.string().email(),
+    accessRole: z.enum(['OWNER', 'ADMIN', 'STAFF', 'USER']),
+    personas: z.array(z.enum(['INVESTOR', 'CLIENT', 'LEGAL', 'RECOVERY', 'MARKETER', 'STAFF_MEMBER'])).default([]),
+    primaryPortal: z.enum(['owner', 'admin', 'investor', 'client', 'legal', 'recovery', 'marketer']).optional(),
+    isMuslim: z.boolean().optional(),
+    inviterId: z.string().min(1),
+    inviterName: z.string().min(1),
+  })
+  .superRefine((data, ctx) => {
+    if (data.personas.includes('INVESTOR') && typeof data.isMuslim !== 'boolean') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['isMuslim'],
+        message: 'Investor religious classification is required.',
+      });
+    }
+  });
 
 export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>): Promise<{
   success: boolean;
@@ -40,7 +53,20 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
     return { success: false, message: 'Invalid invite data.' };
   }
 
-  const { email, accessRole, personas, primaryPortal: requestedPortal, inviterId, inviterName } = validated.data;
+  const {
+    authToken,
+    email,
+    accessRole,
+    personas,
+    primaryPortal: requestedPortal,
+    isMuslim,
+    inviterId,
+    inviterName,
+  } = validated.data;
+  const actor = await verifyAdminWrite(authToken);
+  if (actor.uid !== inviterId) {
+    return { success: false, message: 'Invalid inviter identity.' };
+  }
   const normalizedEmail = email.toLowerCase();
   const dedupedPersonas = [...new Set(personas)] as Persona[];
   const resolvedPrimaryPortal = (
@@ -74,7 +100,18 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
       .limit(1)
       .get();
     if (!existingInvite.empty) {
-      const token = existingInvite.docs[0].id;
+      const inviteRef = existingInvite.docs[0].ref;
+      const token = inviteRef.id;
+      await inviteRef.update({
+        accessRole,
+        personas: dedupedPersonas,
+        primaryPortal: resolvedPrimaryPortal,
+        role: legacyRole,
+        isMuslim: dedupedPersonas.includes('INVESTOR') ? isMuslim : FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+        createdBy: inviterId,
+        createdByName: inviterName,
+      });
       const baseUrl = getInviteBaseUrl();
       return {
         success: true,
@@ -90,6 +127,7 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
       personas: dedupedPersonas,
       primaryPortal: resolvedPrimaryPortal,
       role: legacyRole,
+      ...(dedupedPersonas.includes('INVESTOR') ? { isMuslim } : {}),
       status: 'Pending',
       createdAt: FieldValue.serverTimestamp(),
       createdBy: inviterId,

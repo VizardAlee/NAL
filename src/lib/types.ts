@@ -42,6 +42,7 @@ export type User = AuthUser & DocumentData & {
     accessRole?: AccessRole;
     personas?: Persona[];
     primaryPortal?: PrimaryPortal;
+    isMuslim?: boolean;
     referralCode?: string;
     rating?: number;
 };

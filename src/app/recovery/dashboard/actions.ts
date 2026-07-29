@@ -5,8 +5,10 @@ import { adminDb } from '@/firebase/admin-app';
 import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { verifyAnyPersonaOrAdmin } from '@/lib/server/auth';
 
 const addLogSchema = z.object({
+  authToken: z.string().min(1),
   taskId: z.string().min(1),
   logText: z.string().min(1, 'Log entry cannot be empty.'),
   authorId: z.string().min(1),
@@ -19,7 +21,9 @@ export async function addRecoveryLogAction(input: z.infer<typeof addLogSchema>) 
     return { success: false, message: 'Invalid data provided for log entry.' };
   }
   
-  const { taskId, logText, authorId, authorName } = validated.data;
+  const { authToken, taskId, logText, authorId, authorName } = validated.data;
+  const actor = await verifyAnyPersonaOrAdmin(authToken, ['RECOVERY', 'LEGAL']);
+  if (actor.uid !== authorId) return { success: false, message: 'Invalid author identity.' };
 
   try {
     const taskRef = adminDb.collection('recoveryTasks').doc(taskId);

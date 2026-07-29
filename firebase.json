@@ -10,5 +10,9 @@
       "**/.*",
       "**/node_modules/**"
     ]
+  },
+  "emulators": {
+    "firestore": { "port": 8088 },
+    "ui": { "enabled": false }
   }
 }

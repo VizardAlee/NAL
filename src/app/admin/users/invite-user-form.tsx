@@ -26,17 +26,29 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { createInviteLinkAction } from './actions';
+import { getRequiredIdToken } from '@/firebase/auth-token';
 import { useUser } from '@/firebase';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { resolvePrimaryPortalFromPersonas, type Persona } from '@/lib/access-control';
 
-const formSchema = z.object({
-  email: z.string().email({ message: 'Enter a valid email address.' }),
-  accessRole: z.enum(['OWNER', 'ADMIN', 'STAFF', 'USER']),
-  personas: z.array(z.enum(['INVESTOR', 'CLIENT', 'LEGAL', 'RECOVERY', 'MARKETER', 'STAFF_MEMBER'])).default([]),
-  primaryPortal: z.enum(['owner', 'admin', 'investor', 'client', 'legal', 'recovery', 'marketer']),
-});
+const formSchema = z
+  .object({
+    email: z.string().email({ message: 'Enter a valid email address.' }),
+    accessRole: z.enum(['OWNER', 'ADMIN', 'STAFF', 'USER']),
+    personas: z.array(z.enum(['INVESTOR', 'CLIENT', 'LEGAL', 'RECOVERY', 'MARKETER', 'STAFF_MEMBER'])).default([]),
+    primaryPortal: z.enum(['owner', 'admin', 'investor', 'client', 'legal', 'recovery', 'marketer']),
+    isMuslim: z.boolean().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.personas.includes('INVESTOR') && typeof data.isMuslim !== 'boolean') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['isMuslim'],
+        message: 'Select Muslim or non-Muslim for an investor.',
+      });
+    }
+  });
 
 type InviteUserFormProps = {
   onInviteCreated: () => void;
@@ -63,6 +75,7 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
       accessRole: 'USER',
       personas: ['INVESTOR'],
       primaryPortal: 'investor',
+      isMuslim: undefined,
     },
   });
 
@@ -97,10 +110,12 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
       }
 
       const result = await createInviteLinkAction({
+        authToken: await getRequiredIdToken(),
         email: values.email,
         accessRole,
         personas,
         primaryPortal,
+        isMuslim: personas.includes('INVESTOR') ? values.isMuslim : undefined,
         inviterId: user.uid,
         inviterName,
       });
@@ -220,6 +235,9 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
                                     ? [...field.value, choice.value]
                                     : field.value.filter((item) => item !== choice.value);
                                   field.onChange(value);
+                                  if (choice.value === 'INVESTOR' && !checked) {
+                                    form.setValue('isMuslim', undefined);
+                                  }
                                 }}
                               />
                             </FormControl>
@@ -237,6 +255,35 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
               </FormItem>
             )}
           />
+          {form.watch('personas').includes('INVESTOR') && (
+            <FormField
+              control={form.control}
+              name="isMuslim"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Investor religious classification</FormLabel>
+                  <Select
+                    onValueChange={(value) => field.onChange(value === 'true')}
+                    value={typeof field.value === 'boolean' ? String(field.value) : undefined}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Muslim or non-Muslim" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="true">Muslim</SelectItem>
+                      <SelectItem value="false">Non-Muslim</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Zakat is calculated only for investors registered as Muslim.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
           <FormField
             control={form.control}
             name="primaryPortal"
