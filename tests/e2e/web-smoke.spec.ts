@@ -41,7 +41,7 @@ test('PWA metadata and install assets are available', async ({ page, request }) 
   expect(faviconResponse.ok()).toBeTruthy();
   expect(faviconResponse.headers()['content-type']).toContain('image/');
 
-  const serviceWorkerResponse = await request.get('/firebase-messaging-sw.js');
+  const serviceWorkerResponse = await request.get('/sw.js');
   expect(serviceWorkerResponse.ok()).toBeTruthy();
   expect(serviceWorkerResponse.headers()['service-worker-allowed']).toBe('/');
 });

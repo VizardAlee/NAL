@@ -68,7 +68,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             if (permissionResult === 'granted') {
                 const messaging = getMessaging(app);
                 const serviceWorkerRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
-                    scope: '/',
+                    scope: '/firebase-cloud-messaging-push-scope',
                     updateViaCache: 'none',
                 });
                 const currentToken = await getToken(messaging, {

@@ -39,7 +39,8 @@ test('PWA manifest is installable and all declared icons are genuinely square', 
 });
 
 test('the shared service worker provides an offline fallback without caching APIs', () => {
-  const serviceWorker = readFileSync(
+  const serviceWorker = readFileSync(new URL('public/sw.js', root), 'utf8');
+  const messagingServiceWorker = readFileSync(
     new URL('public/firebase-messaging-sw.js', root),
     'utf8'
   );
@@ -48,5 +49,6 @@ test('the shared service worker provides an offline fallback without caching API
   assert.match(serviceWorker, /addEventListener\("fetch"/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
   assert.match(serviceWorker, /pathname\.startsWith\("\/api\/"\)/);
-  assert.match(serviceWorker, /firebase\.messaging\(\)/);
+  assert.doesNotMatch(serviceWorker, /importScripts/);
+  assert.match(messagingServiceWorker, /firebase\.messaging\(\)/);
 });

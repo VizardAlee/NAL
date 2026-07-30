@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 
-const SERVICE_WORKER_PATH = '/firebase-messaging-sw.js';
+const SERVICE_WORKER_PATH = '/sw.js';
 const UPDATE_INTERVAL_MS = 60 * 60 * 1000;
 
 export function PwaRegistration() {
