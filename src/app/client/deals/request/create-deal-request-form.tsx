@@ -23,13 +23,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition } from 'react';
 import { Loader2, Paperclip, BookOpen } from 'lucide-react';
 import { useAuth, useFirebaseApp, useUser } from '@/firebase';
 import { requestDealAction } from './actions';
 import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
-import { isDurationShort } from '@/lib/duration-helpers';
 import Link from 'next/link';
 import { uploadAuthenticatedFile } from '@/firebase/storage-upload';
 
@@ -43,7 +42,7 @@ const formSchema = z.object({
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).default('Murabaha'),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
-  repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
+  repaymentType: z.literal('Equal Installments'),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   proposalDetails: z.string().optional(),
   proposalPdf: z.any()
@@ -76,16 +75,6 @@ export function CreateDealRequestForm() {
       proposalDetails: '',
     },
   });
-
-  const durationValue = form.watch('durationValue');
-  const durationUnit = form.watch('durationUnit');
-  const isShortDeal = isDurationShort(durationValue, durationUnit);
-
-  useEffect(() => {
-    if (!isShortDeal && form.getValues('repaymentType') === 'Balloon Payment') {
-      form.setValue('repaymentType', 'Equal Installments');
-    }
-  }, [isShortDeal, form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const currentUser = auth?.currentUser;
@@ -249,10 +238,9 @@ export function CreateDealRequestForm() {
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="Equal Installments">Equal Installments</SelectItem>
-                  {isShortDeal && <SelectItem value="Balloon Payment">Balloon Payment</SelectItem>}
                 </SelectContent>
               </Select>
-              <FormDescription>Balloon Payment is only available for deals 3 months or shorter.</FormDescription>
+              <FormDescription>Principal and profit are divided uniformly across every repayment period.</FormDescription>
               <FormMessage />
             </FormItem>
           )}

@@ -14,21 +14,28 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, XCircle, ShieldAlert, Hourglass, History } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData, Timestamp, runTransaction, doc, writeBatch, getDocs } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
+import { collection, query, where, DocumentData, Timestamp } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { generateAmortizationSchedule } from '@/lib/amortization';
-import { Deal } from '@/lib/types';
-import { Investment } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { runOwnerProfitAllocationAction } from '@/app/admin/funds/actions';
 import { getRequiredIdToken } from '@/firebase/auth-token';
 import { processTerminationRequestAction } from '@/app/admin/approvals/actions';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 type TerminationRequest = DocumentData & {
     id: string;
@@ -40,7 +47,16 @@ type TerminationRequest = DocumentData & {
     requestedAt: Timestamp;
     processedAt?: Timestamp;
     platformEarning?: number;
+    remainingPrincipal?: number;
+    remainingProfit?: number;
+    settlementAmount?: number;
 };
+
+const formatCurrency = (amount?: number) =>
+    typeof amount === 'number'
+        ? new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount)
+        : 'Calculated on approval';
+
 function TerminationsTable({
     requests,
     isLoading,
@@ -50,14 +66,18 @@ function TerminationsTable({
     requests: TerminationRequest[],
     isLoading: boolean,
     showActionButtons: boolean,
-    onProcessRequest?: (request: TerminationRequest, newStatus: 'Approved' | 'Rejected') => void
+    onProcessRequest?: (request: TerminationRequest, newStatus: 'Approved' | 'Rejected') => Promise<void>
 }) {
     const [processingId, setProcessingId] = useState<string | null>(null);
     const isMobile = useIsMobile();
 
-    const handleProcessClick = (request: TerminationRequest, newStatus: 'Approved' | 'Rejected') => {
+    const handleProcessClick = async (request: TerminationRequest, newStatus: 'Approved' | 'Rejected') => {
         setProcessingId(request.id);
-        onProcessRequest?.(request, newStatus);
+        try {
+            await onProcessRequest?.(request, newStatus);
+        } finally {
+            setProcessingId(null);
+        }
     };
 
     if (isLoading) {
@@ -113,6 +133,10 @@ function TerminationsTable({
                                     <p className="font-medium">{request.clientName}</p>
                                     <p className="text-sm text-primary font-bold">{request.dealName}</p>
                                     <p className="text-xs text-muted-foreground">{format(request.requestedAt.toDate(), 'PPP')}</p>
+                                    <p className="text-sm font-semibold mt-1">Full settlement: {formatCurrency(request.settlementAmount)}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        Principal {formatCurrency(request.remainingPrincipal)} · Profit {formatCurrency(request.remainingProfit)}
+                                    </p>
                                 </div>
                                 {!showActionButtons && <Badge variant={request.status === 'Approved' ? 'default' : 'destructive'}>{request.status}</Badge>}
                             </div>
@@ -127,14 +151,28 @@ function TerminationsTable({
                                         {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
                                         Reject
                                     </Button>
-                                    <Button
-                                        size="sm"
-                                        onClick={() => handleProcessClick(request, 'Approved')}
-                                        disabled={processingId === request.id}
-                                    >
-                                        {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
-                                        Approve
-                                    </Button>
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button size="sm" disabled={processingId === request.id}>
+                                                {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+                                                Confirm Full Payment &amp; Terminate
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Confirm full settlement received?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Confirm that {formatCurrency(request.settlementAmount)} has been received. This will post all remaining principal and profit and permanently terminate the deal.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                <AlertDialogAction onClick={() => handleProcessClick(request, 'Approved')}>
+                                                    Confirm Payment &amp; Terminate
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
                                 </div>
                             )}
                         </CardContent>
@@ -152,6 +190,7 @@ function TerminationsTable({
                         <TableRow>
                             <TableHead>Client</TableHead>
                             <TableHead>Deal</TableHead>
+                            <TableHead>Full Settlement</TableHead>
                             <TableHead>Date Requested</TableHead>
                             {showActionButtons ? <TableHead className="text-right">Actions</TableHead> : <TableHead>Status</TableHead>}
                         </TableRow>
@@ -161,6 +200,12 @@ function TerminationsTable({
                             <TableRow key={request.id}>
                                 <TableCell data-label="Client" className="font-medium">{request.clientName}</TableCell>
                                 <TableCell data-label="Deal">{request.dealName}</TableCell>
+                                <TableCell data-label="Full Settlement">
+                                    <p className="font-semibold">{formatCurrency(request.settlementAmount)}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        Principal {formatCurrency(request.remainingPrincipal)} · Profit {formatCurrency(request.remainingProfit)}
+                                    </p>
+                                </TableCell>
                                 <TableCell data-label="Date Requested">{format(request.requestedAt.toDate(), 'PPP')}</TableCell>
                                 {showActionButtons ? (
                                     <TableCell data-label="Actions" className="text-right space-x-2">
@@ -173,14 +218,28 @@ function TerminationsTable({
                                             {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
                                             Reject
                                         </Button>
-                                        <Button
-                                            size="sm"
-                                            onClick={() => handleProcessClick(request, 'Approved')}
-                                            disabled={processingId === request.id}
-                                        >
-                                            {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
-                                            Approve
-                                        </Button>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button size="sm" disabled={processingId === request.id}>
+                                                    {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+                                                    Confirm Full Payment &amp; Terminate
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Confirm full settlement received?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Confirm that {formatCurrency(request.settlementAmount)} has been received. This posts all remaining principal and profit and permanently terminates the deal.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => handleProcessClick(request, 'Approved')}>
+                                                        Confirm Payment &amp; Terminate
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
                                     </TableCell>
                                 ) : (
                                     <TableCell data-label="Status">
@@ -199,23 +258,19 @@ function TerminationsTable({
 export default function TerminationsPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
-    const [processingId, setProcessingId] = useState<string | null>(null);
     const pendingQuery = useMemo(() => firestore ? query(collection(firestore, 'terminationRequests'), where('status', '==', 'Pending')) : null, [firestore]);
     const processedQuery = useMemo(() => firestore ? query(collection(firestore, 'terminationRequests'), where('status', 'in', ['Approved', 'Rejected'])) : null, [firestore]);
 
     const { data: pendingRequests, loading: pendingLoading } = useCollection<TerminationRequest>(pendingQuery);
     const { data: processedRequests, loading: processedLoading } = useCollection<TerminationRequest>(processedQuery);
 
-    const isLoading = pendingLoading || processedLoading;
-
     const handleProcessRequest = async (request: TerminationRequest, newStatus: 'Approved' | 'Rejected') => {
-        setProcessingId(request.id);
         try {
-            await processTerminationRequestAction({ authToken: await getRequiredIdToken(), requestId: request.id, decision: newStatus });
+            const result = await processTerminationRequestAction({ authToken: await getRequiredIdToken(), requestId: request.id, decision: newStatus });
 
             toast({
-                title: `Request Approved`,
-                description: `Deal "${request.dealName}" has been terminated.`,
+                title: newStatus === 'Approved' ? 'Full Payment Confirmed' : 'Request Rejected',
+                description: result.message,
             });
 
         } catch (error) {
@@ -225,8 +280,6 @@ export default function TerminationsPage() {
                 title: "Processing Failed",
                 description: error instanceof Error ? error.message : "An unknown error occurred.",
             });
-        } finally {
-            setProcessingId(null);
         }
     };
 
@@ -234,7 +287,7 @@ export default function TerminationsPage() {
         <div>
             <PageHeader
                 title="Termination Approvals"
-                description="Review and process client requests to terminate deals."
+                description="Confirm receipt of the full unpaid principal and profit before terminating a deal."
                 icon={ShieldAlert}
             />
             <Tabs defaultValue="pending" className="w-full">

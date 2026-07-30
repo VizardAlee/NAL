@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test';
 
 test('public entry points render and password reset is available', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveTitle(/NAL/i);
-  await page.goto('/login');
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('link', { name: /forgot your password/i })).toBeVisible();
-  await page.goto('/forgot-password');
+  await page.goto('/forgot-password', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('button', { name: /send reset link/i })).toBeVisible();
 });
 
@@ -20,7 +20,7 @@ test('production security headers are emitted', async ({ request }) => {
 });
 
 test('PWA metadata and install assets are available', async ({ page, request }) => {
-  await page.goto('/');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
 
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.json');
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', /apple-touch-icon/);
@@ -48,7 +48,7 @@ test('PWA metadata and install assets are available', async ({ page, request }) 
 });
 
 test('PWA serves the offline fallback without caching private portal data', async ({ page, context }) => {
-  await page.goto('/');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
   });

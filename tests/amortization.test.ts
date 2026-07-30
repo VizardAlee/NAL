@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { generateAmortizationSchedule } from '../src/lib/amortization';
+import {
+  calculateRemainingRepaymentBalance,
+  generateAmortizationSchedule,
+} from '../src/lib/amortization';
 import type { Deal } from '../src/lib/types';
 
 const timestamp = (date: Date) => ({ toDate: () => date }) as Deal['createdAt'];
@@ -15,20 +18,70 @@ function deal(overrides: Partial<Deal> = {}): Deal {
   } as Deal;
 }
 
-test('equal installments preserve principal and total profit to the kobo', () => {
+test('principal and profit remain uniform while preserving totals to the kobo', () => {
   const schedule = generateAmortizationSchedule(deal());
+  const principalValues = schedule.map((row) => Math.round(row.principal * 100));
+  const profitValues = schedule.map((row) => Math.round(row.interest * 100));
   assert.equal(schedule.length, 12);
+  assert.ok(Math.max(...principalValues) - Math.min(...principalValues) <= 1);
+  assert.ok(Math.max(...profitValues) - Math.min(...profitValues) <= 1);
   assert.equal(Number(schedule.reduce((sum, row) => sum + row.principal, 0).toFixed(2)), 1_000_000);
   assert.equal(Number(schedule.reduce((sum, row) => sum + row.interest, 0).toFixed(2)), 120_000);
   assert.equal(Number(schedule.reduce((sum, row) => sum + row.payment, 0).toFixed(2)), 1_120_000);
   assert.equal(schedule.at(-1)?.balance, 0);
 });
 
-test('balloon schedule returns principal only in the final installment', () => {
+test('legacy balloon deals also use uniform principal and profit repayments', () => {
   const schedule = generateAmortizationSchedule(deal({ repaymentType: 'Balloon Payment' }));
-  assert.ok(schedule.slice(0, -1).every((row) => row.principal === 0));
-  assert.equal(schedule.at(-1)?.principal, 1_000_000);
+  const principalValues = schedule.map((row) => Math.round(row.principal * 100));
+  const profitValues = schedule.map((row) => Math.round(row.interest * 100));
+  assert.ok(Math.max(...principalValues) - Math.min(...principalValues) <= 1);
+  assert.ok(Math.max(...profitValues) - Math.min(...profitValues) <= 1);
+  assert.equal(Number(schedule.reduce((sum, row) => sum + row.principal, 0).toFixed(2)), 1_000_000);
   assert.equal(Number(schedule.reduce((sum, row) => sum + row.interest, 0).toFixed(2)), 120_000);
+});
+
+test('termination requires all unpaid principal and profit', () => {
+  const settlement = calculateRemainingRepaymentBalance(deal(), [
+    { amount: 93_333.34, installmentNumber: 1 },
+  ]);
+
+  assert.deepEqual(settlement, {
+    remainingPrincipal: 916_666.66,
+    remainingProfit: 110_000,
+    totalRemaining: 1_026_666.66,
+  });
+});
+
+test('termination uses recorded principal and profit allocations for partial payments', () => {
+  const settlement = calculateRemainingRepaymentBalance(deal(), [
+    { amount: 120_000, installmentNumber: 1, principalApplied: 100_000, interestApplied: 20_000 },
+  ]);
+
+  assert.deepEqual(settlement, {
+    remainingPrincipal: 900_000,
+    remainingProfit: 100_000,
+    totalRemaining: 1_000_000,
+  });
+});
+
+test('a fully repaid deal has no termination settlement remaining', () => {
+  const schedule = generateAmortizationSchedule(deal());
+  const settlement = calculateRemainingRepaymentBalance(
+    deal(),
+    schedule.map((installment) => ({
+      amount: installment.payment,
+      installmentNumber: installment.installment,
+      principalApplied: installment.principal,
+      interestApplied: installment.interest,
+    }))
+  );
+
+  assert.deepEqual(settlement, {
+    remainingPrincipal: 0,
+    remainingProfit: 0,
+    totalRemaining: 0,
+  });
 });
 
 test('month-end schedules remain ordered and finite', () => {

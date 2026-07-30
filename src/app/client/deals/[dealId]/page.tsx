@@ -169,7 +169,7 @@ export default function ClientDealDetailPage() {
                             </div>
                             <div>
                                 <p className="text-muted-foreground">Repayment</p>
-                                <p className="font-medium">{deal.repaymentType}</p>
+                                <p className="font-medium">Uniform Principal &amp; Profit</p>
                             </div>
                             <div>
                                 <p className="text-muted-foreground">Frequency</p>
@@ -198,7 +198,7 @@ export default function ClientDealDetailPage() {
                                     <AlertDialogHeader>
                                         <AlertDialogTitle>Request deal termination?</AlertDialogTitle>
                                         <AlertDialogDescription>
-                                            This sends a termination request to an administrator for review. Your deal will remain active until the request is approved.
+                                            Termination requires payment of all unpaid principal and profit in full. The deal remains active until an administrator confirms the full settlement.
                                         </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>

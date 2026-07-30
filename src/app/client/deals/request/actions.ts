@@ -18,7 +18,7 @@ const requestDealSchema = z.object({
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).optional(),
   durationValue: z.coerce.number().positive().int(),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
-  repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
+  repaymentType: z.literal('Equal Installments'),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   proposalDetails: z.string().optional(),
   proposalPdf: z.string().url().refine(

@@ -266,7 +266,7 @@ export default function DealDetailPage() {
                             <div className="font-medium">Financing Mode</div><div><Badge variant="outline">{deal.financingMode || 'Murabaha'}</Badge></div>
                             <div className="font-medium">Profit Rate</div><div>{deal.profitRate}%</div>
                             <div className="font-medium">Duration</div><div>{deal.durationValue} {deal.durationUnit}</div>
-                            <div className="font-medium">Repayment Type</div><div>{deal.repaymentType}</div>
+                            <div className="font-medium">Repayment Structure</div><div>Uniform Principal &amp; Profit</div>
                             <div className="font-medium">Repayment Frequency</div><div>{deal.repaymentFrequency}</div>
                             <div className="font-medium">Term Start Date</div><div>{formatDate(deal.startDate)}</div>
                             <div className="font-medium">Date Created</div><div>{formatDate(deal.createdAt)}</div>

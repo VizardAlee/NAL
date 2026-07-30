@@ -130,7 +130,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
     if (schedule.length === 0) {
         return (
             <div className="p-6 text-sm text-muted-foreground">
-                This deal is a Balloon Payment type and does not have a detailed installment schedule.
+                A repayment schedule could not be generated for this deal.
             </div>
         );
     }

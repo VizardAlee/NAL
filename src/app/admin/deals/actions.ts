@@ -17,7 +17,7 @@ const formSchema = z.object({
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).optional(),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
-  repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
+  repaymentType: z.literal('Equal Installments'),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   startDate: z.date().optional(),
 });

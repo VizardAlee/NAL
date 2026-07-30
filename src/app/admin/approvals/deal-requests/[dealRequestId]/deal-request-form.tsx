@@ -23,12 +23,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition } from 'react';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { approveDealAction, rejectDealAction } from './actions';
 import { useRouter } from 'next/navigation';
-import { isDurationShort } from '@/lib/duration-helpers';
 import { getRequiredIdToken } from '@/firebase/auth-token';
 
 const formSchema = z.object({
@@ -37,7 +36,7 @@ const formSchema = z.object({
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
-  repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
+  repaymentType: z.literal('Equal Installments'),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
 });
 
@@ -59,20 +58,10 @@ export function DealRequestForm({ dealRequest }: DealRequestFormProps) {
       profitRate: dealRequest.profitRate,
       durationValue: dealRequest.durationValue,
       durationUnit: dealRequest.durationUnit,
-      repaymentType: dealRequest.repaymentType,
+      repaymentType: 'Equal Installments',
       repaymentFrequency: dealRequest.repaymentFrequency,
     },
   });
-
-  const durationValue = form.watch('durationValue');
-  const durationUnit = form.watch('durationUnit');
-  const isShortDeal = isDurationShort(durationValue, durationUnit);
-
-  useEffect(() => {
-    if (!isShortDeal && form.getValues('repaymentType') === 'Balloon Payment') {
-      form.setValue('repaymentType', 'Equal Installments');
-    }
-  }, [isShortDeal, form]);
 
   async function onApprove(values: z.infer<typeof formSchema>) {
     startApproveTransition(async () => {
@@ -187,10 +176,9 @@ export function DealRequestForm({ dealRequest }: DealRequestFormProps) {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="Equal Installments">Equal Installments</SelectItem>
-                          {isShortDeal && <SelectItem value="Balloon Payment">Balloon Payment</SelectItem>}
                         </SelectContent>
                       </Select>
-                      <FormDescription>Balloon Payment is only available for deals 3 months or shorter.</FormDescription>
+                      <FormDescription>Principal and profit are divided uniformly across every repayment period.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

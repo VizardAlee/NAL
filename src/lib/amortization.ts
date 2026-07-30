@@ -7,8 +7,19 @@ export interface ScheduleInstallment {
   dueDate: Date;
   payment: number;
   principal: number;
-  interest: number; // This will now represent "profit" or "markup"
+  interest: number; // Profit or markup for the installment.
   balance: number;
+}
+
+export type RepaymentRecord = {
+  amount?: number;
+  installmentNumber?: number;
+  principalApplied?: number;
+  interestApplied?: number;
+};
+
+function toKobo(value: number): number {
+  return Math.round(Number(value || 0) * 100);
 }
 
 function getPeriods(deal: Deal): { totalPeriods: number; addPeriod: (date: Date, count: number) => Date } {
@@ -66,8 +77,7 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
   const termStartDate = deal.startDate?.toDate() || deal.createdAt?.toDate();
   if (!termStartDate) return [];
 
-  // --- Use Integers for Calculations (Kobo) ---
-  const principalInKobo = Math.round(deal.principal * 100);
+  const principalInKobo = toKobo(deal.principal);
   const markupRate = (deal.profitRate || 0) / 100;
   
   const { totalPeriods, addPeriod } = getPeriods(deal);
@@ -76,76 +86,72 @@ export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] 
 
   const schedule: ScheduleInstallment[] = [];
   const totalProfitInKobo = Math.round(principalInKobo * markupRate);
-  
-  if (deal.repaymentType === 'Balloon Payment') {
-    const profitPerInstallmentInKobo = Math.floor(totalProfitInKobo / totalPeriods);
-    let accumulatedProfit = 0;
+  const principalPerPeriodInKobo = Math.floor(principalInKobo / totalPeriods);
+  const profitPerPeriodInKobo = Math.floor(totalProfitInKobo / totalPeriods);
+  const principalRemainderInKobo = principalInKobo % totalPeriods;
+  const profitRemainderInKobo = totalProfitInKobo % totalPeriods;
+  let principalAllocatedInKobo = 0;
 
-    for (let i = 1; i <= totalPeriods; i++) {
-        const isLastPayment = i === totalPeriods;
-        let currentProfit = profitPerInstallmentInKobo;
-        if (isLastPayment) {
-            currentProfit = totalProfitInKobo - accumulatedProfit;
-        }
-        accumulatedProfit += currentProfit;
-        
-        const principalPaymentInKobo = isLastPayment ? principalInKobo : 0;
-        const paymentInKobo = currentProfit + principalPaymentInKobo;
-        const balanceInKobo = isLastPayment ? 0 : principalInKobo;
-        
-        schedule.push({
-            installment: i,
-            dueDate: addPeriod(termStartDate, i),
-            payment: paymentInKobo / 100,
-            principal: principalPaymentInKobo / 100,
-            interest: currentProfit / 100,
-            balance: balanceInKobo / 100,
-        });
-    }
+  for (let i = 1; i <= totalPeriods; i++) {
+    const principalPaymentInKobo =
+      principalPerPeriodInKobo + (i <= principalRemainderInKobo ? 1 : 0);
+    const profitPaymentInKobo =
+      profitPerPeriodInKobo + (i <= profitRemainderInKobo ? 1 : 0);
 
-  } else { // Equal Installments
-      const totalRepaymentInKobo = principalInKobo + totalProfitInKobo;
-      const equalPaymentInKobo = Math.floor(totalRepaymentInKobo / totalPeriods);
-      
-      let remainingBalanceInKobo = principalInKobo;
-      let accumulatedPayment = 0;
+    principalAllocatedInKobo += principalPaymentInKobo;
 
-      const sumOfDigits = (totalPeriods * (totalPeriods + 1)) / 2;
-
-      for (let i = 1; i <= totalPeriods; i++) {
-          if (i === totalPeriods) {
-              const finalPayment = totalRepaymentInKobo - accumulatedPayment;
-              const finalInterest = Math.round(finalPayment * (totalProfitInKobo / totalRepaymentInKobo));
-              const finalPrincipal = finalPayment - finalInterest;
-
-              schedule.push({
-                  installment: i,
-                  dueDate: addPeriod(termStartDate, i),
-                  payment: finalPayment / 100,
-                  principal: (remainingBalanceInKobo / 100), // The last principal payment must be the remaining balance
-                  interest: (finalPayment - remainingBalanceInKobo) / 100,
-                  balance: 0,
-              });
-
-          } else {
-              const profitProportion = (totalPeriods - i + 1) / sumOfDigits;
-              const interestPaymentInKobo = Math.round(totalProfitInKobo * profitProportion);
-              const principalPaymentInKobo = equalPaymentInKobo - interestPaymentInKobo;
-              
-              remainingBalanceInKobo -= principalPaymentInKobo;
-              accumulatedPayment += equalPaymentInKobo;
-
-              schedule.push({
-                  installment: i,
-                  dueDate: addPeriod(termStartDate, i),
-                  payment: equalPaymentInKobo / 100,
-                  principal: principalPaymentInKobo / 100,
-                  interest: interestPaymentInKobo / 100,
-                  balance: remainingBalanceInKobo / 100,
-              });
-          }
-      }
+    schedule.push({
+      installment: i,
+      dueDate: addPeriod(termStartDate, i),
+      payment: (principalPaymentInKobo + profitPaymentInKobo) / 100,
+      principal: principalPaymentInKobo / 100,
+      interest: profitPaymentInKobo / 100,
+      balance: (principalInKobo - principalAllocatedInKobo) / 100,
+    });
   }
 
   return schedule;
+}
+
+export function calculateRemainingRepaymentBalance(
+  deal: Deal,
+  approvedRepayments: RepaymentRecord[]
+) {
+  const schedule = generateAmortizationSchedule(deal);
+  const scheduledPrincipalInKobo = schedule.reduce((sum, installment) => sum + toKobo(installment.principal), 0);
+  const scheduledProfitInKobo = schedule.reduce((sum, installment) => sum + toKobo(installment.interest), 0);
+
+  let paidPrincipalInKobo = 0;
+  let paidProfitInKobo = 0;
+
+  for (const repayment of approvedRepayments) {
+    const recordedPrincipal = Number(repayment.principalApplied);
+    const recordedProfit = Number(repayment.interestApplied);
+    if (Number.isFinite(recordedPrincipal) && Number.isFinite(recordedProfit)) {
+      paidPrincipalInKobo += toKobo(recordedPrincipal);
+      paidProfitInKobo += toKobo(recordedProfit);
+      continue;
+    }
+
+    const installment = schedule.find((item) => item.installment === Number(repayment.installmentNumber));
+    const amountInKobo = toKobo(Number(repayment.amount || 0));
+    if (!installment || amountInKobo <= 0) continue;
+
+    const installmentPaymentInKobo = toKobo(installment.payment);
+    const principalInKobo = Math.min(
+      toKobo(installment.principal),
+      Math.round(amountInKobo * (toKobo(installment.principal) / installmentPaymentInKobo))
+    );
+    paidPrincipalInKobo += principalInKobo;
+    paidProfitInKobo += amountInKobo - principalInKobo;
+  }
+
+  const remainingPrincipalInKobo = Math.max(0, scheduledPrincipalInKobo - paidPrincipalInKobo);
+  const remainingProfitInKobo = Math.max(0, scheduledProfitInKobo - paidProfitInKobo);
+
+  return {
+    remainingPrincipal: remainingPrincipalInKobo / 100,
+    remainingProfit: remainingProfitInKobo / 100,
+    totalRemaining: (remainingPrincipalInKobo + remainingProfitInKobo) / 100,
+  };
 }

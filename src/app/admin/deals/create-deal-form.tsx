@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { CalendarIcon, Loader2, BookOpen } from 'lucide-react';
 import { collection, query } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -31,7 +31,6 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { isDurationShort } from '@/lib/duration-helpers';
 import { Calendar } from '@/components/ui/calendar';
 import Link from 'next/link';
 import { hasPersona, type LegacyRole, type Persona } from '@/lib/access-control';
@@ -74,7 +73,7 @@ const formSchema = z.object({
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).default('Murabaha'),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
-  repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
+  repaymentType: z.literal('Equal Installments'),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   startDate: z.date().optional(),
 });
@@ -138,16 +137,6 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
       financingMode: 'Murabaha',
     },
   });
-
-  const durationValue = form.watch('durationValue');
-  const durationUnit = form.watch('durationUnit');
-  const isShortDeal = isDurationShort(durationValue, durationUnit);
-
-  useEffect(() => {
-    if (!isShortDeal && form.getValues('repaymentType') === 'Balloon Payment') {
-      form.setValue('repaymentType', 'Equal Installments');
-    }
-  }, [isShortDeal, form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
@@ -382,10 +371,9 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="Equal Installments">Equal Installments</SelectItem>
-                  {isShortDeal && <SelectItem value="Balloon Payment">Balloon Payment</SelectItem>}
                 </SelectContent>
               </Select>
-              <FormDescription>Balloon Payment is only available for deals 3 months or shorter.</FormDescription>
+              <FormDescription>Principal and profit are divided uniformly across every repayment period.</FormDescription>
               <FormMessage />
             </FormItem>
           )}

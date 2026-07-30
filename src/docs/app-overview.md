@@ -51,7 +51,7 @@ This directory holds all the reusable React components.
 This contains shared utilities, type definitions, and helper functions.
 
 -   **`types.ts`**: Defines the core TypeScript types for data entities like `Deal`, `User`, and `Investment`.
--   **`amortization.ts`**: Contains the complex financial logic for generating repayment schedules.
+-   **`amortization.ts`**: Generates uniform principal-and-profit repayment schedules and full termination settlements.
 -   **`utils.ts`**: General utility functions, most notably `cn` for merging Tailwind CSS classes.
 
 ### 2.4. `/src/firebase` - Firebase Configuration

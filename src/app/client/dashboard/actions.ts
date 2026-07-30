@@ -2,13 +2,12 @@
 'use server';
 
 import { Timestamp } from 'firebase-admin/firestore';
-import { initializeFirebase } from '@/firebase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { notifyAdmins } from '@/lib/server/notification-service';
 import { adminDb } from '@/firebase/admin-app';
 import { verifyAuthTokenForUser } from '@/lib/server/auth';
-import { generateAmortizationSchedule } from '@/lib/amortization';
+import { calculateRemainingRepaymentBalance, generateAmortizationSchedule } from '@/lib/amortization';
 import { Deal } from '@/lib/types';
 import { roundCurrency } from '@/lib/financial-integrity';
 
@@ -191,33 +190,67 @@ export async function requestTerminationAction(
     
     try {
         await verifyAuthTokenForUser(authToken, clientId);
-        const { firestore } = initializeFirebase();
-        const requestRef = firestore.collection('terminationRequests').doc(`${dealId}_${clientId}`);
-        await firestore.runTransaction(async (trx) => {
-            const existingRequest = await trx.get(requestRef);
+        const requestRef = adminDb.collection('terminationRequests').doc(`${dealId}_${clientId}`);
+        const settlement = await adminDb.runTransaction(async (trx) => {
+            const dealRef = adminDb.collection('deals').doc(dealId);
+            const [existingRequest, dealSnapshot, repaymentsSnapshot] = await Promise.all([
+                trx.get(requestRef),
+                trx.get(dealRef),
+                trx.get(adminDb.collection('repayments').where('dealId', '==', dealId)),
+            ]);
             if (existingRequest.exists && existingRequest.data()?.status === 'Pending') {
                 throw new Error('A termination request for this deal is already pending.');
             }
+            if (!dealSnapshot.exists) {
+                throw new Error('Deal not found.');
+            }
+            const deal = { id: dealSnapshot.id, ...dealSnapshot.data() } as Deal;
+            if (deal.clientId !== clientId) {
+                throw new Error('You are not allowed to terminate this deal.');
+            }
+            if (deal.status !== 'Active') {
+                throw new Error('Only active deals can be terminated.');
+            }
+            const settlement = calculateRemainingRepaymentBalance(
+                deal,
+                repaymentsSnapshot.docs
+                    .map((snapshot) => snapshot.data())
+                    .filter((repayment) => repayment.status === 'Approved')
+            );
+            if (settlement.totalRemaining <= 0) {
+                throw new Error('This deal has no remaining balance to settle.');
+            }
             trx.set(requestRef, {
                 dealId,
-                dealName,
+                dealName: deal.dealName || dealName,
                 clientId,
                 clientName,
                 status: 'Pending',
                 requestedAt: Timestamp.now(),
+                remainingPrincipal: settlement.remainingPrincipal,
+                remainingProfit: settlement.remainingProfit,
+                settlementAmount: settlement.totalRemaining,
             });
+            return settlement;
         });
+        const formattedSettlement = new Intl.NumberFormat('en-NG', {
+            style: 'currency',
+            currency: 'NGN',
+        }).format(settlement.totalRemaining);
 
         await notifyAdmins(
             'Termination Request',
-            `${clientName} requested to terminate the deal "${dealName}".`,
+            `${clientName} requested to terminate "${dealName}". Full settlement due: ${formattedSettlement}.`,
             '/admin/approvals/terminations',
             'approval'
         );
 
         revalidatePath('/client/dashboard');
 
-        return { success: true, message: "Your request to terminate the deal has been sent to an administrator for review." };
+        return {
+            success: true,
+            message: `Your termination request has been sent for review. The full settlement due is ${formattedSettlement}, covering all unpaid principal and profit.`,
+        };
 
     } catch (error) {
         console.error("TERMINATION REQUEST ERROR:", error);

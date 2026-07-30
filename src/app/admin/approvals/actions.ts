@@ -4,7 +4,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { adminDb } from '@/firebase/admin-app';
 import { verifyAdminWrite } from '@/lib/server/auth';
-import { generateAmortizationSchedule } from '@/lib/amortization';
+import { calculateRemainingRepaymentBalance, generateAmortizationSchedule } from '@/lib/amortization';
 import { processOwnerProfitAllocations } from '@/lib/server/owner-profit';
 import {
   allocateCurrencyByWeights,
@@ -231,6 +231,7 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
 export async function processTerminationRequestAction(input: Omit<DecisionInput, 'specialInvestment'>) {
   const data = parseDecision({ ...input, specialInvestment: false });
   await verifyAdminWrite(data.authToken);
+  let confirmedSettlementAmount: number | null = null;
   await adminDb.runTransaction(async (trx) => {
     const requestRef = adminDb.collection('terminationRequests').doc(data.requestId);
     const requestSnapshot = await trx.get(requestRef);
@@ -244,36 +245,51 @@ export async function processTerminationRequestAction(input: Omit<DecisionInput,
     const [dealSnapshot, investmentsSnapshot, repaymentsSnapshot] = await Promise.all([
       trx.get(dealRef),
       trx.get(adminDb.collection('investments').where('dealId', '==', request.dealId)),
-      trx.get(adminDb.collection('repayments').where('dealId', '==', request.dealId).where('status', '==', 'Pending')),
+      trx.get(adminDb.collection('repayments').where('dealId', '==', request.dealId)),
     ]);
     if (!dealSnapshot.exists) throw new Error('Deal not found.');
     const deal = { id: dealSnapshot.id, ...dealSnapshot.data() } as any;
     if (deal.status === 'Terminated') throw new Error('Deal is already terminated.');
     const now = Timestamp.now();
-    const schedule = generateAmortizationSchedule(deal);
-    const installment = schedule.find((item) => item.dueDate.getTime() >= now.toMillis()) || schedule.at(-1);
-    const finalInterest = installment?.interest || 0;
-    const remainingPrincipal = deal.repaymentType === 'Balloon Payment'
-      ? Number(deal.principal)
-      : (installment ? installment.balance + installment.principal : 0);
+    const approvedRepayments = repaymentsSnapshot.docs
+      .map((snapshot) => snapshot.data())
+      .filter((repayment) => repayment.status === 'Approved');
+    const settlement = calculateRemainingRepaymentBalance(deal, approvedRepayments);
+    if (settlement.totalRemaining <= 0) throw new Error('This deal has no remaining balance to settle.');
+    confirmedSettlementAmount = settlement.totalRemaining;
     const totalInvested = investmentsSnapshot.docs.reduce((sum, item) => sum + Number(item.data().amount), 0);
     if (totalInvested <= 0) throw new Error('No valid investments found for this deal.');
-    for (const investmentSnapshot of investmentsSnapshot.docs) {
-      const investment = investmentSnapshot.data();
-      const proportion = Number(investment.amount) / totalInvested;
-      if (finalInterest > 0) trx.set(adminDb.collection('transactions').doc(), {
-        userId: investment.investorId, dealId: deal.id, type: 'ProfitDistribution', amount: finalInterest * proportion * 0.4,
-        createdAt: now, dealName: deal.dealName, details: 'Final profit on early termination', sourceRequestId: data.requestId,
+    const investments = investmentsSnapshot.docs.map((snapshot) => ({
+      snapshot,
+      data: snapshot.data(),
+      weight: Number(snapshot.data().amount),
+    }));
+    const investorProfitPool = roundCurrency(settlement.remainingProfit * 0.4);
+    const investorProfitShares = allocateCurrencyByWeights(
+      investorProfitPool,
+      investments.map((investment) => investment.weight)
+    );
+    const principalShares = allocateCurrencyByWeights(
+      settlement.remainingPrincipal,
+      investments.map((investment) => investment.weight)
+    );
+    for (const [index, item] of investments.entries()) {
+      const investmentSnapshot = item.snapshot;
+      const investment = item.data;
+      const investorProfit = investorProfitShares[index];
+      if (investorProfit > 0) trx.set(adminDb.collection('transactions').doc(), {
+        userId: investment.investorId, dealId: deal.id, type: 'ProfitDistribution', amount: investorProfit,
+        createdAt: now, dealName: deal.dealName, details: 'Remaining profit paid on termination', sourceRequestId: data.requestId,
         investmentId: investmentSnapshot.id,
         ...(investment.fundBatchId ? { fundBatchId: investment.fundBatchId } : {}),
       });
-      const principal = remainingPrincipal * proportion;
+      const principal = principalShares[index];
       if (principal > 0) trx.set(adminDb.collection('fundBatches').doc(), {
         sourceId: investment.investorId, amount: principal, remainingAmount: principal, createdAt: now,
         tenureValue: 10, tenureUnit: 'Years', specialInvestment: Boolean(investment.specialInvestment), sourceRequestId: data.requestId,
       });
     }
-    const platformProfit = finalInterest * 0.6;
+    const platformProfit = roundCurrency(settlement.remainingProfit - investorProfitPool);
     if (platformProfit > 0) {
       trx.set(adminDb.collection('transactions').doc(), {
         userId: 'platform', dealId: deal.id, type: 'PlatformEarning', amount: platformProfit, createdAt: now,
@@ -284,10 +300,52 @@ export async function processTerminationRequestAction(input: Omit<DecisionInput,
         tenureValue: 10, tenureUnit: 'Years', sourceRequestId: data.requestId,
       });
     }
-    repaymentsSnapshot.docs.forEach((snapshot) => trx.update(snapshot.ref, { status: 'Cancelled' }));
-    trx.update(dealRef, { status: 'Terminated' });
-    trx.update(requestRef, { status: 'Approved', processedAt: now, platformEarning: platformProfit });
+    for (const snapshot of repaymentsSnapshot.docs) {
+      if (snapshot.data().status === 'Pending') {
+        trx.update(snapshot.ref, { status: 'Cancelled', processedAt: now });
+      }
+    }
+    trx.set(adminDb.collection('repayments').doc(), {
+      dealId: deal.id,
+      clientId: deal.clientId,
+      amount: settlement.totalRemaining,
+      status: 'Approved',
+      lodgedAt: now,
+      approvedAt: now,
+      dueDate: now,
+      installmentNumber: 0,
+      principalApplied: settlement.remainingPrincipal,
+      interestApplied: settlement.remainingProfit,
+      isTerminationSettlement: true,
+      sourceRequestId: data.requestId,
+    });
+    trx.set(adminDb.collection('transactions').doc(), {
+      userId: deal.clientId,
+      dealId: deal.id,
+      type: 'Repayment',
+      amount: -settlement.totalRemaining,
+      createdAt: now,
+      dealName: deal.dealName,
+      details: 'Full remaining balance paid on termination',
+      sourceRequestId: data.requestId,
+    });
+    trx.update(dealRef, {
+      status: 'Terminated',
+      terminatedAt: now,
+      terminationSettlementAmount: settlement.totalRemaining,
+    });
+    trx.update(requestRef, {
+      status: 'Approved',
+      processedAt: now,
+      remainingPrincipal: settlement.remainingPrincipal,
+      remainingProfit: settlement.remainingProfit,
+      settlementAmount: settlement.totalRemaining,
+      platformEarning: platformProfit,
+    });
   });
   if (data.decision === 'Approved') await processOwnerProfitAllocations({ includeHistorical: false, limit: 200 });
-  return { success: true, message: `Termination request ${data.decision.toLowerCase()}.` };
+  const message = data.decision === 'Approved' && confirmedSettlementAmount !== null
+    ? `Full settlement of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(confirmedSettlementAmount)} confirmed and deal terminated.`
+    : 'Termination request rejected.';
+  return { success: true, message };
 }

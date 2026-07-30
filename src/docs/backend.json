@@ -426,6 +426,18 @@
           "format": "date-time",
           "description": "The timestamp when an admin processed the request."
         },
+        "remainingPrincipal": {
+          "type": "number",
+          "description": "The full unpaid principal required for termination."
+        },
+        "remainingProfit": {
+          "type": "number",
+          "description": "The full unpaid profit required for termination."
+        },
+        "settlementAmount": {
+          "type": "number",
+          "description": "The total principal and profit that must be paid before termination is confirmed."
+        },
          "platformEarning": {
           "type": "number",
           "description": "The profit earned by the platform upon termination."
