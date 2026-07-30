@@ -67,8 +67,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
             if (permissionResult === 'granted') {
                 const messaging = getMessaging(app);
+                const serviceWorkerRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+                    scope: '/',
+                    updateViaCache: 'none',
+                });
                 const currentToken = await getToken(messaging, {
                     vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+                    serviceWorkerRegistration,
                 });
 
                 if (currentToken) {

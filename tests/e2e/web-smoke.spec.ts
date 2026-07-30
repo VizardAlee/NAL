@@ -17,6 +17,49 @@ test('production security headers are emitted', async ({ request }) => {
   expect(response.headers()['x-powered-by']).toBeUndefined();
 });
 
+test('PWA metadata and install assets are available', async ({ page, request }) => {
+  await page.goto('/');
+
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.json');
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', /apple-touch-icon/);
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /favicon\.ico/);
+
+  const manifestResponse = await request.get('/manifest.json');
+  expect(manifestResponse.ok()).toBeTruthy();
+  const manifest = await manifestResponse.json();
+  expect(manifest.display).toBe('standalone');
+  expect(manifest.icons).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ sizes: '192x192' }),
+      expect.objectContaining({ sizes: '512x512' }),
+      expect.objectContaining({ purpose: 'maskable' }),
+    ])
+  );
+
+  const faviconResponse = await request.get('/favicon.ico?v=2');
+  expect(faviconResponse.ok()).toBeTruthy();
+  expect(faviconResponse.headers()['content-type']).toContain('image/');
+
+  const serviceWorkerResponse = await request.get('/firebase-messaging-sw.js');
+  expect(serviceWorkerResponse.ok()).toBeTruthy();
+  expect(serviceWorkerResponse.headers()['service-worker-allowed']).toBe('/');
+});
+
+test('PWA serves the offline fallback without caching private portal data', async ({ page, context }) => {
+  await page.goto('/');
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+
+  await context.setOffline(true);
+  try {
+    await page.goto('/admin/deals');
+    await expect(page.getByRole('heading', { name: /you are offline/i })).toBeVisible();
+  } finally {
+    await context.setOffline(false);
+  }
+});
+
 for (const portal of ['admin', 'owner', 'investor', 'client', 'marketer', 'legal', 'recovery']) {
   test(`unauthenticated ${portal} dashboard cannot expose portal content`, async ({ page }) => {
     await page.goto(`/${portal}/dashboard`);
