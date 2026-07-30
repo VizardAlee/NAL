@@ -62,5 +62,5 @@ jobs:
         run: >-
           firebase deploy
           --project studio-1298078893-e7941
-          --only functions,firestore,storage
+          --only functions:createUser,functions:createDeal,functions:runDailyAutomation,firestore,storage
           --non-interactive
