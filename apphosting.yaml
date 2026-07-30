@@ -14,3 +14,8 @@ env:
     value: https://nalgm.com
     availability:
       - RUNTIME
+
+  - variable: CRON_SECRET
+    secret: CRON_SECRET
+    availability:
+      - RUNTIME

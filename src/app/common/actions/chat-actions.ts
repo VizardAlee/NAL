@@ -5,7 +5,7 @@ import { getAdminApp } from '@/firebase/admin-app';
 import { getFirestore, Timestamp, FieldValue, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { notifyAdmins, notifyUser } from './notification-actions';
+import { notifyAdmins, notifyUser } from '@/lib/server/notification-service';
 import { verifyAuthToken, verifyAuthTokenForUser } from '@/lib/server/auth';
 import { canViewAdmin, normalizeAccessModel } from '@/lib/access-control';
 
@@ -115,7 +115,10 @@ const messageSchema = z.object({
   conversationId: z.string().min(1),
   senderId: z.string().min(1),
   text: z.string().optional(),
-  attachmentUrl: z.string().optional(),
+  attachmentUrl: z.string().url().refine(
+    (url) => url.startsWith('https://firebasestorage.googleapis.com/'),
+    'Attachments must be stored in Firebase Storage.'
+  ).optional(),
   attachmentName: z.string().optional(),
 });
 
@@ -226,7 +229,7 @@ export async function getOrCreateConversation(input: z.infer<typeof getOrCreateC
     if (!validated.success) {
         return { success: false, message: 'Invalid data for conversation.' };
     }
-    const { authToken, adminId, adminName, userId, userName } = validated.data;
+    const { authToken, adminId, userId } = validated.data;
     const adminDb = getFirestore(getAdminApp());
     
     try {
@@ -234,6 +237,19 @@ export async function getOrCreateConversation(input: z.infer<typeof getOrCreateC
         if (decoded.uid !== adminId && decoded.uid !== userId) {
             return { success: false, message: 'Forbidden: invalid user context.' };
         }
+
+        const [adminSnapshot, userSnapshot] = await Promise.all([
+            adminDb.collection('users').doc(adminId).get(),
+            adminDb.collection('users').doc(userId).get(),
+        ]);
+        if (!adminSnapshot.exists || !canViewAdmin(adminSnapshot.data() as any)) {
+            return { success: false, message: 'Forbidden: selected account is not an administrator.' };
+        }
+        if (!userSnapshot.exists || canViewAdmin(userSnapshot.data() as any)) {
+            return { success: false, message: 'Forbidden: invalid user account.' };
+        }
+        const verifiedAdminName = adminSnapshot.data()?.name || adminSnapshot.data()?.email || 'Administrator';
+        const verifiedUserName = userSnapshot.data()?.name || userSnapshot.data()?.email || 'User';
 
         const existingConvoQuery = adminDb.collection('conversations')
             .where('participantIds', 'array-contains', adminId);
@@ -250,7 +266,10 @@ export async function getOrCreateConversation(input: z.infer<typeof getOrCreateC
 
         const conversationId = [adminId, userId].sort().join('_');
         const newConversationRef = adminDb.collection('conversations').doc(conversationId);
-        const initialMessage = `Hi ${userName}, this is ${adminName}. How can I assist you?`;
+        const initiatorId = decoded.uid;
+        const initialMessage = initiatorId === adminId
+            ? `Hi ${verifiedUserName}, this is ${verifiedAdminName}. How can I assist you?`
+            : `Hello, this is ${verifiedUserName}. I would like to start a conversation.`;
         await adminDb.runTransaction(async (trx) => {
             const conversationDoc = await trx.get(newConversationRef);
             if (conversationDoc.exists) {
@@ -259,18 +278,18 @@ export async function getOrCreateConversation(input: z.infer<typeof getOrCreateC
             const now = FieldValue.serverTimestamp();
             trx.set(newConversationRef, {
                 participantIds: [adminId, userId],
-                participantNames: [adminName, userName],
+                participantNames: [verifiedAdminName, verifiedUserName],
                 participantAvatars: [`https://picsum.photos/seed/${adminId}/128/128`, `https://picsum.photos/seed/${userId}/128/128`],
                 lastMessage: initialMessage,
-                lastMessageSenderId: adminId,
+                lastMessageSenderId: initiatorId,
                 lastUpdatedAt: now,
-                readBy: [adminId],
+                readBy: [initiatorId],
             });
 
             const firstMessageRef = newConversationRef.collection('messages').doc();
             trx.set(firstMessageRef, {
                 conversationId: newConversationRef.id,
-                senderId: adminId,
+                senderId: initiatorId,
                 text: initialMessage,
                 createdAt: now,
             });

@@ -1,0 +1,39 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      let profile = firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+      return signedIn() && (profile.accessRole == 'ADMIN' || (!('accessRole' in profile) && profile.role == 'Admin'));
+    }
+
+    function validUpload() {
+      return request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)|application/pdf');
+    }
+
+    match /users/{userId}/proposals/{fileName} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow write: if signedIn() && request.auth.uid == userId && validUpload();
+    }
+
+    match /conversations/{conversationId}/{userId}/{fileName} {
+      allow read: if signedIn()
+        && request.auth.uid in firestore.get(/databases/(default)/documents/conversations/$(conversationId)).data.participantIds;
+      allow write: if signedIn()
+        && request.auth.uid == userId
+        && request.auth.uid in firestore.get(/databases/(default)/documents/conversations/$(conversationId)).data.participantIds
+        && validUpload();
+    }
+
+    match /admin/{adminId}/legal/{userId}/{fileName} {
+      allow read: if signedIn() && request.auth.uid == adminId && isAdmin();
+      allow write: if signedIn() && request.auth.uid == adminId && isAdmin() && validUpload();
+    }
+  }
+}

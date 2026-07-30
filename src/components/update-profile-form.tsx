@@ -74,7 +74,9 @@ export function UpdateProfileForm() {
     }
     
     startTransition(async () => {
+        const authToken = await user.getIdToken();
         const result = await updateProfileAction({
+            authToken,
             userId: user.uid,
             name: values.name,
             phoneNumber: values.phoneNumber,

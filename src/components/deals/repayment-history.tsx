@@ -34,11 +34,12 @@ export function RepaymentHistory({ repayments, loading }: RepaymentHistoryProps)
         const isApproved = status === 'Approved';
         const variant = isApproved ? 'default' : (status === 'Rejected' || status === 'Cancelled') ? 'destructive' : 'secondary';
         const Icon = isApproved ? CheckCircle : Hourglass;
+        const label = isApproved ? 'Paid' : status;
 
         return (
             <Badge variant={variant} className="flex items-center gap-1.5">
                 <Icon className="h-3 w-3" />
-                {status}
+                {label}
             </Badge>
         );
     };

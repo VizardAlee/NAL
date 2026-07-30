@@ -3,7 +3,7 @@
 
 import { useMemo, useState, useTransition, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { useDoc, useCollection, useUser, useFirestore, useAuth } from '@/firebase';
+import { useDoc, useCollection, useUser, useFirestore, useAuth, useFirebaseApp } from '@/firebase';
 import { doc, collection, query, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Loader2, Send, Paperclip, X, Download } from 'lucide-react';
@@ -14,6 +14,7 @@ import { format } from 'date-fns';
 import { sendMessageAction } from './actions';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
+import { uploadAuthenticatedFile } from '@/firebase/storage-upload';
 
 type Conversation = {
     id: string;
@@ -36,15 +37,6 @@ type Message = {
     attachmentName?: string;
 };
 
-// Helper to convert file to Base64
-const fileToDataUri = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-});
-
-
 function SubmitButton() {
     const { pending } = useFormStatus();
     return (
@@ -60,6 +52,7 @@ export default function InvestorConversationPage() {
     const { user } = useUser();
     const firestore = useFirestore();
     const auth = useAuth();
+    const app = useFirebaseApp();
     const [newMessage, setNewMessage] = useState('');
     const [attachment, setAttachment] = useState<File | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -101,7 +94,12 @@ export default function InvestorConversationPage() {
         let attachmentName: string | undefined;
 
         if (attachment) {
-            attachmentUrl = await fileToDataUri(attachment);
+            attachmentUrl = (await uploadAuthenticatedFile(
+                app,
+                attachment,
+                ['conversations', conversationId, user.uid],
+                ['application/pdf']
+            )).url;
             attachmentName = attachment.name;
         }
 

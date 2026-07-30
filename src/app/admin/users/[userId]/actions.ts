@@ -104,7 +104,11 @@ export async function payZakatAction(input: z.infer<typeof payZakatSchema>) {
 const uploadDocumentSchema = z.object({
     authToken: z.string().min(1),
     userId: z.string().min(1),
-    documentUrl: z.string().startsWith('data:'),
+    documentUrl: z.string().url().refine(
+        (url) => url.startsWith('https://firebasestorage.googleapis.com/'),
+        'Document must be stored in Firebase Storage.'
+    ),
+    storagePath: z.string().startsWith('admin/'),
 });
 
 export async function uploadLegalDocumentAction(input: z.infer<typeof uploadDocumentSchema>) {
@@ -113,12 +117,13 @@ export async function uploadLegalDocumentAction(input: z.infer<typeof uploadDocu
         return { success: false, message: 'Invalid document data provided.' };
     }
 
-    const { authToken, userId, documentUrl } = validated.data;
+    const { authToken, userId, documentUrl, storagePath } = validated.data;
     await verifyAdminWrite(authToken);
     try {
         const userRef = adminDb.collection('users').doc(userId);
         await userRef.update({
-            legalDocumentUrl: documentUrl
+            legalDocumentUrl: documentUrl,
+            legalDocumentStoragePath: storagePath,
         });
 
         revalidatePath(`/admin/users/${userId}`);

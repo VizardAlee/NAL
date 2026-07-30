@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bot, Loader2, BarChart, Shield, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useIdToken } from "@/firebase/auth-token";
 
 const initialState = {
   message: "",
@@ -16,11 +17,11 @@ const initialState = {
   errors: null,
 };
 
-function SubmitButton() {
+function SubmitButton({ ready }: { ready: boolean }) {
   const { pending } = useFormStatus();
 
   return (
-    <Button type="submit" disabled={pending} size="lg">
+    <Button type="submit" disabled={pending || !ready} size="lg">
       {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bot className="mr-2 h-4 w-4" />}
       Analyze Proposal
     </Button>
@@ -28,6 +29,7 @@ function SubmitButton() {
 }
 
 export function AnalyzerForm() {
+  const authToken = useIdToken();
   const [state, formAction] = useActionState(getAnalysis, initialState);
   const { toast } = useToast();
 
@@ -45,6 +47,7 @@ export function AnalyzerForm() {
   return (
     <div className="grid gap-8 md:grid-cols-2">
       <form action={formAction} className="space-y-4">
+        <input type="hidden" name="authToken" value={authToken} />
         <Textarea
           name="proposalDetails"
           placeholder="Paste the full details of the financing proposal here. Include information about the business, funding amount, use of funds, repayment terms, and any other relevant data..."
@@ -56,7 +59,7 @@ export function AnalyzerForm() {
             {state.errors.proposalDetails[0]}
           </p>
         )}
-        <SubmitButton />
+        <SubmitButton ready={Boolean(authToken)} />
       </form>
 
       <div className="space-y-6">

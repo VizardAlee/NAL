@@ -17,12 +17,14 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useActionState, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { useAuth, useUser } from '@/firebase';
+import { useUser } from '@/firebase';
 import { requestWithdrawalAction } from './withdrawal-actions';
+import { getRequiredIdToken } from '@/firebase/auth-token';
 
 type WithdrawFormProps = {
   withdrawableBalance: number;
   onWithdrawalRequested: () => void;
+  source?: 'ShortTermProfit' | 'AnniversaryProfit';
 };
 
 const formSchema = z.object({
@@ -32,10 +34,13 @@ const formSchema = z.object({
     .min(1, { message: 'Withdrawal amount must be greater than zero.' }),
 });
 
-export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: WithdrawFormProps) {
+export function WithdrawForm({
+  withdrawableBalance,
+  onWithdrawalRequested,
+  source = 'ShortTermProfit',
+}: WithdrawFormProps) {
   const { toast } = useToast();
   const { user } = useUser();
-  const auth = useAuth();
   const [state, action, isPending] = useActionState(requestWithdrawalAction, { success: false, message: '' });
   const [toastShown, setToastShown] = useState(false);
 
@@ -77,8 +82,7 @@ export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: Wit
   }, [isPending]);
 
   const handleSubmit = async (values: z.infer<typeof formSchema>) => {
-    const currentUser = auth?.currentUser;
-    if (!currentUser) {
+    if (!user) {
       toast({
         variant: 'destructive',
         title: 'Request Failed',
@@ -87,12 +91,13 @@ export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: Wit
       return;
     }
 
-    const authToken = await currentUser.getIdToken();
+    const authToken = await getRequiredIdToken();
     const formData = new FormData();
     formData.append('authToken', authToken);
     formData.append('amount', values.amount.toString());
     formData.append('userId', user?.uid || '');
     formData.append('userName', user?.displayName || user?.email || 'Investor');
+    formData.append('source', source);
 
     // Call the server action provided by useActionState
     action(formData);
@@ -114,7 +119,10 @@ export function WithdrawForm({ withdrawableBalance, onWithdrawalRequested }: Wit
                 </div>
               </FormControl>
               <FormDescription>
-                Max available for withdrawal: {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(withdrawableBalance)}
+                {source === 'AnniversaryProfit'
+                  ? 'Remaining annual 20% allowance: '
+                  : 'Max available for withdrawal: '}
+                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(withdrawableBalance)}
               </FormDescription>
               <FormMessage />
             </FormItem>

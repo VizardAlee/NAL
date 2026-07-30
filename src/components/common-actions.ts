@@ -4,8 +4,10 @@
 import { adminDb } from '@/firebase/admin-app';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
+import { verifyAuthTokenForUser } from '@/lib/server/auth';
 
 const updateProfileSchema = z.object({
+  authToken: z.string().min(1),
   userId: z.string().min(1),
   name: z.string().min(2, "Name must be at least 2 characters."),
   phoneNumber: z.string().optional(),
@@ -17,9 +19,10 @@ export async function updateProfileAction(data: z.infer<typeof updateProfileSche
     return { success: false, message: "Invalid data provided." };
   }
 
-  const { userId, name, phoneNumber } = validated.data;
+  const { authToken, userId, name, phoneNumber } = validated.data;
 
   try {
+    await verifyAuthTokenForUser(authToken, userId);
     const userDocRef = adminDb.collection('users').doc(userId);
     
     // Prepare the data for update, handling the optional phone number.

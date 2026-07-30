@@ -35,7 +35,7 @@ export default function PrivacyPolicyPage() {
             </div>
             <h1 className="text-3xl font-bold tracking-tight font-headline sm:text-4xl">Privacy Policy</h1>
           </div>
-          <p className="text-muted-foreground italic">Last Updated: March 2024</p>
+          <p className="text-muted-foreground italic">Last Updated: July 2026</p>
 
           <section className="space-y-4 pt-8">
             <h2 className="text-2xl font-bold font-headline flex items-center gap-2">
@@ -48,6 +48,7 @@ export default function PrivacyPolicyPage() {
               <li><strong>Identity Data:</strong> Full name, email address, and phone number.</li>
               <li><strong>Compliance Data:</strong> Signed legal documents and KYC (Know Your Customer) information.</li>
               <li><strong>Financial Data:</strong> Transaction history, fund batch details, and repayment schedules.</li>
+              <li><strong>Zakat Eligibility Data:</strong> For investors, whether the investor identifies as Muslim or non-Muslim. This classification is used only to determine whether automated Zakat processing applies.</li>
               <li><strong>Device Data:</strong> IP address and notification tokens for push alerts.</li>
             </ul>
           </section>

@@ -6,6 +6,10 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "sourceId",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "remainingAmount",
           "order": "ASCENDING"
         },

@@ -142,6 +142,7 @@ export async function POST(request: NextRequest) {
                 transaction.set(investmentRef, {
                     investorId: batchData.sourceId,
                     dealId: dealId,
+                    fundBatchId: batchDoc.id,
                     amount: amountToDeduct,
                     createdAt: transactionTimestamp,
                     specialInvestment: Boolean(batchData.specialInvestment),
@@ -152,6 +153,8 @@ export async function POST(request: NextRequest) {
                 transaction.set(transactionRef, {
                     userId: batchData.sourceId,
                     dealId: dealId,
+                    fundBatchId: batchDoc.id,
+                    investmentId: investmentRef.id,
                     type: 'Investment',
                     amount: -amountToDeduct,
                     createdAt: transactionTimestamp,

@@ -5,7 +5,7 @@ import { adminDb } from '@/firebase/admin-app';
 import { Timestamp } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { notifyAdmins } from '@/app/common/actions/notification-actions';
+import { notifyAdmins } from '@/lib/server/notification-service';
 import { verifyAuthTokenForUser } from '@/lib/server/auth';
 
 const requestDealSchema = z.object({
@@ -21,7 +21,10 @@ const requestDealSchema = z.object({
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   proposalDetails: z.string().optional(),
-  proposalPdf: z.string().optional(),
+  proposalPdf: z.string().url().refine(
+    (url) => url.startsWith('https://firebasestorage.googleapis.com/'),
+    'Proposal must be stored in Firebase Storage.'
+  ).optional(),
 });
 
 export async function requestDealAction(input: z.infer<typeof requestDealSchema>) {

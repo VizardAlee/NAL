@@ -4,9 +4,10 @@ import { adminDb } from '@/firebase/admin-app';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { addDays, differenceInDays, startOfDay, isBefore, isEqual } from 'date-fns';
 import { processOwnerProfitAllocations } from '@/lib/server/owner-profit';
-import { notifyAdmins, notifyUser } from '@/app/common/actions/notification-actions';
+import { notifyAdmins, notifyUser } from '@/lib/server/notification-service';
 import { hasPersona } from '@/lib/access-control';
 import { isZakatApplicable } from '@/lib/zakat-eligibility';
+import { calculateInvestorPortfolioValue } from '@/lib/financial-integrity';
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -51,7 +52,9 @@ async function processZakat() {
             }
 
             const transactionsSnapshot = await adminDb.collection('transactions').where('userId', '==', userId).get();
-            const portfolioValue = transactionsSnapshot.docs.reduce((sum, doc) => sum + doc.data().amount, 0);
+            const portfolioValue = calculateInvestorPortfolioValue(
+                transactionsSnapshot.docs.map((doc) => doc.data())
+            );
 
             if (portfolioValue < nisab) {
                 skippedCount++;

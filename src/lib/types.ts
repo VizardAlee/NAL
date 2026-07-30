@@ -27,6 +27,7 @@ export type Investment = DocumentData & {
   id: string;
   investorId: string;
   dealId: string;
+  fundBatchId?: string;
   amount: number;
   createdAt: Timestamp;
   specialInvestment?: boolean;

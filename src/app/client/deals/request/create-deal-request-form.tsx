@@ -25,12 +25,13 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useState, useTransition, useEffect } from 'react';
 import { Loader2, Paperclip, BookOpen } from 'lucide-react';
-import { useAuth, useUser } from '@/firebase';
+import { useAuth, useFirebaseApp, useUser } from '@/firebase';
 import { requestDealAction } from './actions';
 import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
 import { isDurationShort } from '@/lib/duration-helpers';
 import Link from 'next/link';
+import { uploadAuthenticatedFile } from '@/firebase/storage-upload';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const ACCEPTED_FILE_TYPES = ["application/pdf"];
@@ -53,21 +54,13 @@ const formSchema = z.object({
     ).optional(),
 });
 
-// Helper to convert file to Base64
-const fileToDataUri = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-});
-
-
 export function CreateDealRequestForm() {
   const { toast } = useToast();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { user } = useUser();
   const auth = useAuth();
+  const app = useFirebaseApp();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -102,10 +95,15 @@ export function CreateDealRequestForm() {
     }
     startTransition(async () => {
         const authToken = await currentUser.getIdToken();
-        let pdfDataUri: string | undefined = undefined;
+        let proposalPdf: string | undefined;
         if (values.proposalPdf) {
             try {
-                pdfDataUri = await fileToDataUri(values.proposalPdf);
+                proposalPdf = (await uploadAuthenticatedFile(
+                    app,
+                    values.proposalPdf,
+                    ['users', user.uid, 'proposals'],
+                    ACCEPTED_FILE_TYPES
+                )).url;
             } catch (error) {
                  toast({
                     variant: 'destructive',
@@ -119,7 +117,7 @@ export function CreateDealRequestForm() {
         const result = await requestDealAction({
             authToken,
             ...values,
-            proposalPdf: pdfDataUri,
+            proposalPdf,
             clientId: user.uid,
             clientName: user.displayName || user.email || 'Unknown Client',
         });

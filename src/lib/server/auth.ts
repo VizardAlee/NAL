@@ -12,6 +12,9 @@ import {
 
 type AuthError = Error & { status?: number };
 
+const AUTH_SERVICE_UNAVAILABLE_MESSAGE =
+  'Authentication verification is temporarily unavailable. Check the server internet connection and try again.';
+
 function createAuthError(message: string, status: number): AuthError {
   const err = new Error(message) as AuthError;
   err.status = status;
@@ -24,6 +27,15 @@ export function getAuthErrorStatus(error: unknown): number | null {
   return typeof status === 'number' ? status : null;
 }
 
+function isAuthVerificationConnectivityError(error: { code?: string; message?: string }): boolean {
+  const message = error.message || '';
+  return message.includes('Error while making request') ||
+    message.includes('Error while making requests') ||
+    /\b(ECONNRESET|ECONNREFUSED|ENETUNREACH|ENOTFOUND|EAI_AGAIN|ETIMEDOUT)\b/.test(message) ||
+    error.code === 'app/network-error' ||
+    error.code === 'app/network-timeout';
+}
+
 export async function verifyAuthToken(authToken: string): Promise<DecodedIdToken> {
   if (!authToken) {
     throw createAuthError('Unauthorized: missing auth token.', 401);
@@ -31,7 +43,18 @@ export async function verifyAuthToken(authToken: string): Promise<DecodedIdToken
   const { auth } = initializeFirebase();
   try {
     return await auth.verifyIdToken(authToken);
-  } catch {
+  } catch (error: unknown) {
+    // Keep the actionable Firebase reason in server logs without ever logging
+    // the credential itself. The client receives the deliberately generic
+    // response below.
+    const firebaseError = error as { code?: string; message?: string };
+    console.warn('Firebase ID token verification failed.', {
+      code: firebaseError.code || 'unknown',
+      message: firebaseError.message || 'Unknown verification failure',
+    });
+    if (isAuthVerificationConnectivityError(firebaseError)) {
+      throw createAuthError(AUTH_SERVICE_UNAVAILABLE_MESSAGE, 503);
+    }
     throw createAuthError('Unauthorized: invalid auth token.', 401);
   }
 }

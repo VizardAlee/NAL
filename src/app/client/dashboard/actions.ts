@@ -5,17 +5,18 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { initializeFirebase } from '@/firebase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { notifyAdmins } from '@/app/common/actions/notification-actions';
+import { notifyAdmins } from '@/lib/server/notification-service';
 import { adminDb } from '@/firebase/admin-app';
 import { verifyAuthTokenForUser } from '@/lib/server/auth';
 import { generateAmortizationSchedule } from '@/lib/amortization';
 import { Deal } from '@/lib/types';
+import { roundCurrency } from '@/lib/financial-integrity';
 
 // --- Lodge Payment Action ---
 const lodgePaymentSchema = z.object({
   authToken: z.string().min(1, 'Authentication token is required.'),
   dealId: z.string().min(1, "Deal ID is required."),
-  amount: z.coerce.number().positive("Amount must be a positive number."),
+  amount: z.coerce.number().finite().positive("Amount must be a positive number."),
   userId: z.string().min(1, "User ID is required."),
   dueDate: z.string().min(1, "Due date is required."),
   installmentNumber: z.coerce.number().int().positive("Installment number is required."),
@@ -61,6 +62,14 @@ export async function lodgePaymentAction(
   }
 
   const { authToken, dealId, amount, userId, installmentNumber } = validatedFields.data;
+  const normalizedAmount = roundCurrency(amount);
+  if (normalizedAmount < 0.01) {
+    return {
+      success: false,
+      message: 'Payment must be at least ₦0.01.',
+      repayment: null,
+    };
+  }
 
   try {
     const firestore = adminDb;
@@ -95,13 +104,16 @@ export async function lodgePaymentAction(
         .where('clientId', '==', userId)
         .where('installmentNumber', '==', installmentNumber);
       const existingRepayments = await trx.get(repaymentsQuery);
-      const alreadyLodged = existingRepayments.docs
-        .map((doc) => doc.data())
-        .filter((repayment) => repayment.status === 'Pending' || repayment.status === 'Approved')
-        .reduce((sum, repayment) => sum + Number(repayment.amount || 0), 0);
-      const amountRemaining = Math.max(0, installment.payment - alreadyLodged);
+      const repaymentRecords = existingRepayments.docs.map((doc) => doc.data());
+      if (repaymentRecords.some((repayment) => repayment.status === 'Pending')) {
+        throw new Error('A payment request for this installment is already awaiting administrator approval.');
+      }
+      const alreadyApproved = roundCurrency(repaymentRecords
+        .filter((repayment) => repayment.status === 'Approved')
+        .reduce((sum, repayment) => sum + Number(repayment.amount || 0), 0));
+      const amountRemaining = Math.max(0, roundCurrency(installment.payment - alreadyApproved));
 
-      if (amount > amountRemaining + 0.01) {
+      if (normalizedAmount > amountRemaining) {
         throw new Error(`Amount exceeds the remaining installment balance of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amountRemaining)}.`);
       }
 
@@ -110,7 +122,7 @@ export async function lodgePaymentAction(
       trx.create(newRepaymentRef, {
         dealId,
         clientId: userId,
-        amount,
+        amount: normalizedAmount,
         status: 'Pending',
         lodgedAt,
         dueDate: dueDateTimestamp,
@@ -121,7 +133,7 @@ export async function lodgePaymentAction(
         id: newRepaymentRef.id,
         dealId,
         clientId: userId,
-        amount,
+        amount: normalizedAmount,
         status: 'Pending' as const,
         lodgedAt: { _seconds: lodgedAt.seconds, _nanoseconds: lodgedAt.nanoseconds },
         dueDate: { _seconds: dueDateTimestamp.seconds, _nanoseconds: dueDateTimestamp.nanoseconds },
@@ -129,7 +141,7 @@ export async function lodgePaymentAction(
       };
     });
 
-    const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+    const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(normalizedAmount);
     await notifyAdmins(
         'New Repayment Lodged',
         `A payment of ${formattedAmount} is awaiting approval.`,

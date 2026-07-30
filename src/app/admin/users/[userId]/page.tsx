@@ -192,9 +192,12 @@ export default function UserDetailPage() {
     const hasMarketerPersona = userProfile ? hasPersona(userProfile, 'MARKETER') : false;
 
     useEffect(() => {
-        if (userProfile && hasMarketerPersona && userProfile.referralCode) {
+        if (userProfile && hasMarketerPersona && userProfile.referralCode && auth?.currentUser) {
             setStatsLoading(true);
-            getMarketerStats(userProfile.id, userProfile.referralCode).then(result => {
+            auth.currentUser.getIdToken().then((authToken) => getMarketerStats({
+                authToken,
+                marketerId: userProfile.id,
+            })).then(result => {
                 if (result.success) {
                     setMarketerStats(result.data as MarketerStats);
                 }
@@ -203,7 +206,7 @@ export default function UserDetailPage() {
         } else if (userProfile && !hasMarketerPersona) {
             setStatsLoading(false);
         }
-    }, [hasMarketerPersona, userProfile]);
+    }, [auth, hasMarketerPersona, userProfile]);
 
     const fundBatchesQuery = useMemo(() => {
         if (!firestore || !userId) return null;

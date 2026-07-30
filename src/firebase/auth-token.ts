@@ -9,7 +9,15 @@ export async function getRequiredIdToken(): Promise<string> {
   if (!currentUser) {
     throw new Error('You must be signed in to perform this action.');
   }
-  return currentUser.getIdToken();
+
+  // Server mutations verify this token with the Admin SDK. Force a refresh so
+  // a long-lived browser tab cannot submit an expired or revoked cached token.
+  // Firebase still coalesces concurrent refresh requests internally.
+  try {
+    return await currentUser.getIdToken(true);
+  } catch {
+    throw new Error('Your session has expired. Please sign out and sign in again.');
+  }
 }
 
 export function useIdToken(): string {

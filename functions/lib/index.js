@@ -19,4 +19,5 @@ admin.initializeApp();
 // We will add our callable functions here.
 __exportStar(require("./users"), exports);
 __exportStar(require("./deals"), exports);
+__exportStar(require("./automation"), exports);
 //# sourceMappingURL=index.js.map

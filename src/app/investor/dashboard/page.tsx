@@ -31,6 +31,8 @@ import { getOrCreateConversation, listContactAdmins } from "@/app/common/actions
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { generateAmortizationSchedule } from "@/lib/amortization";
+import { calculateFundBatchAnniversaryWindow } from '@/lib/financial-integrity';
+import { getRequiredIdToken } from '@/firebase/auth-token';
 
 
 type Transaction = DocumentData & {
@@ -38,6 +40,7 @@ type Transaction = DocumentData & {
     type: 'Deposit' | 'Withdrawal' | 'Investment' | 'Repayment' | 'ProfitDistribution' | 'Zakat';
     amount: number;
     dealId?: string;
+    fundBatchId?: string;
     userId: string;
     createdAt: Timestamp;
     dealName?: string; // Denormalized for display
@@ -68,6 +71,8 @@ type InvestorRequest = DocumentData & {
     amount: number;
     status: 'Pending' | 'Approved' | 'Rejected';
     requestedAt: Timestamp;
+    source?: string;
+    anniversaryWindowIds?: string[];
 };
 
 type UserProfile = DocumentData & {
@@ -107,7 +112,7 @@ function ReinvestButton({ balance, user }: { balance: number, user: User }) {
         const currentUser = auth?.currentUser;
         if (!currentUser) return;
         startTransition(async () => {
-            const authToken = await currentUser.getIdToken();
+            const authToken = await getRequiredIdToken();
             const result = await reinvestAction({
                 authToken,
                 amount: balance,
@@ -375,6 +380,7 @@ export default function InvestorDashboard() {
     const firestore = useFirestore();
     const { user, loading: userLoading } = useUser();
     const [isWithdrawOpen, setWithdrawOpen] = useState(false);
+    const [isAnniversaryWithdrawOpen, setAnniversaryWithdrawOpen] = useState(false);
     const [isDepositOpen, setDepositOpen] = useState(false);
     const [chartRange, setChartRange] = useState<'4w' | '12w' | '52w' | 'all'>('12w');
     const isMobile = useIsMobile();
@@ -406,14 +412,9 @@ export default function InvestorDashboard() {
         return query(collection(firestore, 'fundBatches'), where('sourceId', '==', user.uid));
     }, [firestore, user]);
 
-    const firstDepositQuery = useMemo(() => {
-        if (!firestore || !user?.uid) return null;
-        return query(collection(firestore, 'transactions'), where('userId', '==', user.uid), where('type', '==', 'Deposit'), orderBy('createdAt', 'asc'), limit(1));
-    }, [firestore, user]);
-
     const withdrawalRequestsQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
-        return query(collection(firestore, 'withdrawalRequests'), where('investorId', '==', user.uid), orderBy('requestedAt', 'desc'), limit(5));
+        return query(collection(firestore, 'withdrawalRequests'), where('investorId', '==', user.uid), orderBy('requestedAt', 'desc'));
     }, [firestore, user]);
 
     const depositRequestsQuery = useMemo(() => {
@@ -432,7 +433,6 @@ export default function InvestorDashboard() {
     const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
     const { data: allTransactions, loading: allTransactionsLoading } = useCollection<Transaction>(allTransactionsQuery);
     const { data: recentTransactions, loading: recentTransactionsLoading } = useCollection<Transaction>(recentTransactionsQuery);
-    const { data: firstDeposit, loading: firstDepositLoading } = useCollection<Transaction>(firstDepositQuery);
     const { data: withdrawalRequests, loading: withdrawalRequestsLoading } = useCollection<InvestorRequest>(withdrawalRequestsQuery);
     const { data: depositRequests, loading: depositRequestsLoading } = useCollection<InvestorRequest>(depositRequestsQuery);
     const { data: reinvestmentRequests, loading: reinvestmentRequestsLoading } = useCollection<InvestorRequest>(reinvestmentRequestsQuery);
@@ -457,7 +457,7 @@ export default function InvestorDashboard() {
 
     const { data: allDealInvestments, loading: allDealInvestmentsLoading } = useCollection<Investment>(allDealInvestmentsQuery);
 
-    const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || allDealInvestmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || firstDepositLoading || withdrawalRequestsLoading || depositRequestsLoading || reinvestmentRequestsLoading;
+    const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || allDealInvestmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || withdrawalRequestsLoading || depositRequestsLoading || reinvestmentRequestsLoading;
 
     const { longTermProfits, withdrawableBalance, expectedIncome, totalProfitsEarned } = useMemo(() => {
         if (!allTransactions || !deals || !investments || !allDealInvestments) {
@@ -536,24 +536,11 @@ export default function InvestorDashboard() {
         return { totalCapital, portfolioValue, investableBalance, simpleROI };
     }, [allTransactions, fundBatches]);
 
-    const withdrawalRules = useMemo(() => {
-        const firstDepositDate = firstDeposit?.[0]?.createdAt?.toDate?.();
-        const longTermUnlockDate = firstDepositDate ? addDays(firstDepositDate, 365) : null;
-        const isLocked = longTermProfits > 0 && (!firstDepositDate || differenceInDays(new Date(), firstDepositDate) < 365);
-        const lastWithdrawal = userProfile?.lastWithdrawalDate?.toDate();
-        const cooldownDaysRemaining = lastWithdrawal ? Math.max(0, 90 - differenceInDays(new Date(), lastWithdrawal)) : 0;
-        const cooldownActive = cooldownDaysRemaining > 0;
-
-        const availableForWithdrawal = Math.min(longTermProfits * 0.2, financialMetrics.investableBalance);
-
-        return {
-            isLocked,
-            cooldownActive,
-            cooldownDaysRemaining,
-            maxWithdrawal: availableForWithdrawal,
-            longTermUnlockDate,
-        };
-    }, [longTermProfits, firstDeposit, userProfile, financialMetrics.investableBalance]);
+    const anniversaryWindow = useMemo(() => calculateFundBatchAnniversaryWindow({
+        fundBatches: fundBatches || [],
+        entries: allTransactions || [],
+        withdrawalRequests: withdrawalRequests || [],
+    }), [allTransactions, fundBatches, withdrawalRequests]);
 
     const pendingRequests = useMemo(() => {
         const formatAmount = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
@@ -619,6 +606,7 @@ export default function InvestorDashboard() {
 
     const handleWithdrawalSuccess = () => {
         setWithdrawOpen(false);
+        setAnniversaryWithdrawOpen(false);
     };
 
     const formatDate = (timestamp: Timestamp | Date | undefined) => {
@@ -799,30 +787,60 @@ export default function InvestorDashboard() {
                         <p className="text-xs text-muted-foreground">Available for withdrawal or reinvestment.</p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="md:col-span-2">
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">Long-Term Profit Pool</CardTitle>
+                        <CardTitle className="text-sm font-medium">Annual Long-Term Profit Window</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-xl font-bold">{formatCurrency(longTermProfits)}</div>
-                        <p className="text-xs text-muted-foreground">
-                            {withdrawalRules.isLocked
-                                ? `Locked until ${withdrawalRules.longTermUnlockDate ? format(withdrawalRules.longTermUnlockDate, 'PPP') : 'your first deposit matures'}.`
-                                : `${formatCurrency(withdrawalRules.maxWithdrawal)} is within the 20% long-term rule.`}
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">Withdrawal Cooldown</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-xl font-bold">
-                            {withdrawalRules.cooldownActive ? `${withdrawalRules.cooldownDaysRemaining} days` : 'Open'}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                            {withdrawalRules.cooldownActive ? 'Time remaining before another scheduled withdrawal.' : 'No recent withdrawal cooldown is active.'}
-                        </p>
+                    <CardContent className="space-y-3">
+                        {anniversaryWindow.isOpen ? (
+                            <>
+                                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                    <div>
+                                        <div className="text-xl font-bold">{formatCurrency(anniversaryWindow.availableToWithdraw)}</div>
+                                        <p className="text-xs text-muted-foreground">
+                                            Remaining from a {formatCurrency(anniversaryWindow.allowance)} allowance—20% of {formatCurrency(anniversaryWindow.generatedProfit)} generated in the preceding investment year.
+                                        </p>
+                                    </div>
+                                    <Badge>Five-day window open</Badge>
+                                </div>
+                                <div className="space-y-1 text-xs text-muted-foreground">
+                                    {anniversaryWindow.activeWindows.map((window) => (
+                                        <p key={window.id}>
+                                            Fund batch year {window.anniversaryYear}: closes {format(window.closesAt, 'PPP p')}.
+                                        </p>
+                                    ))}
+                                </div>
+                                <Dialog open={isAnniversaryWithdrawOpen} onOpenChange={setAnniversaryWithdrawOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={anniversaryWindow.availableToWithdraw <= 0}
+                                        >
+                                            <Download className="mr-2 h-4 w-4" />
+                                            Withdraw Annual Allowance
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                        <DialogHeader>
+                                            <DialogTitle>Annual Profit Withdrawal</DialogTitle>
+                                        </DialogHeader>
+                                        <WithdrawForm
+                                            withdrawableBalance={anniversaryWindow.availableToWithdraw}
+                                            onWithdrawalRequested={handleWithdrawalSuccess}
+                                            source="AnniversaryProfit"
+                                        />
+                                    </DialogContent>
+                                </Dialog>
+                            </>
+                        ) : (
+                            <>
+                                <div className="text-xl font-bold">{formatCurrency(longTermProfits)}</div>
+                                <p className="text-xs text-muted-foreground">
+                                    Closed. Fund batches locked for more than two years receive a five-day window on each annual anniversary. During that window, 20% of the preceding year&apos;s generated profit is reserved from reinvestment.
+                                </p>
+                            </>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -927,7 +945,7 @@ export default function InvestorDashboard() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {withdrawalRequests.map((req) => (
+                                    {withdrawalRequests.slice(0, 5).map((req) => (
                                         <TableRow key={req.id}>
                                             <TableCell>{format(req.requestedAt.toDate(), 'PPP')}</TableCell>
                                             <TableCell className="font-medium">{formatCurrency(req.amount)}</TableCell>

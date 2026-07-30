@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { roundCurrency } from '@/lib/financial-integrity';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -53,7 +54,9 @@ interface ScheduledPayment extends ScheduleInstallment {
   status: RepaymentStatus;
   isActionable?: boolean;
   amountPaid: number;
+  pendingAmount: number;
   amountRemaining: number;
+  amountAvailableToLodge: number;
   paymentHistory: Repayment[];
   openingBalance: number;
 }
@@ -73,7 +76,7 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
     const { toast } = useToast();
     const auth = useAuth();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [amountToPay, setAmountToPay] = useState(installment.amountRemaining);
+    const [amountToPay, setAmountToPay] = useState(installment.amountAvailableToLodge);
     const [authToken, setAuthToken] = useState('');
 
     useEffect(() => {
@@ -102,10 +105,10 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
     // Reset amount when dialog opens
     useEffect(() => {
         if(isDialogOpen) {
-            setAmountToPay(installment.amountRemaining);
+            setAmountToPay(installment.amountAvailableToLodge);
             auth?.currentUser?.getIdToken().then(setAuthToken).catch(() => setAuthToken(''));
         }
-    }, [auth, isDialogOpen, installment.amountRemaining]);
+    }, [auth, isDialogOpen, installment.amountAvailableToLodge]);
     
     return (
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -130,10 +133,12 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
                             id="amount"
                             name="amount"
                             type="number"
+                            inputMode="decimal"
+                            step="0.01"
                             value={amountToPay}
                             onChange={(e) => setAmountToPay(parseFloat(e.target.value) || 0)}
-                            max={installment.amountRemaining}
-                            min={1}
+                            max={roundCurrency(installment.amountAvailableToLodge)}
+                            min="0.01"
                         />
                     </div>
                     <input type="hidden" name="dealId" value={dealId} />
@@ -164,6 +169,9 @@ function InstallmentDetailsDialog({ installment }: { installment: ScheduledPayme
                 <div className="rounded-lg border p-4 space-y-2">
                     <div className="flex justify-between text-sm"><span className="text-muted-foreground">Total Due:</span> <span>{formatCurrency(installment.payment)}</span></div>
                     <div className="flex justify-between text-sm"><span className="text-muted-foreground">Amount Paid:</span> <span>{formatCurrency(installment.amountPaid)}</span></div>
+                    {installment.pendingAmount > 0 && (
+                        <div className="flex justify-between text-sm"><span className="text-muted-foreground">Awaiting Approval:</span> <span>{formatCurrency(installment.pendingAmount)}</span></div>
+                    )}
                     <div className="flex justify-between font-bold text-base"><span >Amount Remaining:</span> <span className="text-primary">{formatCurrency(installment.amountRemaining)}</span></div>
                 </div>
 
@@ -183,7 +191,7 @@ function InstallmentDetailsDialog({ installment }: { installment: ScheduledPayme
                                     <TableRow key={p.id}>
                                         <TableCell>{format(p.lodgedAt.toDate(), 'PPP')}</TableCell>
                                         <TableCell>{formatCurrency(p.amount)}</TableCell>
-                                        <TableCell><Badge variant={p.status === 'Approved' ? 'default' : 'secondary'}>{p.status}</Badge></TableCell>
+                                        <TableCell><Badge variant={p.status === 'Approved' ? 'default' : 'secondary'}>{p.status === 'Approved' ? 'Paid' : p.status}</Badge></TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
@@ -230,17 +238,17 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
           r.installmentNumber === installment.installment
       ) || [];
 
-      const approvedAmountPaid = relatedRepayments.filter(r => r.status === 'Approved').reduce((sum, r) => sum + r.amount, 0);
-      const pendingAmount = relatedRepayments.filter(r => r.status === 'Pending').reduce((sum, r) => sum + r.amount, 0);
-      const totalAmountPaid = approvedAmountPaid + pendingAmount;
-      const amountRemaining = Math.max(0, installment.payment - totalAmountPaid);
+      const approvedAmountPaid = roundCurrency(relatedRepayments.filter(r => r.status === 'Approved').reduce((sum, r) => sum + r.amount, 0));
+      const pendingAmount = roundCurrency(relatedRepayments.filter(r => r.status === 'Pending').reduce((sum, r) => sum + r.amount, 0));
+      const amountRemaining = Math.max(0, roundCurrency(installment.payment - approvedAmountPaid));
+      const amountAvailableToLodge = Math.max(0, roundCurrency(amountRemaining - pendingAmount));
 
       let status: RepaymentStatus = 'Upcoming';
-      if (totalAmountPaid >= installment.payment - 0.01) { // Tolerance for float precision
+      if (approvedAmountPaid >= installment.payment) {
           status = 'Paid';
       } else if (pendingAmount > 0) {
           status = 'Pending';
-      } else if (totalAmountPaid > 0) {
+      } else if (approvedAmountPaid > 0) {
           status = 'Partially Paid';
       } else if (isPast(installment.dueDate)) {
           status = 'Due';
@@ -249,7 +257,11 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
       let isActionable = false;
       const firstActionableInstallment = schedule.find(inst => {
           const payments = allRepayments?.filter(r => r.installmentNumber === inst.installment) || [];
-          const paid = payments.reduce((sum, p) => sum + p.amount, 0) >= inst.payment - 0.01;
+          const paid = roundCurrency(
+            payments
+              .filter((payment) => payment.status === 'Approved')
+              .reduce((sum, payment) => sum + payment.amount, 0)
+          ) >= inst.payment;
           return !paid;
       });
 
@@ -257,7 +269,17 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
         isActionable = true;
       }
       
-      return { ...installment, status, isActionable, amountPaid: totalAmountPaid, amountRemaining, paymentHistory: relatedRepayments, openingBalance };
+      return {
+        ...installment,
+        status,
+        isActionable,
+        amountPaid: approvedAmountPaid,
+        pendingAmount,
+        amountRemaining,
+        amountAvailableToLodge,
+        paymentHistory: relatedRepayments,
+        openingBalance,
+      };
     });
   }, [schedule, allRepayments, deal.principal]);
   
@@ -345,7 +367,7 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
                                             <div className="flex justify-between"><span className="text-muted-foreground">Profit Payment:</span> <span>{formatCurrency(item.interest)}</span></div>
                                             <div className="flex justify-between"><span className="text-muted-foreground">Closing Balance:</span> <span>{formatCurrency(item.balance)}</span></div>
                                         </div>
-                                        {(item.isActionable && item.status !== 'Paid' && user) && (
+                                        {(item.isActionable && item.status !== 'Paid' && item.status !== 'Pending' && user) && (
                                             <div className="pt-3 border-t">
                                                 <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
                                             </div>
@@ -383,7 +405,7 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
                                     <TableCell>{formatCurrency(item.balance)}</TableCell>
                                     <TableCell><StatusBadge status={item.status} /></TableCell>
                                     <TableCell className="text-right w-40">
-                                    {(item.isActionable && item.status !== 'Paid' && user) && (
+                                    {(item.isActionable && item.status !== 'Paid' && item.status !== 'Pending' && user) && (
                                         <LodgePaymentButton installment={item} dealId={deal.id} userId={user.uid} onPaymentLodged={handlePaymentLodged} />
                                     )}
                                     </TableCell>

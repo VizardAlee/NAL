@@ -40,7 +40,7 @@ function deriveAccessModel(role) {
 function isAdminCaller(token) {
     if (!token)
         return false;
-    return token.role === 'Admin' || ['OWNER', 'ADMIN', 'STAFF'].includes(token.accessRole);
+    return token.accessRole === 'ADMIN' || (token.role === 'Admin' && !token.accessRole);
 }
 // Helper function to generate a unique referral code
 function generateReferralCode(name) {

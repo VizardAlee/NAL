@@ -5,7 +5,7 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { initializeFirebase } from '@/firebase/server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { notifyAdmins } from '@/app/common/actions/notification-actions';
+import { notifyAdmins } from '@/lib/server/notification-service';
 import { verifyAuthTokenForUser } from '@/lib/server/auth';
 
 const depositSchema = z.object({

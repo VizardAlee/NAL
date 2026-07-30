@@ -40,7 +40,7 @@ function deriveAccessModel(role: z.infer<typeof createUserSchema>['role']) {
 
 function isAdminCaller(token: admin.auth.DecodedIdToken | undefined): boolean {
     if (!token) return false;
-    return token.role === 'Admin' || ['OWNER', 'ADMIN', 'STAFF'].includes(token.accessRole as string);
+    return token.accessRole === 'ADMIN' || (token.role === 'Admin' && !token.accessRole);
 }
 
 // Helper function to generate a unique referral code

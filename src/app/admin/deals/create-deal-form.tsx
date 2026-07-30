@@ -46,6 +46,13 @@ type CallableError = Error & {
 
 function getDealCreationErrorMessage(error: unknown) {
   const callableError = error as CallableError;
+  if (
+    callableError.message?.includes('Unauthorized: invalid auth token') ||
+    callableError.message?.includes('Unauthorized: missing auth token')
+  ) {
+    return 'Your session is no longer valid. Please sign out, sign in again, and retry creating the deal.';
+  }
+
   const details = callableError.details || callableError.customData;
   const parts = [
     callableError.code ? `Code: ${callableError.code}` : null,
@@ -182,7 +189,10 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
           clientName: selectedClient.name,
           startDate: values.startDate ? values.startDate.toISOString() : undefined,
         };
-        console.error(`Deal Creation Failed: ${description}\n${JSON.stringify({ description, attemptedPayload }, null, 2)}`);
+        // Server-declared action failures are recoverable application states.
+        // The server already records unexpected details, so avoid triggering
+        // the Next.js development error overlay here.
+        console.warn(`Deal Creation Failed: ${description}\n${JSON.stringify({ description, attemptedPayload }, null, 2)}`);
         toast({ variant: 'destructive', title: 'Deal Creation Failed', description });
       }
     } catch (error: unknown) {
@@ -193,7 +203,14 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
         clientName: selectedClient.name,
         startDate: values.startDate ? values.startDate.toISOString() : undefined,
       };
-      console.error(`Deal Creation Error: ${description}\n${JSON.stringify({ description, attemptedPayload }, null, 2)}`);
+      const logMessage = `Deal Creation Error: ${description}\n${JSON.stringify({ description, attemptedPayload }, null, 2)}`;
+      if (description.includes('session is no longer valid') || description.includes('session has expired')) {
+        // Authentication expiry is an expected recoverable state, not an app
+        // exception. Avoid triggering the Next.js development error overlay.
+        console.warn(logMessage);
+      } else {
+        console.error(logMessage);
+      }
       toast({ variant: 'destructive', title: 'Deal Creation Failed', description });
     } finally {
       setIsLoading(false);

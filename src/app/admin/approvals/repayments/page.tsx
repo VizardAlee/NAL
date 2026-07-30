@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, Clock, CalendarCheck, AlertTriangle } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { collection, query, where, DocumentData, Timestamp, runTransaction, doc, writeBatch, orderBy, getDocs, addDoc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
@@ -225,7 +225,7 @@ export default function RepaymentsPage() {
 
     const isLoading = dealsLoading || usersLoading || investmentsLoading;
 
-    const enrichRepayments = (repayments: Repayment[] | null): RepaymentRow[] => {
+    const enrichRepayments = useCallback((repayments: Repayment[] | null): RepaymentRow[] => {
         if (!repayments || !deals || !users) return [];
         return repayments.map(repayment => {
             const deal = deals.find(d => d.id === repayment.dealId);
@@ -236,11 +236,11 @@ export default function RepaymentsPage() {
                 clientName: client?.name || 'Unknown Client',
             }
         });
-    };
+    }, [deals, users]);
 
-    const pendingRows = useMemo(() => enrichRepayments(pendingRepayments), [pendingRepayments, deals, users]);
-    const confirmedRows = useMemo(() => enrichRepayments(confirmedRepayments), [confirmedRepayments, deals, users]);
-    const overdueRows = useMemo(() => enrichRepayments(overdueRepayments), [overdueRepayments, deals, users]);
+    const pendingRows = useMemo(() => enrichRepayments(pendingRepayments), [enrichRepayments, pendingRepayments]);
+    const confirmedRows = useMemo(() => enrichRepayments(confirmedRepayments), [confirmedRepayments, enrichRepayments]);
+    const overdueRows = useMemo(() => enrichRepayments(overdueRepayments), [enrichRepayments, overdueRepayments]);
 
 
     const handleApprove = async (repayment: RepaymentRow) => {

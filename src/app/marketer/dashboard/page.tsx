@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { PageHeader } from "@/components/page-header";
 import { LayoutDashboard, Users, UserPlus, Banknote, Briefcase, Copy, Star } from "lucide-react";
-import { useUser } from "@/firebase";
+import { useAuth, useUser } from "@/firebase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -39,13 +39,17 @@ function StatCard({ title, value, icon: Icon, isLoading }: { title: string, valu
 
 export default function MarketerDashboardPage() {
     const { user, loading: userLoading } = useUser();
+    const auth = useAuth();
     const { toast } = useToast();
     const [stats, setStats] = useState<MarketerStats | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (user && user.referralCode) {
-            getMarketerStats(user.uid, user.referralCode).then(result => {
+        if (user && user.referralCode && auth?.currentUser) {
+            auth.currentUser.getIdToken().then((authToken) => getMarketerStats({
+                authToken,
+                marketerId: user.uid,
+            })).then(result => {
                 if (result.success) {
                     setStats(result.data as MarketerStats);
                 } else {
@@ -61,7 +65,7 @@ export default function MarketerDashboardPage() {
             // This case handles when the user is loaded but has no referral code
             setLoading(false);
         }
-    }, [user, userLoading, toast]);
+    }, [auth, user, userLoading, toast]);
 
     const handleCopyCode = () => {
         if (!user?.referralCode) return;

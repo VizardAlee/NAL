@@ -5,7 +5,7 @@ import { adminDb } from '@/firebase/admin-app';
 import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { verifyAdminWrite } from '@/lib/server/auth';
+import { getAuthErrorStatus, verifyAdminWrite } from '@/lib/server/auth';
 
 const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
@@ -23,7 +23,19 @@ const formSchema = z.object({
 });
 
 export async function createDealAction(authToken: string, clientName: string, values: z.infer<typeof formSchema>) {
-    await verifyAdminWrite(authToken);
+    try {
+        await verifyAdminWrite(authToken);
+    } catch (error: unknown) {
+        const status = getAuthErrorStatus(error);
+        if (status) {
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : 'Authentication failed.',
+                status,
+            };
+        }
+        throw error;
+    }
     const validated = formSchema.safeParse(values);
     if (!validated.success) {
         return {
