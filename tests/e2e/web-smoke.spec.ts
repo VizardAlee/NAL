@@ -12,6 +12,7 @@ test('public entry points render and password reset is available', async ({ page
 test('production security headers are emitted', async ({ request }) => {
   const response = await request.get('/');
   expect(response.headers()['content-security-policy']).toContain("frame-ancestors 'none'");
+  expect(response.headers()['content-security-policy']).toContain('https://fonts.googleapis.com');
   expect(response.headers()['strict-transport-security']).toContain('max-age=');
   expect(response.headers()['x-content-type-options']).toBe('nosniff');
   expect(response.headers()['x-powered-by']).toBeUndefined();

@@ -18,7 +18,7 @@ const nextConfig = {
       "form-action 'self'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data: https:",
-      "style-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com",
       "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://*.cloudfunctions.net wss://*.firebaseio.com wss://*.googleapis.com",
       "worker-src 'self' blob:",
