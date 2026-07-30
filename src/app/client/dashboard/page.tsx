@@ -25,6 +25,7 @@ import { RepaymentHistory } from "@/components/deals/repayment-history";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { generateAmortizationSchedule } from "@/lib/amortization";
+import { RepaymentMilestoneGauge } from "@/components/deals/repayment-milestone-gauge";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -306,6 +307,13 @@ function DealCard({ deal }: { deal: Deal }) {
                         <span className="text-xs text-muted-foreground"> ({deal.managementFeeRate || 0}%)</span>
                     </span>
                 </div>
+                {(deal.status === 'Active' || deal.status === 'Completed') && (
+                    <RepaymentMilestoneGauge
+                        deal={deal}
+                        repayments={repayments}
+                        loading={repaymentsLoading}
+                    />
+                )}
                 {deal.status === 'Active' && (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
