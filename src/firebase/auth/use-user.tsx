@@ -6,6 +6,29 @@ import { onAuthStateChanged, type User as AuthUser } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { useAuth, useFirestore } from "@/firebase/provider";
 import { type User } from "@/lib/types";
+import {
+  loadAuthenticatedProfileAction,
+  type AuthenticatedProfile,
+} from "@/app/login/actions";
+
+function mergeAuthenticatedUser(
+  authUser: AuthUser,
+  profile?: AuthenticatedProfile | Record<string, unknown>
+): User {
+  const profileName =
+    profile && 'name' in profile && typeof profile.name === 'string'
+      ? profile.name
+      : authUser.displayName;
+
+  return {
+    ...authUser,
+    uid: authUser.uid,
+    id: authUser.uid,
+    email: authUser.email || '',
+    displayName: profileName,
+    ...profile,
+  } as User;
+}
 
 export function useUser() {
   const auth = useAuth();
@@ -29,27 +52,38 @@ export function useUser() {
       }
 
       if (authUser) {
+        const loadServerProfile = async () => {
+          try {
+            const authToken = await authUser.getIdToken();
+            const result = await loadAuthenticatedProfileAction({ authToken });
+            setUser(
+              result.success
+                ? mergeAuthenticatedUser(authUser, result.profile)
+                : mergeAuthenticatedUser(authUser)
+            );
+          } catch (error) {
+            console.warn('Unable to load fallback user profile.', error);
+            setUser(mergeAuthenticatedUser(authUser));
+          } finally {
+            setLoading(false);
+          }
+        };
+
         const userDocRef = doc(firestore, 'users', authUser.uid);
 
         unsubscribeFirestore = onSnapshot(userDocRef, (userDoc) => {
           if (userDoc.exists()) {
             const firestoreData = userDoc.data();
-            setUser({
-              ...authUser,
-              id: authUser.uid,
-              ...firestoreData,
-            } as User);
+            setUser(mergeAuthenticatedUser(authUser, firestoreData));
+            setLoading(false);
           } else {
-            // User exists in Auth but not Firestore. This can happen during signup.
-            // We provide a basic user object, but roles might not work until the doc is created.
-            setUser(authUser as User);
+            void loadServerProfile();
           }
-          setLoading(false);
         }, (err: any) => {
           if (err.code !== 'permission-denied') {
             console.error('Error fetching user document:', err);
           }
-          setLoading(false); // Ensure loading is set to false even on error
+          void loadServerProfile();
         });
 
       } else {

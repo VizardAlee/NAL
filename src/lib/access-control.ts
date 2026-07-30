@@ -227,18 +227,25 @@ export function isPrimaryPortal(value: unknown): value is PrimaryPortal {
 
 export function getAccessiblePortals(user: UserLike | null | undefined): PrimaryPortal[] {
   const model = normalizeAccessModel(user);
-  const explicitPortals: PrimaryPortal[] = model.personas
-    .filter((persona): persona is Exclude<Persona, 'STAFF_MEMBER'> => persona !== 'STAFF_MEMBER')
-    .map((persona) => PERSONA_TO_PORTAL[persona]);
+  const operationalPortals: PrimaryPortal[] = [
+    'investor',
+    'client',
+    'legal',
+    'recovery',
+    'marketer',
+  ];
 
   if (model.accessRole === 'OWNER') {
-    explicitPortals.push('owner');
-    explicitPortals.push('admin');
+    return ['owner', 'admin', ...operationalPortals];
   }
 
   if (model.accessRole === 'ADMIN' || model.accessRole === 'STAFF') {
-    explicitPortals.push('admin');
+    return ['admin', ...operationalPortals];
   }
+
+  const explicitPortals: PrimaryPortal[] = model.personas
+    .filter((persona): persona is Exclude<Persona, 'STAFF_MEMBER'> => persona !== 'STAFF_MEMBER')
+    .map((persona) => PERSONA_TO_PORTAL[persona]);
 
   if (explicitPortals.length > 0) {
     return [...new Set(explicitPortals)];

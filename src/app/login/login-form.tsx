@@ -20,12 +20,12 @@ import { ArrowRight, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { useAuth, useFirestore } from "@/firebase";
+import { useAuth } from "@/firebase";
 import { FirebaseError } from "firebase/app";
 import Link from "next/link";
 import { getDefaultRouteForUser } from "@/lib/access-control";
 import { resolvePreferredPortal } from "@/lib/active-portal";
+import { loadAuthenticatedProfileAction } from "./actions";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -38,7 +38,6 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
   const auth = useAuth();
-  const firestore = useFirestore();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -51,7 +50,7 @@ export function LoginForm() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     setLoginError("");
-    if (!auth || !firestore) {
+    if (!auth) {
       toast({
         variant: "destructive",
         title: "Error",
@@ -70,16 +69,14 @@ export function LoginForm() {
       );
       
       const user = userCredential.user;
-      
-      // Fetch user role from Firestore
-      const userDocRef = doc(firestore, 'users', user.uid);
-      const userDoc = await getDoc(userDocRef);
+      const authToken = await user.getIdToken();
+      const profileResult = await loadAuthenticatedProfileAction({ authToken });
 
-      if (!userDoc.exists()) {
-        throw new Error("User profile not found in database.");
+      if (!profileResult.success) {
+        throw new Error(profileResult.message);
       }
 
-      const userData = userDoc.data();
+      const userData = profileResult.profile;
       toast({
         title: "Login Successful",
         description: "Redirecting to your dashboard...",

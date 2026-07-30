@@ -402,14 +402,14 @@ export default function ClientDashboard() {
         return doc(firestore, 'users', user.uid);
     }, [firestore, user?.uid]);
 
-    const { data: userProfile, loading: profileLoading } = useDoc<UserProfile>(userProfileRef);
+    const { data: userProfile, loading: profileLoading, error: profileError } = useDoc<UserProfile>(userProfileRef);
 
     const dealsQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
         return query(collection(firestore, 'deals'), where('clientId', '==', user.uid), orderBy('createdAt', 'desc'));
     }, [firestore, user?.uid]);
 
-    const { data: deals, loading: dealsLoading } = useCollection<Deal>(
+    const { data: deals, loading: dealsLoading, error: dealsError } = useCollection<Deal>(
         dealsQuery as any
     );
 
@@ -428,11 +428,12 @@ export default function ClientDashboard() {
         return query(collection(firestore, 'terminationRequests'), where('clientId', '==', user.uid), orderBy('requestedAt', 'desc'));
     }, [firestore, user?.uid]);
 
-    const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery as any);
-    const { data: dealRequests, loading: dealRequestsLoading } = useCollection<ClientRequest>(dealRequestsQuery as any);
-    const { data: terminationRequests, loading: terminationRequestsLoading } = useCollection<ClientRequest>(terminationRequestsQuery as any);
+    const { data: repayments, loading: repaymentsLoading, error: repaymentsError } = useCollection<Repayment>(repaymentsQuery as any);
+    const { data: dealRequests, loading: dealRequestsLoading, error: dealRequestsError } = useCollection<ClientRequest>(dealRequestsQuery as any);
+    const { data: terminationRequests, loading: terminationRequestsLoading, error: terminationRequestsError } = useCollection<ClientRequest>(terminationRequestsQuery as any);
 
     const isLoading = userLoading || dealsLoading || profileLoading || repaymentsLoading || dealRequestsLoading || terminationRequestsLoading;
+    const dataLoadError = profileError || dealsError || repaymentsError || dealRequestsError || terminationRequestsError;
 
     const mostRecentDeal = useMemo(() => deals?.[0], [deals]);
 
@@ -518,6 +519,30 @@ export default function ClientDashboard() {
     if (!user) {
         router.replace('/login');
         return <DealsSkeleton />;
+    }
+
+    if (dataLoadError) {
+        return (
+            <div>
+                <PageHeader
+                    title="Client Dashboard"
+                    description="Here is an overview of your most recent financing deal."
+                    icon={FileText}
+                />
+                <Alert variant="destructive">
+                    <ShieldAlert className="h-4 w-4" />
+                    <AlertTitle>We could not load your records</AlertTitle>
+                    <AlertDescription className="space-y-3">
+                        <p>
+                            Your records have not been deleted. The dashboard could not reach Firestore or verify this session.
+                        </p>
+                        <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+                            Retry loading records
+                        </Button>
+                    </AlertDescription>
+                </Alert>
+            </div>
+        );
     }
 
     return (
