@@ -1,6 +1,6 @@
 'use server';
 
-import { notifyAdmins } from '@/lib/server/notification-service';
+import { notifyAdmins, notifyUser } from '@/lib/server/notification-service';
 import { adminDb } from '@/firebase/admin-app';
 import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
@@ -36,6 +36,46 @@ function isDateInWindow(quarters: any[]): { open: boolean; label?: string } {
         }
     }
     return { open: false };
+}
+
+async function notifyWithdrawalSubmitted({
+    userId,
+    userName,
+    formattedAmount,
+    userLink,
+    isCapitalWithdrawal = false,
+}: {
+    userId: string;
+    userName: string;
+    formattedAmount: string;
+    userLink: string;
+    isCapitalWithdrawal?: boolean;
+}) {
+    const withdrawalLabel = isCapitalWithdrawal ? 'capital withdrawal' : 'withdrawal';
+    const deliveries = await Promise.allSettled([
+        notifyAdmins(
+            isCapitalWithdrawal ? 'Capital Withdrawal Request' : 'Withdrawal Request',
+            isCapitalWithdrawal
+                ? `${userName} requested to withdraw uninvested capital of ${formattedAmount}.`
+                : `${userName} requested a withdrawal of ${formattedAmount}.`,
+            '/admin/approvals/withdrawals',
+            'approval'
+        ),
+        notifyUser(
+            userId,
+            'Withdrawal Request Submitted',
+            `Your ${withdrawalLabel} request for ${formattedAmount} has been submitted and is awaiting administrator approval.`,
+            userLink,
+            'request-status'
+        ),
+    ]);
+
+    deliveries.forEach((delivery, index) => {
+        if (delivery.status === 'rejected') {
+            const recipient = index === 0 ? 'administrators' : `investor ${userId}`;
+            console.error(`Failed to deliver withdrawal notification to ${recipient}:`, delivery.reason);
+        }
+    });
 }
 
 export async function requestWithdrawalAction(prevState: any, formData: FormData) {
@@ -158,12 +198,12 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
         });
 
         const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
-        await notifyAdmins(
-            'Withdrawal Request',
-            `${userName} requested a withdrawal of ${formattedAmount}.`,
-            '/admin/approvals/withdrawals',
-            'approval'
-        );
+        await notifyWithdrawalSubmitted({
+            userId,
+            userName,
+            formattedAmount,
+            userLink: isOwnerAccount ? '/owner/dashboard' : '/investor/dashboard',
+        });
 
         revalidatePath('/admin/approvals/withdrawals');
         revalidatePath('/investor/dashboard');
@@ -309,12 +349,13 @@ export async function requestCapitalWithdrawalAction(input: z.infer<typeof capit
             source: 'Capital',
         });
 
-        await notifyAdmins(
-            'Capital Withdrawal Request',
-            `${userName} requested to withdraw uninvested capital of ${formattedAmount}.`,
-            '/admin/approvals/withdrawals',
-            'approval'
-        );
+        await notifyWithdrawalSubmitted({
+            userId,
+            userName,
+            formattedAmount,
+            userLink: '/investor/dashboard',
+            isCapitalWithdrawal: true,
+        });
 
         revalidatePath('/investor/dashboard');
         revalidatePath('/admin/approvals/withdrawals');
