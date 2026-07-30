@@ -20,16 +20,6 @@
       ]
     },
     {
-      "collectionGroup": "fundBatches",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "sourceId",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "conversations",
       "queryScope": "COLLECTION",
       "fields": [
