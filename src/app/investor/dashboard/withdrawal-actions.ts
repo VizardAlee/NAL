@@ -98,13 +98,18 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
         }
 
         await adminDb.runTransaction(async (trx) => {
-            const [batches, pendingRequests, anniversaryContext] = await Promise.all([
-                trx.get(adminDb.collection('fundBatches').where('sourceId', '==', userId).where('remainingAmount', '>', 0)),
-                trx.get(adminDb.collection('withdrawalRequests').where('investorId', '==', userId).where('status', '==', 'Pending')),
-                loadFundBatchAnniversaryWindow(trx, userId),
-            ]);
-            const investible = batches.docs.reduce((sum, doc) => sum + Number(doc.data().remainingAmount || 0), 0);
-            const reserved = pendingRequests.docs.reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0);
+            const anniversaryContext = await loadFundBatchAnniversaryWindow(trx, userId);
+            const pendingRequests = anniversaryContext.withdrawalRequests.filter(
+                (request) => request.status === 'Pending'
+            );
+            const investible = anniversaryContext.fundBatches.reduce(
+                (sum, batch) => sum + Math.max(0, Number(batch.remainingAmount || 0)),
+                0
+            );
+            const reserved = pendingRequests.reduce(
+                (sum, request) => sum + Number(request.amount || 0),
+                0
+            );
             if (amount > investible - reserved + 0.01) {
                 throw new Error('Amount exceeds your available investible balance after pending requests.');
             }
@@ -122,9 +127,9 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
                         throw new Error('Amount exceeds the remaining 20% allowance for this annual window.');
                     }
                 } else {
-                    const reservedProfit = pendingRequests.docs
-                        .filter((doc) => doc.data().source === 'ShortTermProfit' || doc.data().type === 'InvestorWithdrawal')
-                        .reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0);
+                    const reservedProfit = pendingRequests
+                        .filter((request) => request.source === 'ShortTermProfit' || request.type === 'InvestorWithdrawal')
+                        .reduce((sum, request) => sum + Number(request.amount || 0), 0);
                     const availableProfit = calculateAvailableProfit(anniversaryContext.entries, reservedProfit);
                     if (amount > availableProfit + 0.01) {
                         throw new Error('Amount exceeds your available, unreserved profit.');

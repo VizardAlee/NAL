@@ -13,17 +13,22 @@ export async function loadFundBatchAnniversaryWindow(
     transaction.get(adminDb.collection('withdrawalRequests').where('investorId', '==', userId)),
   ]);
 
+  const fundBatches = fundBatchesSnapshot.docs.map((snapshot) => {
+    const data = snapshot.data();
+    return {
+      id: snapshot.id,
+      ...data,
+      remainingAmount: Number(data.remainingAmount || 0),
+    };
+  });
   const entries = transactionsSnapshot.docs.map((snapshot) => snapshot.data());
   const withdrawalRequests = withdrawalsSnapshot.docs.map((snapshot) => snapshot.data());
   const window = calculateFundBatchAnniversaryWindow({
-    fundBatches: fundBatchesSnapshot.docs.map((snapshot) => ({
-      id: snapshot.id,
-      ...snapshot.data(),
-    })),
+    fundBatches,
     entries,
     withdrawalRequests,
     now,
   });
 
-  return { window, entries, withdrawalRequests };
+  return { window, fundBatches, entries, withdrawalRequests };
 }
