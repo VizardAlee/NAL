@@ -4,6 +4,23 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const applicationPageSources = [
+  '/',
+  '/admin/:path*',
+  '/client/:path*',
+  '/forgot-password',
+  '/investor/:path*',
+  '/legal/:path*',
+  '/login',
+  '/marketer/:path*',
+  '/offline',
+  '/owner/:path*',
+  '/privacy',
+  '/recovery/:path*',
+  '/signup/:path*',
+  '/terms',
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
@@ -36,6 +53,12 @@ const nextConfig = {
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
         ],
       },
+      ...applicationPageSources.map((source) => ({
+        source,
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store, max-age=0' },
+        ],
+      })),
       {
         source: '/sw.js',
         headers: [

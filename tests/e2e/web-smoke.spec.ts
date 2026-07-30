@@ -16,6 +16,7 @@ test('production security headers are emitted', async ({ request }) => {
   expect(response.headers()['strict-transport-security']).toContain('max-age=');
   expect(response.headers()['x-content-type-options']).toBe('nosniff');
   expect(response.headers()['x-powered-by']).toBeUndefined();
+  expect(response.headers()['cache-control']).toContain('no-store');
 });
 
 test('PWA metadata and install assets are available', async ({ page, request }) => {
