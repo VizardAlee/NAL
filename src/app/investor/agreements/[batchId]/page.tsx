@@ -17,6 +17,7 @@ import {
   type MudarabaAgreementModel,
 } from '@/lib/agreements/mudaraba';
 import { buildMudarabaAgreementPdf } from '@/lib/agreements/mudaraba-pdf';
+import { AgreementCompanyStamp } from '@/components/agreement-company-stamp';
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -143,6 +144,7 @@ export default function InvestorAgreementPage() {
           <div className="mt-5 grid gap-8 sm:grid-cols-2">
             <div><strong>FOR NAL GENERAL MERCHANT LTD.</strong><p className="mt-3">Name: NURA LABARAN NUHU<br />Capacity: Director<br /><br />Signature: ________________________<br />Date: ____________________________</p></div>
             <div><strong>FOR NAL GENERAL MERCHANT LTD.</strong><p className="mt-3">Name: NAZIR SHARIF FILLO<br />Capacity: Director<br /><br />Signature: ________________________<br />Date: ____________________________</p></div>
+            <AgreementCompanyStamp />
             <div className="relative"><strong>SIGNED BY THE INVESTOR</strong><p className="mt-3">Name: {agreement.investor.name.toUpperCase()}<br />Capacity: Investor / Rabb al-Mal<br /><br />Signature: ________________________<br />Date: ____________________________<br />Thumbprint: ______________________</p></div>
           </div>
         </section>

@@ -27,6 +27,8 @@ export async function buildKafaalahBondPdf(model: KafaalahBondModel): Promise<Ui
   const regular = await pdf.embedFont(StandardFonts.TimesRoman); const bold = await pdf.embedFont(StandardFonts.TimesRomanBold); const italic = await pdf.embedFont(StandardFonts.TimesRomanItalic);
   const logoBytes = typeof window !== 'undefined' ? await fetchBytes(new URL('/NAL%20LOGO.jpg', window.location.origin).toString()) : null;
   const logo = logoBytes ? await pdf.embedJpg(logoBytes).catch(() => null) : null;
+  const stampBytes = typeof window !== 'undefined' ? await fetchBytes(new URL('/nal-stamp.png', window.location.origin).toString()) : null;
+  const stamp = stampBytes ? await pdf.embedPng(stampBytes).catch(() => null) : null;
   const photoBytes = model.guarantor.photoURL ? await fetchBytes(model.guarantor.photoURL) : null;
   const photo = photoBytes ? await (async () => { try { return await pdf.embedJpg(photoBytes); } catch { try { return await pdf.embedPng(photoBytes); } catch { return null; } } })() : null;
   let page!: PDFPage; let y = 0; const margin = 48; const width = A4[0] - margin * 2;
@@ -42,10 +44,16 @@ export async function buildKafaalahBondPdf(model: KafaalahBondModel): Promise<Ui
   draw('The Guarantor agrees to secure the Customer’s performance of the terms and obligations contained in the Principal Agreement.');
   draw('NOW THIS DEED WITNESSES AS FOLLOWS', { font: bold, size: 10 });
   for (const clause of buildKafaalahClauses(model)) { ensure(35); draw(`${clause.number}. ${clause.title}`, { font: bold, size: 9.4, gap: 2 }); draw(clause.body, { size: 8.5, gap: 8 }); }
-  ensure(190); draw('EXECUTION', { font: bold, size: 11 }); draw(`DATED this ${formatAgreementDate(model.bondDate)}.`, { font: bold }); draw('IN WITNESS WHEREOF, the Guarantor has executed this Bond on the date stated above.', { font: italic });
+  ensure(stamp ? 315 : 190); draw('EXECUTION', { font: bold, size: 11 }); draw(`DATED this ${formatAgreementDate(model.bondDate)}.`, { font: bold }); draw('IN WITNESS WHEREOF, the Guarantor has executed this Bond on the date stated above.', { font: italic });
   if (photo) page.drawImage(photo, { x: A4[0] - margin - 72, y: y - 75, width: 62, height: 72 });
   draw('SIGNED BY THE GUARANTOR', { font: bold }); draw(`Name: ${model.guarantor.name.toUpperCase()}\nCapacity: Guarantor / Kafeel\nPhone Number: ${model.guarantor.phoneNumber}\nOccupation: ${model.guarantor.occupation}\nSignature: ________________________    Date: ____________________`);
   draw('IN THE PRESENCE OF A WITNESS', { font: bold }); draw('Name: ______________________________\nPhone Number: _______________________\nAddress: ____________________________\nOccupation: _________________________\nSignature: __________________________    Date: ____________________');
+  if (stamp) {
+    ensure(130);
+    page.drawText('NAL COMPANY STAMP / SEAL', { x: margin, y, size: 8.5, font: bold, color: TEXT });
+    page.drawImage(stamp, { x: margin, y: y - 120, width: 180, height: 120 });
+    y -= 130;
+  }
   draw('This Bond should be reviewed by a Nigerian legal practitioner and qualified Sharia adviser before execution.', { font: italic, size: 8 });
   const pages = pdf.getPages(); pages.forEach((pdfPage, index) => { const footer = `${model.company.name} | RC No. ${model.company.rcNumber} | ${model.company.email} | ${model.company.website} | Tel: ${model.company.phoneNumbers} | Page ${index + 1} of ${pages.length}`; pdfPage.drawLine({ start: { x: margin, y: 35 }, end: { x: A4[0] - margin, y: 35 }, thickness: 0.6, color: GREEN }); pdfPage.drawText(safe(wrap(footer, regular, 6.5, width)[0]), { x: margin, y: 22, size: 6.5, font: regular, color: MUTED }); });
   return pdf.save();

@@ -65,6 +65,10 @@ export async function buildMudarabaAgreementPdf(model: MudarabaAgreementModel): 
     ? await fetchBytes(new URL('/NAL%20LOGO.jpg', window.location.origin).toString())
     : null;
   const logo = logoBytes ? await pdf.embedJpg(logoBytes).catch(() => null) : null;
+  const stampBytes = typeof window !== 'undefined'
+    ? await fetchBytes(new URL('/nal-stamp.png', window.location.origin).toString())
+    : null;
+  const stamp = stampBytes ? await pdf.embedPng(stampBytes).catch(() => null) : null;
   const photoBytes = model.investor.photoURL ? await fetchBytes(model.investor.photoURL) : null;
   const photo = photoBytes
     ? await (async () => {
@@ -147,7 +151,7 @@ export async function buildMudarabaAgreementPdf(model: MudarabaAgreementModel): 
     drawWrapped(clause.body, { size: 8.7, gap: 8 });
   }
 
-  ensureSpace(210);
+  ensureSpace(stamp ? 335 : 210);
   drawWrapped('EXECUTION', { font: bold, size: 11 });
   drawWrapped('IN WITNESS WHEREOF, the Parties have executed this Agreement on the date first above written.', { font: italic });
   if (photo) {
@@ -155,6 +159,12 @@ export async function buildMudarabaAgreementPdf(model: MudarabaAgreementModel): 
   }
   drawWrapped('FOR NAL GENERAL MERCHANT LTD.', { font: bold });
   drawWrapped('Name: NURA LABARAN NUHU\nCapacity: Director\nSignature: ________________________    Date: ____________________\n\nName: NAZIR SHARIF FILLO\nCapacity: Director\nSignature: ________________________    Date: ____________________');
+  if (stamp) {
+    ensureSpace(130);
+    page.drawText('NAL COMPANY STAMP / SEAL', { x: margin, y, size: 8.5, font: bold, color: TEXT });
+    page.drawImage(stamp, { x: margin, y: y - 120, width: 180, height: 120 });
+    y -= 130;
+  }
   drawWrapped('SIGNED BY THE INVESTOR', { font: bold });
   drawWrapped(`Name: ${model.investor.name.toUpperCase()}\nCapacity: Investor / Rabb al-Mal\nSignature: ________________________    Date: ____________________\nThumbprint (optional): ____________________`);
   drawWrapped('WITNESSES', { font: bold });

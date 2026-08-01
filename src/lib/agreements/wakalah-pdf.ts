@@ -43,6 +43,8 @@ export async function buildWakalahAgreementPdf(model: WakalahAgreementModel): Pr
   const italic = await pdf.embedFont(StandardFonts.TimesRomanItalic);
   const logoBytes = typeof window !== 'undefined' ? await fetchBytes(new URL('/NAL%20LOGO.jpg', window.location.origin).toString()) : null;
   const logo = logoBytes ? await pdf.embedJpg(logoBytes).catch(() => null) : null;
+  const stampBytes = typeof window !== 'undefined' ? await fetchBytes(new URL('/nal-stamp.png', window.location.origin).toString()) : null;
+  const stamp = stampBytes ? await pdf.embedPng(stampBytes).catch(() => null) : null;
   const photoBytes = model.client.photoURL ? await fetchBytes(model.client.photoURL) : null;
   const photo = photoBytes ? await (async () => {
     try { return await pdf.embedJpg(photoBytes); } catch { try { return await pdf.embedPng(photoBytes); } catch { return null; } }
@@ -95,12 +97,18 @@ export async function buildWakalahAgreementPdf(model: WakalahAgreementModel): Pr
     draw(`${clause.number}. ${clause.title}`, { font: bold, size: 9.5, gap: 2 });
     draw(clause.body, { size: 8.7, gap: 8 });
   }
-  ensure(225);
+  ensure(stamp ? 350 : 225);
   draw('EXECUTION', { font: bold, size: 11 });
   draw('IN WITNESS WHEREOF, the Parties have executed this Agreement on the date first above written.', { font: italic });
   if (photo) page.drawImage(photo, { x: A4[0] - margin - 72, y: y - 72, width: 62, height: 72 });
   draw('SIGNED FOR AND ON BEHALF OF NAL GENERAL MERCHANT LTD.', { font: bold });
-  draw('Name: NURA LABARAN NUHU\nCapacity: Director\nSignature: ________________________    Date: ____________________\n\nName: NAZIR SHARIF FILLO\nCapacity: Director\nSignature: ________________________    Date: ____________________\n\nCompany Stamp/Seal: ______________________________');
+  draw('Name: NURA LABARAN NUHU\nCapacity: Director\nSignature: ________________________    Date: ____________________\n\nName: NAZIR SHARIF FILLO\nCapacity: Director\nSignature: ________________________    Date: ____________________');
+  if (stamp) {
+    ensure(130);
+    page.drawText('NAL COMPANY STAMP / SEAL', { x: margin, y, size: 8.5, font: bold, color: TEXT });
+    page.drawImage(stamp, { x: margin, y: y - 120, width: 180, height: 120 });
+    y -= 130;
+  }
   draw('SIGNED BY THE CUSTOMER', { font: bold });
   draw(`Name: ${model.client.name.toUpperCase()}\nCapacity: Customer / Wakil\nSignature: ________________________    Date: ____________________`);
   draw('IN THE PRESENCE OF A WITNESS', { font: bold });
