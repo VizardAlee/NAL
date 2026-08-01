@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
-import { Check, FileSignature, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
-import { listAdminAgreementEnvelopesAction, submitAuthenticatedSignatureAction } from '@/app/signing/actions';
+import { Check, Download, Eye, FileSignature, Loader2, Printer, RefreshCw, ShieldCheck } from 'lucide-react';
+import { getAgreementSigningStateAction, listAdminAgreementEnvelopesAction, submitAuthenticatedSignatureAction } from '@/app/signing/actions';
 import { SignatureCanvas, type SignatureCanvasHandle } from '@/components/signature-canvas';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -30,8 +30,10 @@ async function makePdf(envelope: AdminEnvelope) {
 export default function AdminAgreementsPage() {
   const auth = useAuth();
   const canvasRef = useRef<SignatureCanvasHandle>(null);
+  const previewRef = useRef<HTMLIFrameElement>(null);
   const [envelopes, setEnvelopes] = useState<AdminEnvelope[]>([]);
-  const [selected, setSelected] = useState<{ envelope: AdminEnvelope; role: AgreementSignerRole } | null>(null);
+  const [selected, setSelected] = useState<{ envelope: AdminEnvelope; role?: AgreementSignerRole } | null>(null);
+  const [openingId, setOpeningId] = useState('');
   const [pdfUrl, setPdfUrl] = useState('');
   const [password, setPassword] = useState('');
   const [consent, setConsent] = useState(false);
@@ -56,8 +58,40 @@ export default function AdminAgreementsPage() {
     return () => { active = false; if (url) URL.revokeObjectURL(url); };
   }, [selected]);
 
+  const openAgreement = async (envelope: AdminEnvelope, role?: AgreementSignerRole) => {
+    if (!auth?.currentUser) return;
+    setOpeningId(envelope.envelopeId);
+    setError('');
+    try {
+      const result = await getAgreementSigningStateAction({
+        authToken: await auth.currentUser.getIdToken(),
+        agreementType: envelope.agreementType,
+        sourceId: envelope.sourceId,
+      });
+      if (!result.success || !result.exists) throw new Error(result.success ? 'Agreement not found.' : result.message);
+      setSelected({ envelope: { ...result.state, documentModel: result.documentModel }, ...(role ? { role } : {}) });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to open this agreement.');
+    } finally {
+      setOpeningId('');
+    }
+  };
+
+  const printAgreement = () => {
+    previewRef.current?.contentWindow?.focus();
+    previewRef.current?.contentWindow?.print();
+  };
+
+  const downloadAgreement = () => {
+    if (!selected || !pdfUrl) return;
+    const anchor = document.createElement('a');
+    anchor.href = pdfUrl;
+    anchor.download = `${selected.envelope.agreementReference.replace(/[^a-zA-Z0-9._-]/g, '-')}.pdf`;
+    anchor.click();
+  };
+
   const submit = () => startTransition(async () => {
-    if (!selected || !auth?.currentUser?.email) return;
+    if (!selected?.role || !auth?.currentUser?.email) return;
     const signatureDataUrl = canvasRef.current?.exportPng();
     if (!signatureDataUrl) { setError('Draw a complete signature.'); return; }
     try {
@@ -72,9 +106,9 @@ export default function AdminAgreementsPage() {
     {error && !selected && <Alert variant="destructive"><AlertTitle>Agreements unavailable</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
     {loading ? <div className="flex py-16 justify-center"><Loader2 className="h-7 w-7 animate-spin" /></div> : envelopes.length === 0 ? <Card><CardContent className="py-14 text-center text-muted-foreground"><FileSignature className="mx-auto mb-3 h-10 w-10" />No signing envelopes yet.</CardContent></Card> : <div className="grid gap-4 xl:grid-cols-2">{envelopes.map((envelope) => {
       const nextRole = envelope.requiredRoles.find((role) => isCompanySignerRole(role) && !envelope.signedRoles.includes(role));
-      return <Card key={envelope.envelopeId}><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle className="text-base">{envelope.agreementReference}</CardTitle><CardDescription>{envelope.agreementType} · Started {new Date(envelope.startedAt).toLocaleDateString('en-NG')}</CardDescription></div><Badge variant={envelope.status === 'EXECUTED' ? 'default' : 'outline'}>{agreementSigningStatusLabel(envelope.status)}</Badge></div></CardHeader><CardContent className="space-y-4"><div className="space-y-2">{envelope.requiredRoles.map((role) => <div className="flex items-center justify-between text-sm" key={role}><span>{agreementSignerRoleLabel(role)}</span>{envelope.signedRoles.includes(role) ? <Check className="h-4 w-4 text-emerald-600" /> : <span className="text-xs text-amber-600">Pending</span>}</div>)}</div>{envelope.status === 'AWAITING_COMPANY' && nextRole && <Button onClick={() => { setSelected({ envelope, role: nextRole }); setError(''); }}><ShieldCheck className="mr-2 h-4 w-4" /> Review and sign as {agreementSignerRoleLabel(nextRole)}</Button>}</CardContent></Card>;
+      return <Card key={envelope.envelopeId}><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle className="text-base">{envelope.agreementReference}</CardTitle><CardDescription>{envelope.agreementType} · Started {new Date(envelope.startedAt).toLocaleDateString('en-NG')}</CardDescription></div><Badge variant={envelope.status === 'EXECUTED' ? 'default' : 'outline'}>{agreementSigningStatusLabel(envelope.status)}</Badge></div></CardHeader><CardContent className="space-y-4"><div className="space-y-2">{envelope.requiredRoles.map((role) => <div className="flex items-center justify-between text-sm" key={role}><span>{agreementSignerRoleLabel(role)}</span>{envelope.signedRoles.includes(role) ? <Check className="h-4 w-4 text-emerald-600" /> : <span className="text-xs text-amber-600">Pending</span>}</div>)}</div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void openAgreement(envelope)} disabled={Boolean(openingId)}>{openingId === envelope.envelopeId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />} View agreement</Button>{envelope.status === 'AWAITING_COMPANY' && nextRole && <Button onClick={() => void openAgreement(envelope, nextRole)} disabled={Boolean(openingId)}><ShieldCheck className="mr-2 h-4 w-4" /> Review and sign as {agreementSignerRoleLabel(nextRole)}</Button>}</div></CardContent></Card>;
     })}</div>}
 
-    <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open && !working) setSelected(null); }}><DialogContent className="max-h-[94vh] max-w-4xl overflow-y-auto"><DialogHeader><DialogTitle>Review and apply NAL signature</DialogTitle><DialogDescription>Review the frozen document in full. Your account, signature, time and document fingerprint will be recorded.</DialogDescription></DialogHeader>{error && <Alert variant="destructive"><AlertTitle>Signature failed</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}{pdfUrl ? <iframe title="Agreement review" src={pdfUrl} className="h-[48vh] w-full rounded border" /> : <div className="flex h-60 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>}<SignatureCanvas ref={canvasRef} onChange={setHasSignature} disabled={working} /><div className="space-y-2"><Label htmlFor="company-sign-password">Confirm your password</Label><Input id="company-sign-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></div><label className="flex items-start gap-3 rounded border p-3 text-sm"><Checkbox checked={consent} onCheckedChange={(checked) => setConsent(checked === true)} /><span>I reviewed this complete agreement and am authorised to bind NAL with this electronic signature.</span></label><DialogFooter><Button variant="outline" onClick={() => setSelected(null)} disabled={working}>Cancel</Button><Button onClick={submit} disabled={working || !hasSignature || !password || !consent}>{working && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Verify and sign</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open && !working) setSelected(null); }}><DialogContent className="max-h-[94vh] max-w-5xl overflow-y-auto"><DialogHeader><DialogTitle>{selected?.role ? 'Review and apply NAL signature' : 'View agreement'}</DialogTitle><DialogDescription>{selected?.role ? 'Review the frozen document in full. Your account, signature, time and document fingerprint will be recorded.' : 'View, print or download this frozen agreement and its recorded signatures.'}</DialogDescription></DialogHeader>{error && <Alert variant="destructive"><AlertTitle>{selected?.role ? 'Signature failed' : 'Agreement unavailable'}</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}<div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={downloadAgreement} disabled={!pdfUrl}><Download className="mr-2 h-4 w-4" /> Download PDF</Button><Button variant="outline" onClick={printAgreement} disabled={!pdfUrl}><Printer className="mr-2 h-4 w-4" /> Print</Button></div>{pdfUrl ? <iframe ref={previewRef} title="Agreement review" src={pdfUrl} className="h-[58vh] w-full rounded border" /> : <div className="flex h-60 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>}{selected?.role && <><SignatureCanvas ref={canvasRef} onChange={setHasSignature} disabled={working} /><div className="space-y-2"><Label htmlFor="company-sign-password">Confirm your password</Label><Input id="company-sign-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></div><label className="flex items-start gap-3 rounded border p-3 text-sm"><Checkbox checked={consent} onCheckedChange={(checked) => setConsent(checked === true)} /><span>I reviewed this complete agreement and am authorised to bind NAL with this electronic signature.</span></label></>}<DialogFooter><Button variant="outline" onClick={() => setSelected(null)} disabled={working}>{selected?.role ? 'Cancel' : 'Close'}</Button>{selected?.role && <Button onClick={submit} disabled={working || !hasSignature || !password || !consent}>{working && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Verify and sign</Button>}</DialogFooter></DialogContent></Dialog>
   </div>;
 }
