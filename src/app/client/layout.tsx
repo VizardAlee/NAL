@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, FileText, PlusCircle, FlaskConical, HelpCircle, BookOpen, History, Settings } from "lucide-react";
+import { LogOut, FileText, PlusCircle, FlaskConical, HelpCircle, BookOpen, History, Settings, ScrollText } from "lucide-react";
 import { Logo } from "@/components/icons";
 import Link from "next/link";
 import { useUser } from "@/firebase";
@@ -65,6 +65,7 @@ const clientOnboardingSteps = [
 const clientNavItems = [
   { href: "/client/dashboard", label: "Home", icon: FileText },
   { href: "/client/deals", label: "Deals", icon: History },
+  { href: "/client/agreements", label: "Agreements", icon: ScrollText },
   { href: "/client/deals/request", label: "Request", icon: PlusCircle },
   { href: "/client/financing-modes", label: "Modes", icon: BookOpen },
   { href: "/client/settings", label: "Settings", icon: Settings },
@@ -75,7 +76,7 @@ function ClientMobileNav() {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/90 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-14px_36px_hsla(var(--primary)/0.14)] backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 lg:hidden">
-      <div className="mx-auto grid max-w-md grid-cols-5 items-end gap-1">
+      <div className="mx-auto grid max-w-lg grid-cols-6 items-end gap-1">
         {clientNavItems.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -127,6 +128,7 @@ function AccountMenu() {
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild><Link href="/client/settings">Settings</Link></DropdownMenuItem>
+              <DropdownMenuItem asChild><Link href="/client/agreements">Agreements</Link></DropdownMenuItem>
               <DropdownMenuItem onClick={showTour} className="flex items-center gap-2 cursor-pointer"><HelpCircle className="h-4 w-4" /><span>Show Tour</span></DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2 cursor-pointer">
@@ -190,6 +192,12 @@ export default function ClientLayout({
                         <Link href="/client/deals">
                             <History className="h-4 w-4 mr-2" />
                             All Deals
+                        </Link>
+                    </Button>
+                    <Button variant="ghost" asChild>
+                        <Link href="/client/agreements">
+                            <ScrollText className="h-4 w-4 mr-2" />
+                            Agreements
                         </Link>
                     </Button>
                     <Button variant="ghost" asChild>

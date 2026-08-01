@@ -11,10 +11,19 @@ const formSchema = z.object({
   dealName: z.string().min(3),
   principal: z.coerce.number().positive(),
   profitRate: z.coerce.number().min(0),
+  financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']),
+  wakalahGranted: z.boolean().default(false),
+  wakalahAssetDescription: z.string().trim().optional(),
+  wakalahSupplierName: z.string().trim().optional(),
   durationValue: z.coerce.number().positive().int(),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.literal('Equal Installments'),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
+}).superRefine((values, context) => {
+  if (!values.wakalahGranted) return;
+  if (values.financingMode !== 'Murabaha') context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahGranted'], message: 'Wakalah procurement authority is available only for Murabaha deals.' });
+  if (!values.wakalahAssetDescription || values.wakalahAssetDescription.length < 3) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahAssetDescription'], message: 'Describe the approved asset.' });
+  if (!values.wakalahSupplierName || values.wakalahSupplierName.length < 2) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahSupplierName'], message: 'Enter the approved supplier.' });
 });
 
 export async function approveDealAction(

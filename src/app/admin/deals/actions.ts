@@ -15,11 +15,19 @@ const formSchema = z.object({
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
   managementFeeRate: z.coerce.number().min(0, { message: 'Management fee rate cannot be negative.' }),
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).optional(),
+  wakalahGranted: z.boolean().default(false),
+  wakalahAssetDescription: z.string().trim().optional(),
+  wakalahSupplierName: z.string().trim().optional(),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.literal('Equal Installments'),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   startDate: z.date().optional(),
+}).superRefine((values, context) => {
+  if (!values.wakalahGranted) return;
+  if (values.financingMode !== 'Murabaha') context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahGranted'], message: 'Wakalah procurement authority is available only for Murabaha deals.' });
+  if (!values.wakalahAssetDescription || values.wakalahAssetDescription.length < 3) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahAssetDescription'], message: 'Describe the asset the client is authorized to procure.' });
+  if (!values.wakalahSupplierName || values.wakalahSupplierName.length < 2) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahSupplierName'], message: 'Enter the approved supplier.' });
 });
 
 export async function createDealAction(authToken: string, clientName: string, values: z.infer<typeof formSchema>) {

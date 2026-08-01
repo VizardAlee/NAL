@@ -5,7 +5,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2, HandCoins, Gavel, Download } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, HandCoins, Gavel, Download, ScrollText } from "lucide-react";
 import { useMemo, useTransition } from 'react';
 import { useAuth, useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, doc } from 'firebase/firestore';
@@ -22,6 +22,7 @@ import { notFound, useParams } from "next/navigation";
 import { ViewPageNav } from "@/components/view-page-nav";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import Image from "next/image";
+import Link from "next/link";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -186,6 +187,14 @@ export default function ClientDealDetailPage() {
                                 <span className="text-xs text-muted-foreground"> ({deal.managementFeeRate || 0}%)</span>
                             </span>
                         </div>
+                        {deal.wakalahGranted && deal.financingMode === 'Murabaha' && (
+                            <div className="rounded-lg border border-primary/25 bg-primary/5 p-4">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div><p className="font-semibold text-primary">Procurement Authority Granted</p><p className="text-sm text-muted-foreground">You may procure {deal.wakalahAssetDescription} from {deal.wakalahSupplierName} on behalf of NAL.</p></div>
+                                    <Button asChild><Link href={`/client/agreements/${deal.id}`}><ScrollText className="mr-2 h-4 w-4" /> View Wakalah Agreement</Link></Button>
+                                </div>
+                            </div>
+                        )}
                         {deal.status === 'Active' && (
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>

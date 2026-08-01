@@ -15,6 +15,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -47,11 +48,19 @@ const formSchema = z.object({
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
   managementFeeRate: z.coerce.number().min(0, { message: 'Management fee rate cannot be negative.' }),
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).optional().default('Murabaha'),
+  wakalahGranted: z.boolean().default(false),
+  wakalahAssetDescription: z.string().trim().optional(),
+  wakalahSupplierName: z.string().trim().optional(),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.literal('Equal Installments'),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   startDate: z.date().optional(),
+}).superRefine((values, context) => {
+  if (!values.wakalahGranted) return;
+  if (values.financingMode !== 'Murabaha') context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahGranted'], message: 'Available only for Murabaha deals.' });
+  if (!values.wakalahAssetDescription || values.wakalahAssetDescription.length < 3) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahAssetDescription'], message: 'Describe the approved asset.' });
+  if (!values.wakalahSupplierName || values.wakalahSupplierName.length < 2) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahSupplierName'], message: 'Enter the approved supplier.' });
 });
 
 type EditDealFormProps = {
@@ -89,6 +98,9 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
       ...deal,
       repaymentType: 'Equal Installments',
       financingMode: deal.financingMode || 'Murabaha',
+      wakalahGranted: deal.wakalahGranted || false,
+      wakalahAssetDescription: deal.wakalahAssetDescription || '',
+      wakalahSupplierName: deal.wakalahSupplierName || '',
       managementFeeRate: deal.managementFeeRate || 0,
       startDate: deal.startDate?.toDate(),
     },
@@ -162,7 +174,7 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Financing Mode</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={(value) => { field.onChange(value); if (value !== 'Murabaha') form.setValue('wakalahGranted', false); }} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                 </FormControl>
@@ -180,6 +192,17 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
             </FormItem>
           )}
         />
+        {form.watch('financingMode') === 'Murabaha' && (
+          <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-4">
+            <FormField control={form.control} name="wakalahGranted" render={({ field }) => (
+              <FormItem className="flex items-center justify-between gap-4 space-y-0"><div><FormLabel>Grant Client Procurement Authority</FormLabel><FormDescription>The client receives a printable Wakalah agreement for this deal.</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>
+            )} />
+            {form.watch('wakalahGranted') && <div className="grid gap-4 md:grid-cols-2">
+              <FormField control={form.control} name="wakalahAssetDescription" render={({ field }) => <FormItem><FormLabel>Approved Asset</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
+              <FormField control={form.control} name="wakalahSupplierName" render={({ field }) => <FormItem><FormLabel>Approved Supplier</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
+            </div>}
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}

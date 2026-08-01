@@ -4,7 +4,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy, HandCoins, Gavel, Download, BookOpen, History } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy, HandCoins, Gavel, Download, BookOpen, History, ScrollText } from "lucide-react";
 import { useMemo, useTransition, useEffect, useState } from 'react';
 import { useAuth, useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, doc } from 'firebase/firestore';
@@ -606,6 +606,16 @@ export default function ClientDashboard() {
                 )}
 
                 <BankDetailsCard />
+
+                <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-background">
+                    <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-3">
+                            <div className="rounded-lg bg-primary/10 p-2 text-primary"><ScrollText className="h-5 w-5" /></div>
+                            <div><h2 className="font-semibold">Procurement Agreements</h2><p className="text-sm text-muted-foreground">View, print, or download any Wakalah authority granted for your Murabaha deals.</p></div>
+                        </div>
+                        <Button asChild variant="outline"><Link href="/client/agreements">View Agreements <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+                    </CardContent>
+                </Card>
 
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                     <Card>

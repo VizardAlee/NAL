@@ -14,6 +14,9 @@ export type Deal = DocumentData & {
   managementFeeAmount?: number;
   managementFeePaid?: boolean;
   financingMode?: 'Murabaha' | 'Ijara' | 'Mudaraba';
+  wakalahGranted?: boolean;
+  wakalahAssetDescription?: string;
+  wakalahSupplierName?: string;
   durationValue: number;
   durationUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
   repaymentType: 'Equal Installments' | 'Balloon Payment';

@@ -271,6 +271,7 @@ export default function DealDetailPage() {
                             <div className="font-medium">Term Start Date</div><div>{formatDate(deal.startDate)}</div>
                             <div className="font-medium">Date Created</div><div>{formatDate(deal.createdAt)}</div>
                             <div className="font-medium">Management Fee</div><div>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)} ({deal.managementFeeRate || 0}%)</div>
+                            <div className="font-medium">Client Procurement Authority</div><div>{deal.wakalahGranted && deal.financingMode === 'Murabaha' ? <div><Badge>Granted</Badge><p className="mt-1 text-xs text-muted-foreground">{deal.wakalahAssetDescription} · {deal.wakalahSupplierName}</p></div> : <Badge variant="outline">Not granted</Badge>}</div>
                         </CardContent>
                     </Card>
 
