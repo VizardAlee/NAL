@@ -17,6 +17,7 @@ const applicationPageSources = [
   '/owner/:path*',
   '/privacy',
   '/recovery/:path*',
+  '/sign/:path*',
   '/signup/:path*',
   '/terms',
 ];
@@ -31,6 +32,7 @@ const nextConfig = {
       "default-src 'self'",
       "base-uri 'self'",
       "object-src 'none'",
+      "frame-src 'self' blob:",
       "frame-ancestors 'none'",
       "form-action 'self'",
       "img-src 'self' data: blob: https:",

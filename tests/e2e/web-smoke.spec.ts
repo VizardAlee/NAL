@@ -87,3 +87,9 @@ test('unauthenticated users cannot access a Kafaalah bond', async ({ page }) => 
   await page.waitForURL(/\/login/, { timeout: 15_000 });
   await expect(page).toHaveURL(/\/login/);
 });
+
+test('external signing entry point is public but rejects an invalid link', async ({ page }) => {
+  await page.goto('/sign/invalid');
+  await expect(page.getByRole('heading', { name: /signing request unavailable/i })).toBeVisible();
+  await expect(page.getByText(/invalid signing link/i)).toBeVisible();
+});

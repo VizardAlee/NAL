@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Download, FileWarning, Loader2, Printer, Settings } from 'lucide-react';
@@ -19,6 +19,9 @@ import {
 import { buildMudarabaAgreementPdf } from '@/lib/agreements/mudaraba-pdf';
 import { AgreementCompanyStamp } from '@/components/agreement-company-stamp';
 import { NonInterestInstitutionMark } from '@/components/non-interest-institution-mark';
+import { AgreementSigningPanel } from '@/components/agreement-signing-panel';
+import { AgreementElectronicSignature } from '@/components/agreement-electronic-signature';
+import type { AgreementDocumentModel, AgreementSigningState } from '@/lib/agreements/signing';
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -36,6 +39,8 @@ export default function InvestorAgreementPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [downloading, startDownload] = useTransition();
+  const [signingState, setSigningState] = useState<AgreementSigningState | null>(null);
+  const useFrozenDocument = useCallback((model: AgreementDocumentModel) => setAgreement(model as MudarabaAgreementModel), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,7 +62,7 @@ export default function InvestorAgreementPage() {
   const downloadPdf = () => {
     if (!agreement || agreement.missingFields.length) return;
     startDownload(async () => {
-      const bytes = await buildMudarabaAgreementPdf(agreement);
+      const bytes = await buildMudarabaAgreementPdf(agreement, signingState);
       const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -84,7 +89,7 @@ export default function InvestorAgreementPage() {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => window.print()} disabled={!canExport}><Printer className="mr-2 h-4 w-4" /> Print</Button>
           <Button onClick={downloadPdf} disabled={!canExport || downloading}>
-            {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />} Download PDF
+            {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />} {signingState?.status === 'EXECUTED' ? 'Download Executed PDF' : 'Download Draft PDF'}
           </Button>
         </div>
       </div>
@@ -100,7 +105,10 @@ export default function InvestorAgreementPage() {
         </Alert>
       )}
 
+      <div className="mb-5"><AgreementSigningPanel agreementType="MUDARABA" sourceId={batchId} primaryRole="INVESTOR" disabled={!canExport} onStateChange={setSigningState} onFrozenDocument={useFrozenDocument} /></div>
+
       <article id="printable-agreement" className="agreement-paper bg-white px-8 py-7 text-[13px] leading-[1.55] text-slate-950 shadow-xl sm:px-14 sm:py-10">
+        {signingState?.status !== 'EXECUTED' && <div className="mb-4 border-2 border-red-200 bg-red-50 py-2 text-center font-bold tracking-widest text-red-700">DRAFT — NOT YET FULLY EXECUTED</div>}
         <header className="mb-6 flex items-center gap-4 border-b-2 border-[#075a3c] pb-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/NAL%20LOGO.jpg" alt="NAL logo" className="h-16 w-20 rounded object-cover" />
@@ -144,10 +152,10 @@ export default function InvestorAgreementPage() {
           <h3>EXECUTION</h3>
           <p>IN WITNESS WHEREOF, the Parties have executed this Agreement on the date first above written.</p>
           <div className="mt-5 grid gap-8 sm:grid-cols-2">
-            <div><strong>FOR NAL GENERAL MERCHANT LTD.</strong><p className="mt-3">Name: NURA LABARAN NUHU<br />Capacity: Director<br /><br />Signature: ________________________<br />Date: ____________________________</p></div>
-            <div><strong>FOR NAL GENERAL MERCHANT LTD.</strong><p className="mt-3">Name: NAZIR SHARIF FILLO<br />Capacity: Director<br /><br />Signature: ________________________<br />Date: ____________________________</p></div>
-            <AgreementCompanyStamp />
-            <div className="relative"><strong>SIGNED BY THE INVESTOR</strong><p className="mt-3">Name: {agreement.investor.name.toUpperCase()}<br />Capacity: Investor / Rabb al-Mal<br /><br />Signature: ________________________<br />Date: ____________________________<br />Thumbprint: ______________________</p></div>
+            <div><strong>FOR NAL GENERAL MERCHANT LTD.</strong><AgreementElectronicSignature signature={signingState?.signatures.NAL_SIGNATORY_1} /></div>
+            <div><strong>FOR NAL GENERAL MERCHANT LTD.</strong><AgreementElectronicSignature signature={signingState?.signatures.NAL_SIGNATORY_2} /></div>
+            {signingState?.status === 'EXECUTED' && <AgreementCompanyStamp />}
+            <div className="relative"><strong>SIGNED BY THE INVESTOR</strong><p className="mt-3">Name: {agreement.investor.name.toUpperCase()}<br />Capacity: Investor / Rabb al-Mal</p><AgreementElectronicSignature signature={signingState?.signatures.INVESTOR} /></div>
           </div>
         </section>
 

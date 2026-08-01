@@ -31,6 +31,7 @@ import {
   Library,
   Landmark,
   MoreHorizontal,
+  FileSignature,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +58,7 @@ type MenuItem = {
 export const adminMenuItems: MenuItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/deals", label: "Deals", icon: FileText },
+  { href: "/admin/agreements", label: "Agreements", icon: FileSignature },
   { href: "/admin/users", label: "Users", icon: Users },
   {
     label: "Approvals",

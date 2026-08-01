@@ -289,6 +289,19 @@ service cloud.firestore {
         // Only admins can change settings.
         allow write: if isAdmin();
     }
+
+    // Agreement envelopes, signatures, invitation secrets and audit events are
+    // accessible only through verified server actions using the Admin SDK.
+    match /agreementEnvelopes/{envelopeId} {
+      allow read, write: if false;
+      match /{nestedDocument=**} {
+        allow read, write: if false;
+      }
+    }
+
+    match /agreementSigningInvites/{inviteId} {
+      allow read, write: if false;
+    }
     
     // --- Messaging System Rules ---
 

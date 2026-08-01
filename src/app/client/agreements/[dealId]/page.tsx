@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Download, FileWarning, Loader2, Printer, Settings } from 'lucide-react';
@@ -15,6 +15,9 @@ import { buildWakalahClauses, type WakalahAgreementModel } from '@/lib/agreement
 import { loadClientAgreementAction } from '../actions';
 import { AgreementCompanyStamp } from '@/components/agreement-company-stamp';
 import { NonInterestInstitutionMark } from '@/components/non-interest-institution-mark';
+import { AgreementSigningPanel } from '@/components/agreement-signing-panel';
+import { AgreementElectronicSignature } from '@/components/agreement-electronic-signature';
+import type { AgreementDocumentModel, AgreementSigningState } from '@/lib/agreements/signing';
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="grid grid-cols-[minmax(8.5rem,34%)_1fr] border-b border-slate-200 last:border-b-0"><div className="bg-[#075a3c] px-3 py-2 font-bold text-white">{label}</div><div className="bg-[#f6f1e2] px-3 py-2 text-slate-950">{children}</div></div>;
@@ -27,6 +30,8 @@ export default function ClientWakalahAgreementPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [downloading, startDownload] = useTransition();
+  const [signingState, setSigningState] = useState<AgreementSigningState | null>(null);
+  const useFrozenDocument = useCallback((model: AgreementDocumentModel) => setAgreement(model as WakalahAgreementModel), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +49,7 @@ export default function ClientWakalahAgreementPage() {
   const downloadPdf = () => {
     if (!agreement || agreement.missingFields.length) return;
     startDownload(async () => {
-      const bytes = await buildWakalahAgreementPdf(agreement);
+      const bytes = await buildWakalahAgreementPdf(agreement, signingState);
       const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }));
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -62,11 +67,14 @@ export default function ClientWakalahAgreementPage() {
     <div className="agreement-screen mx-auto max-w-5xl">
       <div className="mb-5 flex flex-col gap-3 rounded-xl border bg-background p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between print:hidden">
         <div><div className="flex items-center gap-2"><h1 className="font-semibold">Wakalah Procurement Agreement</h1><Badge variant="outline">{agreement.version}</Badge></div><p className="font-mono text-xs text-muted-foreground">{agreement.agreementId}</p></div>
-        <div className="flex gap-2"><Button variant="outline" onClick={() => window.print()} disabled={!canExport}><Printer className="mr-2 h-4 w-4" /> Print</Button><Button onClick={downloadPdf} disabled={!canExport || downloading}>{downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />} Download PDF</Button></div>
+        <div className="flex gap-2"><Button variant="outline" onClick={() => window.print()} disabled={!canExport}><Printer className="mr-2 h-4 w-4" /> Print</Button><Button onClick={downloadPdf} disabled={!canExport || downloading}>{downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />} {signingState?.status === 'EXECUTED' ? 'Download Executed PDF' : 'Download Draft PDF'}</Button></div>
       </div>
       {!canExport && <Alert className="mb-5 print:hidden"><FileWarning className="h-4 w-4" /><AlertTitle>Complete your agreement details</AlertTitle><AlertDescription className="space-y-3"><p>Before printing or downloading, add: {agreement.missingFields.join(', ')}.</p><Button asChild size="sm" variant="outline"><Link href="/client/settings"><Settings className="mr-2 h-4 w-4" /> Open Settings</Link></Button></AlertDescription></Alert>}
 
+      <div className="mb-5"><AgreementSigningPanel agreementType="WAKALAH" sourceId={dealId} primaryRole="CLIENT" disabled={!canExport} onStateChange={setSigningState} onFrozenDocument={useFrozenDocument} /></div>
+
       <article id="printable-agreement" className="agreement-paper bg-white px-8 py-7 text-[13px] leading-[1.55] text-slate-950 shadow-xl sm:px-14 sm:py-10">
+        {signingState?.status !== 'EXECUTED' && <div className="mb-4 border-2 border-red-200 bg-red-50 py-2 text-center font-bold tracking-widest text-red-700">DRAFT — NOT YET FULLY EXECUTED</div>}
         <header className="mb-6 flex items-center gap-4 border-b-2 border-[#075a3c] pb-4"><img src="/NAL%20LOGO.jpg" alt="NAL logo" className="h-16 w-20 rounded object-cover" /><div><div className="font-serif text-lg font-bold text-[#075a3c]">{agreement.company.name}</div><div className="max-w-xl text-[11px] text-slate-600">{agreement.company.address}</div></div><NonInterestInstitutionMark className="ml-auto h-14 w-24" /></header>
         <h2 className="mb-5 text-center font-serif text-2xl font-bold text-[#075a3c]">WAKALAH AGREEMENT</h2>
         <div className="mb-7 overflow-hidden rounded border border-slate-200"><DetailRow label="Reference">{agreement.agreementId}</DetailRow><DetailRow label="Deal">{agreement.deal.name}</DetailRow><DetailRow label="Approved Asset">{agreement.deal.assetDescription}</DetailRow><DetailRow label="Approved Supplier">{agreement.deal.supplierName}</DetailRow><DetailRow label="Procurement Funds">{formatAgreementCurrency(agreement.deal.principal)}</DetailRow></div>
@@ -75,8 +83,8 @@ export default function ClientWakalahAgreementPage() {
         <h3 className="agreement-heading">AND</h3><div className="mb-4 flex items-start gap-4"><p className="flex-1"><strong>{agreement.client.name.toUpperCase()}</strong>, of {agreement.client.address}, hereinafter referred to as the “Customer” or “Agent”, which expression shall, where the context permits, include the Customer’s lawful representatives, heirs and permitted assigns.</p>{agreement.client.photoURL && <img src={agreement.client.photoURL} alt={agreement.client.name} className="h-24 w-20 rounded border object-cover" />}</div>
         <p className="mb-4">At the request of the Customer and strictly for operational convenience, the Company hereby appoints the Customer as its disclosed procurement agent (Wakil), solely for the purpose of identifying, negotiating and purchasing <strong>{agreement.deal.assetDescription}</strong> from <strong>{agreement.deal.supplierName}</strong> on behalf of and in the name of the Company.</p><p className="mb-5">The Customer hereby agrees to be bound by the following terms and undertakings:</p>
         {buildWakalahClauses(agreement).map((clause) => <section key={clause.number} className="agreement-clause"><h3>{clause.number}. {clause.title}</h3><p>{clause.body}</p></section>)}
-        <section className="agreement-clause"><h3>EXECUTION</h3><p>IN WITNESS WHEREOF, the Parties have executed this Agreement on the date first above written.</p><div className="mt-5 grid gap-8 sm:grid-cols-2"><div><strong>SIGNED FOR AND ON BEHALF OF NAL GENERAL MERCHANT LTD.</strong><p className="mt-3">Name: NURA LABARAN NUHU<br />Capacity: Director<br />Signature: ________________________<br />Date: ____________________________<br /><br />Name: NAZIR SHARIF FILLO<br />Capacity: Director<br />Signature: ________________________<br />Date: ____________________________</p><AgreementCompanyStamp className="mt-4" /></div><div><strong>SIGNED BY THE CUSTOMER</strong><p className="mt-3">Name: {agreement.client.name.toUpperCase()}<br />Capacity: Customer / Wakil<br />Signature: ________________________<br />Date: ____________________________</p></div></div></section>
-        <section className="agreement-clause"><h3>IN THE PRESENCE OF A WITNESS</h3><p>Name: ______________________________<br />Phone Number: _______________________<br />Address: ____________________________<br />Occupation: _________________________<br />Signature: __________________________ &nbsp; Date: ____________________</p></section>
+        <section className="agreement-clause"><h3>EXECUTION</h3><p>IN WITNESS WHEREOF, the Parties have executed this Agreement on the date first above written.</p><div className="mt-5 grid gap-8 sm:grid-cols-2"><div><strong>SIGNED FOR AND ON BEHALF OF NAL GENERAL MERCHANT LTD.</strong><AgreementElectronicSignature signature={signingState?.signatures.NAL_SIGNATORY_1} /><AgreementElectronicSignature signature={signingState?.signatures.NAL_SIGNATORY_2} />{signingState?.status === 'EXECUTED' && <AgreementCompanyStamp className="mt-4" />}</div><div><strong>SIGNED BY THE CUSTOMER</strong><p className="mt-3">Name: {agreement.client.name.toUpperCase()}<br />Capacity: Customer / Wakil</p><AgreementElectronicSignature signature={signingState?.signatures.CLIENT} /></div></div></section>
+        <section className="agreement-clause"><h3>IN THE PRESENCE OF A WITNESS</h3><AgreementElectronicSignature signature={signingState?.signatures.WITNESS} /></section>
         <footer className="mt-8 border-t border-[#075a3c] pt-3 text-center text-[9px] text-slate-500">{agreement.company.name} | RC No. {agreement.company.rcNumber} | {agreement.company.email} | {agreement.company.website} | Tel: {agreement.company.phoneNumbers}</footer>
       </article>
     </div>

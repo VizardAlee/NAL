@@ -59,6 +59,17 @@ test('message sender must match the authenticated participant', async () => {
   await assertFails(setDoc(doc(db, 'conversations/conversation/messages/spoofed'), { senderId: 'admin', text: 'forged' }));
 });
 
+test('agreement signing records cannot be read or forged from client SDKs', async () => {
+  const clientDb = env.authenticatedContext('client').firestore();
+  const adminDb = env.authenticatedContext('admin').firestore();
+  for (const db of [clientDb, adminDb]) {
+    await assertFails(setDoc(doc(db, 'agreementEnvelopes', 'forged'), { status: 'EXECUTED' }));
+    await assertFails(setDoc(doc(db, 'agreementEnvelopes/forged/signatures/INVESTOR'), { signerName: 'Forged' }));
+    await assertFails(setDoc(doc(db, 'agreementSigningInvites', 'token'), { pinHash: 'exposed' }));
+    await assertFails(getDoc(doc(db, 'agreementEnvelopes', 'secret')));
+  }
+});
+
 test('transactional pending check permits only one concurrent approval', async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
