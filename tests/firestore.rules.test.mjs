@@ -36,7 +36,15 @@ test('clients cannot create role-bearing user profiles', async () => {
 
 test('users may edit safe profile fields but not access fields', async () => {
   const db = env.authenticatedContext('client').firestore();
-  await assertSucceeds(updateDoc(doc(db, 'users', 'client'), { name: 'Updated Client' }));
+  await assertSucceeds(updateDoc(doc(db, 'users', 'client'), {
+    name: 'Updated Client',
+    phoneNumber: '+2348012345678',
+    address: '12 Valid Residential Avenue, Kano',
+    bankName: 'Taj Bank',
+    bankAccountName: 'Updated Client',
+    bankAccountNumber: '0123456789',
+  }));
+  await assertFails(updateDoc(doc(db, 'users', 'client'), { bankAccountNumber: 'not-an-account' }));
   await assertFails(updateDoc(doc(db, 'users', 'client'), { accessRole: 'ADMIN' }));
 });
 

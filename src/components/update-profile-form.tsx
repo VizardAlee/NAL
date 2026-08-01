@@ -17,10 +17,11 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useTransition } from 'react';
 import { Loader2, User } from 'lucide-react';
-import { useUser } from '@/firebase';
+import { updateProfile } from 'firebase/auth';
+import { doc, updateDoc } from 'firebase/firestore';
+import { useAuth, useFirestore, useUser } from '@/firebase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Skeleton } from './ui/skeleton';
-import { updateProfileAction } from './common-actions';
 import { ProfilePhotoUploader } from './profile-photo-uploader';
 
 const profileSchema = z.object({
@@ -40,6 +41,8 @@ export function UpdateProfileForm() {
   const [isPending, startTransition] = useTransition();
   const [isFetching, setIsFetching] = useState(true);
   const { user } = useUser();
+  const auth = useAuth();
+  const firestore = useFirestore();
 
   const form = useForm<ProfileData>({
     resolver: zodResolver(profileSchema),
@@ -74,36 +77,33 @@ export function UpdateProfileForm() {
   }, [user, form]);
 
   async function onSubmit(values: ProfileData) {
-    if (!user) {
+    if (!user || !auth?.currentUser || !firestore) {
       toast({ variant: 'destructive', title: 'Error', description: 'User not available.' });
       return;
     }
     
     startTransition(async () => {
-        const authToken = await user.getIdToken();
-        const result = await updateProfileAction({
-            authToken,
-            userId: user.uid,
-            name: values.name,
-            phoneNumber: values.phoneNumber,
-            address: values.address,
-            bankName: values.bankName,
-            bankAccountName: values.bankAccountName,
-            bankAccountNumber: values.bankAccountNumber,
+      try {
+        await updateDoc(doc(firestore, 'users', user.uid), {
+          name: values.name,
+          phoneNumber: values.phoneNumber || '',
+          address: values.address,
+          bankName: values.bankName,
+          bankAccountName: values.bankAccountName,
+          bankAccountNumber: values.bankAccountNumber,
         });
-
-        if (result.success) {
+        await updateProfile(auth.currentUser!, { displayName: values.name });
             toast({
-                title: 'Profile Updated',
-                description: result.message,
+              title: 'Profile Updated',
+              description: 'Your personal information was saved successfully.',
             });
-        } else {
-            toast({
-                variant: 'destructive',
-                title: 'Update Failed',
-                description: result.message,
-            });
-        }
+      } catch (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Update Failed',
+          description: error instanceof Error ? error.message : 'Unable to update your profile.',
+        });
+      }
     });
   }
 

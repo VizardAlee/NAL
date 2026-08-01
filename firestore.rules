@@ -95,8 +95,30 @@ service cloud.firestore {
         || canManageOwnerAssignments(userId)
         || (isOwner(userId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'fcmTokens', 'name', 'phoneNumber', 'photoURL', 'photoStoragePath'
+            'fcmTokens', 'name', 'phoneNumber', 'address', 'bankName',
+            'bankAccountName', 'bankAccountNumber', 'photoURL', 'photoStoragePath'
           ])
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'name', 'phoneNumber', 'address', 'bankName', 'bankAccountName', 'bankAccountNumber'
+            ])
+            || (
+              request.resource.data.name is string
+              && request.resource.data.name.size() >= 2
+              && request.resource.data.name.size() <= 120
+              && request.resource.data.phoneNumber is string
+              && request.resource.data.phoneNumber.size() <= 30
+              && request.resource.data.address is string
+              && (request.resource.data.address.size() == 0 || request.resource.data.address.size() >= 5)
+              && request.resource.data.address.size() <= 300
+              && request.resource.data.bankName is string
+              && request.resource.data.bankName.size() <= 120
+              && request.resource.data.bankAccountName is string
+              && request.resource.data.bankAccountName.size() <= 120
+              && request.resource.data.bankAccountNumber is string
+              && request.resource.data.bankAccountNumber.matches('^$|^[0-9]{10}$')
+            )
+          )
           && (
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['photoURL', 'photoStoragePath'])
             || (
