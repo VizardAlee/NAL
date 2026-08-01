@@ -69,3 +69,9 @@ for (const portal of ['admin', 'owner', 'investor', 'client', 'marketer', 'legal
     await expect(page).toHaveURL(/\/login/);
   });
 }
+
+test('unauthenticated users cannot access investor agreements', async ({ page }) => {
+  await page.goto('/investor/agreements');
+  await page.waitForURL(/\/login/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/login/);
+});

@@ -47,12 +47,18 @@ export async function processDepositRequestAction(input: DecisionInput) {
     const now = Timestamp.now();
     trx.set(adminDb.collection('fundBatches').doc(), {
       sourceId: request.investorId, amount: request.amount, remainingAmount: request.amount,
-      createdAt: now, tenureValue: 10, tenureUnit: 'Years', specialInvestment: data.specialInvestment,
+      createdAt: now,
+      tenureValue: Number(request.tenureValue || 36),
+      tenureUnit: request.tenureUnit || 'Months',
+      paymentDate: request.paymentDate || now,
+      paymentReference: request.paymentReference || `NAL-DEP-${data.requestId.toUpperCase()}`,
+      specialInvestment: data.specialInvestment,
       sourceRequestId: data.requestId,
     });
     trx.set(adminDb.collection('transactions').doc(), {
       userId: request.investorId, type: 'Deposit', amount: request.amount, createdAt: now,
       details: 'Investor Deposit', sourceRequestId: data.requestId,
+      paymentReference: request.paymentReference || `NAL-DEP-${data.requestId.toUpperCase()}`,
     });
   });
   return { success: true, message: `Deposit request ${data.decision.toLowerCase()}.` };

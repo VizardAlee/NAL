@@ -46,6 +46,12 @@ export type User = AuthUser & DocumentData & {
     isMuslim?: boolean;
     referralCode?: string;
     rating?: number;
+    photoURL?: string;
+    photoStoragePath?: string;
+    address?: string;
+    bankName?: string;
+    bankAccountName?: string;
+    bankAccountNumber?: string;
 };
 
 export type Repayment = DocumentData & {

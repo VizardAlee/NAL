@@ -13,9 +13,28 @@ const depositSchema = z.object({
   amount: z.coerce.number().positive("Amount must be a positive number."),
   userId: z.string().min(1, "User ID is required."),
   userName: z.string().min(1, "User name is required."),
-});
+  tenureValue: z.coerce.number().int().positive().max(120),
+  tenureUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
+  paymentDate: z.string().date(),
+  paymentReference: z.string().trim().max(100).optional(),
+}).refine(
+  ({ tenureValue, tenureUnit }) => {
+    const maximums = { Days: 3650, Weeks: 520, Fortnights: 260, Months: 120, Years: 10 } as const;
+    return tenureValue <= maximums[tenureUnit];
+  },
+  { message: 'Investment term cannot exceed ten years.', path: ['tenureValue'] }
+);
 
-export async function requestDepositAction(input: { authToken: string; amount: number; userId: string; userName: string }): Promise<{ success: boolean; message: string; }> {
+export async function requestDepositAction(input: {
+  authToken: string;
+  amount: number;
+  userId: string;
+  userName: string;
+  tenureValue: number;
+  tenureUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
+  paymentDate: string;
+  paymentReference?: string;
+}): Promise<{ success: boolean; message: string; }> {
 
   const validatedFields = depositSchema.safeParse(input);
 
@@ -26,18 +45,24 @@ export async function requestDepositAction(input: { authToken: string; amount: n
     };
   }
 
-  const { authToken, amount, userId, userName } = validatedFields.data;
+  const { authToken, amount, userId, userName, tenureValue, tenureUnit, paymentDate, paymentReference } = validatedFields.data;
 
   try {
     await verifyAuthTokenForUser(authToken, userId);
     const { firestore } = initializeFirebase();
     
-    await firestore.collection('depositRequests').add({
+    const requestRef = firestore.collection('depositRequests').doc();
+    const transactionReference = paymentReference || `NAL-DEP-${requestRef.id.toUpperCase()}`;
+    await requestRef.set({
       investorId: userId,
       investorName: userName,
       amount: amount,
       status: 'Pending',
       requestedAt: Timestamp.now(),
+      paymentDate: Timestamp.fromDate(new Date(`${paymentDate}T12:00:00+01:00`)),
+      paymentReference: transactionReference,
+      tenureValue,
+      tenureUnit,
     });
 
     const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);

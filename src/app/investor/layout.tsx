@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Wallet, Banknote, FlaskConical, HelpCircle, BookOpen, History, Settings } from "lucide-react";
+import { LogOut, Wallet, Banknote, FlaskConical, HelpCircle, BookOpen, History, Settings, FileSignature } from "lucide-react";
 import { Logo } from "@/components/icons";
 import Link from "next/link";
 import { useUser } from "@/firebase";
@@ -67,8 +67,8 @@ const investorOnboardingSteps = [
 const investorNavItems = [
   { href: "/investor/dashboard", label: "Home", icon: Wallet },
   { href: "/investor/transactions", label: "Activity", icon: History },
+  { href: "/investor/agreements", label: "Agreements", icon: FileSignature },
   { href: "/investor/financing-modes", label: "Modes", icon: BookOpen },
-  { href: "/investor/analyzer", label: "Analyzer", icon: FlaskConical },
   { href: "/investor/settings", label: "Settings", icon: Settings },
 ];
 
@@ -120,7 +120,7 @@ function AccountMenu() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/128/128`} alt={user?.displayName ?? ''} />
+                  <AvatarImage src={user?.photoURL} alt={user?.displayName ?? ''} />
                   <AvatarFallback>{user?.displayName?.charAt(0) ?? user?.email?.charAt(0)}</AvatarFallback>
                 </Avatar>
               </Button>
@@ -133,6 +133,9 @@ function AccountMenu() {
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/investor/transactions">Transactions</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/investor/agreements">Agreements</Link>
               </DropdownMenuItem>
                <DropdownMenuItem asChild>
                 <Link href="/investor/settings">Settings</Link>
@@ -190,6 +193,12 @@ export default function InvestorLayout({
                 </Link>
                 <div className="flex-1" />
                 <nav className="hidden items-center gap-1 text-sm font-medium lg:flex">
+                    <Button variant="ghost" asChild>
+                        <Link href="/investor/agreements">
+                            <FileSignature className="h-4 w-4 mr-2" />
+                            Agreements
+                        </Link>
+                    </Button>
                     <Button variant="ghost" asChild>
                         <Link href="/investor/dashboard">
                             <Wallet className="h-4 w-4 mr-2" />

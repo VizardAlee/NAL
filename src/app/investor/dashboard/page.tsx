@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle, MessageSquare, Copy, Gavel } from "lucide-react";
+import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle, MessageSquare, Copy, Gavel, FileSignature } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc } from 'firebase/firestore';
@@ -646,6 +646,19 @@ export default function InvestorDashboard() {
             <div className="mb-8">
                 <BankDetailsCard />
             </div>
+
+            <Card className="mb-8 overflow-hidden border-primary/20 bg-gradient-to-r from-primary/5 via-background to-lime-500/5">
+                <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-4">
+                        <div className="rounded-xl bg-primary p-3 text-primary-foreground"><FileSignature className="h-6 w-6" /></div>
+                        <div>
+                            <h2 className="text-lg font-semibold">Investment Agreements</h2>
+                            <p className="text-sm text-muted-foreground">Access the personalized agreement for every approved fund batch, then download or print it.</p>
+                        </div>
+                    </div>
+                    <Button asChild><Link href="/investor/agreements">View Agreements <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+                </CardContent>
+            </Card>
 
             {!isLoading && pendingRequests.length > 0 && (
                 <Alert className="mb-8">

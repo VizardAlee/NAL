@@ -21,6 +21,8 @@ import { useAuth, useUser } from '@/firebase';
 import { requestDepositAction } from './deposit-actions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { format } from 'date-fns';
 
 type DepositFormProps = {
   onDepositRequested: () => void;
@@ -31,7 +33,17 @@ const formSchema = z.object({
     .number()
     .positive({ message: 'Amount must be a positive number.' })
     .min(1000, { message: 'Minimum deposit is ₦1,000.' }),
-});
+  tenureValue: z.coerce.number().int().positive().max(120),
+  tenureUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
+  paymentDate: z.string().min(1, 'Payment date is required.'),
+  paymentReference: z.string().trim().max(100).optional(),
+}).refine(
+  ({ tenureValue, tenureUnit }) => {
+    const maximums = { Days: 3650, Weeks: 520, Fortnights: 260, Months: 120, Years: 10 } as const;
+    return tenureValue <= maximums[tenureUnit];
+  },
+  { message: 'Investment term cannot exceed ten years.', path: ['tenureValue'] }
+);
 
 
 export function DepositForm({ onDepositRequested }: DepositFormProps) {
@@ -44,6 +56,10 @@ export function DepositForm({ onDepositRequested }: DepositFormProps) {
     resolver: zodResolver(formSchema),
     defaultValues: {
       amount: 50000,
+      tenureValue: 36,
+      tenureUnit: 'Months',
+      paymentDate: format(new Date(), 'yyyy-MM-dd'),
+      paymentReference: '',
     },
   });
 
@@ -61,6 +77,10 @@ export function DepositForm({ onDepositRequested }: DepositFormProps) {
           amount: values.amount,
           userId: user.uid,
           userName: user.displayName!,
+          tenureValue: values.tenureValue,
+          tenureUnit: values.tenureUnit,
+          paymentDate: values.paymentDate,
+          paymentReference: values.paymentReference,
         });
 
         if (result.success) {
@@ -105,6 +125,58 @@ export function DepositForm({ onDepositRequested }: DepositFormProps) {
                 <FormMessage />
                 </FormItem>
             )}
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="tenureValue"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Investment Term</FormLabel>
+                    <FormControl><Input type="number" min="1" step="1" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="tenureUnit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Term Unit</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        {['Days', 'Weeks', 'Fortnights', 'Months', 'Years'].map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="paymentDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment Date</FormLabel>
+                  <FormControl><Input type="date" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="paymentReference"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Bank Payment Reference (optional)</FormLabel>
+                  <FormControl><Input placeholder="Transfer/session reference" {...field} /></FormControl>
+                  <FormDescription>If omitted, the platform assigns a unique NAL transaction reference.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
             <Button type="submit" className="w-full" disabled={isPending}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

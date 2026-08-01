@@ -35,6 +35,10 @@ type DepositRequest = DocumentData & {
   status: 'Pending' | 'Approved' | 'Rejected';
   requestedAt: Timestamp;
   processedAt?: Timestamp;
+  paymentDate?: Timestamp;
+  paymentReference?: string;
+  tenureValue?: number;
+  tenureUnit?: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
 };
 function DepositsTable({
     requests,
@@ -118,6 +122,8 @@ function DepositsTable({
                                     <p className="font-medium">{request.investorName}</p>
                                     <p className="text-sm text-primary font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.amount)}</p>
                                     <p className="text-xs text-muted-foreground">{format(request.requestedAt.toDate(), 'PPP')}</p>
+                                    <p className="text-xs text-muted-foreground">Term: {request.tenureValue || 36} {request.tenureUnit || 'Months'}</p>
+                                    <p className="text-xs text-muted-foreground">Ref: {request.paymentReference || 'Platform generated'}</p>
                                 </div>
                                 {!showActionButtons && <Badge variant={request.status === 'Approved' ? 'default' : 'destructive'}>{request.status}</Badge>}
                             </div>
@@ -167,6 +173,7 @@ function DepositsTable({
                             <TableHead>Investor</TableHead>
                             <TableHead>Amount</TableHead>
                             <TableHead>Date Requested</TableHead>
+                            <TableHead>Agreement Details</TableHead>
                             {showActionButtons && <TableHead>Priority</TableHead>}
                             {showActionButtons ? <TableHead className="text-right">Actions</TableHead> : <TableHead>Status</TableHead>}
                         </TableRow>
@@ -177,6 +184,10 @@ function DepositsTable({
                                 <TableCell data-label="Investor" className="font-medium">{request.investorName}</TableCell>
                                 <TableCell data-label="Amount">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(request.amount)}</TableCell>
                                 <TableCell data-label="Date Requested">{format(request.requestedAt.toDate(), 'PPP')}</TableCell>
+                                <TableCell data-label="Agreement Details" className="text-xs">
+                                  <div>{request.tenureValue || 36} {request.tenureUnit || 'Months'}</div>
+                                  <div className="max-w-40 truncate text-muted-foreground">{request.paymentReference || 'Platform generated reference'}</div>
+                                </TableCell>
                                 {showActionButtons && (
                                     <TableCell data-label="Priority">
                                         <label className="flex items-center gap-2 text-sm">

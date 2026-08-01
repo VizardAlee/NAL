@@ -382,6 +382,7 @@ type UserProfile = DocumentData & {
     email: string;
     role: 'Admin' | 'Investor' | 'Client';
     legalDocumentUrl?: string;
+    photoURL?: string;
 };
 
 type ClientRequest = DocumentData & {
@@ -445,6 +446,7 @@ export default function ClientDashboard() {
             name: user.displayName || user.name || 'Client',
             email: user.email || '',
             role: user.role || 'Client',
+            photoURL: user.photoURL,
         } as UserProfile;
     }, [user, userProfile]);
 
@@ -591,7 +593,7 @@ export default function ClientDashboard() {
                     <Card>
                         <CardHeader className="flex flex-row items-center gap-4 space-y-0">
                             <Avatar className="h-16 w-16">
-                                <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/128/128`} />
+                                <AvatarImage src={effectiveUserProfile.photoURL} />
                                 <AvatarFallback>{effectiveUserProfile.name.charAt(0)}</AvatarFallback>
                             </Avatar>
                             <div>

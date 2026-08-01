@@ -24,6 +24,12 @@ export type AuthenticatedProfile = {
   personas?: Persona[];
   primaryPortal?: PrimaryPortal;
   isMuslim?: boolean;
+  photoURL?: string;
+  address?: string;
+  phoneNumber?: string;
+  bankName?: string;
+  bankAccountName?: string;
+  bankAccountNumber?: string;
 };
 
 export async function loadAuthenticatedProfileAction(input: {
@@ -62,6 +68,12 @@ export async function loadAuthenticatedProfileAction(input: {
         ...(Array.isArray(data.personas) ? { personas: data.personas as Persona[] } : {}),
         ...(data.primaryPortal ? { primaryPortal: data.primaryPortal as PrimaryPortal } : {}),
         ...(typeof data.isMuslim === 'boolean' ? { isMuslim: data.isMuslim } : {}),
+        ...(data.photoURL ? { photoURL: String(data.photoURL) } : {}),
+        ...(data.address ? { address: String(data.address) } : {}),
+        ...(data.phoneNumber ? { phoneNumber: String(data.phoneNumber) } : {}),
+        ...(data.bankName ? { bankName: String(data.bankName) } : {}),
+        ...(data.bankAccountName ? { bankAccountName: String(data.bankAccountName) } : {}),
+        ...(data.bankAccountNumber ? { bankAccountNumber: String(data.bankAccountNumber) } : {}),
       },
     };
   } catch (error) {

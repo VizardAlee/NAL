@@ -30,11 +30,19 @@ beforeEach(async () => {
 after(async () => env?.cleanup());
 
 const pdfMetadata = { contentType: 'application/pdf' };
+const jpegMetadata = { contentType: 'image/jpeg' };
 
 test('users can upload their own proposal but not another user’s', async () => {
   const storage = env.authenticatedContext('client').storage();
   await assertSucceeds(storage.ref('users/client/proposals/proposal.pdf').putString('proposal', 'raw', pdfMetadata));
   await assertFails(storage.ref('users/other/proposals/proposal.pdf').putString('proposal', 'raw', pdfMetadata));
+});
+
+test('users can upload their own profile photo but not another user’s photo', async () => {
+  const user = env.authenticatedContext('client').storage();
+  await assertSucceeds(user.ref('users/client/profile/photo.jpg').putString('photo', 'raw', jpegMetadata));
+  await assertFails(user.ref('users/other/profile/photo.jpg').putString('photo', 'raw', jpegMetadata));
+  await assertFails(user.ref('users/client/profile/photo.pdf').putString('photo', 'raw', pdfMetadata));
 });
 
 test('conversation attachments require membership and matching uploader identity', async () => {

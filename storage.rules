@@ -22,6 +22,15 @@ service firebase.storage {
       allow write: if signedIn() && request.auth.uid == userId && validUpload();
     }
 
+    match /users/{userId}/profile/{fileName} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.size > 0
+        && request.resource.size <= 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png)');
+    }
+
     match /conversations/{conversationId}/{userId}/{fileName} {
       allow read: if signedIn()
         && request.auth.uid in firestore.get(/databases/(default)/documents/conversations/$(conversationId)).data.participantIds;
