@@ -4,6 +4,7 @@ import * as admin from 'firebase-admin';
 import { differenceInDays } from 'date-fns';
 import { getAuthErrorStatus, verifyAdminWrite } from '@/lib/server/auth';
 import { getAdminApp } from '@/firebase/admin-app';
+import { hasCompleteGuarantor } from '@/lib/deals/guarantor';
 
 // Defines the shape of the data for a Deal document
 interface Deal {
@@ -14,6 +15,11 @@ interface Deal {
     durationUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
     createdAt: admin.firestore.Timestamp;
     startDate?: admin.firestore.Timestamp;
+    guarantorName?: string;
+    guarantorAddress?: string;
+    guarantorPhoneNumber?: string;
+    guarantorOccupation?: string;
+    guarantorPhotoURL?: string;
 }
 
 // Defines the shape of the data for a FundBatch document
@@ -73,6 +79,10 @@ export async function POST(request: NextRequest) {
 
             if (dealData.status !== 'Pending') {
                 throw new Error(`Deal is already ${dealData.status}.`);
+            }
+
+            if (!hasCompleteGuarantor(dealData)) {
+                throw new Error('This deal cannot be funded until the required guarantor details and photograph are complete.');
             }
             
             const investmentsSnapshot = await transaction.get(

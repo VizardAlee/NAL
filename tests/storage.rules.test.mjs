@@ -45,6 +45,14 @@ test('users can upload their own profile photo but not another user’s photo', 
   await assertFails(user.ref('users/client/profile/photo.pdf').putString('photo', 'raw', pdfMetadata));
 });
 
+test('guarantor photographs require an authenticated owner and an image file', async () => {
+  const client = env.authenticatedContext('client').storage();
+  const other = env.authenticatedContext('other').storage();
+  await assertSucceeds(client.ref('users/client/guarantors/photo.jpg').putString('photo', 'raw', jpegMetadata));
+  await assertFails(other.ref('users/client/guarantors/photo.jpg').putString('photo', 'raw', jpegMetadata));
+  await assertFails(client.ref('users/client/guarantors/document.pdf').putString('photo', 'raw', pdfMetadata));
+});
+
 test('conversation attachments require membership and matching uploader identity', async () => {
   const member = env.authenticatedContext('client').storage();
   const outsider = env.authenticatedContext('outsider').storage();

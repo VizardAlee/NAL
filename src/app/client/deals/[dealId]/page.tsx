@@ -195,6 +195,12 @@ export default function ClientDealDetailPage() {
                                 </div>
                             </div>
                         )}
+                        <div className="rounded-lg border p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div><p className="font-semibold">Kafaalah Guarantee Bond</p><p className="text-sm text-muted-foreground">Guarantor: {deal.guarantorName || 'Details awaiting completion'}</p></div>
+                                <Button asChild variant="outline"><Link href={`/client/agreements/kafaalah/${deal.id}`}><ShieldAlert className="mr-2 h-4 w-4" /> View Guarantee Bond</Link></Button>
+                            </div>
+                        </div>
                         {deal.status === 'Active' && (
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>

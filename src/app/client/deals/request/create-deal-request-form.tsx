@@ -31,6 +31,7 @@ import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
 import Link from 'next/link';
 import { uploadAuthenticatedFile } from '@/firebase/storage-upload';
+import { GuarantorPhotoField } from '@/components/guarantor-photo-field';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const ACCEPTED_FILE_TYPES = ["application/pdf"];
@@ -40,6 +41,11 @@ const formSchema = z.object({
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).default('Murabaha'),
+  guarantorName: z.string().trim().min(2, { message: 'Guarantor name is required.' }),
+  guarantorAddress: z.string().trim().min(5, { message: 'Guarantor address is required.' }),
+  guarantorPhoneNumber: z.string().trim().min(7, { message: 'Guarantor phone number is required.' }),
+  guarantorOccupation: z.string().trim().min(2, { message: 'Guarantor occupation is required.' }),
+  guarantorPhotoURL: z.string().url({ message: 'Upload the guarantor photograph.' }),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.literal('Equal Installments'),
@@ -68,6 +74,11 @@ export function CreateDealRequestForm() {
       principal: 10000,
       profitRate: 5,
       financingMode: 'Murabaha',
+      guarantorName: '',
+      guarantorAddress: '',
+      guarantorPhoneNumber: '',
+      guarantorOccupation: '',
+      guarantorPhotoURL: '',
       durationValue: 12,
       durationUnit: 'Months',
       repaymentType: 'Equal Installments',
@@ -141,6 +152,16 @@ export function CreateDealRequestForm() {
             </FormItem>
           )}
         />
+        <div className="rounded-lg border p-4 space-y-4">
+          <div><h3 className="font-semibold">Required Guarantor</h3><p className="text-sm text-muted-foreground">Every financing request must include a guarantor. These details will be reviewed by NAL and used for the Kafaalah bond.</p></div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <FormField control={form.control} name="guarantorName" render={({ field }) => <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
+            <FormField control={form.control} name="guarantorPhoneNumber" render={({ field }) => <FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>} />
+            <FormField control={form.control} name="guarantorOccupation" render={({ field }) => <FormItem><FormLabel>Occupation</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
+            <FormField control={form.control} name="guarantorAddress" render={({ field }) => <FormItem><FormLabel>Residential Address</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>} />
+          </div>
+          <FormField control={form.control} name="guarantorPhotoURL" render={({ field }) => <FormItem><FormControl><GuarantorPhotoField value={field.value} guarantorName={form.watch('guarantorName')} onChange={field.onChange} disabled={isPending} /></FormControl><FormMessage /></FormItem>} />
+        </div>
         
         <FormField
           control={form.control}

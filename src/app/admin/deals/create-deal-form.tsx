@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { GuarantorPhotoField } from '@/components/guarantor-photo-field';
 import {
   Select,
   SelectContent,
@@ -75,6 +77,11 @@ const formSchema = z.object({
   wakalahGranted: z.boolean().default(false),
   wakalahAssetDescription: z.string().trim().optional(),
   wakalahSupplierName: z.string().trim().optional(),
+  guarantorName: z.string().trim().min(2, { message: 'Guarantor name is required.' }),
+  guarantorAddress: z.string().trim().min(5, { message: 'Guarantor address is required.' }),
+  guarantorPhoneNumber: z.string().trim().min(7, { message: 'Guarantor phone number is required.' }),
+  guarantorOccupation: z.string().trim().min(2, { message: 'Guarantor occupation is required.' }),
+  guarantorPhotoURL: z.string().url({ message: 'Upload the guarantor photograph.' }),
   durationValue: z.coerce.number().positive().int({ message: 'Duration must be a positive number.' }),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.literal('Equal Installments'),
@@ -147,6 +154,11 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
       wakalahGranted: false,
       wakalahAssetDescription: '',
       wakalahSupplierName: '',
+      guarantorName: '',
+      guarantorAddress: '',
+      guarantorPhoneNumber: '',
+      guarantorOccupation: '',
+      guarantorPhotoURL: '',
     },
   });
 
@@ -312,6 +324,16 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
             </div>}
           </div>
         )}
+        <div className="rounded-lg border p-4 space-y-4">
+          <div><h3 className="font-semibold">Required Guarantor</h3><p className="text-sm text-muted-foreground">Every deal must have a guarantor whose details will appear on the Kafaalah bond.</p></div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <FormField control={form.control} name="guarantorName" render={({ field }) => <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
+            <FormField control={form.control} name="guarantorPhoneNumber" render={({ field }) => <FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" {...field} /></FormControl><FormMessage /></FormItem>} />
+            <FormField control={form.control} name="guarantorOccupation" render={({ field }) => <FormItem><FormLabel>Occupation</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
+            <FormField control={form.control} name="guarantorAddress" render={({ field }) => <FormItem><FormLabel>Residential Address</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>} />
+          </div>
+          <FormField control={form.control} name="guarantorPhotoURL" render={({ field }) => <FormItem><FormControl><GuarantorPhotoField value={field.value} guarantorName={form.watch('guarantorName')} onChange={field.onChange} disabled={isLoading} /></FormControl><FormMessage /></FormItem>} />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control}

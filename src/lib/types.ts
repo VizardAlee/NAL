@@ -17,6 +17,11 @@ export type Deal = DocumentData & {
   wakalahGranted?: boolean;
   wakalahAssetDescription?: string;
   wakalahSupplierName?: string;
+  guarantorName?: string;
+  guarantorAddress?: string;
+  guarantorPhoneNumber?: string;
+  guarantorOccupation?: string;
+  guarantorPhotoURL?: string;
   durationValue: number;
   durationUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
   repaymentType: 'Equal Installments' | 'Balloon Payment';

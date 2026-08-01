@@ -16,6 +16,14 @@ const requestDealSchema = z.object({
   principal: z.coerce.number().positive(),
   profitRate: z.coerce.number().min(0),
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).optional(),
+  guarantorName: z.string().trim().min(2),
+  guarantorAddress: z.string().trim().min(5),
+  guarantorPhoneNumber: z.string().trim().min(7),
+  guarantorOccupation: z.string().trim().min(2),
+  guarantorPhotoURL: z.string().url().refine(
+    (url) => url.startsWith('https://firebasestorage.googleapis.com/'),
+    'Guarantor photograph must be stored in Firebase Storage.'
+  ),
   durationValue: z.coerce.number().positive().int(),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.literal('Equal Installments'),

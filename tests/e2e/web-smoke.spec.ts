@@ -81,3 +81,9 @@ test('unauthenticated users cannot access client agreements', async ({ page }) =
   await page.waitForURL(/\/login/, { timeout: 15_000 });
   await expect(page).toHaveURL(/\/login/);
 });
+
+test('unauthenticated users cannot access a Kafaalah bond', async ({ page }) => {
+  await page.goto('/client/agreements/kafaalah/example-deal');
+  await page.waitForURL(/\/login/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/login/);
+});

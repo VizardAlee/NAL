@@ -611,7 +611,7 @@ export default function ClientDashboard() {
                     <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-start gap-3">
                             <div className="rounded-lg bg-primary/10 p-2 text-primary"><ScrollText className="h-5 w-5" /></div>
-                            <div><h2 className="font-semibold">Procurement Agreements</h2><p className="text-sm text-muted-foreground">View, print, or download any Wakalah authority granted for your Murabaha deals.</p></div>
+                            <div><h2 className="font-semibold">Deal Agreements</h2><p className="text-sm text-muted-foreground">View required Kafaalah guarantee bonds and any optional Wakalah procurement authority.</p></div>
                         </div>
                         <Button asChild variant="outline"><Link href="/client/agreements">View Agreements <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
                     </CardContent>
