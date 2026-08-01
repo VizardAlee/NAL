@@ -18,6 +18,7 @@ import {
 } from '@/lib/agreements/mudaraba';
 import { buildMudarabaAgreementPdf } from '@/lib/agreements/mudaraba-pdf';
 import { AgreementCompanyStamp } from '@/components/agreement-company-stamp';
+import { NonInterestInstitutionMark } from '@/components/non-interest-institution-mark';
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -107,6 +108,7 @@ export default function InvestorAgreementPage() {
             <div className="font-serif text-lg font-bold text-[#075a3c]">{agreement.company.name}</div>
             <div className="max-w-xl text-[11px] text-slate-600">{agreement.company.address}</div>
           </div>
+          <NonInterestInstitutionMark className="ml-auto h-14 w-24" />
         </header>
 
         <h2 className="mb-5 text-center font-serif text-2xl font-bold text-[#075a3c]">MUDARABA INVESTMENT AGREEMENT</h2>

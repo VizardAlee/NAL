@@ -45,6 +45,8 @@ export async function buildWakalahAgreementPdf(model: WakalahAgreementModel): Pr
   const logo = logoBytes ? await pdf.embedJpg(logoBytes).catch(() => null) : null;
   const stampBytes = typeof window !== 'undefined' ? await fetchBytes(new URL('/nal-stamp.png', window.location.origin).toString()) : null;
   const stamp = stampBytes ? await pdf.embedPng(stampBytes).catch(() => null) : null;
+  const institutionBytes = typeof window !== 'undefined' ? await fetchBytes(new URL('/non-interest-institution.png', window.location.origin).toString()) : null;
+  const institutionMark = institutionBytes ? await pdf.embedPng(institutionBytes).catch(() => null) : null;
   const photoBytes = model.client.photoURL ? await fetchBytes(model.client.photoURL) : null;
   const photo = photoBytes ? await (async () => {
     try { return await pdf.embedJpg(photoBytes); } catch { try { return await pdf.embedPng(photoBytes); } catch { return null; } }
@@ -58,6 +60,7 @@ export async function buildWakalahAgreementPdf(model: WakalahAgreementModel): Pr
     page = pdf.addPage(A4);
     y = A4[1] - 45;
     if (logo) page.drawImage(logo, { x: margin, y: y - 28, width: 38, height: 30 });
+    if (institutionMark) page.drawImage(institutionMark, { x: A4[0] - margin - 74, y: y - 34, width: 74, height: 42 });
     page.drawText(safe(model.company.name), { x: margin + 47, y: y - 10, size: 10.5, font: bold, color: GREEN });
     page.drawText(safe(model.company.address), { x: margin + 47, y: y - 24, size: 6.8, font: regular, color: MUTED });
     page.drawLine({ start: { x: margin, y: y - 36 }, end: { x: A4[0] - margin, y: y - 36 }, thickness: 1.2, color: GREEN });

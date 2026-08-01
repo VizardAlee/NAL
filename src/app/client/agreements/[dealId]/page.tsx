@@ -14,6 +14,7 @@ import { buildWakalahAgreementPdf } from '@/lib/agreements/wakalah-pdf';
 import { buildWakalahClauses, type WakalahAgreementModel } from '@/lib/agreements/wakalah';
 import { loadClientAgreementAction } from '../actions';
 import { AgreementCompanyStamp } from '@/components/agreement-company-stamp';
+import { NonInterestInstitutionMark } from '@/components/non-interest-institution-mark';
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="grid grid-cols-[minmax(8.5rem,34%)_1fr] border-b border-slate-200 last:border-b-0"><div className="bg-[#075a3c] px-3 py-2 font-bold text-white">{label}</div><div className="bg-[#f6f1e2] px-3 py-2 text-slate-950">{children}</div></div>;
@@ -66,7 +67,7 @@ export default function ClientWakalahAgreementPage() {
       {!canExport && <Alert className="mb-5 print:hidden"><FileWarning className="h-4 w-4" /><AlertTitle>Complete your agreement details</AlertTitle><AlertDescription className="space-y-3"><p>Before printing or downloading, add: {agreement.missingFields.join(', ')}.</p><Button asChild size="sm" variant="outline"><Link href="/client/settings"><Settings className="mr-2 h-4 w-4" /> Open Settings</Link></Button></AlertDescription></Alert>}
 
       <article id="printable-agreement" className="agreement-paper bg-white px-8 py-7 text-[13px] leading-[1.55] text-slate-950 shadow-xl sm:px-14 sm:py-10">
-        <header className="mb-6 flex items-center gap-4 border-b-2 border-[#075a3c] pb-4"><img src="/NAL%20LOGO.jpg" alt="NAL logo" className="h-16 w-20 rounded object-cover" /><div><div className="font-serif text-lg font-bold text-[#075a3c]">{agreement.company.name}</div><div className="max-w-xl text-[11px] text-slate-600">{agreement.company.address}</div></div></header>
+        <header className="mb-6 flex items-center gap-4 border-b-2 border-[#075a3c] pb-4"><img src="/NAL%20LOGO.jpg" alt="NAL logo" className="h-16 w-20 rounded object-cover" /><div><div className="font-serif text-lg font-bold text-[#075a3c]">{agreement.company.name}</div><div className="max-w-xl text-[11px] text-slate-600">{agreement.company.address}</div></div><NonInterestInstitutionMark className="ml-auto h-14 w-24" /></header>
         <h2 className="mb-5 text-center font-serif text-2xl font-bold text-[#075a3c]">WAKALAH AGREEMENT</h2>
         <div className="mb-7 overflow-hidden rounded border border-slate-200"><DetailRow label="Reference">{agreement.agreementId}</DetailRow><DetailRow label="Deal">{agreement.deal.name}</DetailRow><DetailRow label="Approved Asset">{agreement.deal.assetDescription}</DetailRow><DetailRow label="Approved Supplier">{agreement.deal.supplierName}</DetailRow><DetailRow label="Procurement Funds">{formatAgreementCurrency(agreement.deal.principal)}</DetailRow></div>
         <p className="mb-4 font-bold">THIS WAKALAH AGREEMENT is made this {formatAgreementDate(agreement.agreementDate)} between:</p>

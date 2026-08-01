@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import React, { useEffect } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
+import { NonInterestInstitutionMark } from "@/components/non-interest-institution-mark";
 import { MessagesLink } from "@/components/messages-link";
 import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
 import { DigitalClock } from "@/components/digital-clock";
@@ -180,6 +181,7 @@ export default function ClientLayout({
                   <span className="hidden lg:inline">NAL General Marchant</span>
                 </span>
                 </Link>
+                <NonInterestInstitutionMark className="h-8 w-14 border-l border-border pl-2 lg:h-10 lg:w-[4.5rem]" />
                 <div className="flex-1" />
                 <nav className="hidden items-center gap-1 text-sm font-medium lg:flex">
                     <Button variant="ghost" asChild>

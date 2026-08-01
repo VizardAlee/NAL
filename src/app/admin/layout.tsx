@@ -31,6 +31,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import React, { useEffect } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
+import { NonInterestInstitutionMark } from "@/components/non-interest-institution-mark";
 import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
 import { DigitalClock } from "@/components/digital-clock";
 import { MessagesLink } from "@/components/messages-link";
@@ -173,6 +174,7 @@ export default function AdminLayout({
                     NAL General Marchant
                 </span>
                 </Link>
+                <NonInterestInstitutionMark className="h-12 w-20 self-start group-data-[collapsible=icon]:hidden" />
             </div>
             </SidebarHeader>
             <SidebarContent>
@@ -190,6 +192,7 @@ export default function AdminLayout({
                   <Logo imageUrl={logoUrl} className="h-7 w-7 text-primary" />
                   <span className="text-sm font-bold font-headline text-primary">NAL</span>
                 </Link>
+                <NonInterestInstitutionMark className="h-8 w-14 border-l border-border pl-2 lg:hidden" />
             </div>
             <div className="hidden lg:block">
               <DigitalClock />

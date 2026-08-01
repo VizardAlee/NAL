@@ -10,6 +10,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { StatsCounter } from "@/components/stats-counter";
 import { Animated } from "@/components/animated";
+import { NonInterestInstitutionMark } from "@/components/non-interest-institution-mark";
 
 const trustPoints = [
   { icon: ShieldCheck, label: "Role-Based Security" },
@@ -48,14 +49,19 @@ export default function Home() {
         <section className="container py-10 sm:py-16 md:py-20">
           <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[0.95fr_1.05fr]">
             <div className="flex flex-col justify-center space-y-7">
-              <Image
-                src="/business_hub.png"
-                alt="Business Hub"
-                width={360}
-                height={141}
-                priority
-                className="h-auto w-[240px] object-contain sm:w-[320px] md:w-[360px]"
-              />
+              <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                <Image
+                  src="/business_hub.png"
+                  alt="Business Hub"
+                  width={360}
+                  height={141}
+                  priority
+                  className="h-auto w-[220px] object-contain sm:w-[300px] md:w-[340px]"
+                />
+                <div className="sm:border-l sm:border-border/70 sm:pl-6">
+                  <NonInterestInstitutionMark className="h-16 w-28 sm:h-20 sm:w-36" priority />
+                </div>
+              </div>
               <h1 className="max-w-3xl text-4xl font-bold tracking-tighter font-headline sm:text-5xl xl:text-6xl/none">
                 Financing Operations, Funds, and Repayments in One Command Center
               </h1>
@@ -176,6 +182,7 @@ export default function Home() {
                 <Logo imageUrl={logoUrl} className="h-6 w-6 text-primary" />
                 <span className="font-bold font-headline">NAL General Marchant</span>
               </div>
+              <NonInterestInstitutionMark className="h-14 w-24" />
               <p className="text-sm text-muted-foreground max-w-xs">
                 Empowering ethical investment and structured financing across Nigeria.
               </p>

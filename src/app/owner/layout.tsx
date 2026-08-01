@@ -19,6 +19,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { Logo } from '@/components/icons';
 import { DigitalClock } from '@/components/digital-clock';
 import { useCompanyLogo } from '@/components/company-logo-provider';
+import { NonInterestInstitutionMark } from '@/components/non-interest-institution-mark';
 import { useAuth } from '@/firebase/provider';
 import { useUser } from '@/firebase';
 import { getDefaultRouteForUser, normalizeAccessModel } from '@/lib/access-control';
@@ -121,6 +122,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
             <span className="hidden lg:inline">Owner Console</span>
           </span>
         </Link>
+        <NonInterestInstitutionMark className="h-8 w-14 border-l border-border pl-2 lg:h-10 lg:w-[4.5rem]" />
         <div className="flex-1" />
         <nav className="hidden items-center gap-2 text-sm font-medium lg:flex">
           <Button variant="ghost" asChild>

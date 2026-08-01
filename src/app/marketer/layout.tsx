@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import React, { useEffect } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
+import { NonInterestInstitutionMark } from "@/components/non-interest-institution-mark";
 import { DigitalClock } from "@/components/digital-clock";
 import { canAccessPortal, getDefaultRouteForUser } from "@/lib/access-control";
 import { RoleSwitcher } from "@/components/role-switcher";
@@ -117,6 +118,7 @@ export default function MarketerLayout({
                   <span className="hidden lg:inline">NAL General Marchant</span>
                 </span>
             </Link>
+            <NonInterestInstitutionMark className="h-8 w-14 border-l border-border pl-2 lg:h-10 lg:w-[4.5rem]" />
             <div className="flex-1" />
             <nav className="hidden items-center gap-2 text-sm font-medium lg:flex">
                 <Button variant="ghost" asChild>
