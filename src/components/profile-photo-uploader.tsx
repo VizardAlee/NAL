@@ -2,12 +2,13 @@
 
 import { useRef, useState, useTransition } from 'react';
 import { Camera, Loader2 } from 'lucide-react';
+import { updateProfile } from 'firebase/auth';
+import { doc, updateDoc } from 'firebase/firestore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useAuth, useFirebaseApp, useUser } from '@/firebase';
+import { useAuth, useFirebaseApp, useFirestore, useUser } from '@/firebase';
 import { uploadAuthenticatedFile } from '@/firebase/storage-upload';
-import { updateProfilePhotoAction } from '@/components/common-actions';
 import { useToast } from '@/hooks/use-toast';
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png'];
@@ -17,13 +18,14 @@ export function ProfilePhotoUploader() {
   const { user } = useUser();
   const auth = useAuth();
   const app = useFirebaseApp();
+  const firestore = useFirestore();
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | undefined>(user?.photoURL);
   const [isPending, startTransition] = useTransition();
 
   const uploadPhoto = (file?: File) => {
-    if (!file || !user || !auth?.currentUser) return;
+    if (!file || !user || !auth?.currentUser || !firestore) return;
     if (!ACCEPTED_TYPES.includes(file.type)) {
       toast({ variant: 'destructive', title: 'Unsupported photo', description: 'Use a JPG or PNG image.' });
       return;
@@ -42,16 +44,14 @@ export function ProfilePhotoUploader() {
           ['users', user.uid, 'profile'],
           ACCEPTED_TYPES
         );
-        const result = await updateProfilePhotoAction({
-          authToken: await auth.currentUser!.getIdToken(),
-          userId: user.uid,
+        await updateDoc(doc(firestore, 'users', user.uid), {
           photoURL: uploaded.url,
-          storagePath: uploaded.fullPath,
+          photoStoragePath: uploaded.fullPath,
         });
+        await updateProfile(auth.currentUser!, { photoURL: uploaded.url });
         toast({
-          variant: result.success ? 'default' : 'destructive',
-          title: result.success ? 'Photo Updated' : 'Upload Failed',
-          description: result.message,
+          title: 'Photo Updated',
+          description: 'Your profile photograph was uploaded successfully.',
         });
       } catch (error) {
         toast({

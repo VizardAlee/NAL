@@ -40,6 +40,23 @@ test('users may edit safe profile fields but not access fields', async () => {
   await assertFails(updateDoc(doc(db, 'users', 'client'), { accessRole: 'ADMIN' }));
 });
 
+test('users may save only their own Firebase Storage profile photograph', async () => {
+  const db = env.authenticatedContext('client').firestore();
+  const validUrl = 'https://firebasestorage.googleapis.com/v0/b/studio-1298078893-e7941.firebasestorage.app/o/users%2Fclient%2Fprofile%2Fphoto.jpg?alt=media';
+  await assertSucceeds(updateDoc(doc(db, 'users', 'client'), {
+    photoURL: validUrl,
+    photoStoragePath: 'users/client/profile/photo.jpg',
+  }));
+  await assertFails(updateDoc(doc(db, 'users', 'client'), {
+    photoURL: 'https://attacker.example/photo.jpg',
+    photoStoragePath: 'users/client/profile/photo.jpg',
+  }));
+  await assertFails(updateDoc(doc(db, 'users', 'client'), {
+    photoURL: validUrl,
+    photoStoragePath: 'users/admin/profile/photo.jpg',
+  }));
+});
+
 test('non-admin users cannot write financial ledgers', async () => {
   const clientDb = env.authenticatedContext('client').firestore();
   const adminDb = env.authenticatedContext('admin').firestore();

@@ -93,7 +93,19 @@ service cloud.firestore {
       // Only the user themself or an Admin can update a user document.
       allow update: if isAdmin()
         || canManageOwnerAssignments(userId)
-        || (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens', 'name', 'phoneNumber']));
+        || (isOwner(userId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'fcmTokens', 'name', 'phoneNumber', 'photoURL', 'photoStoragePath'
+          ])
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['photoURL', 'photoStoragePath'])
+            || (
+              request.resource.data.photoStoragePath is string
+              && request.resource.data.photoStoragePath.matches('^users/' + userId + '/profile/[a-zA-Z0-9._-]+$')
+              && request.resource.data.photoURL is string
+              && request.resource.data.photoURL.matches('^https://firebasestorage\\.googleapis\\.com/v0/b/studio-1298078893-e7941\\.firebasestorage\\.app/o/.*$')
+            )
+          ));
 
       // Only admins can delete users.
       allow delete: if isAdmin();
