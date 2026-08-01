@@ -433,7 +433,20 @@ export default function ClientDashboard() {
     const { data: terminationRequests, loading: terminationRequestsLoading, error: terminationRequestsError } = useCollection<ClientRequest>(terminationRequestsQuery as any);
 
     const isLoading = userLoading || dealsLoading || profileLoading || repaymentsLoading || dealRequestsLoading || terminationRequestsLoading;
-    const dataLoadError = profileError || dealsError || repaymentsError || dealRequestsError || terminationRequestsError;
+    const criticalDataLoadError = dealsError || repaymentsError;
+    const supplementalDataLoadError = profileError || dealRequestsError || terminationRequestsError;
+
+    const effectiveUserProfile = useMemo<UserProfile | null>(() => {
+        if (userProfile) return userProfile;
+        if (!user) return null;
+
+        return {
+            id: user.uid,
+            name: user.displayName || user.name || 'Client',
+            email: user.email || '',
+            role: user.role || 'Client',
+        } as UserProfile;
+    }, [user, userProfile]);
 
     const mostRecentDeal = useMemo(() => deals?.[0], [deals]);
 
@@ -521,7 +534,7 @@ export default function ClientDashboard() {
         return <DealsSkeleton />;
     }
 
-    if (dataLoadError) {
+    if (criticalDataLoadError) {
         return (
             <div>
                 <PageHeader
@@ -564,17 +577,27 @@ export default function ClientDashboard() {
             </PageHeader>
 
             <div className="grid gap-8">
-                {userProfile && (
+                {supplementalDataLoadError && (
+                    <Alert>
+                        <ShieldAlert className="h-4 w-4" />
+                        <AlertTitle>Some request updates are temporarily unavailable</AlertTitle>
+                        <AlertDescription>
+                            Your deals and repayments are available. Refresh shortly to update profile or pending-request details.
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {effectiveUserProfile && (
                     <Card>
                         <CardHeader className="flex flex-row items-center gap-4 space-y-0">
                             <Avatar className="h-16 w-16">
                                 <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/128/128`} />
-                                <AvatarFallback>{(userProfile.name as string).charAt(0)}</AvatarFallback>
+                                <AvatarFallback>{effectiveUserProfile.name.charAt(0)}</AvatarFallback>
                             </Avatar>
                             <div>
-                                <CardTitle className="font-headline text-2xl">{userProfile.name}</CardTitle>
-                                <p className="text-muted-foreground">{userProfile.email}</p>
-                                <Badge variant="secondary" className="mt-1">{userProfile.role}</Badge>
+                                <CardTitle className="font-headline text-2xl">{effectiveUserProfile.name}</CardTitle>
+                                <p className="text-muted-foreground">{effectiveUserProfile.email}</p>
+                                <Badge variant="secondary" className="mt-1">{effectiveUserProfile.role}</Badge>
                             </div>
                         </CardHeader>
                     </Card>
@@ -647,7 +670,7 @@ export default function ClientDashboard() {
                     </Alert>
                 )}
 
-                {userProfile?.legalDocumentUrl && (
+                {effectiveUserProfile?.legalDocumentUrl && (
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2"><Gavel /> Legal Document</CardTitle>
@@ -664,16 +687,16 @@ export default function ClientDashboard() {
                                     <SheetHeader className="flex-row items-center justify-between">
                                         <SheetTitle>Signed Legal Document</SheetTitle>
                                         <Button variant="outline" asChild>
-                                            <a href={userProfile.legalDocumentUrl} download={`LegalDocument-${userProfile.name}.pdf`}>
+                                            <a href={effectiveUserProfile.legalDocumentUrl} download={`LegalDocument-${effectiveUserProfile.name}.pdf`}>
                                                 <Download className="mr-2 h-4 w-4" /> Download
                                             </a>
                                         </Button>
                                     </SheetHeader>
                                     <div className="py-4 flex-1 bg-white overflow-y-auto">
-                                        {userProfile.legalDocumentUrl.startsWith('data:image/') ? (
-                                            <Image src={userProfile.legalDocumentUrl} alt="Legal Document" width={800} height={1100} className="rounded-md object-contain mx-auto" />
+                                        {effectiveUserProfile.legalDocumentUrl.startsWith('data:image/') ? (
+                                            <Image src={effectiveUserProfile.legalDocumentUrl} alt="Legal Document" width={800} height={1100} className="rounded-md object-contain mx-auto" />
                                         ) : (
-                                            <iframe src={`${userProfile.legalDocumentUrl}#toolbar=1`} className="w-full h-full rounded-md border" />
+                                            <iframe src={`${effectiveUserProfile.legalDocumentUrl}#toolbar=1`} className="w-full h-full rounded-md border" />
                                         )}
                                     </div>
                                 </SheetContent>
