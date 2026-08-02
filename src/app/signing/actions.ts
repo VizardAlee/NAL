@@ -323,6 +323,37 @@ async function archiveAfterExecution(envelopeId: string, envelope: StoredEnvelop
   return refreshed.data() as StoredEnvelope;
 }
 
+async function upgradePendingMudarabaWitnesses(
+  envelopeId: string,
+  envelope: StoredEnvelope
+): Promise<StoredEnvelope> {
+  const requiredRoles = REQUIRED_SIGNER_ROLES.MUDARABA;
+  if (
+    envelope.agreementType !== 'MUDARABA' ||
+    envelope.status === 'EXECUTED' ||
+    requiredRoles.every((role) => envelope.requiredRoles.includes(role))
+  ) return envelope;
+
+  const reference = adminDb.collection('agreementEnvelopes').doc(envelopeId);
+  await adminDb.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(reference);
+    if (!snapshot.exists) return;
+    const current = snapshot.data() as StoredEnvelope;
+    if (current.status === 'EXECUTED' || current.agreementType !== 'MUDARABA') return;
+    const status = calculateSigningStatus(requiredRoles, current.signedRoles || []);
+    const now = Timestamp.now();
+    transaction.update(reference, { requiredRoles, status, updatedAt: now });
+    transaction.create(reference.collection('events').doc(), {
+      event: 'SIGNING_REQUIREMENTS_UPDATED',
+      addedRoles: requiredRoles.filter((role) => !current.requiredRoles.includes(role)),
+      reason: 'Investor agreement witness execution requirement introduced.',
+      createdAt: now,
+    });
+  });
+  const refreshed = await reference.get();
+  return refreshed.data() as StoredEnvelope;
+}
+
 export async function startAgreementSigningAction(input: {
   authToken: string;
   agreementType: AgreementSigningType;
@@ -364,7 +395,7 @@ export async function startAgreementSigningAction(input: {
       });
     });
     const snapshot = await reference.get();
-    const envelope = snapshot.data() as StoredEnvelope;
+    const envelope = await upgradePendingMudarabaWitnesses(envelopeId, snapshot.data() as StoredEnvelope);
     await notifyUser(
       envelope.ownerUserId,
       'Agreement ready for signatures',
@@ -394,8 +425,9 @@ export async function getAgreementSigningStateAction(input: {
     const envelopeId = agreementEnvelopeId(validated.data.agreementType, validated.data.sourceId);
     const snapshot = await adminDb.collection('agreementEnvelopes').doc(envelopeId).get();
     if (!snapshot.exists) return { success: true, exists: false };
-    const envelope = snapshot.data() as StoredEnvelope;
+    let envelope = snapshot.data() as StoredEnvelope;
     await authorizeEnvelopeRead(validated.data.authToken, envelope);
+    envelope = await upgradePendingMudarabaWitnesses(envelopeId, envelope);
     return {
       success: true,
       exists: true,
@@ -535,8 +567,9 @@ export async function createExternalSigningInviteAction(input: {
     const envelopeReference = adminDb.collection('agreementEnvelopes').doc(envelopeId);
     const envelopeSnapshot = await envelopeReference.get();
     if (!envelopeSnapshot.exists) throw new Error('Start the signing process first.');
-    const envelope = envelopeSnapshot.data() as StoredEnvelope;
+    let envelope = envelopeSnapshot.data() as StoredEnvelope;
     const decoded = await authorizeEnvelopeRead(validated.data.authToken, envelope);
+    envelope = await upgradePendingMudarabaWitnesses(envelopeId, envelope);
     if (decoded.uid !== envelope.ownerUserId) await verifyAdminOrOwner(validated.data.authToken);
     if (!envelope.requiredRoles.includes(validated.data.role)) throw new Error('This external signature is not required.');
     if (envelope.signedRoles.includes(validated.data.role)) throw new Error('This signer has already completed the agreement.');
@@ -757,7 +790,7 @@ export async function listAdminAgreementEnvelopesAction(input: { authToken: stri
     await verifyAdminOrOwner(input.authToken);
     const snapshot = await adminDb.collection('agreementEnvelopes').orderBy('startedAt', 'desc').limit(100).get();
     const envelopes = await Promise.all(snapshot.docs.map(async (document) => {
-      const envelope = document.data() as StoredEnvelope;
+      const envelope = await upgradePendingMudarabaWitnesses(document.id, document.data() as StoredEnvelope);
       return { ...(await serializeEnvelope(document.id, envelope, false)), documentModel: envelope.documentModel };
     }));
     return { success: true, envelopes };
