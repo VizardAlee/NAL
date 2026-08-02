@@ -4,23 +4,17 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { adminDb } from '@/firebase/admin-app';
-import { createRestructuredRepaymentPlan } from '@/lib/amortization';
+import { createRestructuredRepaymentPlan, generateAmortizationSchedule } from '@/lib/amortization';
 import { verifyAdminWrite, verifyAuthTokenForUser } from '@/lib/server/auth';
 import { notifyAdmins, notifyUser } from '@/lib/server/notification-service';
 import type { Deal } from '@/lib/types';
 
-const durationUnit = z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']);
 const repaymentFrequency = z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']);
-const repaymentTermsSchema = z.object({
-  durationValue: z.coerce.number().int().positive().max(120),
-  durationUnit,
-  repaymentFrequency,
-});
 const requestSchema = z.object({
   authToken: z.string().min(1),
   dealId: z.string().min(1).max(180),
   clientId: z.string().min(1).max(180),
-  ...repaymentTermsSchema.shape,
+  repaymentFrequency,
   reason: z.string().trim().min(10).max(1_000),
 });
 const decisionSchema = z.object({
@@ -30,21 +24,10 @@ const decisionSchema = z.object({
   adminNote: z.string().trim().max(1_000).optional(),
 });
 
-function approximateDays(value: number, unit: z.infer<typeof durationUnit>): number {
-  if (unit === 'Days') return value;
-  if (unit === 'Weeks') return value * 7;
-  if (unit === 'Fortnights') return value * 14;
-  if (unit === 'Months') return value * 30.4375;
-  return value * 365.25;
-}
-
 export async function requestRepaymentPlanChangeAction(input: z.infer<typeof requestSchema>) {
   const parsed = requestSchema.safeParse(input);
-  if (!parsed.success) return { success: false as const, message: 'Complete all proposed repayment terms and provide a reason.' };
+  if (!parsed.success) return { success: false as const, message: 'Choose a proposed repayment frequency and provide a reason.' };
   const data = parsed.data;
-  if (approximateDays(data.durationValue, data.durationUnit) > 3652.5) {
-    return { success: false as const, message: 'The revised remaining duration cannot exceed 10 years.' };
-  }
   try {
     await verifyAuthTokenForUser(data.authToken, data.clientId);
     const now = Timestamp.now();
@@ -58,10 +41,8 @@ export async function requestRepaymentPlanChangeAction(input: z.infer<typeof req
       const deal = { id: dealSnapshot.id, ...dealSnapshot.data() } as Deal;
       if (deal.clientId !== data.clientId) throw new Error('You are not allowed to change this deal.');
       if (deal.status !== 'Active') throw new Error('Only active deals can be restructured.');
-      if (deal.pendingRepaymentPlanChangeRequestId) throw new Error('A repayment-plan change is already awaiting approval.');
+      if (deal.pendingRepaymentPlanChangeRequestId) throw new Error('A repayment-frequency change is already awaiting approval.');
       if (
-        deal.durationValue === data.durationValue &&
-        deal.durationUnit === data.durationUnit &&
         deal.repaymentFrequency === data.repaymentFrequency
       ) throw new Error('The proposed terms are the same as the current repayment plan.');
       const pendingRepayments = await transaction.get(
@@ -83,8 +64,6 @@ export async function requestRepaymentPlanChangeAction(input: z.infer<typeof req
           repaymentPlanVersion: Number(deal.repaymentPlanVersion || 1),
         },
         proposedTerms: {
-          durationValue: data.durationValue,
-          durationUnit: data.durationUnit,
           repaymentFrequency: data.repaymentFrequency,
         },
         reason: data.reason,
@@ -93,16 +72,16 @@ export async function requestRepaymentPlanChangeAction(input: z.infer<typeof req
       transaction.update(dealRef, { pendingRepaymentPlanChangeRequestId: requestRef.id });
     });
     await notifyAdmins(
-      'Repayment Plan Change Requested',
-      `${clientName} requested new repayment terms for ${dealName}.`,
+      'Repayment Frequency Change Requested',
+      `${clientName} requested a new repayment frequency for ${dealName}.`,
       '/admin/approvals/repayment-changes',
       'approval'
     ).catch((error) => console.error('Unable to notify administrators about repayment-plan request.', error));
     revalidatePath(`/client/deals/${data.dealId}`);
     revalidatePath('/client/dashboard');
-    return { success: true as const, message: 'Your proposed repayment plan has been sent for administrator approval.' };
+    return { success: true as const, message: 'Your proposed repayment frequency has been sent for administrator approval.' };
   } catch (error) {
-    return { success: false as const, message: error instanceof Error ? error.message : 'Unable to submit the repayment-plan request.' };
+    return { success: false as const, message: error instanceof Error ? error.message : 'Unable to submit the repayment-frequency request.' };
   }
 }
 
@@ -143,18 +122,19 @@ export async function processRepaymentPlanChangeAction(input: z.infer<typeof dec
       transaction.get(adminDb.collection('repayments').where('dealId', '==', dealId).where('status', '==', 'Approved')),
     ]);
     if (!pendingRepayments.empty) throw new Error('Process the pending repayment before approving this schedule change.');
-    const proposed = repaymentTermsSchema.parse(request.proposedTerms);
-    if (approximateDays(proposed.durationValue, proposed.durationUnit) > 3652.5) {
-      throw new Error('The revised remaining duration cannot exceed 10 years.');
-    }
+    const proposed = z.object({ repaymentFrequency }).parse(request.proposedTerms);
     const approvedInstallments = [...new Set(approvedRepayments.docs.map((item) => Number(item.data().installmentNumber)).filter(Number.isFinite))];
+    const currentSchedule = generateAmortizationSchedule(deal);
+    const maturityDate = currentSchedule.at(-1)?.dueDate;
+    if (!maturityDate || maturityDate <= now.toDate()) throw new Error('The deal has reached its repayment maturity and can no longer change frequency.');
     const plan = createRestructuredRepaymentPlan({
       deal,
       approvedInstallmentNumbers: approvedInstallments,
-      newDurationValue: proposed.durationValue,
-      newDurationUnit: proposed.durationUnit,
+      newDurationValue: deal.durationValue,
+      newDurationUnit: deal.durationUnit,
       newRepaymentFrequency: proposed.repaymentFrequency,
       effectiveDate: now.toDate(),
+      maturityDate,
     });
     const storedPlan = {
       preservedInstallments: plan.preservedInstallments.map((installment) => ({
@@ -164,11 +144,10 @@ export async function processRepaymentPlanChangeAction(input: z.infer<typeof dec
       futureSegment: {
         ...plan.futureSegment,
         startDate: Timestamp.fromDate(plan.futureSegment.startDate),
+        ...(plan.futureSegment.endDate ? { endDate: Timestamp.fromDate(plan.futureSegment.endDate) } : {}),
       },
     };
     transaction.update(dealRef, {
-      durationValue: proposed.durationValue,
-      durationUnit: proposed.durationUnit,
       repaymentFrequency: proposed.repaymentFrequency,
       repaymentPlanOverride: storedPlan,
       repaymentPlanVersion: Number(deal.repaymentPlanVersion || 1) + 1,
@@ -184,15 +163,15 @@ export async function processRepaymentPlanChangeAction(input: z.infer<typeof dec
   });
   await notifyUser(
     clientId,
-    `Repayment plan ${data.decision.toLowerCase()}`,
+    `Repayment frequency ${data.decision.toLowerCase()}`,
     data.decision === 'Approved'
-      ? `Your revised repayment terms for ${dealName} are now active.`
-      : `Your requested repayment changes for ${dealName} were not approved.`,
+      ? `Your revised repayment frequency for ${dealName} is now active. The maturity date is unchanged.`
+      : `Your requested repayment-frequency change for ${dealName} was not approved.`,
     `/client/deals/${dealId}`,
     'system'
   ).catch((error) => console.error('Unable to notify client about repayment-plan decision.', error));
   revalidatePath('/admin/approvals/repayment-changes');
   revalidatePath(`/client/deals/${dealId}`);
   revalidatePath('/client/dashboard');
-  return { success: true as const, message: `Repayment-plan request ${data.decision.toLowerCase()}.` };
+  return { success: true as const, message: `Repayment-frequency request ${data.decision.toLowerCase()}.` };
 }

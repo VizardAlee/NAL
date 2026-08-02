@@ -24,7 +24,7 @@ function toKobo(value: number): number {
 
 type RepaymentTerms = Pick<Deal, 'durationValue' | 'durationUnit' | 'repaymentFrequency'>;
 
-function getPeriodsForTerms(termStartDate: Date | undefined, terms: RepaymentTerms): { totalPeriods: number; addPeriod: (date: Date, count: number) => Date } {
+function getPeriodsForTerms(termStartDate: Date | undefined, terms: RepaymentTerms, fixedEndDate?: Date): { totalPeriods: number; addPeriod: (date: Date, count: number) => Date } {
   if (!termStartDate) {
       return { totalPeriods: 0, addPeriod: (date, count) => add(date, { days: count }) };
   }
@@ -32,7 +32,7 @@ function getPeriodsForTerms(termStartDate: Date | undefined, terms: RepaymentTer
   let totalPeriods = 0;
   let addPeriod: (date: Date, count: number) => Date;
 
-  const endDate = (() => {
+  const endDate = fixedEndDate || (() => {
     switch (terms.durationUnit) {
       case 'Days': return add(termStartDate, { days: terms.durationValue });
       case 'Weeks': return add(termStartDate, { weeks: terms.durationValue });
@@ -83,11 +83,12 @@ export function generateUniformRepaymentSegment(input: {
   durationUnit: Deal['durationUnit'];
   repaymentFrequency: Deal['repaymentFrequency'];
   startingInstallment?: number;
+  endDate?: Date;
 }): ScheduleInstallment[] {
   const principalInKobo = toKobo(input.principal);
   const profitInKobo = toKobo(input.profit);
   if (principalInKobo + profitInKobo <= 0) return [];
-  const { totalPeriods, addPeriod } = getPeriodsForTerms(input.startDate, input);
+  const { totalPeriods, addPeriod } = getPeriodsForTerms(input.startDate, input, input.endDate);
   const principalPerPeriod = Math.floor(principalInKobo / totalPeriods);
   const profitPerPeriod = Math.floor(profitInKobo / totalPeriods);
   const principalRemainder = principalInKobo % totalPeriods;
@@ -132,6 +133,7 @@ export function createRestructuredRepaymentPlan(input: {
   newDurationUnit: Deal['durationUnit'];
   newRepaymentFrequency: Deal['repaymentFrequency'];
   effectiveDate: Date;
+  maturityDate?: Date;
 }): RestructuredRepaymentPlan {
   const currentSchedule = generateAmortizationSchedule(input.deal);
   const approved = new Set(input.approvedInstallmentNumbers);
@@ -157,6 +159,7 @@ export function createRestructuredRepaymentPlan(input: {
       durationUnit: input.newDurationUnit,
       repaymentFrequency: input.newRepaymentFrequency,
       startingInstallment: nextInstallment,
+      ...(input.maturityDate ? { endDate: input.maturityDate } : {}),
     },
   };
 }
@@ -168,14 +171,18 @@ export function buildRestructuredRepaymentSchedule(input: Parameters<typeof crea
 
 export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] {
   if (deal.repaymentPlanOverride) {
+    const { startDate, endDate, ...futureTerms } = deal.repaymentPlanOverride.futureSegment;
     return materializeRepaymentPlan({
       preservedInstallments: deal.repaymentPlanOverride.preservedInstallments.map((installment) => ({
         ...installment,
         dueDate: installment.dueDate.toDate(),
       })),
       futureSegment: {
-        ...deal.repaymentPlanOverride.futureSegment,
-        startDate: deal.repaymentPlanOverride.futureSegment.startDate.toDate(),
+        ...futureTerms,
+        startDate: startDate.toDate(),
+        ...(endDate
+          ? { endDate: endDate.toDate() }
+          : {}),
       },
     });
   }

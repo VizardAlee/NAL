@@ -98,10 +98,11 @@ test('approved installments are preserved when future repayments change frequenc
   const revised = buildRestructuredRepaymentSchedule({
     deal: currentDeal,
     approvedInstallmentNumbers: [1, 2],
-    newDurationValue: 10,
-    newDurationUnit: 'Months',
+    newDurationValue: currentDeal.durationValue,
+    newDurationUnit: currentDeal.durationUnit,
     newRepaymentFrequency: 'Weekly',
     effectiveDate: new Date('2026-03-01T00:00:00Z'),
+    maturityDate: original.at(-1)?.dueDate,
   });
 
   assert.deepEqual(revised.slice(0, 2).map((row) => row.installment), [1, 2]);
@@ -113,16 +114,21 @@ test('approved installments are preserved when future repayments change frequenc
   assert.equal(revised.at(-1)?.balance, 0);
 });
 
-test('an approved duration change preserves totals to the kobo', () => {
+test('a frequency change preserves the existing maturity window and totals', () => {
+  const currentDeal = deal();
+  const original = generateAmortizationSchedule(currentDeal);
+  const maturityDate = original.at(-1)!.dueDate;
   const revised = buildRestructuredRepaymentSchedule({
-    deal: deal(),
+    deal: currentDeal,
     approvedInstallmentNumbers: [],
-    newDurationValue: 18,
-    newDurationUnit: 'Months',
-    newRepaymentFrequency: 'Monthly',
+    newDurationValue: currentDeal.durationValue,
+    newDurationUnit: currentDeal.durationUnit,
+    newRepaymentFrequency: 'Weekly',
     effectiveDate: new Date('2026-03-01T00:00:00Z'),
+    maturityDate,
   });
-  assert.equal(revised.length, 18);
+  assert.ok(revised.at(-1)!.dueDate <= maturityDate);
+  assert.ok(maturityDate.getTime() - revised.at(-1)!.dueDate.getTime() < 7 * 24 * 60 * 60 * 1000);
   assert.equal(Math.round(revised.reduce((sum, row) => sum + row.payment, 0) * 100), 112_000_000);
 });
 
@@ -135,12 +141,17 @@ test('a stored compact repayment plan recreates the approved schedule', () => {
     newDurationUnit: 'Months' as const,
     newRepaymentFrequency: 'Weekly' as const,
     effectiveDate: new Date('2026-02-02T00:00:00Z'),
+    maturityDate: generateAmortizationSchedule(currentDeal).at(-1)!.dueDate,
   };
   const plan = createRestructuredRepaymentPlan(input);
   const storedDeal = deal({
     repaymentPlanOverride: {
       preservedInstallments: plan.preservedInstallments.map((row) => ({ ...row, dueDate: timestamp(row.dueDate) })),
-      futureSegment: { ...plan.futureSegment, startDate: timestamp(plan.futureSegment.startDate) },
+      futureSegment: {
+        ...plan.futureSegment,
+        startDate: timestamp(plan.futureSegment.startDate),
+        ...(plan.futureSegment.endDate ? { endDate: timestamp(plan.futureSegment.endDate) } : {}),
+      },
     },
   });
   assert.deepEqual(generateAmortizationSchedule(storedDeal), buildRestructuredRepaymentSchedule(input));

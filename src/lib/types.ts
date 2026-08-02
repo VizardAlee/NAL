@@ -50,6 +50,7 @@ export type Deal = DocumentData & {
       principal: number;
       profit: number;
       startDate: Timestamp;
+      endDate?: Timestamp;
       durationValue: number;
       durationUnit: Deal['durationUnit'];
       repaymentFrequency: Deal['repaymentFrequency'];

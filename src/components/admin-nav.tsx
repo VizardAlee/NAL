@@ -70,7 +70,7 @@ export const adminMenuItems: MenuItem[] = [
       { href: "/admin/approvals/withdrawals", label: "Withdrawals", icon: HandCoins, notificationCollection: 'withdrawalRequests' },
       { href: "/admin/approvals/reinvestments", label: "Reinvestments", icon: RefreshCcw, notificationCollection: 'reinvestmentRequests' },
       { href: "/admin/approvals/repayments", label: "Repayments", icon: HandCoins, notificationCollection: 'repayments' },
-      { href: "/admin/approvals/repayment-changes", label: "Repayment Changes", icon: CalendarSync, notificationCollection: 'repaymentPlanChangeRequests' },
+      { href: "/admin/approvals/repayment-changes", label: "Frequency Changes", icon: CalendarSync, notificationCollection: 'repaymentPlanChangeRequests' },
       { href: "/admin/approvals/terminations", label: "Terminations", icon: ShieldAlert, notificationCollection: 'terminationRequests' },
       { href: "/admin/approvals/chat-requests", label: "Chat Requests", icon: MessageSquarePlus, notificationCollection: 'chatRequests' },
     ],
