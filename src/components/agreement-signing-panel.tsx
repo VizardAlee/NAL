@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
-import { Check, Clipboard, FileLock2, KeyRound, Loader2, PenLine, Send, ShieldCheck } from 'lucide-react';
+import { Check, Clipboard, ExternalLink, FileLock2, KeyRound, Loader2, PenLine, Send, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/firebase';
 import { getRequiredIdToken } from '@/firebase/auth-token';
 import { useToast } from '@/hooks/use-toast';
@@ -199,8 +199,8 @@ export function AgreementSigningPanel({
       <Dialog open={Boolean(invite)} onOpenChange={(open) => { if (!open) setInvite(null); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Secure {invite ? agreementSignerRoleLabel(invite.role) : ''} invitation</DialogTitle><DialogDescription>Send the link and PIN through separate channels where practical. The link expires after 72 hours and can be used only once.</DialogDescription></DialogHeader>
-          {invite && <div className="space-y-4"><div><Label>Signing link</Label><div className="mt-1 flex gap-2"><Input readOnly value={invite.signingUrl} className="font-mono text-xs" /><Button size="icon" variant="outline" onClick={() => void navigator.clipboard.writeText(invite.signingUrl)}><Clipboard className="h-4 w-4" /></Button></div></div><div><Label>Six-digit signing PIN</Label><div className="mt-1 flex gap-2"><Input readOnly value={invite.pin} className="font-mono text-lg tracking-[0.35em]" /><Button size="icon" variant="outline" onClick={() => void navigator.clipboard.writeText(invite.pin)}><Clipboard className="h-4 w-4" /></Button></div></div><Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Share carefully</AlertTitle><AlertDescription>Anyone holding both the link and PIN can attempt to sign. Confirm the recipient independently before sharing.</AlertDescription></Alert></div>}
-          <DialogFooter><Button onClick={() => setInvite(null)}>Done</Button></DialogFooter>
+          {invite && <div className="space-y-4"><div><Label>Signing link</Label><div className="mt-1 flex gap-2"><Input readOnly value={invite.signingUrl} className="font-mono text-xs" /><Button size="icon" variant="outline" onClick={() => void navigator.clipboard.writeText(invite.signingUrl)}><Clipboard className="h-4 w-4" /></Button></div></div><div><Label>Six-digit signing PIN</Label><div className="mt-1 flex gap-2"><Input readOnly value={invite.pin} className="font-mono text-lg tracking-[0.35em]" /><Button size="icon" variant="outline" onClick={() => void navigator.clipboard.writeText(invite.pin)}><Clipboard className="h-4 w-4" /></Button></div></div><Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>For the named signer only</AlertTitle><AlertDescription>Hand the device to the named signer or share the link and PIN securely. Do not draw another person&apos;s signature for them.</AlertDescription></Alert></div>}
+          <DialogFooter>{invite && <Button variant="outline" asChild><a href={invite.signingUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-2 h-4 w-4" /> Open signature intake</a></Button>}<Button onClick={() => setInvite(null)}>Done</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </>

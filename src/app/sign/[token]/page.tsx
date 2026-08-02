@@ -2,13 +2,16 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useParams } from 'next/navigation';
-import { CheckCircle2, FileCheck2, Loader2, LockKeyhole, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, FileCheck2, Loader2, LockKeyhole, PenLine, ShieldCheck } from 'lucide-react';
 import { loadExternalSigningAction, submitExternalSignatureAction } from '@/app/signing/actions';
 import { SignatureCanvas, type SignatureCanvasHandle } from '@/components/signature-canvas';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { buildKafaalahBondPdf } from '@/lib/agreements/kafaalah-pdf';
@@ -44,6 +47,7 @@ export default function ExternalSigningPage() {
   const [pin, setPin] = useState('');
   const [consent, setConsent] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
+  const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [working, startTransition] = useTransition();
 
@@ -92,14 +96,23 @@ export default function ExternalSigningPage() {
 
       <Card><CardHeader><CardTitle>1. Review the complete agreement</CardTitle><CardDescription>Scroll through every page before signing. This is the exact frozen version your signature will be bound to.</CardDescription></CardHeader><CardContent>{pdfUrl ? <iframe title="Agreement to review" src={pdfUrl} className="h-[68vh] w-full rounded border bg-white" /> : <div className="flex h-80 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>}</CardContent></Card>
 
-      <Card><CardHeader><CardTitle>2. Verify and sign</CardTitle><CardDescription>Use a finger or stylus on a phone, or click and drag with a trackpad or mouse on a laptop.</CardDescription></CardHeader><CardContent className="space-y-5">
+      <Card><CardHeader><CardTitle>2. Sign the agreement</CardTitle><CardDescription>After reviewing every page, open the dedicated blank signature sheet.</CardDescription></CardHeader><CardContent className="space-y-4">
         {error && <Alert variant="destructive"><AlertTitle>Signature not submitted</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
-        <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="signer-name">Full legal name</Label><Input id="signer-name" value={signerName} onChange={(event) => setSignerName(event.target.value)} readOnly={Boolean(request.expectedSignerName)} /></div><div className="space-y-2"><Label htmlFor="signer-phone">Phone number</Label><Input id="signer-phone" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></div></div>
-        <div className="max-w-xs space-y-2"><Label htmlFor="signing-pin">Six-digit signing PIN</Label><Input id="signing-pin" inputMode="numeric" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className="font-mono text-lg tracking-[0.3em]" /></div>
-        <SignatureCanvas ref={canvasRef} onChange={setHasSignature} disabled={working} />
-        <label className="flex items-start gap-3 rounded-lg border p-3 text-sm"><Checkbox checked={consent} onCheckedChange={(checked) => setConsent(checked === true)} className="mt-0.5" /><span>I have reviewed the complete agreement, accept its terms, consent to electronic records and intend this electronic signature to be legally binding.</span></label>
-        <Button size="lg" onClick={submit} disabled={working || !hasSignature || !signerName.trim() || !phone.trim() || pin.length !== 6 || !consent}>{working ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />} Apply secure signature</Button>
+        <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>For the named signer only</AlertTitle><AlertDescription>Only the {request.roleLabel.toLowerCase()} should draw and submit this signature. A finger or stylus works on mobile; a mouse or trackpad works on a laptop.</AlertDescription></Alert>
+        <Button size="lg" onClick={() => { setError(''); setSignatureDialogOpen(true); }}><PenLine className="mr-2 h-4 w-4" /> Open blank signature sheet</Button>
       </CardContent></Card>
+
+      <Dialog open={signatureDialogOpen} onOpenChange={(open) => { if (!working) setSignatureDialogOpen(open); }}>
+        <DialogContent className="max-h-[94vh] max-w-2xl overflow-y-auto">
+          <DialogHeader><DialogTitle>Blank signature sheet — {request.roleLabel}</DialogTitle><DialogDescription>Complete your verification details, then draw your signature inside the white sheet below. Your strokes will appear immediately while you draw.</DialogDescription></DialogHeader>
+          {error && <Alert variant="destructive"><AlertTitle>Signature not submitted</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+          <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="signer-name">Full legal name</Label><Input id="signer-name" value={signerName} onChange={(event) => setSignerName(event.target.value)} readOnly={Boolean(request.expectedSignerName)} /></div><div className="space-y-2"><Label htmlFor="signer-phone">Phone number</Label><Input id="signer-phone" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></div></div>
+          <div className="max-w-xs space-y-2"><Label htmlFor="signing-pin">Six-digit signing PIN</Label><Input id="signing-pin" inputMode="numeric" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className="font-mono text-lg tracking-[0.3em]" /></div>
+          <div className="rounded-xl border-2 border-slate-300 bg-white p-3 shadow-inner"><p className="mb-2 text-sm font-semibold text-slate-900">Draw your signature on this blank sheet</p><SignatureCanvas ref={canvasRef} onChange={setHasSignature} disabled={working} /></div>
+          <label className="flex items-start gap-3 rounded-lg border p-3 text-sm"><Checkbox checked={consent} onCheckedChange={(checked) => setConsent(checked === true)} className="mt-0.5" /><span>I have reviewed the complete agreement, accept its terms, consent to electronic records and intend this electronic signature to be legally binding.</span></label>
+          <DialogFooter><Button variant="outline" onClick={() => setSignatureDialogOpen(false)} disabled={working}>Cancel</Button><Button onClick={submit} disabled={working || !hasSignature || !signerName.trim() || !phone.trim() || pin.length !== 6 || !consent}>{working ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />} Apply secure signature</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
