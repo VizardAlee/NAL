@@ -2,6 +2,7 @@ import { PDFDocument, StandardFonts, degrees, rgb, type PDFImage, type PDFFont, 
 import { formatAgreementCurrency, formatAgreementDate } from './mudaraba';
 import { buildKafaalahClauses, type KafaalahBondModel } from './kafaalah';
 import type { AgreementSignerRole, AgreementSigningState } from './signing';
+import { buildAgreementVerificationQr } from './verification-qr';
 
 const A4: [number, number] = [595.28, 841.89];
 const GREEN = rgb(0.027, 0.353, 0.235);
@@ -33,6 +34,9 @@ export async function buildKafaalahBondPdf(model: KafaalahBondModel, signing?: A
   const stamp = stampBytes ? await pdf.embedPng(stampBytes).catch(() => null) : null;
   const institutionBytes = typeof window !== 'undefined' ? await fetchBytes(new URL('/non-interest-institution.png', window.location.origin).toString()) : null;
   const institutionMark = institutionBytes ? await pdf.embedPng(institutionBytes).catch(() => null) : null;
+  const verification = await buildAgreementVerificationQr(signing).catch(() => null);
+  const verificationBytes = verification ? await fetchBytes(verification.dataUrl) : null;
+  const verificationQr = verificationBytes ? await pdf.embedPng(verificationBytes).catch(() => null) : null;
   const photoBytes = model.guarantor.photoURL ? await fetchBytes(model.guarantor.photoURL) : null;
   const photo = photoBytes ? await (async () => { try { return await pdf.embedJpg(photoBytes); } catch { try { return await pdf.embedPng(photoBytes); } catch { return null; } } })() : null;
   const signatureImages = new Map<AgreementSignerRole, PDFImage>();
@@ -45,7 +49,7 @@ export async function buildKafaalahBondPdf(model: KafaalahBondModel, signing?: A
   const addPage = () => { page = pdf.addPage(A4); y = A4[1] - 45; if (logo) page.drawImage(logo, { x: margin, y: y - 28, width: 38, height: 30 }); if (institutionMark) page.drawImage(institutionMark, { x: A4[0] - margin - 74, y: y - 34, width: 74, height: 42 }); page.drawText(safe(model.company.name), { x: margin + 47, y: y - 10, size: 10.5, font: bold, color: GREEN }); page.drawText(safe(model.company.address), { x: margin + 47, y: y - 24, size: 6.8, font: regular, color: MUTED }); page.drawLine({ start: { x: margin, y: y - 36 }, end: { x: A4[0] - margin, y: y - 36 }, thickness: 1.2, color: GREEN }); y -= 57; };
   const ensure = (height: number) => { if (y - height < 55) addPage(); };
   const draw = (text: string, options?: { font?: PDFFont; size?: number; gap?: number }) => { const font = options?.font || regular; const size = options?.size || 9; const height = size * 1.38; for (const line of wrap(text, font, size, width)) { ensure(height); page.drawText(line, { x: margin, y, size, font, color: TEXT }); y -= height; } y -= options?.gap ?? 5; };
-  const drawSignature = (role: AgreementSignerRole, fallback: string) => { const signature = signing?.signatures[role]; const image = signatureImages.get(role); if (!signature || !image) { draw(fallback); return; } ensure(75); page.drawImage(image, { x: margin, y: y - 42, width: 145, height: 48 }); y -= 48; draw(`Electronically signed by ${signature.signerName}\n${new Date(signature.signedAt).toLocaleString('en-NG')} | Verification ${signature.signatureHash.slice(0, 16)}`, { size: 7.5 }); };
+  const drawSignature = (role: AgreementSignerRole, fallback: string) => { const signature = signing?.signatures[role]; const image = signatureImages.get(role); if (!signature || !image) { draw(fallback); return; } ensure(75); page.drawImage(image, { x: margin, y: y - 42, width: 145, height: 48 }); y -= 48; draw(`Electronically signed by ${signature.signerName}\n${new Date(signature.signedAt).toLocaleString('en-NG')} | Verification ref ${signature.signatureHash.slice(0, 16).toUpperCase()}`, { size: 7.5 }); };
   addPage();
   page.drawText('KAFAALAH BOND', { x: margin, y, size: 17, font: bold, color: GREEN }); y -= 20; page.drawText('GUARANTEE AND INDEMNITY', { x: margin, y, size: 11, font: bold, color: TEXT }); y -= 24;
   draw(`Bond Reference: ${model.bondId}`, { font: bold }); draw(`Principal Agreement: ${model.deal.name} (${model.deal.financingMode})`); draw(`Contract Amount: ${formatAgreementCurrency(model.deal.principal)}`);
@@ -67,6 +71,16 @@ export async function buildKafaalahBondPdf(model: KafaalahBondModel, signing?: A
     y -= 130;
   }
   draw('This Bond should be reviewed by a Nigerian legal practitioner and qualified Sharia adviser before execution.', { font: italic, size: 8 });
+  if (verification && verificationQr) {
+    ensure(108);
+    page.drawRectangle({ x: margin, y: y - 90, width, height: 94, borderColor: GREEN, borderWidth: 1, color: rgb(0.965, 0.99, 0.98) });
+    page.drawImage(verificationQr, { x: margin + 8, y: y - 82, width: 76, height: 76 });
+    page.drawText('SCAN TO VERIFY THIS EXECUTED AGREEMENT', { x: margin + 96, y: y - 20, size: 9, font: bold, color: GREEN });
+    page.drawText(`Reference: ${verification.reference.slice(0, 24).toUpperCase()}`, { x: margin + 96, y: y - 38, size: 7.5, font: regular, color: TEXT });
+    page.drawText('Opens the official NAL authenticity register at nalgm.com', { x: margin + 96, y: y - 54, size: 7, font: regular, color: MUTED });
+    page.drawText('Compare the reference, parties and amount with this document.', { x: margin + 96, y: y - 68, size: 7, font: regular, color: MUTED });
+    y -= 102;
+  }
   const pages = pdf.getPages(); pages.forEach((pdfPage, index) => { if (!executed) pdfPage.drawText('DRAFT - NOT FULLY EXECUTED', { x: 105, y: 390, size: 28, font: bold, color: rgb(0.75, 0.08, 0.08), rotate: degrees(35), opacity: 0.12 }); const footer = `${model.company.name} | RC No. ${model.company.rcNumber} | ${model.company.email} | ${model.company.website} | Tel: ${model.company.phoneNumbers} | Page ${index + 1} of ${pages.length}`; pdfPage.drawLine({ start: { x: margin, y: 35 }, end: { x: A4[0] - margin, y: 35 }, thickness: 0.6, color: GREEN }); pdfPage.drawText(safe(wrap(footer, regular, 6.5, width)[0]), { x: margin, y: 22, size: 6.5, font: regular, color: MUTED }); });
   return pdf.save();
 }

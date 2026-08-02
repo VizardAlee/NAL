@@ -2,6 +2,7 @@ import { PDFDocument, StandardFonts, degrees, rgb, type PDFImage, type PDFFont, 
 import { formatAgreementCurrency, formatAgreementDate } from './mudaraba';
 import { buildWakalahClauses, type WakalahAgreementModel } from './wakalah';
 import type { AgreementSignerRole, AgreementSigningState } from './signing';
+import { buildAgreementVerificationQr } from './verification-qr';
 
 const A4: [number, number] = [595.28, 841.89];
 const GREEN = rgb(0.027, 0.353, 0.235);
@@ -49,6 +50,9 @@ export async function buildWakalahAgreementPdf(model: WakalahAgreementModel, sig
   const stamp = stampBytes ? await pdf.embedPng(stampBytes).catch(() => null) : null;
   const institutionBytes = typeof window !== 'undefined' ? await fetchBytes(new URL('/non-interest-institution.png', window.location.origin).toString()) : null;
   const institutionMark = institutionBytes ? await pdf.embedPng(institutionBytes).catch(() => null) : null;
+  const verification = await buildAgreementVerificationQr(signing).catch(() => null);
+  const verificationBytes = verification ? await fetchBytes(verification.dataUrl) : null;
+  const verificationQr = verificationBytes ? await pdf.embedPng(verificationBytes).catch(() => null) : null;
   const photoBytes = model.client.photoURL ? await fetchBytes(model.client.photoURL) : null;
   const photo = photoBytes ? await (async () => {
     try { return await pdf.embedJpg(photoBytes); } catch { try { return await pdf.embedPng(photoBytes); } catch { return null; } }
@@ -90,7 +94,7 @@ export async function buildWakalahAgreementPdf(model: WakalahAgreementModel, sig
     const signature = signing?.signatures[role]; const image = signatureImages.get(role);
     if (!signature || !image) { draw(fallback); return; }
     ensure(75); page.drawImage(image, { x: margin, y: y - 42, width: 145, height: 48 }); y -= 48;
-    draw(`Electronically signed by ${signature.signerName}\n${new Date(signature.signedAt).toLocaleString('en-NG')} | Verification ${signature.signatureHash.slice(0, 16)}`, { size: 7.5 });
+    draw(`Electronically signed by ${signature.signerName}\n${new Date(signature.signedAt).toLocaleString('en-NG')} | Verification ref ${signature.signatureHash.slice(0, 16).toUpperCase()}`, { size: 7.5 });
   };
 
   addPage();
@@ -132,6 +136,17 @@ export async function buildWakalahAgreementPdf(model: WakalahAgreementModel, sig
   drawSignature('CLIENT', 'Signature: ________________________    Date: ____________________');
   draw('IN THE PRESENCE OF A WITNESS', { font: bold });
   drawSignature('WITNESS', 'Name: ______________________________\nPhone Number: _______________________\nSignature: __________________________    Date: ____________________');
+
+  if (verification && verificationQr) {
+    ensure(108);
+    page.drawRectangle({ x: margin, y: y - 90, width, height: 94, borderColor: GREEN, borderWidth: 1, color: rgb(0.965, 0.99, 0.98) });
+    page.drawImage(verificationQr, { x: margin + 8, y: y - 82, width: 76, height: 76 });
+    page.drawText('SCAN TO VERIFY THIS EXECUTED AGREEMENT', { x: margin + 96, y: y - 20, size: 9, font: bold, color: GREEN });
+    page.drawText(`Reference: ${verification.reference.slice(0, 24).toUpperCase()}`, { x: margin + 96, y: y - 38, size: 7.5, font: regular, color: TEXT });
+    page.drawText('Opens the official NAL authenticity register at nalgm.com', { x: margin + 96, y: y - 54, size: 7, font: regular, color: MUTED });
+    page.drawText('Compare the reference, parties and amount with this document.', { x: margin + 96, y: y - 68, size: 7, font: regular, color: MUTED });
+    y -= 102;
+  }
 
   const pages = pdf.getPages();
   pages.forEach((pdfPage, index) => {

@@ -6,6 +6,7 @@ import {
   type MudarabaAgreementModel,
 } from './mudaraba';
 import type { AgreementSignerRole, AgreementSigningState } from './signing';
+import { buildAgreementVerificationQr } from './verification-qr';
 
 const A4: [number, number] = [595.28, 841.89];
 const GREEN = rgb(0.027, 0.353, 0.235);
@@ -75,6 +76,9 @@ export async function buildMudarabaAgreementPdf(model: MudarabaAgreementModel, s
     ? await fetchBytes(new URL('/non-interest-institution.png', window.location.origin).toString())
     : null;
   const institutionMark = institutionBytes ? await pdf.embedPng(institutionBytes).catch(() => null) : null;
+  const verification = await buildAgreementVerificationQr(signing).catch(() => null);
+  const verificationBytes = verification ? await fetchBytes(verification.dataUrl) : null;
+  const verificationQr = verificationBytes ? await pdf.embedPng(verificationBytes).catch(() => null) : null;
   const photoBytes = model.investor.photoURL ? await fetchBytes(model.investor.photoURL) : null;
   const photo = photoBytes
     ? await (async () => {
@@ -144,7 +148,7 @@ export async function buildMudarabaAgreementPdf(model: MudarabaAgreementModel, s
     ensureSpace(75);
     page.drawImage(image, { x: margin, y: y - 42, width: 145, height: 48 });
     y -= 48;
-    drawWrapped(`Electronically signed by ${signature.signerName}\n${new Date(signature.signedAt).toLocaleString('en-NG')} | Verification ${signature.signatureHash.slice(0, 16)}`, { size: 7.5 });
+    drawWrapped(`Electronically signed by ${signature.signerName}\n${new Date(signature.signedAt).toLocaleString('en-NG')} | Verification ref ${signature.signatureHash.slice(0, 16).toUpperCase()}`, { size: 7.5 });
   };
 
   addPage();
@@ -203,6 +207,17 @@ export async function buildMudarabaAgreementPdf(model: MudarabaAgreementModel, s
   drawTableRow('Payment Reference', model.paymentReference, 1);
   drawTableRow('Company Receiving Account', `${model.company.account.accountName} | ${model.company.account.accountNumber} | ${model.company.account.bankName}`, 2);
   drawTableRow('Investor Verified Account', `${model.investor.account.accountName} | ${model.investor.account.accountNumber} | ${model.investor.account.bankName}`, 3);
+
+  if (verification && verificationQr) {
+    ensureSpace(108);
+    page.drawRectangle({ x: margin, y: y - 90, width, height: 94, borderColor: GREEN, borderWidth: 1, color: rgb(0.965, 0.99, 0.98) });
+    page.drawImage(verificationQr, { x: margin + 8, y: y - 82, width: 76, height: 76 });
+    page.drawText('SCAN TO VERIFY THIS EXECUTED AGREEMENT', { x: margin + 96, y: y - 20, size: 9, font: bold, color: GREEN });
+    page.drawText(`Reference: ${verification.reference.slice(0, 24).toUpperCase()}`, { x: margin + 96, y: y - 38, size: 7.5, font: regular, color: TEXT });
+    page.drawText('Opens the official NAL authenticity register at nalgm.com', { x: margin + 96, y: y - 54, size: 7, font: regular, color: MUTED });
+    page.drawText('Compare the reference, parties and amount with this document.', { x: margin + 96, y: y - 68, size: 7, font: regular, color: MUTED });
+    y -= 102;
+  }
 
   const pages = pdf.getPages();
   pages.forEach((pdfPage, index) => {
