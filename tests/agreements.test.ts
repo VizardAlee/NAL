@@ -71,6 +71,12 @@ test('non-Muslim agreements explicitly prohibit Zakat deductions', () => {
   assert.match(clauses.find((clause) => clause.number === 9)?.body || '', /no Zakat shall be deducted/i);
 });
 
+test('permitted activities expressly include Mudaraba', () => {
+  const permittedActivities = buildMudarabaClauses(sampleAgreement)
+    .find((clause) => clause.number === 3)?.body || '';
+  assert.match(permittedActivities, /including Murabaha, Mudaraba, Salam/);
+});
+
 test('the generated agreement is a real PDF document', async () => {
   const bytes = await buildMudarabaAgreementPdf(sampleAgreement);
   assert.equal(Buffer.from(bytes).subarray(0, 4).toString(), '%PDF');

@@ -164,7 +164,7 @@ export function buildMudarabaClauses(model: MudarabaAgreementModel): AgreementCl
     {
       number: 3,
       title: 'PERMITTED ACTIVITIES',
-      body: 'The Company shall deploy the capital only in lawful and Sharia-compliant activities, including Murabaha, Salam, Istisna, Ijara, Musharaka and other lawful trade or joint-venture transactions. The capital shall not be used for unlawful activity, personal expenditure, prohibited interest-bearing transactions or undisclosed related-party dealings.',
+      body: 'The Company shall deploy the capital only in lawful and Sharia-compliant activities, including Murabaha, Mudaraba, Salam, Istisna, Ijara, Musharaka and other lawful trade or joint-venture transactions. The capital shall not be used for unlawful activity, personal expenditure, prohibited interest-bearing transactions or undisclosed related-party dealings.',
     },
     {
       number: 4,
