@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ViewPageNav } from '@/components/view-page-nav';
-import { payZakatAction, updateAccessRoleAction } from './actions';
+import { updateAccessRoleAction } from './actions';
 import { getRequiredIdToken } from '@/firebase/auth-token';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -40,6 +40,7 @@ import Image from 'next/image';
 import { getMarketerStats } from '@/app/marketer/dashboard/actions';
 import { canWriteAdmin, hasPersona, isReadOnlyOwner, normalizeAccessModel } from '@/lib/access-control';
 import { isZakatApplicable } from '@/lib/zakat-eligibility';
+import { calculateZakatAmount, getNextZakatAssessmentDate } from '@/lib/zakat';
 
 type UserProfile = DocumentData & {
     id: string;
@@ -48,6 +49,7 @@ type UserProfile = DocumentData & {
     phoneNumber?: string;
     role: 'Admin' | 'Investor' | 'Client' | 'Legal' | 'Recovery' | 'Marketer';
     lastZakatPaymentDate?: Timestamp;
+    lastZakatAssessmentDate?: Timestamp;
     legalDocumentUrl?: string;
     referralCode?: string;
     rating?: number;
@@ -134,15 +136,13 @@ const formatDate = (timestamp: Timestamp | Date | undefined) => {
     }
 };
 
-const ZakatCountdown = ({ firstDepositDate, lastZakatPaymentDate }: { firstDepositDate: Date, lastZakatPaymentDate?: Date }) => {
+const ZakatCountdown = ({ firstDepositDate, lastZakatAssessmentDate, lastZakatPaymentDate }: { firstDepositDate: Date, lastZakatAssessmentDate?: Date, lastZakatPaymentDate?: Date }) => {
     const [timeLeft, setTimeLeft] = useState('');
 
     const targetDate = useMemo(() => {
-        const baseDate = lastZakatPaymentDate || firstDepositDate;
-        const target = new Date(baseDate);
-        target.setFullYear(target.getFullYear() + 1);
-        return target;
-    }, [firstDepositDate, lastZakatPaymentDate]);
+        const baseDate = lastZakatAssessmentDate || lastZakatPaymentDate || firstDepositDate;
+        return getNextZakatAssessmentDate(baseDate);
+    }, [firstDepositDate, lastZakatAssessmentDate, lastZakatPaymentDate]);
 
     useEffect(() => {
         const updateCountdown = () => {
@@ -318,8 +318,8 @@ export default function UserDetailPage() {
         }
 
         const nisab = zakatSettings?.nisab || 0;
-        const isEligible = financialMetrics.portfolioValue >= nisab;
-        const amount = financialMetrics.portfolioValue * 0.025;
+        const amount = calculateZakatAmount(financialMetrics.portfolioValue, nisab);
+        const isEligible = amount > 0;
 
         return { isZakatEligible: isEligible, zakatAmount: amount };
     }, [financialMetrics, zakatSettings, userProfile]);
@@ -663,6 +663,7 @@ export default function UserDetailPage() {
                                 {firstDeposit?.[0]?.createdAt && (
                                     <ZakatCountdown
                                         firstDepositDate={firstDeposit[0].createdAt.toDate()}
+                                        lastZakatAssessmentDate={userProfile.lastZakatAssessmentDate?.toDate()}
                                         lastZakatPaymentDate={userProfile.lastZakatPaymentDate?.toDate()}
                                     />
                                 )}

@@ -11,6 +11,7 @@ export const runDailyAutomation = onSchedule(
     secrets: [cronSecret],
     retryCount: 3,
     maxRetrySeconds: 900,
+    timeoutSeconds: 540,
   },
   async () => {
     const response = await fetch("https://nalgm.com/api/cron", {

@@ -29,6 +29,14 @@
           "format": "date-time",
           "description": "The timestamp of the user's last Zakat payment."
         },
+        "lastZakatAssessmentDate": {
+          "type": "timestamp",
+          "description": "The timestamp of the user's last completed annual Zakat assessment, including a zero assessment below Nisab."
+        },
+        "lastZakatFundingNoticeDate": {
+          "type": "timestamp",
+          "description": "The timestamp of the latest insufficient-balance Zakat notice, used to prevent repeated notifications."
+        },
         "fcmTokens": {
           "type": "array",
           "items": { "type": "string" },
