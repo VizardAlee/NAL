@@ -62,11 +62,10 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
 
             const approvedAmountPaid = relatedRepayments.filter(r => r.status === 'Approved').reduce((sum, r) => sum + r.amount, 0);
             const pendingAmount = relatedRepayments.filter(r => r.status === 'Pending').reduce((sum, r) => sum + r.amount, 0);
-            const totalAmountPaid = approvedAmountPaid + pendingAmount;
-            const amountRemaining = Math.max(0, installment.payment - totalAmountPaid);
+            const amountRemaining = Math.max(0, installment.payment - approvedAmountPaid);
 
             let status: RepaymentStatus = 'Upcoming';
-            if (amountRemaining <= 0.01) { // Tolerance for float precision
+            if (approvedAmountPaid >= installment.payment - 0.01) { // Tolerance for float precision
                 status = 'Paid';
             } else if (pendingAmount > 0) {
                 status = 'Pending';
@@ -76,7 +75,7 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
                 status = 'Due';
             }
 
-            return { ...installment, status, amountPaid: totalAmountPaid, amountRemaining, paymentHistory: relatedRepayments, openingBalance };
+            return { ...installment, status, amountPaid: approvedAmountPaid, amountRemaining, paymentHistory: relatedRepayments, openingBalance };
         });
     }, [schedule, initialRepayments, deal.principal]);
 

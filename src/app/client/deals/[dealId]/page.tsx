@@ -5,7 +5,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2, HandCoins, Gavel, Download, ScrollText } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, HandCoins, Gavel, Download, Printer, ScrollText } from "lucide-react";
 import { useMemo, useTransition } from 'react';
 import { useAuth, useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, doc } from 'firebase/firestore';
@@ -24,6 +24,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import Image from "next/image";
 import Link from "next/link";
 import { RepaymentPlanChangeDialog } from '@/components/deals/repayment-plan-change-dialog';
+import { PrintableDealStatement } from '@/components/deals/printable-deal-statement';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -38,6 +39,11 @@ import {
 
 type UserProfile = DocumentData & {
     id: string;
+    name?: string;
+    address?: string;
+    bankName?: string;
+    bankAccountName?: string;
+    bankAccountNumber?: string;
     legalDocumentUrl?: string;
 };
 
@@ -142,7 +148,7 @@ export default function ClientDealDetailPage() {
     return (
         <div>
             <PageHeader title={deal.dealName} icon={FileText}>
-                <ViewPageNav homePath="/client/dashboard" />
+                <div className="flex flex-wrap items-center gap-2 print:hidden"><Button variant="outline" onClick={() => window.print()} disabled={repaymentsLoading}><Printer className="mr-2 h-4 w-4" /> Print Deal &amp; Schedule</Button><ViewPageNav homePath="/client/dashboard" /></div>
             </PageHeader>
             <div className="grid gap-6 md:grid-cols-3">
                 <Card className="flex flex-col md:col-span-2">
@@ -275,6 +281,7 @@ export default function ClientDealDetailPage() {
                     </TabsContent>
                 </Tabs>
             </div>
+            <PrintableDealStatement deal={deal} repayments={repayments} clientProfile={userProfile} />
         </div>
     )
 }

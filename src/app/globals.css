@@ -26,6 +26,43 @@ html {
   text-align: justify;
 }
 
+.deal-print-statement {
+  display: none;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.deal-print-table thead {
+  display: table-header-group;
+}
+
+.deal-print-table tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.deal-print-table th,
+.deal-print-table td {
+  border: 1px solid #64748b;
+  padding: 4px 5px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.deal-print-table th {
+  background: #334155 !important;
+  color: white !important;
+  font-weight: 700;
+}
+
+.deal-print-table tbody tr:nth-child(even) td {
+  background: #e8f1f5 !important;
+}
+
+@page deal-statement {
+  size: A4 landscape;
+  margin: 10mm;
+}
+
 @media print {
   @page {
     size: A4;
@@ -52,6 +89,13 @@ html {
     min-height: 0;
     box-shadow: none !important;
     padding: 0 !important;
+  }
+
+  .deal-print-statement {
+    display: block !important;
+    page: deal-statement;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
 

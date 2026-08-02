@@ -10,7 +10,7 @@ import { doc, collection, query, where, DocumentData, Timestamp, orderBy } from 
 import { useAuth, useFirestore } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { FileText, Users, Landmark, Zap, Loader2, UserCheck, HandCoins, CheckCircle, BookOpen } from 'lucide-react';
+import { FileText, Users, Landmark, Zap, Loader2, UserCheck, HandCoins, CheckCircle, BookOpen, Printer } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -24,10 +24,15 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RepaymentSchedule, RepaymentHistory } from '@/components/deals/page';
 import { approveManagementFeeAction } from '../actions';
+import { PrintableDealStatement } from '@/components/deals/printable-deal-statement';
 
 type User = {
     id: string;
     name: string;
+    address?: string;
+    bankName?: string;
+    bankAccountName?: string;
+    bankAccountNumber?: string;
 }
 
 type FundBatch = DocumentData & {
@@ -142,6 +147,8 @@ export default function DealDetailPage() {
         }));
     }, [investments, users]);
 
+    const clientProfile = useMemo(() => users?.find((candidate) => candidate.id === deal?.clientId) || null, [deal?.clientId, users]);
+
     const eligibleFundBatches = useMemo(() => {
         if (!deal || !fundBatches || !users) return [];
 
@@ -250,7 +257,8 @@ export default function DealDetailPage() {
     return (
         <div>
             <PageHeader title={deal.dealName} icon={FileText}>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-3 print:hidden">
+                    <Button variant="outline" onClick={() => window.print()} disabled={repaymentsLoading}><Printer className="mr-2 h-4 w-4" /> Print Deal &amp; Schedule</Button>
                     <Badge variant={statusVariant[deal.status] || 'secondary'} className="text-base px-4 py-2">{deal.status}</Badge>
                     <ViewPageNav homePath="/admin/deals" />
                 </div>
@@ -435,6 +443,7 @@ export default function DealDetailPage() {
                     </Card>
                 </div>
             </div>
+            <PrintableDealStatement deal={deal} repayments={repayments} clientProfile={clientProfile} />
         </div>
     );
 }
