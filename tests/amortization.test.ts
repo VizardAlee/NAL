@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  buildRestructuredRepaymentSchedule,
   calculateRemainingRepaymentBalance,
+  createRestructuredRepaymentPlan,
   generateAmortizationSchedule,
 } from '../src/lib/amortization';
 import type { Deal } from '../src/lib/types';
@@ -88,4 +90,58 @@ test('month-end schedules remain ordered and finite', () => {
   const schedule = generateAmortizationSchedule(deal({ createdAt: timestamp(new Date('2028-01-31T00:00:00Z')) }));
   assert.ok(schedule.every((row) => Number.isFinite(row.payment) && row.payment >= 0));
   assert.ok(schedule.every((row, index) => index === 0 || row.dueDate > schedule[index - 1].dueDate));
+});
+
+test('approved installments are preserved when future repayments change frequency', () => {
+  const currentDeal = deal();
+  const original = generateAmortizationSchedule(currentDeal);
+  const revised = buildRestructuredRepaymentSchedule({
+    deal: currentDeal,
+    approvedInstallmentNumbers: [1, 2],
+    newDurationValue: 10,
+    newDurationUnit: 'Months',
+    newRepaymentFrequency: 'Weekly',
+    effectiveDate: new Date('2026-03-01T00:00:00Z'),
+  });
+
+  assert.deepEqual(revised.slice(0, 2).map((row) => row.installment), [1, 2]);
+  assert.deepEqual(revised.slice(0, 2).map((row) => row.payment), original.slice(0, 2).map((row) => row.payment));
+  assert.ok(revised.slice(2).every((row) => row.installment > original.length));
+  assert.ok(revised.length > original.length);
+  assert.equal(Number(revised.reduce((sum, row) => sum + row.principal, 0).toFixed(2)), 1_000_000);
+  assert.equal(Number(revised.reduce((sum, row) => sum + row.interest, 0).toFixed(2)), 120_000);
+  assert.equal(revised.at(-1)?.balance, 0);
+});
+
+test('an approved duration change preserves totals to the kobo', () => {
+  const revised = buildRestructuredRepaymentSchedule({
+    deal: deal(),
+    approvedInstallmentNumbers: [],
+    newDurationValue: 18,
+    newDurationUnit: 'Months',
+    newRepaymentFrequency: 'Monthly',
+    effectiveDate: new Date('2026-03-01T00:00:00Z'),
+  });
+  assert.equal(revised.length, 18);
+  assert.equal(Math.round(revised.reduce((sum, row) => sum + row.payment, 0) * 100), 112_000_000);
+});
+
+test('a stored compact repayment plan recreates the approved schedule', () => {
+  const currentDeal = deal();
+  const input = {
+    deal: currentDeal,
+    approvedInstallmentNumbers: [1],
+    newDurationValue: 6,
+    newDurationUnit: 'Months' as const,
+    newRepaymentFrequency: 'Weekly' as const,
+    effectiveDate: new Date('2026-02-02T00:00:00Z'),
+  };
+  const plan = createRestructuredRepaymentPlan(input);
+  const storedDeal = deal({
+    repaymentPlanOverride: {
+      preservedInstallments: plan.preservedInstallments.map((row) => ({ ...row, dueDate: timestamp(row.dueDate) })),
+      futureSegment: { ...plan.futureSegment, startDate: timestamp(plan.futureSegment.startDate) },
+    },
+  });
+  assert.deepEqual(generateAmortizationSchedule(storedDeal), buildRestructuredRepaymentSchedule(input));
 });

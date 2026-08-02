@@ -95,6 +95,22 @@ test('agreement signing records cannot be read or forged from client SDKs', asyn
   }
 });
 
+test('repayment-plan requests are readable by the client and admin but writable only by the server', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'repaymentPlanChangeRequests', 'request'), {
+      clientId: 'client', status: 'Pending', dealId: 'deal',
+    });
+  });
+  const clientDb = env.authenticatedContext('client').firestore();
+  const adminDb = env.authenticatedContext('admin').firestore();
+  const attackerDb = env.authenticatedContext('attacker').firestore();
+  await assertSucceeds(getDoc(doc(clientDb, 'repaymentPlanChangeRequests', 'request')));
+  await assertSucceeds(getDoc(doc(adminDb, 'repaymentPlanChangeRequests', 'request')));
+  await assertFails(getDoc(doc(attackerDb, 'repaymentPlanChangeRequests', 'request')));
+  await assertFails(updateDoc(doc(clientDb, 'repaymentPlanChangeRequests', 'request'), { status: 'Approved' }));
+  await assertFails(updateDoc(doc(adminDb, 'repaymentPlanChangeRequests', 'request'), { status: 'Approved' }));
+});
+
 test('transactional pending check permits only one concurrent approval', async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();

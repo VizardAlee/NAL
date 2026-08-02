@@ -32,6 +32,7 @@ import {
   Landmark,
   MoreHorizontal,
   FileSignature,
+  CalendarSync,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +70,7 @@ export const adminMenuItems: MenuItem[] = [
       { href: "/admin/approvals/withdrawals", label: "Withdrawals", icon: HandCoins, notificationCollection: 'withdrawalRequests' },
       { href: "/admin/approvals/reinvestments", label: "Reinvestments", icon: RefreshCcw, notificationCollection: 'reinvestmentRequests' },
       { href: "/admin/approvals/repayments", label: "Repayments", icon: HandCoins, notificationCollection: 'repayments' },
+      { href: "/admin/approvals/repayment-changes", label: "Repayment Changes", icon: CalendarSync, notificationCollection: 'repaymentPlanChangeRequests' },
       { href: "/admin/approvals/terminations", label: "Terminations", icon: ShieldAlert, notificationCollection: 'terminationRequests' },
       { href: "/admin/approvals/chat-requests", label: "Chat Requests", icon: MessageSquarePlus, notificationCollection: 'chatRequests' },
     ],
@@ -105,7 +107,7 @@ function NotificationBadge({ collectionName }: { collectionName: string }) {
     }
 
     // For other collections with a 'status' field
-    if (['dealRequests', 'depositRequests', 'withdrawalRequests', 'reinvestmentRequests', 'repayments', 'terminationRequests'].includes(collectionName)) {
+    if (['dealRequests', 'depositRequests', 'withdrawalRequests', 'reinvestmentRequests', 'repayments', 'repaymentPlanChangeRequests', 'terminationRequests'].includes(collectionName)) {
       return query(collection(firestore, collectionName), where('status', '==', 'Pending'));
     }
 

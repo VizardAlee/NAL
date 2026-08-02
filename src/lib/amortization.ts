@@ -22,8 +22,9 @@ function toKobo(value: number): number {
   return Math.round(Number(value || 0) * 100);
 }
 
-function getPeriods(deal: Deal): { totalPeriods: number; addPeriod: (date: Date, count: number) => Date } {
-  const termStartDate = deal.startDate?.toDate() || deal.createdAt?.toDate();
+type RepaymentTerms = Pick<Deal, 'durationValue' | 'durationUnit' | 'repaymentFrequency'>;
+
+function getPeriodsForTerms(termStartDate: Date | undefined, terms: RepaymentTerms): { totalPeriods: number; addPeriod: (date: Date, count: number) => Date } {
   if (!termStartDate) {
       return { totalPeriods: 0, addPeriod: (date, count) => add(date, { days: count }) };
   }
@@ -31,20 +32,18 @@ function getPeriods(deal: Deal): { totalPeriods: number; addPeriod: (date: Date,
   let totalPeriods = 0;
   let addPeriod: (date: Date, count: number) => Date;
 
-  const durationInDays = (() => {
-    switch (deal.durationUnit) {
-      case 'Days': return deal.durationValue;
-      case 'Weeks': return deal.durationValue * 7;
-      case 'Fortnights': return deal.durationValue * 14;
-      case 'Months': return deal.durationValue * 30.4375; // Average days in month
-      case 'Years': return deal.durationValue * 365.25;
-      default: return 0;
+  const endDate = (() => {
+    switch (terms.durationUnit) {
+      case 'Days': return add(termStartDate, { days: terms.durationValue });
+      case 'Weeks': return add(termStartDate, { weeks: terms.durationValue });
+      case 'Fortnights': return add(termStartDate, { weeks: terms.durationValue * 2 });
+      case 'Months': return add(termStartDate, { months: terms.durationValue });
+      case 'Years': return add(termStartDate, { years: terms.durationValue });
+      default: return termStartDate;
     }
   })();
 
-  const endDate = add(termStartDate, { days: Math.round(durationInDays) });
-
-  switch (deal.repaymentFrequency) {
+  switch (terms.repaymentFrequency) {
     case 'Daily':
       totalPeriods = differenceInDays(endDate, termStartDate);
       addPeriod = (date, count) => add(date, { days: count });
@@ -72,8 +71,126 @@ function getPeriods(deal: Deal): { totalPeriods: number; addPeriod: (date: Date,
   return { totalPeriods: Math.max(1, totalPeriods), addPeriod };
 }
 
+function getPeriods(deal: Deal): { totalPeriods: number; addPeriod: (date: Date, count: number) => Date } {
+  return getPeriodsForTerms(deal.startDate?.toDate() || deal.createdAt?.toDate(), deal);
+}
+
+export function generateUniformRepaymentSegment(input: {
+  principal: number;
+  profit: number;
+  startDate: Date;
+  durationValue: number;
+  durationUnit: Deal['durationUnit'];
+  repaymentFrequency: Deal['repaymentFrequency'];
+  startingInstallment?: number;
+}): ScheduleInstallment[] {
+  const principalInKobo = toKobo(input.principal);
+  const profitInKobo = toKobo(input.profit);
+  if (principalInKobo + profitInKobo <= 0) return [];
+  const { totalPeriods, addPeriod } = getPeriodsForTerms(input.startDate, input);
+  const principalPerPeriod = Math.floor(principalInKobo / totalPeriods);
+  const profitPerPeriod = Math.floor(profitInKobo / totalPeriods);
+  const principalRemainder = principalInKobo % totalPeriods;
+  const profitRemainder = profitInKobo % totalPeriods;
+  let allocatedPrincipal = 0;
+  return Array.from({ length: totalPeriods }, (_, index) => {
+    const principal = principalPerPeriod + (index < principalRemainder ? 1 : 0);
+    const profit = profitPerPeriod + (index < profitRemainder ? 1 : 0);
+    allocatedPrincipal += principal;
+    return {
+      installment: (input.startingInstallment || 1) + index,
+      dueDate: addPeriod(input.startDate, index + 1),
+      payment: (principal + profit) / 100,
+      principal: principal / 100,
+      interest: profit / 100,
+      balance: (principalInKobo - allocatedPrincipal) / 100,
+    };
+  });
+}
+
+export type RestructuredRepaymentPlan = {
+  preservedInstallments: ScheduleInstallment[];
+  futureSegment: Parameters<typeof generateUniformRepaymentSegment>[0];
+};
+
+function materializeRepaymentPlan(plan: RestructuredRepaymentPlan): ScheduleInstallment[] {
+  const replacement = generateUniformRepaymentSegment(plan.futureSegment);
+  let remainingPrincipal = [...plan.preservedInstallments, ...replacement]
+    .reduce((sum, installment) => sum + toKobo(installment.principal), 0);
+  return [...plan.preservedInstallments, ...replacement]
+    .sort((left, right) => left.dueDate.getTime() - right.dueDate.getTime())
+    .map((installment) => {
+      remainingPrincipal -= toKobo(installment.principal);
+      return { ...installment, balance: Math.max(0, remainingPrincipal) / 100 };
+    });
+}
+
+export function createRestructuredRepaymentPlan(input: {
+  deal: Deal;
+  approvedInstallmentNumbers: number[];
+  newDurationValue: number;
+  newDurationUnit: Deal['durationUnit'];
+  newRepaymentFrequency: Deal['repaymentFrequency'];
+  effectiveDate: Date;
+}): RestructuredRepaymentPlan {
+  const currentSchedule = generateAmortizationSchedule(input.deal);
+  const approved = new Set(input.approvedInstallmentNumbers);
+  const preserved = currentSchedule.filter((installment) => approved.has(installment.installment));
+  const totalPrincipal = currentSchedule.reduce((sum, installment) => sum + toKobo(installment.principal), 0);
+  const totalProfit = currentSchedule.reduce((sum, installment) => sum + toKobo(installment.interest), 0);
+  const preservedPrincipal = preserved.reduce((sum, installment) => sum + toKobo(installment.principal), 0);
+  const preservedProfit = preserved.reduce((sum, installment) => sum + toKobo(installment.interest), 0);
+  const latestPreservedDueDate = preserved.reduce(
+    (latest, installment) => installment.dueDate > latest ? installment.dueDate : latest,
+    input.effectiveDate
+  );
+  const nextInstallment = preserved.length
+    ? Math.max(...currentSchedule.map((installment) => installment.installment)) + 1
+    : 1;
+  return {
+    preservedInstallments: preserved,
+    futureSegment: {
+      principal: (totalPrincipal - preservedPrincipal) / 100,
+      profit: (totalProfit - preservedProfit) / 100,
+      startDate: latestPreservedDueDate,
+      durationValue: input.newDurationValue,
+      durationUnit: input.newDurationUnit,
+      repaymentFrequency: input.newRepaymentFrequency,
+      startingInstallment: nextInstallment,
+    },
+  };
+}
+
+export function buildRestructuredRepaymentSchedule(input: Parameters<typeof createRestructuredRepaymentPlan>[0]): ScheduleInstallment[] {
+  return materializeRepaymentPlan(createRestructuredRepaymentPlan(input));
+}
+
 
 export function generateAmortizationSchedule(deal: Deal): ScheduleInstallment[] {
+  if (deal.repaymentPlanOverride) {
+    return materializeRepaymentPlan({
+      preservedInstallments: deal.repaymentPlanOverride.preservedInstallments.map((installment) => ({
+        ...installment,
+        dueDate: installment.dueDate.toDate(),
+      })),
+      futureSegment: {
+        ...deal.repaymentPlanOverride.futureSegment,
+        startDate: deal.repaymentPlanOverride.futureSegment.startDate.toDate(),
+      },
+    });
+  }
+  if (Array.isArray(deal.repaymentScheduleOverride) && deal.repaymentScheduleOverride.length > 0) {
+    return deal.repaymentScheduleOverride
+      .map((installment) => ({
+        installment: Number(installment.installment),
+        dueDate: installment.dueDate.toDate(),
+        payment: Number(installment.payment),
+        principal: Number(installment.principal),
+        interest: Number(installment.interest),
+        balance: Number(installment.balance),
+      }))
+      .sort((left, right) => left.dueDate.getTime() - right.dueDate.getTime());
+  }
   const termStartDate = deal.startDate?.toDate() || deal.createdAt?.toDate();
   if (!termStartDate) return [];
 

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, ShieldAlert, Loader2, HandCoins, Gavel, Download, ScrollText } from "lucide-react";
 import { useMemo, useTransition } from 'react';
 import { useAuth, useCollection, useDoc } from '@/firebase';
-import { collection, query, where, DocumentData, Timestamp, doc } from 'firebase/firestore';
+import { collection, query, where, DocumentData, doc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Deal, Repayment } from '@/lib/types';
@@ -23,6 +23,7 @@ import { ViewPageNav } from "@/components/view-page-nav";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import Image from "next/image";
 import Link from "next/link";
+import { RepaymentPlanChangeDialog } from '@/components/deals/repayment-plan-change-dialog';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -202,7 +203,7 @@ export default function ClientDealDetailPage() {
                             </div>
                         </div>
                         {deal.status === 'Active' && (
-                            <AlertDialog>
+                            <div className="flex flex-wrap gap-2"><RepaymentPlanChangeDialog deal={deal} /><AlertDialog>
                                 <AlertDialogTrigger asChild>
                                     <Button variant="destructive" size="sm" disabled={isPendingTermination}>
                                         {isPendingTermination ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldAlert className="mr-2 h-4 w-4" />}
@@ -221,7 +222,7 @@ export default function ClientDealDetailPage() {
                                         <AlertDialogAction onClick={handleTerminationRequest}>Submit Request</AlertDialogAction>
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
-                            </AlertDialog>
+                            </AlertDialog></div>
                         )}
                     </CardContent>
                 </Card>

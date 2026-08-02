@@ -29,6 +29,36 @@ export type Deal = DocumentData & {
   status: 'Pending' | 'Active' | 'Completed' | 'Terminated';
   createdAt: Timestamp; // Firestore Timestamp object
   startDate?: Timestamp; // The official start date of the financing term
+  repaymentScheduleOverride?: Array<{
+    installment: number;
+    dueDate: Timestamp;
+    payment: number;
+    principal: number;
+    interest: number;
+    balance: number;
+  }>;
+  repaymentPlanOverride?: {
+    preservedInstallments: Array<{
+      installment: number;
+      dueDate: Timestamp;
+      payment: number;
+      principal: number;
+      interest: number;
+      balance: number;
+    }>;
+    futureSegment: {
+      principal: number;
+      profit: number;
+      startDate: Timestamp;
+      durationValue: number;
+      durationUnit: Deal['durationUnit'];
+      repaymentFrequency: Deal['repaymentFrequency'];
+      startingInstallment: number;
+    };
+  };
+  repaymentPlanVersion?: number;
+  repaymentTermsChangedAt?: Timestamp;
+  pendingRepaymentPlanChangeRequestId?: string;
 };
 
 export type Investment = DocumentData & {

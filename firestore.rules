@@ -336,6 +336,14 @@ service cloud.firestore {
     match /agreementSigningInvites/{inviteId} {
       allow read, write: if false;
     }
+
+    // Repayment-plan amendments are written only by trusted server actions.
+    // Administrators may list them; the requesting client may read their own record.
+    match /repaymentPlanChangeRequests/{requestId} {
+      allow get, list: if canAdminRead()
+        || (request.auth != null && resource.data.clientId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
     
     // --- Messaging System Rules ---
 
