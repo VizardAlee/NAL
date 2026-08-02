@@ -17,6 +17,13 @@ service firebase.storage {
         && request.resource.contentType.matches('image/(jpeg|png|webp)|application/pdf');
     }
 
+    // Final executed agreements are written and read only by authenticated
+    // server actions using the Admin SDK. Even a signed-in user cannot bypass
+    // the application authorization checks by guessing an archive path.
+    match /agreement-archives/{allPaths=**} {
+      allow read, write: if false;
+    }
+
     match /users/{userId}/proposals/{fileName} {
       allow read: if signedIn() && request.auth.uid == userId;
       allow write: if signedIn() && request.auth.uid == userId && validUpload();

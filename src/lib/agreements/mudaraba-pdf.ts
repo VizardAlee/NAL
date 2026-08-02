@@ -63,17 +63,20 @@ export async function buildMudarabaAgreementPdf(model: MudarabaAgreementModel, s
   const regular = await pdf.embedFont(StandardFonts.TimesRoman);
   const bold = await pdf.embedFont(StandardFonts.TimesRomanBold);
   const italic = await pdf.embedFont(StandardFonts.TimesRomanItalic);
-  const logoBytes = typeof window !== 'undefined'
-    ? await fetchBytes(new URL('/NAL%20LOGO.jpg', window.location.origin).toString())
+  const executed = signing?.status === 'EXECUTED';
+  const assetOrigin = typeof window !== 'undefined'
+    ? window.location.origin
+    : executed ? (process.env.NEXT_PUBLIC_APP_URL || 'https://nalgm.com') : null;
+  const logoBytes = assetOrigin
+    ? await fetchBytes(new URL('/NAL%20LOGO.jpg', assetOrigin).toString())
     : null;
   const logo = logoBytes ? await pdf.embedJpg(logoBytes).catch(() => null) : null;
-  const executed = signing?.status === 'EXECUTED';
-  const stampBytes = executed && typeof window !== 'undefined'
-    ? await fetchBytes(new URL('/nal-stamp.png', window.location.origin).toString())
+  const stampBytes = executed && assetOrigin
+    ? await fetchBytes(new URL('/nal-stamp.png', assetOrigin).toString())
     : null;
   const stamp = stampBytes ? await pdf.embedPng(stampBytes).catch(() => null) : null;
-  const institutionBytes = typeof window !== 'undefined'
-    ? await fetchBytes(new URL('/non-interest-institution.png', window.location.origin).toString())
+  const institutionBytes = assetOrigin
+    ? await fetchBytes(new URL('/non-interest-institution.png', assetOrigin).toString())
     : null;
   const institutionMark = institutionBytes ? await pdf.embedPng(institutionBytes).catch(() => null) : null;
   const verification = await buildAgreementVerificationQr(signing).catch(() => null);

@@ -67,6 +67,15 @@ test('only full administrators can upload legal documents', async () => {
   await assertFails(staff.ref('admin/staff/legal/client/document.pdf').putString('legal', 'raw', pdfMetadata));
 });
 
+test('executed agreement archives cannot be accessed directly by clients or admins', async () => {
+  const admin = env.authenticatedContext('admin').storage();
+  const client = env.authenticatedContext('client').storage();
+  const path = 'agreement-archives/mudaraba_batch/final.pdf';
+  await assertFails(admin.ref(path).putString('signed agreement', 'raw', pdfMetadata));
+  await assertFails(client.ref(path).putString('signed agreement', 'raw', pdfMetadata));
+  await assertFails(admin.ref(path).getDownloadURL());
+});
+
 test('uploads over five megabytes are rejected', async () => {
   const storage = env.authenticatedContext('client').storage();
   await assertFails(

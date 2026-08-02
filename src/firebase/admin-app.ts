@@ -1,6 +1,9 @@
 import * as admin from 'firebase-admin';
 import { ServiceAccount } from 'firebase-admin';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
+
+type AdminStorageBucket = ReturnType<ReturnType<typeof getStorage>['bucket']>;
 
 function readEnv(name: string): string | undefined {
     return process.env[name] || process.env[name.toLowerCase()];
@@ -116,6 +119,13 @@ function getAdminDb(): Firestore {
     return getFirestore(getAdminApp());
 }
 
+function getAdminStorageBucket(): AdminStorageBucket {
+    const bucketName =
+        process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
+        `${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT}.firebasestorage.app`;
+    return getStorage(getAdminApp()).bucket(bucketName);
+}
+
 // Keep existing imports build-safe: Firebase Admin is initialized only when a
 // server action/API route actually touches Firestore, not when Next imports the module.
 export const adminDb = new Proxy({} as Firestore, {
@@ -123,5 +133,16 @@ export const adminDb = new Proxy({} as Firestore, {
         const db = getAdminDb();
         const value = Reflect.get(db, property, receiver);
         return typeof value === 'function' ? value.bind(db) : value;
+    },
+});
+
+// Like adminDb, defer Storage initialization until a server action actually
+// needs the private bucket. Agreement archives are never exposed to clients
+// through Firebase Storage rules.
+export const adminStorageBucket = new Proxy({} as AdminStorageBucket, {
+    get(_target, property, receiver) {
+        const bucket = getAdminStorageBucket();
+        const value = Reflect.get(bucket, property, receiver);
+        return typeof value === 'function' ? value.bind(bucket) : value;
     },
 });

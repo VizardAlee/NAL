@@ -4,7 +4,7 @@ import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto
 import { headers } from 'next/headers';
 import { z } from 'zod';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { adminDb } from '@/firebase/admin-app';
+import { adminDb, adminStorageBucket } from '@/firebase/admin-app';
 import { verifyAdminOrOwner, verifyAuthToken } from '@/lib/server/auth';
 import { normalizeAccessModel } from '@/lib/access-control';
 import { notifyAdmins, notifyUser } from '@/lib/server/notification-service';
@@ -26,6 +26,9 @@ import {
   type AgreementSigningType,
   type SigningInviteSummary,
 } from '@/lib/agreements/signing';
+import { buildKafaalahBondPdf } from '@/lib/agreements/kafaalah-pdf';
+import { buildMudarabaAgreementPdf } from '@/lib/agreements/mudaraba-pdf';
+import { buildWakalahAgreementPdf } from '@/lib/agreements/wakalah-pdf';
 
 const SIGNATURE_CONSENT_VERSION = 'NAL-ESIGN-CONSENT-1.0';
 const SIGNATURE_MAX_DATA_URL_LENGTH = 350_000;
@@ -67,6 +70,14 @@ type StoredEnvelope = {
   documentVersion: string;
   documentHash: string;
   finalDocumentHash?: string;
+  finalPdfArchive?: {
+    status: 'ARCHIVED' | 'FAILED';
+    storagePath?: string;
+    fileHash?: string;
+    fileSize?: number;
+    archivedAt?: Timestamp;
+    failureMessage?: string;
+  };
   documentModel: AgreementDocumentModel;
   requiredRoles: AgreementSignerRole[];
   signedRoles: AgreementSignerRole[];
@@ -202,6 +213,14 @@ async function serializeEnvelope(
     documentVersion: envelope.documentVersion,
     documentHash: envelope.documentHash,
     ...(envelope.finalDocumentHash ? { finalDocumentHash: envelope.finalDocumentHash } : {}),
+    ...(envelope.finalPdfArchive ? {
+      finalPdfArchive: {
+        status: envelope.finalPdfArchive.status,
+        ...(envelope.finalPdfArchive.fileHash ? { fileHash: envelope.finalPdfArchive.fileHash } : {}),
+        ...(envelope.finalPdfArchive.fileSize ? { fileSize: envelope.finalPdfArchive.fileSize } : {}),
+        ...(envelope.finalPdfArchive.archivedAt ? { archivedAt: toIso(envelope.finalPdfArchive.archivedAt) } : {}),
+      },
+    } : {}),
     status: envelope.status,
     requiredRoles: envelope.requiredRoles,
     signedRoles: envelope.signedRoles || [],
@@ -230,6 +249,75 @@ function ensureRecentAuthentication(authTime?: number) {
 function finalHash(documentDigest: string, signatureHashes: Partial<Record<AgreementSignerRole, string>>): string {
   const ordered = Object.entries(signatureHashes).sort(([left], [right]) => left.localeCompare(right));
   return sha256(JSON.stringify({ documentHash: documentDigest, signatures: ordered }));
+}
+
+async function buildExecutedPdf(envelope: StoredEnvelope, state: AgreementSigningState): Promise<Uint8Array> {
+  if (envelope.agreementType === 'MUDARABA') {
+    return buildMudarabaAgreementPdf(envelope.documentModel as never, state);
+  }
+  if (envelope.agreementType === 'WAKALAH') {
+    return buildWakalahAgreementPdf(envelope.documentModel as never, state);
+  }
+  return buildKafaalahBondPdf(envelope.documentModel as never, state);
+}
+
+async function ensureExecutedAgreementArchive(envelopeId: string, envelope: StoredEnvelope) {
+  if (envelope.status !== 'EXECUTED' || !envelope.finalDocumentHash) {
+    throw new Error('Only a fully executed agreement can be archived.');
+  }
+  if (envelope.finalPdfArchive?.status === 'ARCHIVED' && envelope.finalPdfArchive.storagePath) {
+    return envelope.finalPdfArchive;
+  }
+
+  const state = await serializeEnvelope(envelopeId, envelope);
+  const pdfBytes = await buildExecutedPdf(envelope, state);
+  const fileBuffer = Buffer.from(pdfBytes);
+  const fileHash = sha256(fileBuffer);
+  const storagePath = `agreement-archives/${envelopeId}/${envelope.finalDocumentHash}.pdf`;
+  const archivedAt = Timestamp.now();
+  await adminStorageBucket.file(storagePath).save(fileBuffer, {
+    resumable: false,
+    contentType: 'application/pdf',
+    metadata: {
+      cacheControl: 'private, no-store, max-age=0',
+      contentDisposition: `attachment; filename="${envelope.agreementReference.replace(/[^a-zA-Z0-9._-]/g, '-')}-signed.pdf"`,
+      metadata: {
+        agreementEnvelopeId: envelopeId,
+        executedEnvelopeHash: envelope.finalDocumentHash,
+        archivedPdfHash: fileHash,
+      },
+    },
+  });
+  const archive = {
+    status: 'ARCHIVED' as const,
+    storagePath,
+    fileHash,
+    fileSize: fileBuffer.byteLength,
+    archivedAt,
+  };
+  await adminDb.collection('agreementEnvelopes').doc(envelopeId).update({
+    finalPdfArchive: archive,
+    updatedAt: archivedAt,
+  });
+  return archive;
+}
+
+async function archiveAfterExecution(envelopeId: string, envelope: StoredEnvelope): Promise<StoredEnvelope> {
+  if (envelope.status !== 'EXECUTED') return envelope;
+  try {
+    await ensureExecutedAgreementArchive(envelopeId, envelope);
+  } catch (error) {
+    console.error('Unable to archive the executed agreement PDF.', error);
+    await adminDb.collection('agreementEnvelopes').doc(envelopeId).update({
+      finalPdfArchive: {
+        status: 'FAILED',
+        failureMessage: error instanceof Error ? error.message.slice(0, 500) : 'Archive creation failed.',
+      },
+      updatedAt: Timestamp.now(),
+    }).catch((updateError) => console.error('Unable to record agreement archive failure.', updateError));
+  }
+  const refreshed = await adminDb.collection('agreementEnvelopes').doc(envelopeId).get();
+  return refreshed.data() as StoredEnvelope;
 }
 
 export async function startAgreementSigningAction(input: {
@@ -402,7 +490,7 @@ export async function submitAuthenticatedSignatureAction(input: {
     });
 
     const updatedSnapshot = await envelopeReference.get();
-    const updated = updatedSnapshot.data() as StoredEnvelope;
+    const updated = await archiveAfterExecution(envelopeId, updatedSnapshot.data() as StoredEnvelope);
     if (isCompanySignerRole(validated.data.role)) {
       await notifyUser(
         updated.ownerUserId,
@@ -627,7 +715,10 @@ export async function submitExternalSignatureAction(input: {
       });
     });
 
-    const updated = (await loaded.envelopeReference.get()).data() as StoredEnvelope;
+    const updated = await archiveAfterExecution(
+      loaded.invite.envelopeId,
+      (await loaded.envelopeReference.get()).data() as StoredEnvelope
+    );
     await notifyUser(
       updated.ownerUserId,
       `${agreementSignerRoleLabel(loaded.invite.role)} signature received`,
@@ -664,5 +755,50 @@ export async function listAdminAgreementEnvelopesAction(input: { authToken: stri
     return { success: true, envelopes };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : 'Unable to load agreement signatures.' };
+  }
+}
+
+export async function downloadExecutedAgreementArchiveAction(input: {
+  authToken: string;
+  agreementType: AgreementSigningType;
+  sourceId: string;
+}): Promise<
+  | { success: true; fileName: string; pdfBase64: string; fileHash: string }
+  | { success: false; message: string }
+> {
+  const validated = agreementRequestSchema.safeParse(input);
+  if (!validated.success) return { success: false, message: 'Invalid agreement download request.' };
+  try {
+    await verifyAdminOrOwner(validated.data.authToken);
+    const envelopeId = agreementEnvelopeId(validated.data.agreementType, validated.data.sourceId);
+    const reference = adminDb.collection('agreementEnvelopes').doc(envelopeId);
+    const snapshot = await reference.get();
+    if (!snapshot.exists) throw new Error('The signed agreement could not be found.');
+    let envelope = snapshot.data() as StoredEnvelope;
+    if (envelope.agreementType !== validated.data.agreementType || envelope.sourceId !== validated.data.sourceId) {
+      throw new Error('The agreement reference does not match this signing envelope.');
+    }
+    if (envelope.status !== 'EXECUTED') throw new Error('This agreement has not been fully signed yet.');
+
+    if (envelope.finalPdfArchive?.status !== 'ARCHIVED' || !envelope.finalPdfArchive.storagePath) {
+      await ensureExecutedAgreementArchive(envelopeId, envelope);
+      envelope = (await reference.get()).data() as StoredEnvelope;
+    }
+    const archive = envelope.finalPdfArchive;
+    if (!archive?.storagePath || !archive.fileHash) throw new Error('The permanent signed copy is not available yet.');
+    const [fileBuffer] = await adminStorageBucket.file(archive.storagePath).download();
+    const actualHash = sha256(fileBuffer);
+    if (!safeEqual(actualHash, archive.fileHash)) {
+      throw new Error('The archived PDF failed its integrity check. Please contact the system administrator.');
+    }
+    return {
+      success: true,
+      fileName: `${envelope.agreementReference.replace(/[^a-zA-Z0-9._-]/g, '-')}-signed.pdf`,
+      pdfBase64: fileBuffer.toString('base64'),
+      fileHash: actualHash,
+    };
+  } catch (error) {
+    console.error('Unable to download executed agreement archive.', error);
+    return { success: false, message: error instanceof Error ? error.message : 'Unable to download the signed agreement.' };
   }
 }

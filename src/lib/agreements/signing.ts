@@ -49,6 +49,12 @@ export type AgreementSigningState = {
   documentVersion: string;
   documentHash: string;
   finalDocumentHash?: string;
+  finalPdfArchive?: {
+    status: 'ARCHIVED' | 'FAILED';
+    fileHash?: string;
+    fileSize?: number;
+    archivedAt?: string;
+  };
   status: AgreementSigningStatus;
   requiredRoles: AgreementSignerRole[];
   signedRoles: AgreementSignerRole[];

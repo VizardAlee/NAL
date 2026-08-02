@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { Check, Download, Eye, FileSignature, Loader2, PenLine, Printer, RefreshCw, ShieldCheck } from 'lucide-react';
-import { getAgreementSigningStateAction, listAdminAgreementEnvelopesAction, submitAuthenticatedSignatureAction } from '@/app/signing/actions';
+import { downloadExecutedAgreementArchiveAction, getAgreementSigningStateAction, listAdminAgreementEnvelopesAction, submitAuthenticatedSignatureAction } from '@/app/signing/actions';
 import { SignatureCanvas, type SignatureCanvasHandle } from '@/components/signature-canvas';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +28,18 @@ async function makePdf(envelope: AdminEnvelope) {
   return buildKafaalahBondPdf(envelope.documentModel as never, envelope);
 }
 
+function saveBase64Pdf(pdfBase64: string, fileName: string) {
+  const binary = window.atob(pdfBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+}
+
 export default function AdminAgreementsPage() {
   const auth = useAuth();
   const { toast } = useToast();
@@ -36,6 +48,7 @@ export default function AdminAgreementsPage() {
   const [envelopes, setEnvelopes] = useState<AdminEnvelope[]>([]);
   const [selected, setSelected] = useState<{ envelope: AdminEnvelope; role?: AgreementSignerRole } | null>(null);
   const [openingId, setOpeningId] = useState('');
+  const [downloadingId, setDownloadingId] = useState('');
   const [pdfUrl, setPdfUrl] = useState('');
   const [password, setPassword] = useState('');
   const [consent, setConsent] = useState(false);
@@ -89,8 +102,35 @@ export default function AdminAgreementsPage() {
     previewRef.current?.contentWindow?.print();
   };
 
+  const downloadSignedCopy = async (envelope: AdminEnvelope) => {
+    if (!auth?.currentUser) return;
+    setDownloadingId(envelope.envelopeId);
+    setError('');
+    try {
+      const result = await downloadExecutedAgreementArchiveAction({
+        authToken: await auth.currentUser.getIdToken(),
+        agreementType: envelope.agreementType,
+        sourceId: envelope.sourceId,
+      });
+      if (!result.success) throw new Error(result.message);
+      saveBase64Pdf(result.pdfBase64, result.fileName);
+      toast({ title: 'Signed copy downloaded', description: `Permanent archive verified: ${result.fileHash.slice(0, 16).toUpperCase()}.` });
+      await load();
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Unable to download the signed copy.';
+      setError(message);
+      toast({ variant: 'destructive', title: 'Download failed', description: message });
+    } finally {
+      setDownloadingId('');
+    }
+  };
+
   const downloadAgreement = () => {
     if (!selected || !pdfUrl) return;
+    if (selected.envelope.status === 'EXECUTED') {
+      void downloadSignedCopy(selected.envelope);
+      return;
+    }
     const anchor = document.createElement('a');
     anchor.href = pdfUrl;
     anchor.download = `${selected.envelope.agreementReference.replace(/[^a-zA-Z0-9._-]/g, '-')}.pdf`;
@@ -122,7 +162,7 @@ export default function AdminAgreementsPage() {
     {error && !selected && <Alert variant="destructive"><AlertTitle>Agreements unavailable</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
     {loading ? <div className="flex py-16 justify-center"><Loader2 className="h-7 w-7 animate-spin" /></div> : envelopes.length === 0 ? <Card><CardContent className="py-14 text-center text-muted-foreground"><FileSignature className="mx-auto mb-3 h-10 w-10" />No signing envelopes yet.</CardContent></Card> : <div className="grid gap-4 xl:grid-cols-2">{envelopes.map((envelope) => {
       const nextRole = envelope.requiredRoles.find((role) => isCompanySignerRole(role) && !envelope.signedRoles.includes(role));
-      return <Card key={envelope.envelopeId}><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle className="text-base">{envelope.agreementReference}</CardTitle><CardDescription>{envelope.agreementType} · Started {new Date(envelope.startedAt).toLocaleDateString('en-NG')}</CardDescription></div><Badge variant={envelope.status === 'EXECUTED' ? 'default' : 'outline'}>{agreementSigningStatusLabel(envelope.status)}</Badge></div></CardHeader><CardContent className="space-y-4"><div className="space-y-2">{envelope.requiredRoles.map((role) => <div className="flex items-center justify-between text-sm" key={role}><span>{agreementSignerRoleLabel(role)}</span>{envelope.signedRoles.includes(role) ? <Check className="h-4 w-4 text-emerald-600" /> : <span className="text-xs text-amber-600">Pending</span>}</div>)}</div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void openAgreement(envelope)} disabled={Boolean(openingId)}>{openingId === envelope.envelopeId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />} View agreement</Button>{envelope.status === 'AWAITING_COMPANY' && nextRole && <Button onClick={() => void openAgreement(envelope, nextRole)} disabled={Boolean(openingId)}><ShieldCheck className="mr-2 h-4 w-4" /> Review and sign as {agreementSignerRoleLabel(nextRole)}</Button>}</div></CardContent></Card>;
+      return <Card key={envelope.envelopeId}><CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle className="text-base">{envelope.agreementReference}</CardTitle><CardDescription>{envelope.agreementType} · Started {new Date(envelope.startedAt).toLocaleDateString('en-NG')}</CardDescription></div><Badge variant={envelope.status === 'EXECUTED' ? 'default' : 'outline'}>{agreementSigningStatusLabel(envelope.status)}</Badge></div></CardHeader><CardContent className="space-y-4"><div className="space-y-2">{envelope.requiredRoles.map((role) => <div className="flex items-center justify-between text-sm" key={role}><span>{agreementSignerRoleLabel(role)}</span>{envelope.signedRoles.includes(role) ? <Check className="h-4 w-4 text-emerald-600" /> : <span className="text-xs text-amber-600">Pending</span>}</div>)}</div>{envelope.status === 'EXECUTED' && <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900"><div className="font-medium">{envelope.finalPdfArchive?.status === 'ARCHIVED' ? 'Permanent signed copy archived' : envelope.finalPdfArchive?.status === 'FAILED' ? 'Signed copy needs archive retry' : 'Signed copy will be archived on download'}</div>{envelope.finalPdfArchive?.fileHash && <div className="mt-1 break-all font-mono text-[10px] text-emerald-700">PDF SHA-256: {envelope.finalPdfArchive.fileHash}</div>}</div>}<div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void openAgreement(envelope)} disabled={Boolean(openingId)}>{openingId === envelope.envelopeId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />} View agreement</Button>{envelope.status === 'EXECUTED' && <Button onClick={() => void downloadSignedCopy(envelope)} disabled={Boolean(downloadingId)}>{downloadingId === envelope.envelopeId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />} Download signed copy</Button>}{envelope.status === 'AWAITING_COMPANY' && nextRole && <Button onClick={() => void openAgreement(envelope, nextRole)} disabled={Boolean(openingId)}><ShieldCheck className="mr-2 h-4 w-4" /> Review and sign as {agreementSignerRoleLabel(nextRole)}</Button>}</div></CardContent></Card>;
     })}</div>}
 
     <Dialog open={Boolean(selected) && !signatureSheetOpen} onOpenChange={(open) => { if (!open && !working && !signatureSheetOpen) setSelected(null); }}><DialogContent className="max-h-[94vh] max-w-5xl overflow-y-auto"><DialogHeader><DialogTitle>{selected?.role ? 'Review agreement before signing' : 'View agreement'}</DialogTitle><DialogDescription>{selected?.role ? 'Review the frozen document in full. When satisfied, open the separate NAL signature sheet.' : 'View, print or download this frozen agreement and its recorded signatures.'}</DialogDescription></DialogHeader>{error && <Alert variant="destructive"><AlertTitle>{selected?.role ? 'Signature failed' : 'Agreement unavailable'}</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}<div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={downloadAgreement} disabled={!pdfUrl}><Download className="mr-2 h-4 w-4" /> Download PDF</Button><Button variant="outline" onClick={printAgreement} disabled={!pdfUrl}><Printer className="mr-2 h-4 w-4" /> Print</Button></div>{pdfUrl ? <iframe ref={previewRef} title="Agreement review" src={pdfUrl} className="h-[58vh] w-full rounded border" /> : <div className="flex h-60 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>}{selected?.role && <Alert><ShieldCheck className="h-4 w-4" /><AlertTitle>Administrator authorisation required</AlertTitle><AlertDescription>Your verified account, signature, signing time and the document fingerprint will be recorded. Two-signatory agreements must be signed by two different authorised accounts.</AlertDescription></Alert>}<DialogFooter><Button variant="outline" onClick={() => setSelected(null)} disabled={working}>Close</Button>{selected?.role && <Button onClick={() => { setError(''); setSignatureSheetOpen(true); }} disabled={!pdfUrl}><PenLine className="mr-2 h-4 w-4" /> Open NAL signature sheet</Button>}</DialogFooter></DialogContent></Dialog>
