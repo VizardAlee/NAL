@@ -11,6 +11,8 @@ export function AgreementElectronicSignature({ signature }: { signature?: Agreem
       <img src={signature.signatureDataUrl} alt={`${signature.signerName} signature`} className="h-14 max-w-[13rem] object-contain object-left" />
       <p className="mt-1 text-[10px] leading-4 text-slate-600">
         Electronically signed by {signature.signerName}<br />
+        {signature.signerAddress && <>Address: {signature.signerAddress}<br /></>}
+        {signature.signerPhoneNumber && <>Phone: {signature.signerPhoneNumber}<br /></>}
         As {agreementSignerRoleLabel(signature.role)} · {new Date(signature.signedAt).toLocaleString('en-NG')}<br />
         Verification: {signature.signatureHash.slice(0, 16)}…
       </p>

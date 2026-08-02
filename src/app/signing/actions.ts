@@ -19,11 +19,13 @@ import {
   agreementSignerRoleLabel,
   calculateSigningStatus,
   isCompanySignerRole,
+  isWitnessSignerRole,
   type AgreementDocumentModel,
   type AgreementSignature,
   type AgreementSignerRole,
   type AgreementSigningState,
   type AgreementSigningType,
+  type ExternalSignerRole,
   type SigningInviteSummary,
 } from '@/lib/agreements/signing';
 import { buildKafaalahBondPdf } from '@/lib/agreements/kafaalah-pdf';
@@ -37,7 +39,7 @@ const RECENT_AUTH_SECONDS = 10 * 60;
 
 const signingTypeSchema = z.enum(['MUDARABA', 'WAKALAH', 'KAFAALAH']);
 const signerRoleSchema = z.enum([
-  'INVESTOR', 'CLIENT', 'GUARANTOR', 'WITNESS',
+  'INVESTOR', 'CLIENT', 'GUARANTOR', 'WITNESS', 'WITNESS_1', 'WITNESS_2',
   'NAL_SIGNATORY_1', 'NAL_SIGNATORY_2', 'NAL_AUTHORIZED_SIGNATORY',
 ]);
 const agreementRequestSchema = z.object({
@@ -51,13 +53,14 @@ const authenticatedSignatureSchema = agreementRequestSchema.extend({
   consent: z.literal(true),
 });
 const inviteRequestSchema = agreementRequestSchema.extend({
-  role: z.enum(['GUARANTOR', 'WITNESS']),
+  role: z.enum(['GUARANTOR', 'WITNESS', 'WITNESS_1', 'WITNESS_2']),
 });
 const externalTokenSchema = z.object({ token: z.string().min(40).max(200) });
 const externalSignatureSchema = externalTokenSchema.extend({
   pin: z.string().regex(/^\d{6}$/),
   signerName: z.string().trim().min(3).max(120),
   signerPhoneNumber: z.string().trim().min(7).max(30),
+  signerAddress: z.string().trim().max(250).optional(),
   signatureDataUrl: z.string().min(100).max(SIGNATURE_MAX_DATA_URL_LENGTH),
   consent: z.literal(true),
 });
@@ -84,8 +87,8 @@ type StoredEnvelope = {
   signatureHashes?: Partial<Record<AgreementSignerRole, string>>;
   signedByUserIds?: string[];
   status: AgreementSigningState['status'];
-  inviteSummaries?: Partial<Record<'GUARANTOR' | 'WITNESS', SigningInviteSummary>>;
-  inviteTokenHashes?: Partial<Record<'GUARANTOR' | 'WITNESS', string>>;
+  inviteSummaries?: Partial<Record<ExternalSignerRole, SigningInviteSummary>>;
+  inviteTokenHashes?: Partial<Record<ExternalSignerRole, string>>;
   startedAt: Timestamp;
   updatedAt: Timestamp;
   executedAt?: Timestamp;
@@ -93,7 +96,7 @@ type StoredEnvelope = {
 
 type StoredInvite = {
   envelopeId: string;
-  role: 'GUARANTOR' | 'WITNESS';
+  role: ExternalSignerRole;
   pinHash: string;
   expectedSignerName?: string;
   expiresAt: Timestamp;
@@ -520,7 +523,7 @@ export async function createExternalSigningInviteAction(input: {
   authToken: string;
   agreementType: AgreementSigningType;
   sourceId: string;
-  role: 'GUARANTOR' | 'WITNESS';
+  role: ExternalSignerRole;
 }): Promise<
   | { success: true; signingUrl: string; pin: string; expiresAt: string; state: AgreementSigningState }
   | { success: false; message: string }
@@ -604,7 +607,7 @@ async function loadValidInvite(token: string) {
 export async function loadExternalSigningAction(input: { token: string }): Promise<
   | {
       success: true;
-      role: 'GUARANTOR' | 'WITNESS';
+      role: ExternalSignerRole;
       roleLabel: string;
       agreementReference: string;
       documentHash: string;
@@ -640,6 +643,7 @@ export async function submitExternalSignatureAction(input: {
   pin: string;
   signerName: string;
   signerPhoneNumber: string;
+  signerAddress?: string;
   signatureDataUrl: string;
   consent: true;
 }): Promise<{ success: true; state: AgreementSigningState } | { success: false; message: string }> {
@@ -662,6 +666,9 @@ export async function submitExternalSignatureAction(input: {
     if (loaded.invite.expectedSignerName && normalizeName(validated.data.signerName) !== normalizeName(loaded.invite.expectedSignerName)) {
       throw new Error('The signer name must match the guarantor named in the agreement.');
     }
+    if (isWitnessSignerRole(loaded.invite.role) && (!validated.data.signerAddress || validated.data.signerAddress.length < 5)) {
+      throw new Error('The witness residential address is required.');
+    }
     const metadata = await requestMetadata();
     const now = Timestamp.now();
     const signatureDigest = sha256(signatureBytes);
@@ -676,8 +683,8 @@ export async function submitExternalSignatureAction(input: {
       const envelope = envelopeSnapshot.data() as StoredEnvelope;
       if (invite.consumedAt || invite.expiresAt.toMillis() <= Date.now()) throw new Error('This signing link is no longer active.');
       if (envelope.signedRoles.includes(invite.role)) throw new Error('This signature has already been completed.');
-      if (invite.role === 'WITNESS') {
-        const priorRoles = envelope.requiredRoles.filter((role) => !isCompanySignerRole(role) && role !== 'WITNESS');
+      if (isWitnessSignerRole(invite.role)) {
+        const priorRoles = envelope.requiredRoles.filter((role) => !isCompanySignerRole(role) && !isWitnessSignerRole(role));
         if (!priorRoles.every((role) => envelope.signedRoles.includes(role))) {
           throw new Error('The principal party must sign before the witness can attest the agreement.');
         }
@@ -689,6 +696,7 @@ export async function submitExternalSignatureAction(input: {
         role: invite.role,
         signerName: validated.data.signerName.trim(),
         signerPhoneNumber: validated.data.signerPhoneNumber.trim(),
+        ...(validated.data.signerAddress ? { signerAddress: validated.data.signerAddress.trim() } : {}),
         signatureDataUrl: validated.data.signatureDataUrl,
         signedAt: now.toDate().toISOString(),
         signatureHash: signatureDigest,

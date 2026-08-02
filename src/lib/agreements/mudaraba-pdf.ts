@@ -151,7 +151,7 @@ export async function buildMudarabaAgreementPdf(model: MudarabaAgreementModel, s
     ensureSpace(75);
     page.drawImage(image, { x: margin, y: y - 42, width: 145, height: 48 });
     y -= 48;
-    drawWrapped(`Electronically signed by ${signature.signerName}\n${new Date(signature.signedAt).toLocaleString('en-NG')} | Verification ref ${signature.signatureHash.slice(0, 16).toUpperCase()}`, { size: 7.5 });
+    drawWrapped(`Electronically signed by ${signature.signerName}\n${signature.signerAddress ? `Address: ${signature.signerAddress}\n` : ''}${signature.signerPhoneNumber ? `Phone: ${signature.signerPhoneNumber}\n` : ''}${new Date(signature.signedAt).toLocaleString('en-NG')} | Verification ref ${signature.signatureHash.slice(0, 16).toUpperCase()}`, { size: 7.5 });
   };
 
   addPage();
@@ -202,7 +202,10 @@ export async function buildMudarabaAgreementPdf(model: MudarabaAgreementModel, s
   drawWrapped(`Name: ${model.investor.name.toUpperCase()}\nCapacity: Investor / Rabb al-Mal`, { gap: 1 });
   drawSignature('INVESTOR', 'Signature: ________________________    Date: ____________________\nThumbprint (optional): ____________________');
   drawWrapped('WITNESSES', { font: bold });
-  drawWrapped('Witness 1 — Name: ____________________  Address: ______________________________  Phone/Email: ____________________  Signature/Date: ____________________\nWitness 2 — Name: ____________________  Address: ______________________________  Phone/Email: ____________________  Signature/Date: ____________________');
+  drawWrapped('WITNESS 1', { font: bold, gap: 1 });
+  drawSignature('WITNESS_1', 'Name: ______________________________\nPhone Number: _______________________\nSignature: __________________________    Date: ____________________');
+  drawWrapped('WITNESS 2', { font: bold, gap: 1 });
+  drawSignature('WITNESS_2', 'Name: ______________________________\nPhone Number: _______________________\nSignature: __________________________    Date: ____________________');
 
   ensureSpace(175);
   drawWrapped('PAYMENT AND ACCOUNT DETAILS', { font: bold, size: 11 });

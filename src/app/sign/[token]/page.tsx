@@ -16,11 +16,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { buildKafaalahBondPdf } from '@/lib/agreements/kafaalah-pdf';
 import { buildMudarabaAgreementPdf } from '@/lib/agreements/mudaraba-pdf';
-import type { AgreementDocumentModel, AgreementSigningState } from '@/lib/agreements/signing';
+import { isWitnessSignerRole, type AgreementDocumentModel, type AgreementSigningState, type ExternalSignerRole } from '@/lib/agreements/signing';
 import { buildWakalahAgreementPdf } from '@/lib/agreements/wakalah-pdf';
 
 type SigningRequest = {
-  role: 'GUARANTOR' | 'WITNESS';
+  role: ExternalSignerRole;
   roleLabel: string;
   agreementReference: string;
   documentHash: string;
@@ -44,6 +44,7 @@ export default function ExternalSigningPage() {
   const [pdfUrl, setPdfUrl] = useState('');
   const [signerName, setSignerName] = useState('');
   const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [pin, setPin] = useState('');
   const [consent, setConsent] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
@@ -75,11 +76,14 @@ export default function ExternalSigningPage() {
   }, [request]);
 
   const submit = () => startTransition(async () => {
+    if (!request) return;
     const signatureDataUrl = canvasRef.current?.exportPng();
     if (!signatureDataUrl) { setError('Draw a complete signature before continuing.'); return; }
     setError('');
     const result = await submitExternalSignatureAction({
-      token, pin, signerName, signerPhoneNumber: phone, signatureDataUrl, consent: true,
+      token, pin, signerName, signerPhoneNumber: phone,
+      ...(isWitnessSignerRole(request.role) ? { signerAddress: address } : {}),
+      signatureDataUrl, consent: true,
     });
     if (!result.success) { setError(result.message); return; }
     setCompleted(true);
@@ -107,10 +111,11 @@ export default function ExternalSigningPage() {
           <DialogHeader><DialogTitle>Blank signature sheet — {request.roleLabel}</DialogTitle><DialogDescription>Complete your verification details, then draw your signature inside the white sheet below. Your strokes will appear immediately while you draw.</DialogDescription></DialogHeader>
           {error && <Alert variant="destructive"><AlertTitle>Signature not submitted</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
           <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="signer-name">Full legal name</Label><Input id="signer-name" value={signerName} onChange={(event) => setSignerName(event.target.value)} readOnly={Boolean(request.expectedSignerName)} /></div><div className="space-y-2"><Label htmlFor="signer-phone">Phone number</Label><Input id="signer-phone" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></div></div>
+          {isWitnessSignerRole(request.role) && <div className="space-y-2"><Label htmlFor="signer-address">Residential address</Label><Input id="signer-address" value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Witness's full residential address" /></div>}
           <div className="max-w-xs space-y-2"><Label htmlFor="signing-pin">Six-digit signing PIN</Label><Input id="signing-pin" inputMode="numeric" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))} className="font-mono text-lg tracking-[0.3em]" /></div>
           <div className="rounded-xl border-2 border-slate-300 bg-white p-3 shadow-inner"><p className="mb-2 text-sm font-semibold text-slate-900">Draw your signature on this blank sheet</p><SignatureCanvas ref={canvasRef} onChange={setHasSignature} disabled={working} /></div>
           <label className="flex items-start gap-3 rounded-lg border p-3 text-sm"><Checkbox checked={consent} onCheckedChange={(checked) => setConsent(checked === true)} className="mt-0.5" /><span>I have reviewed the complete agreement, accept its terms, consent to electronic records and intend this electronic signature to be legally binding.</span></label>
-          <DialogFooter><Button variant="outline" onClick={() => setSignatureDialogOpen(false)} disabled={working}>Cancel</Button><Button onClick={submit} disabled={working || !hasSignature || !signerName.trim() || !phone.trim() || pin.length !== 6 || !consent}>{working ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />} Apply secure signature</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setSignatureDialogOpen(false)} disabled={working}>Cancel</Button><Button onClick={submit} disabled={working || !hasSignature || !signerName.trim() || !phone.trim() || (isWitnessSignerRole(request.role) && address.trim().length < 5) || pin.length !== 6 || !consent}>{working ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />} Apply secure signature</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </main>

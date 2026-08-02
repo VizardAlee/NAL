@@ -9,6 +9,8 @@ export type AgreementSignerRole =
   | 'CLIENT'
   | 'GUARANTOR'
   | 'WITNESS'
+  | 'WITNESS_1'
+  | 'WITNESS_2'
   | 'NAL_SIGNATORY_1'
   | 'NAL_SIGNATORY_2'
   | 'NAL_AUTHORIZED_SIGNATORY';
@@ -29,6 +31,7 @@ export type AgreementSignature = {
   signerName: string;
   signerUserId?: string;
   signerPhoneNumber?: string;
+  signerAddress?: string;
   signatureDataUrl: string;
   signedAt: string;
   signatureHash: string;
@@ -36,10 +39,12 @@ export type AgreementSignature = {
 };
 
 export type SigningInviteSummary = {
-  role: 'GUARANTOR' | 'WITNESS';
+  role: ExternalSignerRole;
   status: 'ACTIVE' | 'USED' | 'EXPIRED';
   expiresAt: string;
 };
+
+export type ExternalSignerRole = 'GUARANTOR' | 'WITNESS' | 'WITNESS_1' | 'WITNESS_2';
 
 export type AgreementSigningState = {
   envelopeId: string;
@@ -65,12 +70,12 @@ export type AgreementSigningState = {
 };
 
 export const REQUIRED_SIGNER_ROLES: Record<AgreementSigningType, AgreementSignerRole[]> = {
-  MUDARABA: ['INVESTOR', 'NAL_SIGNATORY_1', 'NAL_SIGNATORY_2'],
+  MUDARABA: ['INVESTOR', 'WITNESS_1', 'WITNESS_2', 'NAL_SIGNATORY_1', 'NAL_SIGNATORY_2'],
   WAKALAH: ['CLIENT', 'WITNESS', 'NAL_SIGNATORY_1', 'NAL_SIGNATORY_2'],
   KAFAALAH: ['GUARANTOR', 'WITNESS', 'NAL_AUTHORIZED_SIGNATORY'],
 };
 
-export const EXTERNAL_SIGNER_ROLES: AgreementSignerRole[] = ['GUARANTOR', 'WITNESS'];
+export const EXTERNAL_SIGNER_ROLES: AgreementSignerRole[] = ['GUARANTOR', 'WITNESS', 'WITNESS_1', 'WITNESS_2'];
 export const COMPANY_SIGNER_ROLES: AgreementSignerRole[] = [
   'NAL_SIGNATORY_1',
   'NAL_SIGNATORY_2',
@@ -81,8 +86,12 @@ export function isCompanySignerRole(role: AgreementSignerRole): boolean {
   return COMPANY_SIGNER_ROLES.includes(role);
 }
 
-export function isExternalSignerRole(role: AgreementSignerRole): role is 'GUARANTOR' | 'WITNESS' {
+export function isExternalSignerRole(role: AgreementSignerRole): role is ExternalSignerRole {
   return EXTERNAL_SIGNER_ROLES.includes(role);
+}
+
+export function isWitnessSignerRole(role: AgreementSignerRole): boolean {
+  return role === 'WITNESS' || role === 'WITNESS_1' || role === 'WITNESS_2';
 }
 
 export function agreementEnvelopeId(type: AgreementSigningType, sourceId: string): string {
@@ -95,6 +104,8 @@ export function agreementSignerRoleLabel(role: AgreementSignerRole): string {
     CLIENT: 'Client',
     GUARANTOR: 'Guarantor / Kafeel',
     WITNESS: 'Witness',
+    WITNESS_1: 'Witness 1',
+    WITNESS_2: 'Witness 2',
     NAL_SIGNATORY_1: 'NAL Authorised Signatory 1',
     NAL_SIGNATORY_2: 'NAL Authorised Signatory 2',
     NAL_AUTHORIZED_SIGNATORY: 'NAL Authorised Signatory',

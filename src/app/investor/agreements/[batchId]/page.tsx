@@ -162,7 +162,8 @@ export default function InvestorAgreementPage() {
         <section className="agreement-clause">
           <h3>WITNESSES</h3>
           <div className="grid gap-8 sm:grid-cols-2">
-            {[1, 2].map((number) => <p key={number}>Witness {number}<br />Name: ____________________________<br />Address: __________________________<br />Phone/Email: ______________________<br />Signature: ________________________<br />Date: ____________________________</p>)}
+            <div><strong>WITNESS 1</strong><AgreementElectronicSignature signature={signingState?.signatures.WITNESS_1} /></div>
+            <div><strong>WITNESS 2</strong><AgreementElectronicSignature signature={signingState?.signatures.WITNESS_2} /></div>
           </div>
         </section>
 

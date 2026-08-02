@@ -1,6 +1,6 @@
 import { addDays, addMonths, addWeeks, addYears, format, subDays } from 'date-fns';
 
-export const MUDARABA_AGREEMENT_VERSION = 'NAL-MUDARABA-2026-01';
+export const MUDARABA_AGREEMENT_VERSION = 'NAL-MUDARABA-2026-02';
 
 export type AgreementAccount = {
   accountName: string;

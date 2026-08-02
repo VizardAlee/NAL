@@ -25,6 +25,7 @@ import {
   type AgreementSignerRole,
   type AgreementSigningState,
   type AgreementSigningType,
+  type ExternalSignerRole,
 } from '@/lib/agreements/signing';
 import {
   createExternalSigningInviteAction,
@@ -33,7 +34,7 @@ import {
   submitAuthenticatedSignatureAction,
 } from '@/app/signing/actions';
 
-type InviteDetails = { signingUrl: string; pin: string; expiresAt: string; role: 'GUARANTOR' | 'WITNESS' };
+type InviteDetails = { signingUrl: string; pin: string; expiresAt: string; role: ExternalSignerRole };
 
 export function AgreementSigningPanel({
   agreementType,
@@ -126,7 +127,7 @@ export function AgreementSigningPanel({
     }
   });
 
-  const createInvite = (role: 'GUARANTOR' | 'WITNESS') => startTransition(async () => {
+  const createInvite = (role: ExternalSignerRole) => startTransition(async () => {
     const result = await createExternalSigningInviteAction({
       authToken: await getRequiredIdToken(), agreementType, sourceId, role,
     });
