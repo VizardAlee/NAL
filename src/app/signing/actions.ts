@@ -64,6 +64,18 @@ const externalSignatureSchema = externalTokenSchema.extend({
   signatureDataUrl: z.string().min(100).max(SIGNATURE_MAX_DATA_URL_LENGTH),
   consent: z.literal(true),
 });
+const adminAgreementListSchema = z.object({
+  authToken: z.string().min(1),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(5).max(50).default(10),
+  search: z.string().trim().max(100).default(''),
+  agreementType: signingTypeSchema.optional(),
+  status: z.enum(['NOT_STARTED', 'AWAITING_SIGNATURES', 'AWAITING_COMPANY', 'EXECUTED']).optional(),
+  dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+}).refine((value) => !value.dateFrom || !value.dateTo || value.dateFrom <= value.dateTo, {
+  message: 'The agreement start date must not be after the end date.',
+});
 
 type StoredEnvelope = {
   agreementType: AgreementSigningType;
@@ -782,18 +794,49 @@ export async function submitExternalSignatureAction(input: {
   }
 }
 
-export async function listAdminAgreementEnvelopesAction(input: { authToken: string }): Promise<
-  | { success: true; envelopes: Array<AgreementSigningState & { documentModel: AgreementDocumentModel }> }
+export async function listAdminAgreementEnvelopesAction(input: z.input<typeof adminAgreementListSchema>): Promise<
+  | { success: true; envelopes: AgreementSigningState[]; page: number; pageSize: number; total: number; totalPages: number }
   | { success: false; message: string }
 > {
+  const validated = adminAgreementListSchema.safeParse(input);
+  if (!validated.success) return { success: false, message: 'Invalid agreement filter or page request.' };
+
   try {
-    await verifyAdminOrOwner(input.authToken);
-    const snapshot = await adminDb.collection('agreementEnvelopes').orderBy('startedAt', 'desc').limit(100).get();
-    const envelopes = await Promise.all(snapshot.docs.map(async (document) => {
+    await verifyAdminOrOwner(validated.data.authToken);
+    const snapshot = await adminDb.collection('agreementEnvelopes').orderBy('startedAt', 'desc').get();
+    const search = validated.data.search.toLocaleLowerCase('en-NG');
+    // The admin operates in Nigeria; date filters represent Lagos calendar days.
+    const dateFrom = validated.data.dateFrom ? new Date(`${validated.data.dateFrom}T00:00:00.000+01:00`) : null;
+    const dateTo = validated.data.dateTo ? new Date(`${validated.data.dateTo}T23:59:59.999+01:00`) : null;
+    const filtered = snapshot.docs.filter((document) => {
+      const envelope = document.data() as StoredEnvelope;
+      if (validated.data.agreementType && envelope.agreementType !== validated.data.agreementType) return false;
+      if (validated.data.status && envelope.status !== validated.data.status) return false;
+      const startedAt = envelope.startedAt?.toDate?.();
+      if (dateFrom && (!startedAt || startedAt < dateFrom)) return false;
+      if (dateTo && (!startedAt || startedAt > dateTo)) return false;
+      if (search) {
+        const searchable = [
+          envelope.agreementReference,
+          envelope.sourceId,
+          envelope.ownerUserId,
+          JSON.stringify(envelope.documentModel),
+        ].join(' ').toLocaleLowerCase('en-NG');
+        if (!searchable.includes(search)) return false;
+      }
+      return true;
+    });
+
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / validated.data.pageSize));
+    const page = Math.min(validated.data.page, totalPages);
+    const start = (page - 1) * validated.data.pageSize;
+    const pageDocuments = filtered.slice(start, start + validated.data.pageSize);
+    const envelopes = await Promise.all(pageDocuments.map(async (document) => {
       const envelope = await upgradePendingMudarabaWitnesses(document.id, document.data() as StoredEnvelope);
-      return { ...(await serializeEnvelope(document.id, envelope, false)), documentModel: envelope.documentModel };
+      return serializeEnvelope(document.id, envelope, false);
     }));
-    return { success: true, envelopes };
+    return { success: true, envelopes, page, pageSize: validated.data.pageSize, total, totalPages };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : 'Unable to load agreement signatures.' };
   }
