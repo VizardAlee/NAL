@@ -154,6 +154,12 @@ export function AgreementSigningPanel({
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
+          <div className="grid gap-2 text-xs sm:grid-cols-4">
+            <div className="rounded-lg border bg-muted/20 p-3"><strong className="block text-foreground">1. Freeze</strong><span className="text-muted-foreground">Lock the exact document version.</span></div>
+            <div className="rounded-lg border bg-muted/20 p-3"><strong className="block text-foreground">2. Parties sign</strong><span className="text-muted-foreground">Named parties review, verify and sign.</span></div>
+            <div className="rounded-lg border bg-muted/20 p-3"><strong className="block text-foreground">3. NAL signs</strong><span className="text-muted-foreground">An authorised account countersigns.</span></div>
+            <div className="rounded-lg border bg-muted/20 p-3"><strong className="block text-foreground">4. Execute</strong><span className="text-muted-foreground">Seal, stamp and unlock the final PDF.</span></div>
+          </div>
           {!state ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">Starting creates an immutable agreement version and audit record. Profile or transaction changes made afterward will not alter that version.</p>

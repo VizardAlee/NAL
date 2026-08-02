@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Eraser, MousePointer2, PenTool } from 'lucide-react';
 
@@ -17,8 +17,32 @@ export const SignatureCanvas = forwardRef<SignatureCanvasHandle, {
   disabled?: boolean;
 }>(function SignatureCanvas({ onChange, disabled = false }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const strokesRef = useRef<Stroke[]>([]);
   const activeStrokeRef = useRef<Stroke | null>(null);
+  const previewFrameRef = useRef<number | null>(null);
+  const [hasPreview, setHasPreview] = useState(false);
+
+  const schedulePreview = () => {
+    if (previewFrameRef.current !== null) return;
+    previewFrameRef.current = window.requestAnimationFrame(() => {
+      previewFrameRef.current = null;
+      const canvas = canvasRef.current;
+      const preview = previewCanvasRef.current;
+      const pointCount = strokesRef.current.reduce((total, stroke) => total + stroke.length, 0);
+      if (!canvas || !preview) return;
+      const bounds = preview.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      const targetWidth = Math.max(1, Math.round(bounds.width * ratio));
+      const targetHeight = Math.max(1, Math.round(bounds.height * ratio));
+      if (preview.width !== targetWidth) preview.width = targetWidth;
+      if (preview.height !== targetHeight) preview.height = targetHeight;
+      const context = preview.getContext('2d');
+      context?.clearRect(0, 0, preview.width, preview.height);
+      if (pointCount > 0) context?.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, preview.width, preview.height);
+      setHasPreview(pointCount > 0);
+    });
+  };
 
   const render = () => {
     const canvas = canvasRef.current;
@@ -52,6 +76,7 @@ export const SignatureCanvas = forwardRef<SignatureCanvasHandle, {
       }
     }
     context.restore();
+    schedulePreview();
   };
 
   useEffect(() => {
@@ -67,13 +92,17 @@ export const SignatureCanvas = forwardRef<SignatureCanvasHandle, {
     const observer = new ResizeObserver(resize);
     observer.observe(canvas);
     resize();
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (previewFrameRef.current !== null) window.cancelAnimationFrame(previewFrameRef.current);
+    };
   }, []);
 
   const clear = () => {
     strokesRef.current = [];
     activeStrokeRef.current = null;
     render();
+    setHasPreview(false);
     onChange?.(false);
   };
 
@@ -102,36 +131,50 @@ export const SignatureCanvas = forwardRef<SignatureCanvasHandle, {
         <span className="inline-flex items-center gap-1.5"><PenTool className="h-3.5 w-3.5" /> Touch or stylus</span>
         <span className="inline-flex items-center gap-1.5"><MousePointer2 className="h-3.5 w-3.5" /> Trackpad or mouse: press and drag</span>
       </div>
-      <div className="overflow-hidden rounded-xl border-2 border-dashed border-primary/35 bg-white shadow-inner">
-        <canvas
-          ref={canvasRef}
-          aria-label="Signature drawing area. Press and drag with a trackpad or mouse, or draw with touch or a stylus."
-          className="h-44 w-full cursor-crosshair touch-none select-none sm:h-48"
-          onPointerDown={(event) => {
-            if (disabled) return;
-            event.preventDefault();
-            event.currentTarget.setPointerCapture(event.pointerId);
-            const stroke = [pointFromEvent(event)];
-            strokesRef.current = [...strokesRef.current, stroke];
-            activeStrokeRef.current = stroke;
-            render();
-          }}
-          onPointerMove={(event) => {
-            if (disabled || !activeStrokeRef.current) return;
-            event.preventDefault();
-            activeStrokeRef.current.push(pointFromEvent(event));
-            render();
-          }}
-          onPointerUp={(event) => {
-            if (!activeStrokeRef.current) return;
-            event.preventDefault();
-            activeStrokeRef.current.push(pointFromEvent(event));
-            activeStrokeRef.current = null;
-            render();
-            onChange?.(true);
-          }}
-          onPointerCancel={() => { activeStrokeRef.current = null; }}
-        />
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(15rem,0.65fr)]">
+        <div className="overflow-hidden rounded-xl border-2 border-dashed border-primary/35 bg-white shadow-inner">
+          <div className="border-b bg-primary/5 px-3 py-2 text-xs font-medium text-primary">Sign here — your ink appears as you move</div>
+          <canvas
+            ref={canvasRef}
+            aria-label="Signature drawing area. Press and drag with a trackpad or mouse, or draw with touch or a stylus."
+            className="h-44 w-full cursor-crosshair touch-none select-none sm:h-48"
+            onPointerDown={(event) => {
+              if (disabled) return;
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              const stroke = [pointFromEvent(event)];
+              strokesRef.current = [...strokesRef.current, stroke];
+              activeStrokeRef.current = stroke;
+              render();
+            }}
+            onPointerMove={(event) => {
+              if (disabled || !activeStrokeRef.current) return;
+              event.preventDefault();
+              activeStrokeRef.current.push(pointFromEvent(event));
+              render();
+            }}
+            onPointerUp={(event) => {
+              if (!activeStrokeRef.current) return;
+              event.preventDefault();
+              activeStrokeRef.current.push(pointFromEvent(event));
+              activeStrokeRef.current = null;
+              render();
+              onChange?.(true);
+            }}
+            onPointerCancel={() => { activeStrokeRef.current = null; }}
+          />
+        </div>
+        <div className="flex min-h-44 flex-col rounded-xl border bg-slate-50 p-4 sm:min-h-48">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Live document preview</span>
+            <span className={`h-2 w-2 rounded-full ${hasPreview ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+          </div>
+          <div className="relative mt-4 flex flex-1 items-end border-b border-slate-500 pb-1">
+            <canvas ref={previewCanvasRef} aria-label="Live preview of the signature being drawn" className="h-24 w-full" />
+            {!hasPreview && <span className="absolute inset-x-0 bottom-9 text-xs text-slate-400">Your signature will appear here while you draw.</span>}
+          </div>
+          <p className="mt-2 text-[10px] leading-4 text-slate-500">Electronic signature preview</p>
+        </div>
       </div>
       <Button type="button" size="sm" variant="outline" onClick={clear} disabled={disabled}>
         <Eraser className="mr-2 h-4 w-4" /> Clear signature
