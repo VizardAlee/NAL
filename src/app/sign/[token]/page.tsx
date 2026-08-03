@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { buildKafaalahBondPdf } from '@/lib/agreements/kafaalah-pdf';
 import { buildMudarabaAgreementPdf } from '@/lib/agreements/mudaraba-pdf';
+import { buildMurabahaAgreementPdf } from '@/lib/agreements/murabaha-pdf';
 import { isWitnessSignerRole, type AgreementDocumentModel, type AgreementSigningState, type ExternalSignerRole } from '@/lib/agreements/signing';
 import { buildWakalahAgreementPdf } from '@/lib/agreements/wakalah-pdf';
 
@@ -32,6 +33,7 @@ type SigningRequest = {
 
 async function buildPreview(request: SigningRequest) {
   if (request.state.agreementType === 'MUDARABA') return buildMudarabaAgreementPdf(request.documentModel as never, request.state);
+  if (request.state.agreementType === 'MURABAHA') return buildMurabahaAgreementPdf(request.documentModel as never, request.state);
   if (request.state.agreementType === 'WAKALAH') return buildWakalahAgreementPdf(request.documentModel as never, request.state);
   return buildKafaalahBondPdf(request.documentModel as never, request.state);
 }

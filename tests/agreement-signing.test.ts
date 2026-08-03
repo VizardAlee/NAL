@@ -4,6 +4,7 @@ import { agreementEnvelopeId, calculateSigningStatus, REQUIRED_SIGNER_ROLES } fr
 
 test('each agreement requires the intended parties, witnesses, and NAL signatories', () => {
   assert.deepEqual(REQUIRED_SIGNER_ROLES.MUDARABA, ['INVESTOR', 'WITNESS_1', 'WITNESS_2', 'NAL_SIGNATORY_1', 'NAL_SIGNATORY_2']);
+  assert.deepEqual(REQUIRED_SIGNER_ROLES.MURABAHA, ['CLIENT', 'GUARANTOR', 'WITNESS', 'NAL_SIGNATORY_1', 'NAL_SIGNATORY_2']);
   assert.deepEqual(REQUIRED_SIGNER_ROLES.WAKALAH, ['CLIENT', 'WITNESS', 'NAL_SIGNATORY_1', 'NAL_SIGNATORY_2']);
   assert.deepEqual(REQUIRED_SIGNER_ROLES.KAFAALAH, ['GUARANTOR', 'WITNESS', 'NAL_AUTHORIZED_SIGNATORY']);
 });
@@ -27,4 +28,5 @@ test('signing status advances only after the required roles are present', () => 
 
 test('envelope ids are deterministic per type and source', () => {
   assert.equal(agreementEnvelopeId('KAFAALAH', 'deal-123'), 'kafaalah_deal-123');
+  assert.equal(agreementEnvelopeId('MURABAHA', 'deal-123'), 'murabaha_deal-123');
 });

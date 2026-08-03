@@ -12,6 +12,7 @@ import { loadInvestorAgreementAction } from '@/app/investor/agreements/actions';
 import {
   loadClientAgreementAction,
   loadClientKafaalahBondAction,
+  loadClientMurabahaAgreementAction,
 } from '@/app/client/agreements/actions';
 import {
   REQUIRED_SIGNER_ROLES,
@@ -31,13 +32,14 @@ import {
 import { buildKafaalahBondPdf } from '@/lib/agreements/kafaalah-pdf';
 import { buildMudarabaAgreementPdf } from '@/lib/agreements/mudaraba-pdf';
 import { buildWakalahAgreementPdf } from '@/lib/agreements/wakalah-pdf';
+import { buildMurabahaAgreementPdf } from '@/lib/agreements/murabaha-pdf';
 
 const SIGNATURE_CONSENT_VERSION = 'NAL-ESIGN-CONSENT-1.0';
 const SIGNATURE_MAX_DATA_URL_LENGTH = 350_000;
 const INVITE_LIFETIME_MS = 72 * 60 * 60 * 1000;
 const RECENT_AUTH_SECONDS = 10 * 60;
 
-const signingTypeSchema = z.enum(['MUDARABA', 'WAKALAH', 'KAFAALAH']);
+const signingTypeSchema = z.enum(['MUDARABA', 'MURABAHA', 'WAKALAH', 'KAFAALAH']);
 const signerRoleSchema = z.enum([
   'INVESTOR', 'CLIENT', 'GUARANTOR', 'WITNESS', 'WITNESS_1', 'WITNESS_2',
   'NAL_SIGNATORY_1', 'NAL_SIGNATORY_2', 'NAL_AUTHORIZED_SIGNATORY',
@@ -173,6 +175,7 @@ function getOwnerUserId(model: AgreementDocumentModel): string {
 
 function getAgreementLink(type: AgreementSigningType, sourceId: string): string {
   if (type === 'MUDARABA') return `/investor/agreements/${sourceId}`;
+  if (type === 'MURABAHA') return `/client/agreements/murabaha/${sourceId}`;
   if (type === 'WAKALAH') return `/client/agreements/${sourceId}`;
   return `/client/agreements/kafaalah/${sourceId}`;
 }
@@ -197,6 +200,11 @@ async function loadTrustedModel(
   }
   if (agreementType === 'WAKALAH') {
     const result = await loadClientAgreementAction({ authToken, dealId: sourceId });
+    if (!result.success) throw new Error(result.message);
+    return result.agreement;
+  }
+  if (agreementType === 'MURABAHA') {
+    const result = await loadClientMurabahaAgreementAction({ authToken, dealId: sourceId });
     if (!result.success) throw new Error(result.message);
     return result.agreement;
   }
@@ -272,6 +280,9 @@ async function buildExecutedPdf(envelope: StoredEnvelope, state: AgreementSignin
   }
   if (envelope.agreementType === 'WAKALAH') {
     return buildWakalahAgreementPdf(envelope.documentModel as never, state);
+  }
+  if (envelope.agreementType === 'MURABAHA') {
+    return buildMurabahaAgreementPdf(envelope.documentModel as never, state);
   }
   return buildKafaalahBondPdf(envelope.documentModel as never, state);
 }

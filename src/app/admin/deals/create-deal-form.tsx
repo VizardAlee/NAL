@@ -88,9 +88,9 @@ const formSchema = z.object({
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   startDate: z.date().optional(),
 }).superRefine((values, context) => {
+  if (values.financingMode === 'Murabaha' && (!values.wakalahAssetDescription || values.wakalahAssetDescription.length < 3)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahAssetDescription'], message: 'Describe the approved asset for the Murabaha sales contract.' });
   if (!values.wakalahGranted) return;
   if (values.financingMode !== 'Murabaha') context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahGranted'], message: 'Available only for Murabaha deals.' });
-  if (!values.wakalahAssetDescription || values.wakalahAssetDescription.length < 3) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahAssetDescription'], message: 'Describe the approved asset.' });
   if (!values.wakalahSupplierName || values.wakalahSupplierName.length < 2) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahSupplierName'], message: 'Enter the approved supplier.' });
 });
 
@@ -315,11 +315,11 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
         />
         {form.watch('financingMode') === 'Murabaha' && (
           <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-4">
+            <FormField control={form.control} name="wakalahAssetDescription" render={({ field }) => <FormItem><FormLabel>Approved Asset(s)</FormLabel><FormControl><Input placeholder="e.g. 500 bags of cement at the approved total cost" {...field} /></FormControl><FormDescription>This appears in the required Murabaha sales contract.</FormDescription><FormMessage /></FormItem>} />
             <FormField control={form.control} name="wakalahGranted" render={({ field }) => (
               <FormItem className="flex items-center justify-between gap-4 space-y-0"><div><FormLabel>Grant Client Procurement Authority</FormLabel><FormDescription>Create a Wakalah agreement allowing this client to procure the approved asset for NAL.</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>
             )} />
             {form.watch('wakalahGranted') && <div className="grid gap-4 md:grid-cols-2">
-              <FormField control={form.control} name="wakalahAssetDescription" render={({ field }) => <FormItem><FormLabel>Approved Asset</FormLabel><FormControl><Input placeholder="e.g. 500 bags of cement" {...field} /></FormControl><FormMessage /></FormItem>} />
               <FormField control={form.control} name="wakalahSupplierName" render={({ field }) => <FormItem><FormLabel>Approved Supplier</FormLabel><FormControl><Input placeholder="Supplier or business name" {...field} /></FormControl><FormMessage /></FormItem>} />
             </div>}
           </div>

@@ -45,6 +45,11 @@ function recomputeEnvelopeHash(envelope: StoredVerificationEnvelope): string {
 
 function publicParties(model: AgreementDocumentModel) {
   if ('investor' in model) return { primaryParty: model.investor.name, amount: model.amount };
+  if (model.type === 'MURABAHA_SALE') return {
+    primaryParty: model.client.name,
+    secondaryParty: model.guarantor.name,
+    amount: model.deal.contractPrice,
+  };
   if ('guarantor' in model) return {
     primaryParty: model.client.name,
     secondaryParty: model.guarantor.name,

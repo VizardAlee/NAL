@@ -1,8 +1,9 @@
 import type { KafaalahBondModel } from './kafaalah';
 import type { MudarabaAgreementModel } from './mudaraba';
 import type { WakalahAgreementModel } from './wakalah';
+import type { MurabahaAgreementModel } from './murabaha';
 
-export type AgreementSigningType = 'MUDARABA' | 'WAKALAH' | 'KAFAALAH';
+export type AgreementSigningType = 'MUDARABA' | 'MURABAHA' | 'WAKALAH' | 'KAFAALAH';
 
 export type AgreementSignerRole =
   | 'INVESTOR'
@@ -23,6 +24,7 @@ export type AgreementSigningStatus =
 
 export type AgreementDocumentModel =
   | MudarabaAgreementModel
+  | MurabahaAgreementModel
   | WakalahAgreementModel
   | KafaalahBondModel;
 
@@ -71,6 +73,7 @@ export type AgreementSigningState = {
 
 export const REQUIRED_SIGNER_ROLES: Record<AgreementSigningType, AgreementSignerRole[]> = {
   MUDARABA: ['INVESTOR', 'WITNESS_1', 'WITNESS_2', 'NAL_SIGNATORY_1', 'NAL_SIGNATORY_2'],
+  MURABAHA: ['CLIENT', 'GUARANTOR', 'WITNESS', 'NAL_SIGNATORY_1', 'NAL_SIGNATORY_2'],
   WAKALAH: ['CLIENT', 'WITNESS', 'NAL_SIGNATORY_1', 'NAL_SIGNATORY_2'],
   KAFAALAH: ['GUARANTOR', 'WITNESS', 'NAL_AUTHORIZED_SIGNATORY'],
 };

@@ -11,6 +11,7 @@ const formSchema = z.object({
   dealName: z.string().min(3),
   principal: z.coerce.number().positive(),
   profitRate: z.coerce.number().min(0),
+  managementFeeRate: z.coerce.number().min(0),
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']),
   wakalahGranted: z.boolean().default(false),
   wakalahAssetDescription: z.string().trim().optional(),
@@ -25,9 +26,9 @@ const formSchema = z.object({
   repaymentType: z.literal('Equal Installments'),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
 }).superRefine((values, context) => {
+  if (values.financingMode === 'Murabaha' && (!values.wakalahAssetDescription || values.wakalahAssetDescription.length < 3)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahAssetDescription'], message: 'Describe the approved asset for the Murabaha sales contract.' });
   if (!values.wakalahGranted) return;
   if (values.financingMode !== 'Murabaha') context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahGranted'], message: 'Wakalah procurement authority is available only for Murabaha deals.' });
-  if (!values.wakalahAssetDescription || values.wakalahAssetDescription.length < 3) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahAssetDescription'], message: 'Describe the approved asset.' });
   if (!values.wakalahSupplierName || values.wakalahSupplierName.length < 2) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahSupplierName'], message: 'Enter the approved supplier.' });
 });
 
@@ -56,7 +57,8 @@ export async function approveDealAction(
       transaction.update(requestRef, { status: 'Approved', processedAt: FieldValue.serverTimestamp() });
       const newDealRef = adminDb.collection('deals').doc();
       const now = Timestamp.now();
-      transaction.set(newDealRef, { ...validated.data, clientId, clientName, status: 'Pending', createdAt: now, startDate: now });
+      const managementFeeAmount = (validated.data.principal * validated.data.managementFeeRate) / 100;
+      transaction.set(newDealRef, { ...validated.data, managementFeeAmount, managementFeePaid: false, clientId, clientName, status: 'Pending', createdAt: now, startDate: now });
     });
 
     revalidatePath('/admin/approvals/deal-requests');

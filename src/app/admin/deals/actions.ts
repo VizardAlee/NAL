@@ -29,9 +29,9 @@ const formSchema = z.object({
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   startDate: z.date().optional(),
 }).superRefine((values, context) => {
+  if ((values.financingMode || 'Murabaha') === 'Murabaha' && (!values.wakalahAssetDescription || values.wakalahAssetDescription.length < 3)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahAssetDescription'], message: 'Describe the approved asset for the Murabaha sales contract.' });
   if (!values.wakalahGranted) return;
   if (values.financingMode !== 'Murabaha') context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahGranted'], message: 'Wakalah procurement authority is available only for Murabaha deals.' });
-  if (!values.wakalahAssetDescription || values.wakalahAssetDescription.length < 3) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahAssetDescription'], message: 'Describe the asset the client is authorized to procure.' });
   if (!values.wakalahSupplierName || values.wakalahSupplierName.length < 2) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahSupplierName'], message: 'Enter the approved supplier.' });
 });
 
