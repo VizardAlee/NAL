@@ -20,6 +20,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <title>NAL General Merchant</title>
+        <meta name="description" content="NAL General Merchant Limited provides trade-based, asset-backed and partnership-oriented commercial solutions for MSMEs, individuals, cooperatives and organisations." />
         <meta name="application-name" content="NAL" />
         <meta name="theme-color" content="#0b593f" />
         <meta name="mobile-web-app-capable" content="yes" />
