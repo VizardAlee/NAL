@@ -30,6 +30,7 @@ interface FundBatch {
     tenureUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
     createdAt: admin.firestore.Timestamp;
     specialInvestment?: boolean;
+    sourceType?: string;
 }
 
 const DURATION_IN_DAYS = {
@@ -156,6 +157,7 @@ export async function POST(request: NextRequest) {
                     amount: amountToDeduct,
                     createdAt: transactionTimestamp,
                     specialInvestment: Boolean(batchData.specialInvestment),
+                    ...(batchData.sourceType ? { sourceType: batchData.sourceType } : {}),
                 });
 
                 // Create a corresponding 'Investment' transaction
@@ -169,6 +171,7 @@ export async function POST(request: NextRequest) {
                     amount: -amountToDeduct,
                     createdAt: transactionTimestamp,
                     dealName: dealData.dealName,
+                    ...(batchData.sourceType ? { sourceType: batchData.sourceType } : {}),
                 });
                 
                 // Decrement the remaining amount in the fund batch

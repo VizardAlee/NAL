@@ -86,6 +86,15 @@ export async function verifyAdminOrOwner(authToken: string): Promise<DecodedIdTo
   return decoded;
 }
 
+/** Require the dedicated OWNER access role for owner-only financial reporting. */
+export async function verifyOwnerRead(authToken: string): Promise<DecodedIdToken> {
+  const { decoded, accessSource } = await getVerifiedAccess(authToken);
+  if (accessSource.accessRole !== 'OWNER') {
+    throw createAuthError('Forbidden: owner access required.', 403);
+  }
+  return decoded;
+}
+
 async function getVerifiedAccess(authToken: string) {
   const decoded = await verifyAuthToken(authToken);
   const { firestore } = initializeFirebase();

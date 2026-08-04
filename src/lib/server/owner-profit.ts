@@ -1,5 +1,6 @@
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from '@/firebase/admin-app';
+import { assertValidOwnerConfiguration } from '@/lib/owner-accounting';
 
 type OwnerProfitPolicy = {
   retainedPercent: number;
@@ -37,6 +38,9 @@ async function getPolicy(): Promise<OwnerProfitPolicy | null> {
   if (retainedPercent < 0 || distributablePercent < 0 || retainedPercent + distributablePercent !== 100) {
     throw new Error('Owner profit policy is invalid: retainedPercent + distributablePercent must equal 100.');
   }
+  if (!Number.isInteger(totalShares) || totalShares <= 0) {
+    throw new Error('Owner profit policy is invalid: totalShares must be a positive whole number.');
+  }
 
   return {
     retainedPercent,
@@ -68,22 +72,26 @@ export async function processOwnerProfitAllocations(options: ProcessOptions = {}
   const { fromDate, toDate, includeHistorical = false, limit = 200 } = options;
   const policy = await getPolicy();
 
-  if (!policy) {
-    return { success: true, processed: 0, skipped: 0, errors: 0, details: ['Owner policy not set.'] };
-  }
+  if (!policy) throw new Error('Owner profit policy is not configured. Allocation has been stopped.');
 
   const partners = await getActivePartners(new Date());
   const totalActiveShares = partners.reduce((sum, p) => sum + Number(p.shareUnits || 0), 0);
   if (partners.length === 0 || totalActiveShares <= 0) {
-    return { success: true, processed: 0, skipped: 0, errors: 0, details: ['No active ownership partners configured.'] };
+    throw new Error('No active ownership partners are configured. Allocation has been stopped.');
   }
+  assertValidOwnerConfiguration({
+    totalShares: policy.totalShares,
+    retainedPercent: policy.retainedPercent,
+    distributablePercent: policy.distributablePercent,
+    activeShareUnits: partners.map((partner) => Number(partner.shareUnits)),
+  });
 
-  const txSnapshot = await adminDb
-    .collection('transactions')
-    .where('type', '==', 'PlatformEarning')
-    .orderBy('createdAt', 'asc')
-    .limit(limit)
-    .get();
+  let earningsQuery = adminDb.collection('transactions').where('type', '==', 'PlatformEarning');
+  // New operating earnings are born with ownerAllocationId: null. Querying that
+  // state prevents already processed history from permanently occupying the
+  // first page and starving later earnings.
+  if (!includeHistorical) earningsQuery = earningsQuery.where('ownerAllocationId', '==', null);
+  const txSnapshot = await earningsQuery.orderBy('createdAt', 'asc').limit(limit).get();
 
   let processed = 0;
   let skipped = 0;
@@ -159,7 +167,7 @@ export async function processOwnerProfitAllocations(options: ProcessOptions = {}
         for (let i = 0; i < sortedPartners.length; i++) {
           const partner = sortedPartners[i]!;
           const shareUnits = Number(partner.shareUnits || 0);
-          const ratio = shareUnits / totalActiveShares;
+          const ratio = shareUnits / policy.totalShares;
           let kobo = 0;
 
           if (i === sortedPartners.length - 1) {

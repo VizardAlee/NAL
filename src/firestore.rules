@@ -54,12 +54,6 @@ service cloud.firestore {
       return isAdmin() || isOwnerRole();
     }
 
-    function canManageOwnerAssignments(userId) {
-      return request.auth != null
-        && (isAdmin() || isOwnerRole())
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accessRole', 'updatedAt']);
-    }
-
     function isClient() {
       return hasRole('Client') || hasPersona('CLIENT');
     }
@@ -106,7 +100,6 @@ service cloud.firestore {
 
       // Only the user themself or an Admin can update a user document.
       allow update: if isAdmin()
-        || canManageOwnerAssignments(userId)
         || (isOwner(userId) && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmTokens']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phoneNumber']) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['legalDocumentUrl'])));
 
       // Only admins can delete users.
@@ -306,8 +299,8 @@ service cloud.firestore {
 
     // Rules for 'platformSettings'
     match /platformSettings/{settingId} {
-        // Allow public read for settings like branding
-        allow read: if true;
+        // Branding remains public, but owner withdrawal calendars are private financial settings.
+        allow read: if settingId != 'ownerWithdrawalWindow' || canAdminRead();
         // Only admins can change settings.
         allow write: if isAdmin();
     }

@@ -19,6 +19,7 @@ export async function loadFundBatchAnniversaryWindow(
       id: snapshot.id,
       ...data,
       remainingAmount: Number(data.remainingAmount || 0),
+      sourceType: typeof data.sourceType === 'string' ? data.sourceType : undefined,
     };
   });
   const entries = transactionsSnapshot.docs.map((snapshot) => snapshot.data());

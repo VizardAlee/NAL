@@ -118,8 +118,15 @@ export async function processWithdrawalRequestAction(input: DecisionInput) {
     const request = requestSnapshot.data()!;
     const userId = request.investorId || request.userId;
     if (!userId) throw new Error('Withdrawal request has no user.');
+    const isOwnerWithdrawal = request.type === 'OwnerWithdrawal';
+    let eligibleBatchesQuery = adminDb.collection('fundBatches')
+      .where('sourceId', '==', userId)
+      .where('remainingAmount', '>', 0);
+    if (isOwnerWithdrawal) {
+      eligibleBatchesQuery = eligibleBatchesQuery.where('sourceType', '==', 'OwnerProfitAutoAllocation');
+    }
     const batchesSnapshot = data.decision === 'Approved'
-      ? await trx.get(adminDb.collection('fundBatches').where('sourceId', '==', userId).where('remainingAmount', '>', 0).orderBy('createdAt', 'asc'))
+      ? await trx.get(eligibleBatchesQuery.orderBy('createdAt', 'asc'))
       : null;
     trx.update(requestRef, { status: data.decision, processedAt: FieldValue.serverTimestamp() });
     if (data.decision === 'Rejected') return;
@@ -133,6 +140,7 @@ export async function processWithdrawalRequestAction(input: DecisionInput) {
     if (remaining > 0.01) throw new Error('Insufficient investible balance for this withdrawal.');
     trx.set(adminDb.collection('transactions').doc(), {
       userId, type: 'Withdrawal', amount: -Math.abs(Number(request.amount)), createdAt: Timestamp.now(), sourceRequestId: data.requestId,
+      ...(isOwnerWithdrawal ? { sourceType: 'OwnerProfitWithdrawal' } : {}),
       ...(request.source ? { metadata: { source: request.source } } : {}),
     });
   });
@@ -164,6 +172,10 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
     ]);
     if (!dealSnapshot.exists) throw new Error('Associated deal not found.');
     if (investmentsSnapshot.empty) throw new Error('No investors found for this deal.');
+    const sourceBatchSnapshots = await Promise.all(investmentsSnapshot.docs.map((snapshot) => {
+      const fundBatchId = snapshot.data().fundBatchId;
+      return fundBatchId ? trx.get(adminDb.collection('fundBatches').doc(fundBatchId)) : Promise.resolve(null);
+    }));
     const deal = { id: dealSnapshot.id, ...dealSnapshot.data() } as any;
     const installment = generateAmortizationSchedule(deal).find((item) => item.installment === (repayment.installmentNumber || 1));
     if (!installment) throw new Error('Matching repayment installment was not found.');
@@ -179,9 +191,12 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
     const allocation = allocatePartialRepayment(repaymentAmount, installment);
     const totalInvested = investmentsSnapshot.docs.reduce((sum, item) => sum + Number(item.data().amount), 0);
     if (!Number.isFinite(totalInvested) || totalInvested <= 0) throw new Error('Investment total is invalid.');
-    const investments = investmentsSnapshot.docs.map((snapshot) => ({
+    const investments = investmentsSnapshot.docs.map((snapshot, index) => ({
       snapshot,
-      data: snapshot.data(),
+      data: {
+        ...snapshot.data(),
+        sourceType: snapshot.data().sourceType || sourceBatchSnapshots[index]?.data()?.sourceType,
+      } as any,
       weight: Number(snapshot.data().amount),
     }));
     const investorProfitPool = roundCurrency(allocation.interest * 0.4);
@@ -208,12 +223,14 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
       if (principalReturned > 0) trx.set(adminDb.collection('fundBatches').doc(), {
         sourceId: investment.investorId, amount: principalReturned, remainingAmount: principalReturned,
         createdAt: now, tenureValue: 0, tenureUnit: 'Days', specialInvestment: Boolean(investment.specialInvestment), sourceRequestId: data.requestId,
+        ...(investment.sourceType === 'OwnerProfitAutoAllocation' ? { sourceType: investment.sourceType } : {}),
       });
     }
     const platformProfit = roundCurrency(allocation.interest - investorProfitPool);
     trx.set(adminDb.collection('transactions').doc(), {
       userId: 'platform', dealId: repayment.dealId, type: 'PlatformEarning', amount: platformProfit,
-      createdAt: now, dealName: deal.dealName, ownerAllocatable: true, platformEarningKind: 'Operating', sourceRequestId: data.requestId,
+      createdAt: now, dealName: deal.dealName, ownerAllocatable: true, ownerAllocationId: null,
+      platformEarningKind: 'Operating', sourceRequestId: data.requestId,
     });
     trx.set(adminDb.collection('fundBatches').doc(), {
       sourceId: 'platform', amount: platformProfit, remainingAmount: platformProfit, createdAt: now,
@@ -254,6 +271,10 @@ export async function processTerminationRequestAction(input: Omit<DecisionInput,
       trx.get(adminDb.collection('repayments').where('dealId', '==', request.dealId)),
     ]);
     if (!dealSnapshot.exists) throw new Error('Deal not found.');
+    const sourceBatchSnapshots = await Promise.all(investmentsSnapshot.docs.map((snapshot) => {
+      const fundBatchId = snapshot.data().fundBatchId;
+      return fundBatchId ? trx.get(adminDb.collection('fundBatches').doc(fundBatchId)) : Promise.resolve(null);
+    }));
     const deal = { id: dealSnapshot.id, ...dealSnapshot.data() } as any;
     if (deal.status === 'Terminated') throw new Error('Deal is already terminated.');
     const now = Timestamp.now();
@@ -265,9 +286,12 @@ export async function processTerminationRequestAction(input: Omit<DecisionInput,
     confirmedSettlementAmount = settlement.totalRemaining;
     const totalInvested = investmentsSnapshot.docs.reduce((sum, item) => sum + Number(item.data().amount), 0);
     if (totalInvested <= 0) throw new Error('No valid investments found for this deal.');
-    const investments = investmentsSnapshot.docs.map((snapshot) => ({
+    const investments = investmentsSnapshot.docs.map((snapshot, index) => ({
       snapshot,
-      data: snapshot.data(),
+      data: {
+        ...snapshot.data(),
+        sourceType: snapshot.data().sourceType || sourceBatchSnapshots[index]?.data()?.sourceType,
+      } as any,
       weight: Number(snapshot.data().amount),
     }));
     const investorProfitPool = roundCurrency(settlement.remainingProfit * 0.4);
@@ -293,13 +317,15 @@ export async function processTerminationRequestAction(input: Omit<DecisionInput,
       if (principal > 0) trx.set(adminDb.collection('fundBatches').doc(), {
         sourceId: investment.investorId, amount: principal, remainingAmount: principal, createdAt: now,
         tenureValue: 10, tenureUnit: 'Years', specialInvestment: Boolean(investment.specialInvestment), sourceRequestId: data.requestId,
+        ...(investment.sourceType === 'OwnerProfitAutoAllocation' ? { sourceType: investment.sourceType } : {}),
       });
     }
     const platformProfit = roundCurrency(settlement.remainingProfit - investorProfitPool);
     if (platformProfit > 0) {
       trx.set(adminDb.collection('transactions').doc(), {
         userId: 'platform', dealId: deal.id, type: 'PlatformEarning', amount: platformProfit, createdAt: now,
-        dealName: deal.dealName, ownerAllocatable: true, platformEarningKind: 'Operating', sourceRequestId: data.requestId,
+        dealName: deal.dealName, ownerAllocatable: true, ownerAllocationId: null,
+        platformEarningKind: 'Operating', sourceRequestId: data.requestId,
       });
       trx.set(adminDb.collection('fundBatches').doc(), {
         sourceId: 'platform', amount: platformProfit, remainingAmount: platformProfit, createdAt: now,

@@ -22,6 +22,7 @@ beforeEach(async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await setDoc(doc(db, 'users', 'admin'), { role: 'Admin', accessRole: 'ADMIN', name: 'Admin' });
+    await setDoc(doc(db, 'users', 'owner'), { role: 'Owner', accessRole: 'OWNER', name: 'Owner' });
     await setDoc(doc(db, 'users', 'client'), { role: 'Client', accessRole: 'USER', personas: ['CLIENT'], name: 'Client' });
     await setDoc(doc(db, 'users', 'recovery'), { role: 'Recovery', accessRole: 'USER', personas: ['RECOVERY'], name: 'Recovery Officer' });
     await setDoc(doc(db, 'users', 'recovery2'), { role: 'Recovery', accessRole: 'USER', personas: ['RECOVERY'], name: 'Second Recovery Officer' });
@@ -50,6 +51,29 @@ test('users may edit safe profile fields but not access fields', async () => {
   }));
   await assertFails(updateDoc(doc(db, 'users', 'client'), { bankAccountNumber: 'not-an-account' }));
   await assertFails(updateDoc(doc(db, 'users', 'client'), { accessRole: 'ADMIN' }));
+});
+
+test('owners have read-only oversight and cannot grant administrative access', async () => {
+  const ownerDb = env.authenticatedContext('owner').firestore();
+  await assertSucceeds(getDocs(collection(ownerDb, 'users')));
+  await assertFails(updateDoc(doc(ownerDb, 'users', 'owner'), { accessRole: 'ADMIN' }));
+  await assertFails(updateDoc(doc(ownerDb, 'users', 'client'), { accessRole: 'ADMIN' }));
+  await assertFails(updateDoc(doc(ownerDb, 'users', 'client'), { accessRole: 'OWNER' }));
+  await assertFails(setDoc(doc(ownerDb, 'fundBatches', 'owner-forged'), { sourceId: 'owner', remainingAmount: 999999 }));
+});
+
+test('owner withdrawal windows are private while ordinary platform settings remain public', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'platformSettings', 'ownerWithdrawalWindow'), { quarters: [] });
+    await setDoc(doc(context.firestore(), 'platformSettings', 'branding'), { name: 'NAL' });
+  });
+  const publicDb = env.unauthenticatedContext().firestore();
+  const clientDb = env.authenticatedContext('client').firestore();
+  const ownerDb = env.authenticatedContext('owner').firestore();
+  await assertSucceeds(getDoc(doc(publicDb, 'platformSettings', 'branding')));
+  await assertFails(getDoc(doc(publicDb, 'platformSettings', 'ownerWithdrawalWindow')));
+  await assertFails(getDoc(doc(clientDb, 'platformSettings', 'ownerWithdrawalWindow')));
+  await assertSucceeds(getDoc(doc(ownerDb, 'platformSettings', 'ownerWithdrawalWindow')));
 });
 
 test('users may save only their own Firebase Storage profile photograph', async () => {

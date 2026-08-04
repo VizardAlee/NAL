@@ -1,17 +1,14 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
-import { Crown, Landmark, PieChart, TrendingUp, Wallet, Banknote, Briefcase, Info, ArrowDownToLine, Loader2, LockKeyhole, History, Users2, Percent, Scale, AlertTriangle } from 'lucide-react';
-import { Timestamp, collection, query, where, orderBy, limit, DocumentData, doc } from 'firebase/firestore';
+import { Crown, Landmark, TrendingUp, Wallet, Banknote, Briefcase, Info, ArrowDownToLine, Loader2, LockKeyhole, History, Users2, Percent, Scale, AlertTriangle, RefreshCw, HandCoins, ShieldAlert, Activity } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth, useFirestore, useUser } from '@/firebase';
-import { useCollection } from '@/firebase/firestore/use-collection';
+import { useAuth, useUser } from '@/firebase';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { useDoc } from '@/firebase/firestore/use-doc';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -33,91 +30,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-
-type Transaction = DocumentData & {
-  id: string;
-  type: string;
-  amount: number;
-  createdAt: Timestamp;
-  platformEarningKind?: 'Operating' | 'OwnerDistributionAdjustment' | 'InterAccountAdjustment';
-};
-
-type Deal = DocumentData & {
-  id: string;
-  status: 'Active' | 'Pending' | 'Completed' | 'Terminated';
-};
-
-type Repayment = DocumentData & {
-  id: string;
-  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
-  dueDate?: Timestamp;
-  amount: number;
-};
-
-type Loan = DocumentData & {
-  id: string;
-  status: 'Active' | 'Repaid';
-  outstanding: number;
-};
-
-type OwnerAllocation = DocumentData & {
-  id: string;
-  sourceTransactionId: string;
-  retainedAmount: number;
-  distributableAmount: number;
-  createdAt?: Timestamp;
-  status?: string;
-  partnerSnapshot: Array<{
-    userId: string;
-    displayName: string;
-    allocatedAmount: number;
-  }>;
-  policySnapshot?: {
-    retainedPercent: number;
-    distributablePercent: number;
-    totalShares: number;
-  };
-};
-
-type FundBatch = DocumentData & {
-  id: string;
-  sourceId: string;
-  amount: number;
-  remainingAmount: number;
-  createdAt: Timestamp;
-};
-
-type Investment = DocumentData & {
-  id: string;
-  investorId: string;
-  amount: number;
-  dealId: string;
-};
-
-type WithdrawalRequest = DocumentData & {
-  id: string;
-  amount: number;
-  status: 'Pending' | 'Approved' | 'Rejected';
-  requestedAt: Timestamp;
-};
-
-type UserProfile = DocumentData & {
-  userId: string;
-  shareUnits: number;
-  active: boolean;
-};
-
-type OwnerPolicy = DocumentData & {
-  totalShares: number;
-  retainedPercent: number;
-  distributablePercent: number;
-};
-
-type OwnershipPartner = DocumentData & {
-  id: string;
-  shareUnits: number;
-  active: boolean;
-};
+import { loadOwnerDashboardAction, type OwnerDashboardSnapshot } from './actions';
 
 type WithdrawalQuarter = { label: string; startDate: string; endDate: string };
 
@@ -151,12 +64,14 @@ function WithdrawDialog({
   maxAmount,
   userId,
   userName,
+  onSubmitted,
 }: {
   open: boolean;
   onClose: () => void;
   maxAmount: number;
   userId: string;
   userName: string;
+  onSubmitted: () => void;
 }) {
   const auth = useAuth();
   const { toast } = useToast();
@@ -194,6 +109,7 @@ function WithdrawDialog({
         toast({ title: 'Withdrawal request submitted', description: result.message });
         setAmount('');
         onClose();
+        onSubmitted();
       } else {
         console.error("Withdrawal Request Server Error:", result);
         toast({
@@ -251,135 +167,44 @@ function WithdrawDialog({
 }
 
 export default function OwnerDashboardPage() {
-  const firestore = useFirestore();
   const { user } = useUser();
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [withdrawalPage, setWithdrawalPage] = useState(1);
+  const [snapshot, setSnapshot] = useState<OwnerDashboardSnapshot | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Platform Queries
-  const usersQuery = useMemo(() => (firestore ? query(collection(firestore, 'users')) : null), [firestore]);
-  const dealsQuery = useMemo(() => (firestore ? query(collection(firestore, 'deals')) : null), [firestore]);
-  const earningsQuery = useMemo(
-    () => (firestore ? query(collection(firestore, 'transactions'), where('type', '==', 'PlatformEarning')) : null),
-    [firestore]
-  );
-  const pendingRepaymentsQuery = useMemo(
-    () => (firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Pending')) : null),
-    [firestore]
-  );
-  const activeLoansQuery = useMemo(
-    () => (firestore ? query(collection(firestore, 'interAccountLoans'), where('status', '==', 'Active')) : null),
-    [firestore]
-  );
-  const ownerAllocationsQuery = useMemo(
-    () => (firestore ? query(collection(firestore, 'ownerProfitAllocations'), orderBy('createdAt', 'desc'), limit(500)) : null),
-    [firestore]
-  );
+  const refresh = useCallback(() => setRefreshKey((value) => value + 1), []);
+  useEffect(() => {
+    let cancelled = false;
+    if (!user) return;
+    setIsLoading(true);
+    setLoadError(null);
+    user.getIdToken().then((authToken) => loadOwnerDashboardAction({ authToken })).then((result) => {
+      if (cancelled) return;
+      if (!result.success) {
+        setSnapshot(null);
+        setLoadError(result.message);
+      } else {
+        setSnapshot(result.data);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setSnapshot(null);
+        setLoadError('The owner accounting service could not be reached. No financial values are being displayed.');
+      }
+    }).finally(() => {
+      if (!cancelled) setIsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [user, refreshKey]);
 
-  // Personal Queries
-  const myFundBatchesQuery = useMemo(
-    () => (firestore && user ? query(collection(firestore, 'fundBatches'), where('sourceId', '==', user.uid)) : null),
-    [firestore, user]
-  );
-  const myInvestmentsQuery = useMemo(
-    () => (firestore && user ? query(collection(firestore, 'investments'), where('investorId', '==', user.uid)) : null),
-    [firestore, user]
-  );
-  const myWithdrawalRequestsQuery = useMemo(
-    () => (firestore && user ? query(collection(firestore, 'withdrawalRequests'), where('investorId', '==', user.uid), orderBy('requestedAt', 'desc'), limit(100)) : null),
-    [firestore, user]
-  );
-  const myTransactionsQuery = useMemo(
-    () => (firestore && user ? query(collection(firestore, 'transactions'), where('userId', '==', user.uid), orderBy('createdAt', 'desc')) : null),
-    [firestore, user]
-  );
-
-  // Partner & Policy refs
-  const myPartnerRef = useMemo(() => (firestore && user ? doc(firestore, 'ownershipPartners', user.uid) : null), [firestore, user]);
-  const ownerPolicyRef = useMemo(() => (firestore ? doc(firestore, 'platformPolicies', 'ownerProfit') : null), [firestore]);
-
-  // Withdrawal window
-  const withdrawalWindowRef = useMemo(
-    () => (firestore ? doc(firestore, 'platformSettings', 'ownerWithdrawalWindow') : null),
-    [firestore]
-  );
-  const { data: withdrawalWindowData } = useDoc<{ quarters: WithdrawalQuarter[] }>(withdrawalWindowRef);
-
-  const { data: users, loading: usersLoading } = useCollection<DocumentData>(usersQuery);
-  const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
-  const { data: earnings, loading: earningsLoading } = useCollection<Transaction>(earningsQuery);
-  const { data: pendingRepayments, loading: repaymentsLoading } = useCollection<Repayment>(pendingRepaymentsQuery);
-  const { data: activeLoans, loading: loansLoading } = useCollection<Loan>(activeLoansQuery);
-  const { data: ownerAllocations, loading: allocationsLoading } = useCollection<OwnerAllocation>(ownerAllocationsQuery);
-  const { data: myFundBatches, loading: myBatchesLoading } = useCollection<FundBatch>(myFundBatchesQuery);
-  const { data: myInvestments, loading: myInvestmentsLoading } = useCollection<Investment>(myInvestmentsQuery);
-  const { data: myWithdrawals, loading: myWithdrawalsLoading } = useCollection<WithdrawalRequest>(myWithdrawalRequestsQuery);
-  const { data: myTransactions, loading: myTransactionsLoading } = useCollection<Transaction>(myTransactionsQuery);
-  const { data: myPartnerData, loading: partnerLoading } = useDoc<OwnershipPartner>(myPartnerRef as any);
-  const { data: ownerPolicy, loading: policyLoading } = useDoc<OwnerPolicy>(ownerPolicyRef as any);
-
-  const metrics = useMemo(() => {
-    const grossPlatformEarnings = (earnings || [])
-      .filter(tx => tx.amount > 0 && (tx.platformEarningKind === 'Operating' || !tx.platformEarningKind))
-      .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
-
-    const activeDealsCount = (deals || []).filter((deal) => deal.status === 'Active').length;
-    const totalUsers = (users || []).length;
-    const adminDebtToPlatform = (activeLoans || []).reduce((sum, loan) => sum + (Number(loan.outstanding) || 0), 0);
-
-    const globalTotalRetained = (ownerAllocations || []).reduce((sum, alloc) => sum + (Number(alloc.retainedAmount) || 0), 0);
-    const globalTotalDistributed = (ownerAllocations || []).reduce((sum, alloc) => sum + (Number(alloc.distributableAmount) || 0), 0);
-
-    // Personal Metrics
-    let personalTotalAllocated = 0;
-    if (ownerAllocations && user) {
-      ownerAllocations.forEach(alloc => {
-        const myPart = alloc.partnerSnapshot?.find(p => p.userId === user.uid);
-        if (myPart) personalTotalAllocated += (myPart.allocatedAmount || 0);
-      });
-    }
-
-    const approvedWithdrawals = (myTransactions || [])
-      .filter(tx => tx.type === 'Withdrawal' && tx.amount < 0)
-      .reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0);
-
-    const personalUnwithdrawnProfit = Math.max(0, personalTotalAllocated - approvedWithdrawals);
-
-    const personalInvestible = (myFundBatches || []).reduce((sum, b) => sum + (b.remainingAmount || 0), 0);
-    const personalInvested = (myInvestments || []).reduce((sum, i) => {
-      const deal = deals?.find(d => d.id === i.dealId);
-      if (deal?.status === 'Active') return sum + (i.amount || 0);
-      return sum;
-    }, 0);
-
-    // --- WITHDRAWABLE LIQUID PROFIT CALCULATION ---
-    // Rule: Owners can only withdraw funds that are currently liquid (uninvested).
-    // If an owner has 1M unwithdrawn profit but 500k is currently powering deals, they can only withdraw 500k.
-    const withdrawableLiquidProfit = Math.min(personalUnwithdrawnProfit, personalInvestible);
-
-    const totalAuthShares = ownerPolicy?.totalShares || 20000000;
-    const myShareUnits = myPartnerData?.shareUnits || 0;
-    const mySharePercent = totalAuthShares > 0 ? (myShareUnits / totalAuthShares) * 100 : 0;
-
-    return {
-      grossPlatformEarnings,
-      activeDealsCount,
-      totalUsers,
-      adminDebtToPlatform,
-      globalTotalRetained,
-      globalTotalDistributed,
-      personalTotalAllocated,
-      personalUnwithdrawnProfit,
-      withdrawableLiquidProfit,
-      personalInvestible,
-      personalInvested,
-      myShareUnits,
-      mySharePercent,
-      totalAuthShares,
-    };
-  }, [earnings, deals, users, activeLoans, ownerAllocations, user, myFundBatches, myInvestments, myTransactions, myPartnerData, ownerPolicy]);
-
-  const isLoading = usersLoading || dealsLoading || earningsLoading || repaymentsLoading || loansLoading || allocationsLoading || myBatchesLoading || myInvestmentsLoading || myWithdrawalsLoading || myTransactionsLoading || partnerLoading || policyLoading;
+  const metrics = snapshot?.metrics;
+  const ownerPolicy = snapshot?.policy;
+  const ownerAllocations = useMemo(() => snapshot?.allocations ?? [], [snapshot]);
+  const myWithdrawals = useMemo(() => snapshot?.withdrawals ?? [], [snapshot]);
+  const withdrawalWindowData = snapshot?.withdrawalWindow;
 
   const withdrawalStatus = useMemo(() => {
     if (!withdrawalWindowData?.quarters?.length) return { open: false };
@@ -396,14 +221,39 @@ export default function OwnerDashboardPage() {
   }, [withdrawalWindowData, withdrawalStatus]);
 
   const paginatedWithdrawals = useMemo(() => {
-    if (!myWithdrawals) return [];
     const start = (withdrawalPage - 1) * ITEMS_PER_PAGE;
     return myWithdrawals.slice(start, start + ITEMS_PER_PAGE);
   }, [myWithdrawals, withdrawalPage]);
 
   const withdrawalTotalPages = useMemo(() => {
-    return myWithdrawals ? Math.ceil(myWithdrawals.length / ITEMS_PER_PAGE) : 0;
+    return Math.ceil(myWithdrawals.length / ITEMS_PER_PAGE);
   }, [myWithdrawals]);
+
+  if (loadError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Owner Dashboard" description="Strategic oversight and personal ownership stake management." icon={Crown} />
+        <Alert variant="destructive">
+          <ShieldAlert className="h-4 w-4" />
+          <AlertTitle>Financial dashboard unavailable</AlertTitle>
+          <AlertDescription className="space-y-3">
+            <p>{loadError}</p>
+            <p>No balance has been replaced with a zero or estimated value.</p>
+            <Button variant="outline" size="sm" onClick={refresh}><RefreshCw className="mr-2 h-4 w-4" />Retry securely</Button>
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (!metrics || !ownerPolicy) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Owner Dashboard" description="Loading verified owner accounting records." icon={Crown} />
+        <div className="grid gap-4 md:grid-cols-3">{[0, 1, 2].map((item) => <Skeleton key={item} className="h-32 w-full" />)}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -520,11 +370,11 @@ export default function OwnerDashboardPage() {
                 <div className="flex items-center justify-between p-3 rounded-md bg-muted/50 border">
                   <div className="text-center flex-1 border-r">
                     <p className="text-[10px] uppercase text-muted-foreground">Retained</p>
-                    <p className="text-xl font-bold text-primary">{ownerPolicy?.retainedPercent || 50}%</p>
+                    <p className="text-xl font-bold text-primary">{ownerPolicy.retainedPercent}%</p>
                   </div>
                   <div className="text-center flex-1">
                     <p className="text-[10px] uppercase text-muted-foreground">Shared</p>
-                    <p className="text-xl font-bold text-accent-foreground">{ownerPolicy?.distributablePercent || 50}%</p>
+                    <p className="text-xl font-bold text-accent-foreground">{ownerPolicy.distributablePercent}%</p>
                   </div>
                 </div>
               )}
@@ -540,11 +390,11 @@ export default function OwnerDashboardPage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Gross Earnings</CardTitle>
+                <CardTitle className="text-sm font-medium">Allocated Gross Earnings</CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoading ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(metrics.grossPlatformEarnings)}</div>}
-                <p className="text-[10px] text-muted-foreground mt-1">Total markup before split</p>
+                <p className="text-[10px] text-muted-foreground mt-1">Verified gross earnings already processed through the owner split</p>
               </CardContent>
             </Card>
 
@@ -589,7 +439,7 @@ export default function OwnerDashboardPage() {
               {isLoading ? <div className="space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div> :
                 !myWithdrawals || myWithdrawals.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No withdrawal requests found.</p> : (
                   <>
-                    <div className="rounded-md border">
+                    <div className="overflow-x-auto rounded-md border">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -601,7 +451,7 @@ export default function OwnerDashboardPage() {
                         <TableBody>
                           {paginatedWithdrawals.map((req) => (
                             <TableRow key={req.id}>
-                              <TableCell className="text-xs">{format(req.requestedAt.toDate(), 'PP')}</TableCell>
+                              <TableCell className="text-xs">{format(new Date(req.requestedAt), 'PP')}</TableCell>
                               <TableCell className="font-medium">{formatCurrency(req.amount)}</TableCell>
                               <TableCell className="text-right">
                                 <Badge variant={req.status === 'Approved' ? 'default' : req.status === 'Rejected' ? 'destructive' : 'secondary'}>
@@ -616,7 +466,7 @@ export default function OwnerDashboardPage() {
                     {withdrawalTotalPages > 1 && (
                       <div className="mt-4">
                         <Pagination>
-                          <PaginationContent>
+                          <PaginationContent className="flex-wrap">
                             <PaginationItem>
                               <PaginationPrevious
                                 href="#"
@@ -663,13 +513,13 @@ export default function OwnerDashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {allocationsLoading ? (
+              {isLoading ? (
                 <div className="space-y-2">
                   <Skeleton className="h-12 w-full" />
                   <Skeleton className="h-12 w-full" />
                   <Skeleton className="h-12 w-full" />
                 </div>
-              ) : !ownerAllocations || ownerAllocations.length === 0 ? (
+              ) : ownerAllocations.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">No profit allocations recorded yet.</p>
               ) : (
                 <div className="space-y-3">
@@ -678,11 +528,11 @@ export default function OwnerDashboardPage() {
                       <div>
                         <p className="font-medium">Gross: {formatCurrency(allocation.sourceEarningAmount)}</p>
                         <p className="text-xs text-muted-foreground">
-                          Retained: {formatCurrency(allocation.retainedAmount)} ({allocation.policySnapshot?.retainedPercent}%) | Distributed: {formatCurrency(allocation.distributableAmount)} ({allocation.policySnapshot?.distributablePercent}%)
+                          Retained: {formatCurrency(allocation.retainedAmount)} ({allocation.retainedPercent}%) | Distributed: {formatCurrency(allocation.distributableAmount)} ({allocation.distributablePercent}%)
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-muted-foreground">{allocation.createdAt ? format(allocation.createdAt.toDate(), 'PPP') : 'Recently'}</p>
+                        <p className="text-xs text-muted-foreground">{allocation.createdAt ? format(new Date(allocation.createdAt), 'PPP') : 'Recently'}</p>
                         <Badge variant="outline" className="mt-1">Verified</Badge>
                       </div>
                     </div>
@@ -692,6 +542,45 @@ export default function OwnerDashboardPage() {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm"><Activity className="h-4 w-4" />Active operations</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{metrics.activeDealsCount}</p>
+            <p className="text-xs text-muted-foreground">Active deals · {metrics.totalUsers} platform users</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm"><HandCoins className="h-4 w-4" />Pending repayments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{formatCurrency(metrics.pendingRepaymentAmount)}</p>
+            <p className="text-xs text-muted-foreground">{metrics.pendingRepaymentCount} payment request(s) awaiting approval</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm"><AlertTriangle className="h-4 w-4" />Overdue exposure</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-destructive">{formatCurrency(metrics.overdueExposure)}</p>
+            <p className="text-xs text-muted-foreground">{metrics.overdueCaseCount} overdue or broken-promise case(s)</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm"><Landmark className="h-4 w-4" />Inter-account leverage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{formatCurrency(metrics.adminDebtToPlatform)}</p>
+            <p className="text-xs text-muted-foreground">Outstanding active inter-account loans</p>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -719,6 +608,8 @@ export default function OwnerDashboardPage() {
         </Card>
       </div>
 
+      <p className="text-right text-xs text-muted-foreground">Verified snapshot generated {format(new Date(snapshot.generatedAt), 'PPpp')}</p>
+
       {user && (
         <WithdrawDialog
           open={withdrawDialogOpen}
@@ -726,6 +617,7 @@ export default function OwnerDashboardPage() {
           maxAmount={metrics.withdrawableLiquidProfit}
           userId={user.uid}
           userName={user.displayName || user.email || 'Owner'}
+          onSubmitted={refresh}
         />
       )}
     </div>

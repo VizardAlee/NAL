@@ -9,6 +9,7 @@ import { differenceInDays } from 'date-fns';
 import { verifyAuthTokenForUser } from '@/lib/server/auth';
 import { calculateAvailableProfit } from '@/lib/financial-integrity';
 import { loadFundBatchAnniversaryWindow } from '@/lib/server/fund-batch-anniversary';
+import { ownerWithdrawalRequestId } from '@/lib/server/owner-withdrawal';
 
 // --- Withdrawal Action ---
 const withdrawalSchema = z.object({
@@ -99,61 +100,69 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
         const userData = userSnap.data() as any;
         const isOwnerAccount = userData?.accessRole === 'OWNER';
 
+        let currentWindowLabel: string | null = null;
+        let ownerRequestId: string | null = null;
         if (isOwnerAccount) {
-            // 1. Check for custom withdrawal window
             const settingsSnap = await adminDb.doc('platformSettings/ownerWithdrawalWindow').get();
             const settingsData = settingsSnap.data();
             const quarters = settingsData?.quarters || [];
-
             const window = isDateInWindow(quarters);
-            if (!window.open) {
+            if (!window.open || !window.label) {
                 return {
                     success: false,
                     message: 'Withdrawals are currently closed. Please wait for an active withdrawal window.',
                 };
             }
-
-            // 2. Check for existing withdrawal request in this specific window (label)
-            const existingOwnerWithdrawal = await adminDb
-                .collection('withdrawalRequests')
-                .where('investorId', '==', userId)
-                .where('windowLabel', '==', window.label)
-                .limit(1)
-                .get();
-
-            if (!existingOwnerWithdrawal.empty) {
-                return {
-                    success: false,
-                    message: `You have already made a withdrawal request for the ${window.label} window. Owners are allowed one request per window.`,
-                };
-            }
-        }
-
-        // Check window again to get the label for reference
-        let currentWindowLabel = null;
-        if (isOwnerAccount) {
-            const settingsSnap = await adminDb.doc('platformSettings/ownerWithdrawalWindow').get();
-            const window = isDateInWindow(settingsSnap.data()?.quarters || []);
             currentWindowLabel = window.label;
+            ownerRequestId = ownerWithdrawalRequestId(userId, window.label);
         }
 
         await adminDb.runTransaction(async (trx) => {
             const anniversaryContext = await loadFundBatchAnniversaryWindow(trx, userId);
+            const requestRef = ownerRequestId
+                ? adminDb.collection('withdrawalRequests').doc(ownerRequestId)
+                : adminDb.collection('withdrawalRequests').doc();
+            if (ownerRequestId) {
+                const deterministicRequest = await trx.get(requestRef);
+                const historicalRequest = anniversaryContext.withdrawalRequests.find(
+                    (request) => request.type === 'OwnerWithdrawal' && request.windowLabel === currentWindowLabel
+                );
+                if (deterministicRequest.exists || historicalRequest) {
+                    throw new Error(`You have already made a withdrawal request for the ${currentWindowLabel} window. Owners are allowed one request per window.`);
+                }
+            }
             const pendingRequests = anniversaryContext.withdrawalRequests.filter(
                 (request) => request.status === 'Pending'
             );
-            const investible = anniversaryContext.fundBatches.reduce(
+            const eligibleBatches = isOwnerAccount
+                ? anniversaryContext.fundBatches.filter((batch) => batch.sourceType === 'OwnerProfitAutoAllocation')
+                : anniversaryContext.fundBatches;
+            const relevantPendingRequests = isOwnerAccount
+                ? pendingRequests.filter((request) => request.type === 'OwnerWithdrawal')
+                : pendingRequests;
+            const investible = eligibleBatches.reduce(
                 (sum, batch) => sum + Math.max(0, Number(batch.remainingAmount || 0)),
                 0
             );
-            const reserved = pendingRequests.reduce(
+            const reserved = relevantPendingRequests.reduce(
                 (sum, request) => sum + Number(request.amount || 0),
                 0
             );
             if (amount > investible - reserved + 0.01) {
                 throw new Error('Amount exceeds your available investible balance after pending requests.');
             }
-            if (!isOwnerAccount) {
+            if (isOwnerAccount) {
+                const totalAllocated = anniversaryContext.entries
+                    .filter((entry: any) => entry.sourceType === 'OwnerProfitAutoAllocation' && entry.type === 'Deposit')
+                    .reduce((sum: number, entry: any) => sum + Math.max(0, Number(entry.amount || 0)), 0);
+                const approvedWithdrawals = anniversaryContext.withdrawalRequests
+                    .filter((request) => request.type === 'OwnerWithdrawal' && request.status === 'Approved')
+                    .reduce((sum, request) => sum + Math.max(0, Number(request.amount || 0)), 0);
+                const ledgerAvailable = Math.max(0, totalAllocated - approvedWithdrawals - reserved);
+                if (amount > ledgerAvailable + 0.01) {
+                    throw new Error('Amount exceeds your allocated, unwithdrawn owner profit.');
+                }
+            } else {
                 if (source === 'AnniversaryProfit') {
                     if (!anniversaryContext.window.isOpen) {
                         throw new Error('The annual five-day profit withdrawal window is currently closed.');
@@ -177,7 +186,7 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
                 }
             }
             const now = FieldValue.serverTimestamp();
-            trx.create(adminDb.collection('withdrawalRequests').doc(), {
+            trx.create(requestRef, {
                 investorId: userId,
                 investorName: userName,
                 amount,
@@ -193,6 +202,7 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
                     })),
                 } : {}),
                 ...(currentWindowLabel ? { windowLabel: currentWindowLabel } : {}),
+                ...(ownerRequestId ? { idempotencyKey: ownerRequestId } : {}),
             });
             trx.update(adminDb.collection('users').doc(userId), { lastWithdrawalDate: now });
         });
