@@ -11,6 +11,30 @@ service firebase.storage {
       return signedIn() && (profile.accessRole == 'ADMIN' || (!('accessRole' in profile) && profile.role == 'Admin'));
     }
 
+    function hasPersona(persona) {
+      let profile = firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+      return signedIn() && (
+        (('personas' in profile) && profile.personas.hasAny([persona]))
+        || (persona == 'RECOVERY' && profile.role == 'Recovery')
+        || (persona == 'LEGAL' && profile.role == 'Legal')
+      );
+    }
+
+    function isRecoveryStatus(status) {
+      return status in ['UPCOMING', 'DUE', 'OVERDUE', 'PROMISE_TO_PAY', 'BROKEN_PROMISE', 'Due_Recovery'];
+    }
+
+    function isLegalStatus(status) {
+      return status in ['ESCALATED_LEGAL', 'NOTICE_PREPARATION', 'DEMAND_ISSUED', 'NEGOTIATION', 'COURT_PROCEEDINGS', 'JUDGMENT', 'SETTLED', 'Escalated_Legal'];
+    }
+
+    function canAccessCase(taskId) {
+      let caseData = firestore.get(/databases/(default)/documents/recoveryTasks/$(taskId)).data;
+      return isAdmin()
+        || (hasPersona('RECOVERY') && isRecoveryStatus(caseData.status) && caseData.assigneeId in [null, request.auth.uid])
+        || (hasPersona('LEGAL') && isLegalStatus(caseData.status) && caseData.assigneeId in [null, request.auth.uid]);
+    }
+
     function validUpload() {
       return request.resource.size > 0
         && request.resource.size <= 5 * 1024 * 1024
@@ -59,6 +83,14 @@ service firebase.storage {
     match /admin/{adminId}/legal/{userId}/{fileName} {
       allow read: if signedIn() && request.auth.uid == adminId && isAdmin();
       allow write: if signedIn() && request.auth.uid == adminId && isAdmin() && validUpload();
+    }
+
+    match /case-evidence/{taskId}/{uploaderId}/{fileName} {
+      allow read: if signedIn() && canAccessCase(taskId);
+      allow write: if signedIn()
+        && request.auth.uid == uploaderId
+        && canAccessCase(taskId)
+        && validUpload();
     }
   }
 }

@@ -279,7 +279,7 @@ export async function getOrCreateConversation(input: z.infer<typeof getOrCreateC
             trx.set(newConversationRef, {
                 participantIds: [adminId, userId],
                 participantNames: [verifiedAdminName, verifiedUserName],
-                participantAvatars: [`https://picsum.photos/seed/${adminId}/128/128`, `https://picsum.photos/seed/${userId}/128/128`],
+                participantAvatars: ['', ''],
                 lastMessage: initialMessage,
                 lastMessageSenderId: initiatorId,
                 lastUpdatedAt: now,

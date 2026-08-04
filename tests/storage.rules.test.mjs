@@ -23,6 +23,12 @@ beforeEach(async () => {
     const db = context.firestore();
     await setDoc(doc(db, 'users', 'admin'), { role: 'Admin', accessRole: 'ADMIN' });
     await setDoc(doc(db, 'users', 'staff'), { role: 'Admin', accessRole: 'STAFF' });
+    await setDoc(doc(db, 'users', 'recovery'), { role: 'Recovery', accessRole: 'USER', personas: ['RECOVERY'] });
+    await setDoc(doc(db, 'users', 'recovery2'), { role: 'Recovery', accessRole: 'USER', personas: ['RECOVERY'] });
+    await setDoc(doc(db, 'users', 'legal'), { role: 'Legal', accessRole: 'USER', personas: ['LEGAL'] });
+    await setDoc(doc(db, 'recoveryTasks', 'recovery-case'), { status: 'OVERDUE', assigneeId: 'recovery' });
+    await setDoc(doc(db, 'recoveryTasks', 'other-recovery-case'), { status: 'OVERDUE', assigneeId: 'recovery2' });
+    await setDoc(doc(db, 'recoveryTasks', 'legal-case'), { status: 'DEMAND_ISSUED', assigneeId: 'legal' });
     await setDoc(doc(db, 'conversations', 'conversation'), { participantIds: ['client', 'admin'] });
   });
 });
@@ -81,4 +87,20 @@ test('uploads over five megabytes are rejected', async () => {
   await assertFails(
     storage.ref('users/client/proposals/large.pdf').putString('x'.repeat(5 * 1024 * 1024 + 1), 'raw', pdfMetadata)
   );
+});
+
+test('case evidence is available only to the assigned operational team or an admin', async () => {
+  const recovery = env.authenticatedContext('recovery').storage();
+  const recovery2 = env.authenticatedContext('recovery2').storage();
+  const legal = env.authenticatedContext('legal').storage();
+  const admin = env.authenticatedContext('admin').storage();
+  const recoveryPath = 'case-evidence/recovery-case/recovery/contact.pdf';
+  const legalPath = 'case-evidence/legal-case/legal/demand.pdf';
+  await assertSucceeds(recovery.ref(recoveryPath).putString('contact evidence', 'raw', pdfMetadata));
+  await assertFails(recovery2.ref(recoveryPath).getDownloadURL());
+  await assertFails(legal.ref(recoveryPath).getDownloadURL());
+  await assertSucceeds(admin.ref(recoveryPath).getDownloadURL());
+  await assertSucceeds(legal.ref(legalPath).putString('legal evidence', 'raw', pdfMetadata));
+  await assertFails(recovery.ref(legalPath).getDownloadURL());
+  await assertSucceeds(admin.ref(legalPath).getDownloadURL());
 });

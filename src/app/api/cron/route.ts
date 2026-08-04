@@ -2,13 +2,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/firebase/admin-app';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { differenceInDays, isBefore, isEqual } from 'date-fns';
+import { differenceInCalendarDays, differenceInDays, isBefore, isEqual } from 'date-fns';
 import { processOwnerProfitAllocations } from '@/lib/server/owner-profit';
-import { notifyAdmins, notifyUser } from '@/lib/server/notification-service';
+import { notifyAdmins, notifyOperationalTeam, notifyUser } from '@/lib/server/notification-service';
 import { hasPersona } from '@/lib/access-control';
 import { isZakatApplicable } from '@/lib/zakat-eligibility';
 import { calculateInvestorPortfolioValue, roundCurrency } from '@/lib/financial-integrity';
 import { calculateZakatAmount, isZakatDue } from '@/lib/zakat';
+import { calculateInstallmentOutstanding, deriveAutomatedRecoveryStatus, isClosedRecoveryStatus, recoveryStatusLabel, recoveryTaskId } from '@/lib/recovery';
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -199,130 +200,142 @@ async function processZakat() {
 
 // --- Recovery & Legal Task Automation Logic ---
 async function processRecoveryTasks() {
-    let tasksCreated = 0, tasksEscalated = 0, clientNotificationsSent = 0, adminOverdueNotificationsSent = 0, adminOverdueNotificationsSkipped = 0, errors = 0;
+    let tasksCreated = 0, tasksUpdated = 0, tasksResolved = 0, tasksEscalated = 0, clientNotificationsSent = 0, teamNotificationsSent = 0, errors = 0;
     const details = [];
 
-    const activeDealsSnapshot = await adminDb.collection('deals').where('status', '==', 'Active').get();
+    const [activeDealsSnapshot, approvedRepaymentsSnapshot, existingTasksSnapshot] = await Promise.all([
+        adminDb.collection('deals').where('status', '==', 'Active').get(),
+        adminDb.collection('repayments').where('status', '==', 'Approved').get(),
+        adminDb.collection('recoveryTasks').get(),
+    ]);
+
+    const repaymentsByDeal = new Map<string, FirebaseFirestore.DocumentData[]>();
+    approvedRepaymentsSnapshot.docs.forEach((document) => {
+        const repayment = document.data();
+        const dealId = String(repayment.dealId || '');
+        if (!dealId) return;
+        repaymentsByDeal.set(dealId, [...(repaymentsByDeal.get(dealId) || []), repayment]);
+    });
+    const tasksByRepaymentId = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
+    existingTasksSnapshot.docs.forEach((document) => {
+        const repaymentId = String(document.data().repaymentId || document.id);
+        tasksByRepaymentId.set(repaymentId, document);
+    });
+    const activeDealIds = new Set(activeDealsSnapshot.docs.map((document) => document.id));
 
     for (const dealDoc of activeDealsSnapshot.docs) {
         const deal = dealDoc.data();
         const dealId = dealDoc.id;
-        
-        const approvedRepaymentsSnapshot = await adminDb.collection('repayments').where('dealId', '==', dealId).where('status', '==', 'Approved').get();
-        const paidInstallmentNumbers = new Set(approvedRepaymentsSnapshot.docs.map(doc => doc.data().installmentNumber));
-
+        const approvedRepayments = repaymentsByDeal.get(dealId) || [];
+        const clientDoc = await adminDb.collection('users').doc(deal.clientId).get();
+        if (!clientDoc.exists) {
+            errors++;
+            details.push(`Skipped recovery automation for ${dealId}: client profile not found.`);
+            continue;
+        }
+        const client = clientDoc.data()!;
         const schedule = require('@/lib/amortization').generateAmortizationSchedule(deal);
 
         for (const installment of schedule) {
-            if (paidInstallmentNumbers.has(installment.installment)) continue;
-
-            const daysUntilDue = differenceInDays(installment.dueDate, new Date());
+            const repaymentId = `${dealId}_${installment.installment}`;
+            const existingTask = tasksByRepaymentId.get(repaymentId);
+            const existingData = existingTask?.data() || {};
+            const balance = calculateInstallmentOutstanding(installment.payment, installment.installment, approvedRepayments);
+            const daysUntilDue = differenceInCalendarDays(installment.dueDate, new Date());
             const daysPastDue = -daysUntilDue;
+            if (!existingTask && daysUntilDue > 3) continue;
 
-            const taskQuery = adminDb.collection('recoveryTasks').where('repaymentId', '==', `${dealId}_${installment.installment}`).limit(1);
-            const existingTaskSnapshot = await taskQuery.get();
-            const taskExists = !existingTaskSnapshot.empty;
-            const taskDoc = taskExists ? existingTaskSnapshot.docs[0] : null;
-
-            // 1. Create Recovery Task (3 days before due)
-            if (daysUntilDue === 3 && !taskExists) {
-                try {
-                    const clientDoc = await adminDb.collection('users').doc(deal.clientId).get();
-                    if (!clientDoc.exists) continue;
-                    const client = clientDoc.data()!;
-
-                    await adminDb.collection('recoveryTasks').add({
-                        clientId: deal.clientId,
-                        clientName: client.name,
-                        clientEmail: client.email,
-                        clientPhoneNumber: client.phoneNumber || 'N/A',
-                        dealId: dealId,
-                        dealName: deal.dealName,
-                        repaymentId: `${dealId}_${installment.installment}`,
-                        amountDue: installment.payment,
-                        dueDate: Timestamp.fromDate(installment.dueDate),
-                        status: 'Due_Recovery',
-                        createdAt: FieldValue.serverTimestamp(),
-                        updatedAt: FieldValue.serverTimestamp(),
-                    });
-
-                    // Send notification to client
-                    await notifyUser(
-                        deal.clientId,
-                        'Upcoming Payment Reminder',
-                        `Your payment of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(installment.payment)} for "${deal.dealName}" is due in 3 days.`,
-                        '/client/dashboard',
-                        'repayment'
-                    );
-
+            try {
+                const nextStatus = deriveAutomatedRecoveryStatus({
+                    currentStatus: existingData.status,
+                    daysUntilDue,
+                    amountOutstanding: balance.amountOutstanding,
+                    promiseDueAt: existingData.promiseDueAt?.toDate?.() || null,
+                });
+                const taskRef = existingTask?.ref || adminDb.collection('recoveryTasks').doc(recoveryTaskId(dealId, installment.installment));
+                const previousStatus = existingData.status;
+                const isNew = !existingTask;
+                const update = {
+                    clientId: deal.clientId,
+                    clientName: client.name || deal.clientName || 'Unknown client',
+                    clientEmail: client.email || '',
+                    clientPhoneNumber: client.phoneNumber || '',
+                    clientAddress: client.address || '',
+                    clientPhotoURL: client.photoURL || '',
+                    dealId,
+                    dealName: deal.dealName,
+                    financingMode: deal.financingMode || '',
+                    repaymentId,
+                    installmentNumber: installment.installment,
+                    scheduledAmount: balance.scheduledAmount,
+                    amountPaid: balance.amountPaid,
+                    amountOutstanding: balance.amountOutstanding,
+                    amountDue: balance.amountOutstanding,
+                    dueDate: Timestamp.fromDate(installment.dueDate),
+                    daysPastDue: Math.max(0, daysPastDue),
+                    status: nextStatus,
+                    assigneeId: existingData.assigneeId || null,
+                    assigneeName: existingData.assigneeName || null,
+                    guarantor: {
+                        name: deal.guarantorName || '', address: deal.guarantorAddress || '',
+                        phoneNumber: deal.guarantorPhoneNumber || '', occupation: deal.guarantorOccupation || '',
+                        photoURL: deal.guarantorPhotoURL || '',
+                    },
+                    lastAutomationAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                    ...(isNew ? { createdAt: FieldValue.serverTimestamp() } : {}),
+                    ...(nextStatus === 'RESOLVED' && !isClosedRecoveryStatus(previousStatus)
+                        ? { resolvedAt: FieldValue.serverTimestamp(), resolutionReason: 'PAYMENT_COMPLETED' }
+                        : {}),
+                    ...(nextStatus === 'ESCALATED_LEGAL' && previousStatus !== 'ESCALATED_LEGAL'
+                        ? { escalatedAt: FieldValue.serverTimestamp(), escalationReason: 'Seven or more days overdue' }
+                        : {}),
+                };
+                await taskRef.set(update, { merge: true });
+                if (isNew) {
                     tasksCreated++;
-                    clientNotificationsSent++;
-                    details.push(`Created recovery task & notified client for deal ${dealId}, installment ${installment.installment}.`);
-                } catch (e) {
-                    errors++;
-                    details.push(`Error creating task for deal ${dealId}, installment ${installment.installment}: ${e instanceof Error ? e.message : 'Unknown'}`);
-                }
-            }
-
-            // 1b. Notify admins for overdue unpaid installments (deduplicated per installment per day).
-            if (daysPastDue >= 1) {
-                try {
-                    const repaymentKey = `${dealId}_${installment.installment}`;
-                    const dayKey = new Date().toISOString().slice(0, 10);
-                    const alertRef = adminDb.collection('systemNotifications').doc(`overdue_${repaymentKey}_${dayKey}`);
-                    const existingAlert = await alertRef.get();
-
-                    if (existingAlert.exists) {
-                        adminOverdueNotificationsSkipped++;
-                    } else {
-                        const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(installment.payment);
-                        const clientLabel = deal.clientName || deal.clientId || 'Unknown client';
-
-                        await notifyAdmins(
-                            'Overdue Payment Alert',
-                            `${clientLabel} is ${daysPastDue} day(s) overdue on ${formattedAmount} for "${deal.dealName}".`,
-                            '/admin/approvals/repayments',
-                            'overdue'
-                        );
-
-                        await alertRef.set({
-                            type: 'OverduePaymentAlert',
-                            dealId,
-                            dealName: deal.dealName || null,
-                            repaymentId: repaymentKey,
-                            installmentNumber: installment.installment,
-                            dueDate: Timestamp.fromDate(installment.dueDate),
-                            amountDue: installment.payment,
-                            daysPastDue,
-                            createdAt: FieldValue.serverTimestamp(),
-                        });
-
-                        adminOverdueNotificationsSent++;
-                        details.push(`Sent overdue admin alert for deal ${dealId}, installment ${installment.installment} (${daysPastDue} day(s) past due).`);
-                    }
-                } catch (e) {
-                    errors++;
-                    details.push(`Error sending overdue admin alert for deal ${dealId}, installment ${installment.installment}: ${e instanceof Error ? e.message : 'Unknown'}`);
-                }
-            }
-
-            // 2. Escalate to Legal (7 days past due)
-            if (daysPastDue >= 7 && taskDoc && taskDoc.data().status === 'Due_Recovery') {
-                 try {
-                    await taskDoc.ref.update({
-                        status: 'Escalated_Legal',
-                        updatedAt: FieldValue.serverTimestamp(),
+                    await taskRef.collection('logs').add({
+                        kind: 'SYSTEM', text: `Recovery case created as ${recoveryStatusLabel(nextStatus)}.`,
+                        authorId: 'automation', authorName: 'NAL Automation', createdAt: FieldValue.serverTimestamp(),
                     });
-                    tasksEscalated++;
-                    details.push(`Escalated task for deal ${dealId}, installment ${installment.installment} to Legal.`);
-                 } catch (e) {
-                    errors++;
-                    details.push(`Error escalating task for deal ${dealId}, installment ${installment.installment}: ${e instanceof Error ? e.message : 'Unknown'}`);
-                 }
+                    const formatted = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(balance.amountOutstanding);
+                    await Promise.allSettled([
+                        notifyUser(deal.clientId, daysUntilDue >= 0 ? 'Upcoming payment reminder' : 'Payment overdue', `${formatted} remains payable for "${deal.dealName}".`, '/client/dashboard', 'repayment'),
+                        notifyOperationalTeam(nextStatus === 'ESCALATED_LEGAL' ? 'LEGAL' : 'RECOVERY', 'New account action required', `${client.name || deal.clientName} — ${formatted} for "${deal.dealName}".`, nextStatus === 'ESCALATED_LEGAL' ? '/legal/dashboard' : '/recovery/dashboard', 'overdue'),
+                    ]);
+                    clientNotificationsSent++;
+                    teamNotificationsSent++;
+                } else {
+                    tasksUpdated++;
+                }
+
+                if (previousStatus && previousStatus !== nextStatus) {
+                    await taskRef.collection('logs').add({
+                        kind: 'STATUS_CHANGE', text: `Status changed from ${recoveryStatusLabel(previousStatus)} to ${recoveryStatusLabel(nextStatus)} by daily automation.`,
+                        fromStatus: previousStatus, toStatus: nextStatus,
+                        authorId: 'automation', authorName: 'NAL Automation', createdAt: FieldValue.serverTimestamp(),
+                    });
+                    if (nextStatus === 'ESCALATED_LEGAL') {
+                        tasksEscalated++;
+                        teamNotificationsSent += await notifyOperationalTeam('LEGAL', 'Recovery case escalated to Legal', `${client.name || deal.clientName} is ${Math.max(0, daysPastDue)} days overdue on "${deal.dealName}".`, '/legal/dashboard', 'overdue');
+                    }
+                    if (nextStatus === 'RESOLVED') tasksResolved++;
+                }
+            } catch (e) {
+                errors++;
+                details.push(`Recovery case error for ${repaymentId}: ${e instanceof Error ? e.message : 'Unknown error'}`);
             }
         }
     }
-    return { tasksCreated, tasksEscalated, clientNotificationsSent, adminOverdueNotificationsSent, adminOverdueNotificationsSkipped, errors, details };
+
+    for (const task of existingTasksSnapshot.docs) {
+        const taskData = task.data();
+        if (!activeDealIds.has(String(taskData.dealId || '')) && !isClosedRecoveryStatus(taskData.status)) {
+            await task.ref.set({ status: 'RESOLVED', resolvedAt: FieldValue.serverTimestamp(), resolutionReason: 'DEAL_NO_LONGER_ACTIVE', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+            tasksResolved++;
+        }
+    }
+    return { tasksCreated, tasksUpdated, tasksResolved, tasksEscalated, clientNotificationsSent, teamNotificationsSent, errors, details };
 }
 
 // --- Marketer Rating Automation Logic ---
@@ -404,6 +417,13 @@ async function handleCron(request: NextRequest) {
         return new Response('Unauthorized', { status: 401 });
     }
 
+    const runRef = adminDb.collection('automationRuns').doc();
+    const healthRef = adminDb.collection('automationHealth').doc('daily');
+    const startedAt = Timestamp.now();
+    await Promise.all([
+        runRef.set({ status: 'RUNNING', startedAt, source: 'runDailyAutomation' }),
+        healthRef.set({ status: 'RUNNING', lastStartedAt: startedAt, lastRunId: runRef.id }, { merge: true }),
+    ]);
     try {
         const [zakatResult, recoveryResult, marketerResult] = await Promise.all([
             processZakat(),
@@ -411,6 +431,17 @@ async function handleCron(request: NextRequest) {
             processMarketerRatings()
         ]);
         const ownerProfitResult = await processOwnerProfitAllocations({ includeHistorical: false, limit: 500 });
+
+        const completedAt = Timestamp.now();
+        const withoutDetails = <T extends Record<string, unknown>>(value: T) => Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'details'));
+        const summary = {
+            zakat: withoutDetails(zakatResult), recovery: withoutDetails(recoveryResult),
+            marketerRating: withoutDetails(marketerResult), ownerProfit: withoutDetails(ownerProfitResult as unknown as Record<string, unknown>),
+        };
+        await Promise.all([
+            runRef.set({ status: 'SUCCEEDED', completedAt, summary }, { merge: true }),
+            healthRef.set({ status: 'HEALTHY', lastSucceededAt: completedAt, lastCompletedAt: completedAt, lastRunId: runRef.id, lastError: FieldValue.delete(), summary }, { merge: true }),
+        ]);
 
         return NextResponse.json({
             success: true,
@@ -422,7 +453,14 @@ async function handleCron(request: NextRequest) {
         });
     } catch (error) {
         console.error('CRON JOB FAILED:', error);
-        return NextResponse.json({ success: false, message: 'Cron job failed.', error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
+        const failedAt = Timestamp.now();
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        await Promise.allSettled([
+            runRef.set({ status: 'FAILED', failedAt, error: message }, { merge: true }),
+            healthRef.set({ status: 'FAILED', lastFailedAt: failedAt, lastCompletedAt: failedAt, lastRunId: runRef.id, lastError: message }, { merge: true }),
+            notifyAdmins('Daily automation failed', message, '/admin/dashboard', 'system'),
+        ]);
+        return NextResponse.json({ success: false, message: 'Cron job failed.', error: message }, { status: 500 });
     }
 }
 

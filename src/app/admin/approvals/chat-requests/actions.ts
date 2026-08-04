@@ -54,7 +54,7 @@ export async function initiateChat(
       trx.set(newConversationRef, {
         participantIds: [adminId, userId],
         participantNames: [adminName, userName],
-        participantAvatars: [`https://picsum.photos/seed/${adminId}/128/128`, `https://picsum.photos/seed/${userId}/128/128`],
+        participantAvatars: ['', ''],
         lastMessage: initialMessage,
         lastMessageSenderId: adminId,
         lastUpdatedAt: now,

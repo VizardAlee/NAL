@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useRouter } from 'next/navigation';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { initiateChat } from './actions';
 
 
@@ -133,7 +133,6 @@ export default function ChatRequestsPage() {
                             <CardContent className="p-4 space-y-3">
                                 <div className="flex items-center gap-4">
                                     <Avatar>
-                                        <AvatarImage src={`https://picsum.photos/seed/${req.userId}/128/128`} />
                                         <AvatarFallback>{req.userName?.charAt(0) || 'U'}</AvatarFallback>
                                     </Avatar>
                                     <div className="flex-1">
@@ -171,7 +170,6 @@ export default function ChatRequestsPage() {
                             <TableCell className="font-medium">
                                 <div className="flex items-center gap-3">
                                     <Avatar>
-                                        <AvatarImage src={`https://picsum.photos/seed/${req.userId}/128/128`} />
                                         <AvatarFallback>{req.userName?.charAt(0) || 'U'}</AvatarFallback>
                                     </Avatar>
                                     <span>{req.userName}</span>
@@ -207,5 +205,3 @@ export default function ChatRequestsPage() {
         </div>
     );
 }
-
-

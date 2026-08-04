@@ -24,6 +24,7 @@ type UserProfile = {
     name: string;
     email: string;
     phoneNumber?: string;
+    photoURL?: string;
     role: 'Admin' | 'Investor' | 'Client';
 };
 
@@ -153,7 +154,7 @@ export default function AdminConversationPage() {
     };
 
     const otherParticipantName = otherUser?.name || 'User';
-    const otherParticipantAvatar = otherUser ? `https://picsum.photos/seed/${otherUser.id}/128/128` : '/placeholder.svg';
+    const otherParticipantAvatar = otherUser?.photoURL || '/placeholder.svg';
 
 
     if (conversationLoading || otherUserLoading) {

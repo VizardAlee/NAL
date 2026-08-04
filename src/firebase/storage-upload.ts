@@ -14,7 +14,8 @@ export async function uploadAuthenticatedFile(
   app: FirebaseApp,
   file: File,
   pathSegments: string[],
-  acceptedTypes: string[]
+  acceptedTypes: string[],
+  includeDownloadUrl = true
 ) {
   if (!acceptedTypes.includes(file.type)) throw new Error('Unsupported file type.');
   if (file.size <= 0 || file.size > MAX_UPLOAD_BYTES) throw new Error('File must be between 1 byte and 5 MB.');
@@ -38,5 +39,5 @@ export async function uploadAuthenticatedFile(
       () => { window.clearTimeout(timeout); resolve(); }
     );
   });
-  return { url: await getDownloadURL(storageRef), fullPath };
+  return { url: includeDownloadUrl ? await getDownloadURL(storageRef) : '', fullPath };
 }

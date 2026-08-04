@@ -419,7 +419,7 @@ export default function UserDetailPage() {
                     <Card>
                         <CardHeader className="flex-row items-center gap-4 space-y-0">
                             <Avatar className="h-16 w-16">
-                                <AvatarImage src={`https://picsum.photos/seed/${userProfile.id}/128/128`} />
+                                {userProfile.photoURL && <AvatarImage src={userProfile.photoURL} alt={userProfile.name} />}
                                 <AvatarFallback>{userProfile.name?.charAt(0)}</AvatarFallback>
                             </Avatar>
                             <div>

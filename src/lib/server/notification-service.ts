@@ -114,3 +114,27 @@ export async function notifyUser(
     sendPushNotification(userId, title, message, link),
   ]);
 }
+
+export async function notifyOperationalTeam(
+  persona: 'RECOVERY' | 'LEGAL',
+  title: string,
+  message: string,
+  link: string,
+  category: NotificationCategory = 'system'
+) {
+  const adminDb = getAdminDb();
+  const legacyRole = persona === 'RECOVERY' ? 'Recovery' : 'Legal';
+  const [currentProfiles, legacyProfiles] = await Promise.all([
+    adminDb.collection('users').where('personas', 'array-contains', persona).get(),
+    adminDb.collection('users').where('role', '==', legacyRole).get(),
+  ]);
+  const recipientIds = Array.from(new Set([
+    ...currentProfiles.docs.map((document) => document.id),
+    ...legacyProfiles.docs.map((document) => document.id),
+  ]));
+  await Promise.all(recipientIds.flatMap((recipientId) => [
+    createInAppNotification(adminDb, recipientId, title, message, link, category),
+    sendPushNotification(recipientId, title, message, link),
+  ]));
+  return recipientIds.length;
+}

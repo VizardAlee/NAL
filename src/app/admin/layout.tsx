@@ -108,7 +108,7 @@ function AccountMenu() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/128/128`} alt={user?.displayName ?? ''} />
+                  {user?.photoURL && <AvatarImage src={user.photoURL} alt={user.displayName ?? ''} />}
                   <AvatarFallback>{user?.displayName?.charAt(0) ?? user?.email?.charAt(0)}</AvatarFallback>
                 </Avatar>
               </Button>
@@ -171,7 +171,7 @@ export default function AdminLayout({
                 <Link href="/admin/dashboard" className="flex items-center gap-2">
                 <Logo imageUrl={logoUrl} className="h-7 w-7 text-primary" />
                 <span className="text-lg font-bold font-headline text-primary group-data-[collapsible=icon]:hidden">
-                    NAL General Marchant
+                    NAL General Merchant
                 </span>
                 </Link>
                 <NonInterestInstitutionMark className="h-12 w-20 self-start group-data-[collapsible=icon]:hidden" />

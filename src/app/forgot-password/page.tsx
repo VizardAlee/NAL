@@ -60,7 +60,7 @@ export default function ForgotPasswordPage() {
           <Link href="/" className="auth-brand">
             <Logo className="h-9 w-9" />
             <span className="text-xl font-bold font-headline sm:text-2xl">
-              NAL General Marchant
+              NAL General Merchant
             </span>
           </Link>
         </div>

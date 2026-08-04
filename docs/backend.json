@@ -620,14 +620,19 @@
         "repaymentId": { "type": "string" },
         "amountDue": { "type": "number" },
         "dueDate": { "type": "string", "format": "date-time" },
-        "status": { "type": "string", "enum": ["Due_Recovery", "Escalated_Legal", "Resolved"] },
+        "installmentNumber": { "type": "number" },
+        "scheduledAmount": { "type": "number" },
+        "amountPaid": { "type": "number", "description": "Approved repayments allocated to this instalment." },
+        "amountOutstanding": { "type": "number" },
+        "daysPastDue": { "type": "number" },
+        "status": { "type": "string", "enum": ["UPCOMING", "DUE", "OVERDUE", "PROMISE_TO_PAY", "BROKEN_PROMISE", "ESCALATED_LEGAL", "NOTICE_PREPARATION", "DEMAND_ISSUED", "NEGOTIATION", "COURT_PROCEEDINGS", "JUDGMENT", "SETTLED", "RESOLVED", "CLOSED"] },
         "lastLog": { "type": "string", "description": "A snippet of the most recent log entry for quick view."},
         "assigneeId": { "type": "string", "description": "The ID of the team member this task is assigned to."},
         "assigneeName": { "type": "string", "description": "The name of the assigned team member."},
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["clientId", "dealId", "repaymentId", "amountDue", "dueDate", "status", "createdAt", "updatedAt"]
+      "required": ["clientId", "dealId", "repaymentId", "scheduledAmount", "amountOutstanding", "dueDate", "status", "createdAt", "updatedAt"]
     },
     "log": {
       "title": "Log Entry",

@@ -3,18 +3,21 @@
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LayoutDashboard, Users, AlertTriangle, Activity, Briefcase, DollarSign, Zap, TrendingUp, HandCoins, ShieldOff, PiggyBank, FilePlus, Wallet } from "lucide-react";
+import { LayoutDashboard, Users, AlertTriangle, Activity, Briefcase, DollarSign, Zap, TrendingUp, HandCoins, ShieldOff, PiggyBank, FilePlus, Wallet, Gavel, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { useCollection } from "@/firebase/firestore/use-collection";
-import { collection, query, Timestamp, DocumentData, where, orderBy, limit } from "firebase/firestore";
-import { useFirestore } from "@/firebase";
-import { useMemo } from "react";
+import { useDoc } from "@/firebase/firestore/use-doc";
+import { collection, doc, query, Timestamp, DocumentData, where, orderBy, limit } from "firebase/firestore";
+import { useAuth, useFirestore } from "@/firebase";
+import { useMemo, useTransition } from "react";
 import { format, subDays, startOfMonth, subMonths, formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { runDailyAutomationNowAction } from "./actions";
 
 const chartConfig = {
     tvl: {
@@ -95,6 +98,13 @@ type MergedActivity = {
     href: string;
 };
 
+type AutomationHealth = DocumentData & {
+    status?: 'RUNNING' | 'HEALTHY' | 'FAILED';
+    lastSucceededAt?: Timestamp;
+    lastFailedAt?: Timestamp;
+    lastError?: string;
+};
+
 const activityIcons: { [key: string]: React.ElementType } = {
     'Deposit': DollarSign,
     'Investment': Briefcase,
@@ -116,6 +126,9 @@ const formatCurrency = (amount: number) =>
 
 export default function AdminDashboardPage() {
     const firestore = useFirestore();
+    const auth = useAuth();
+    const { toast } = useToast();
+    const [automationPending, startAutomationTransition] = useTransition();
     const now = useMemo(() => new Date(), []);
     const twoWeeksAgo = useMemo(() => subDays(now, 14), [now]);
 
@@ -224,6 +237,8 @@ export default function AdminDashboardPage() {
       );
     }, [firestore, now]);
 
+    const automationHealthRef = useMemo(() => firestore ? doc(firestore, 'automationHealth', 'daily') : null, [firestore]);
+
 
     const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
     const { data: users, loading: usersLoading } = useCollection<User>(usersQuery);
@@ -237,6 +252,7 @@ export default function AdminDashboardPage() {
     const { data: earningsTransactions, loading: earningsLoading } = useCollection<Transaction>(earningsQuery);
     const { data: investorDeposits, loading: investorDepositsLoading } = useCollection<Transaction>(investorDepositsQuery);
     const { data: overdueRepayments, loading: overdueRepaymentsLoading } = useCollection<DocumentData>(overdueRepaymentsQuery);
+    const { data: automationHealth, loading: automationHealthLoading } = useDoc<AutomationHealth>(automationHealthRef);
     
     const isLoading = [fundBatchesLoading, usersLoading, transactionsLoading, dealRequestsLoading, depositRequestsLoading, withdrawalRequestsLoading, reinvestmentRequestsLoading, terminationsLoading, recentBatchesLoading, earningsLoading, investorDepositsLoading, overdueRepaymentsLoading].some(Boolean);
 
@@ -538,6 +554,12 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
+      <div className="mt-8 grid gap-4 lg:grid-cols-3">
+        <Link href="/recovery/dashboard"><Card className="h-full transition hover:border-primary/40 hover:bg-muted/40"><CardHeader className="flex-row items-center justify-between"><CardTitle className="text-base">Recovery operations</CardTitle><ShieldAlert className="h-5 w-5 text-amber-600" /></CardHeader><CardContent><p className="text-sm text-muted-foreground">Open the assigned recovery queue, follow-ups, promises and escalations.</p></CardContent></Card></Link>
+        <Link href="/legal/dashboard"><Card className="h-full transition hover:border-primary/40 hover:bg-muted/40"><CardHeader className="flex-row items-center justify-between"><CardTitle className="text-base">Legal cases</CardTitle><Gavel className="h-5 w-5 text-purple-700" /></CardHeader><CardContent><p className="text-sm text-muted-foreground">Review evidence, agreements, notices, proceedings and settlements.</p></CardContent></Card></Link>
+        <Card className={automationHealth?.status === 'FAILED' ? 'border-destructive' : ''}><CardHeader className="flex-row items-center justify-between"><CardTitle className="text-base">Daily automation</CardTitle>{automationHealth?.status === 'FAILED' ? <AlertTriangle className="h-5 w-5 text-destructive" /> : <CheckCircle2 className="h-5 w-5 text-emerald-600" />}</CardHeader><CardContent>{automationHealthLoading ? <Skeleton className="h-10" /> : automationHealth ? <><p className="font-semibold">{automationHealth.status === 'HEALTHY' ? 'Healthy' : automationHealth.status || 'Unknown'}</p><p className="mt-1 text-xs text-muted-foreground">{automationHealth.lastSucceededAt?.toDate ? `Last succeeded ${formatDistanceToNow(automationHealth.lastSucceededAt.toDate(), { addSuffix: true })}` : 'No successful run has been recorded yet.'}</p>{automationHealth.lastError && <p className="mt-2 text-xs text-destructive">{automationHealth.lastError}</p>}</> : <p className="text-sm text-amber-700">No automation health record yet. It will appear after the next scheduled run.</p>}<Button className="mt-3" size="sm" variant="outline" disabled={automationPending || !auth?.currentUser} onClick={() => startAutomationTransition(async () => { const result = await runDailyAutomationNowAction({ authToken: await auth!.currentUser!.getIdToken() }); toast({ variant: result.success ? 'default' : 'destructive', title: result.success ? 'Automation complete' : 'Automation failed', description: result.message }); })}>{automationPending ? 'Running…' : 'Run now'}</Button></CardContent></Card>
+      </div>
+
       <Card className="mt-8">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -564,7 +586,6 @@ export default function AdminDashboardPage() {
                 return (
                     <Link key={activity.id} href={activity.href} className="flex items-start gap-4 rounded-md p-2 -m-2 transition-colors hover:bg-muted/50">
                       <Avatar className="h-9 w-9 border hidden md:flex">
-                        <AvatarImage src={`https://picsum.photos/seed/${activity.userId}/128/128`} />
                         <AvatarFallback>{activity.user.charAt(0)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 space-y-1">

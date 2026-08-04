@@ -6,7 +6,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
 
 let env;
 
@@ -23,6 +23,10 @@ beforeEach(async () => {
     const db = context.firestore();
     await setDoc(doc(db, 'users', 'admin'), { role: 'Admin', accessRole: 'ADMIN', name: 'Admin' });
     await setDoc(doc(db, 'users', 'client'), { role: 'Client', accessRole: 'USER', personas: ['CLIENT'], name: 'Client' });
+    await setDoc(doc(db, 'users', 'recovery'), { role: 'Recovery', accessRole: 'USER', personas: ['RECOVERY'], name: 'Recovery Officer' });
+    await setDoc(doc(db, 'users', 'recovery2'), { role: 'Recovery', accessRole: 'USER', personas: ['RECOVERY'], name: 'Second Recovery Officer' });
+    await setDoc(doc(db, 'users', 'legal'), { role: 'Legal', accessRole: 'USER', personas: ['LEGAL'], name: 'Legal Officer' });
+    await setDoc(doc(db, 'users', 'legal2'), { role: 'Legal', accessRole: 'USER', personas: ['LEGAL'], name: 'Second Legal Officer' });
     await setDoc(doc(db, 'conversations', 'conversation'), { participantIds: ['client', 'admin'], lastMessage: '' });
   });
 });
@@ -126,4 +130,61 @@ test('transactional pending check permits only one concurrent approval', async (
     assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
     assert.equal((await getDocs(collection(db, 'transactions'))).size, 1);
   });
+});
+
+test('recovery and legal queues are stage- and assignment-scoped', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    const dueDate = Timestamp.fromDate(new Date('2026-08-10T00:00:00Z'));
+    await setDoc(doc(db, 'recoveryTasks', 'recovery-unassigned'), { status: 'OVERDUE', assigneeId: null, dueDate });
+    await setDoc(doc(db, 'recoveryTasks', 'recovery-mine'), { status: 'PROMISE_TO_PAY', assigneeId: 'recovery', dueDate });
+    await setDoc(doc(db, 'recoveryTasks', 'recovery-other'), { status: 'OVERDUE', assigneeId: 'recovery2', dueDate });
+    await setDoc(doc(db, 'recoveryTasks', 'legal-unassigned'), { status: 'ESCALATED_LEGAL', assigneeId: null, dueDate });
+    await setDoc(doc(db, 'recoveryTasks', 'legal-mine'), { status: 'DEMAND_ISSUED', assigneeId: 'legal', dueDate });
+    await setDoc(doc(db, 'recoveryTasks', 'legal-other'), { status: 'NEGOTIATION', assigneeId: 'legal2', dueDate });
+    await setDoc(doc(db, 'recoveryTasks/recovery-mine/logs', 'log'), { text: 'Scoped recovery log' });
+    await setDoc(doc(db, 'recoveryTasks/legal-mine/logs', 'log'), { text: 'Scoped legal log' });
+  });
+  const recoveryDb = env.authenticatedContext('recovery').firestore();
+  const legalDb = env.authenticatedContext('legal').firestore();
+  await assertSucceeds(getDoc(doc(recoveryDb, 'recoveryTasks', 'recovery-unassigned')));
+  await assertSucceeds(getDoc(doc(recoveryDb, 'recoveryTasks', 'recovery-mine')));
+  await assertFails(getDoc(doc(recoveryDb, 'recoveryTasks', 'recovery-other')));
+  await assertFails(getDoc(doc(recoveryDb, 'recoveryTasks', 'legal-unassigned')));
+  await assertSucceeds(getDoc(doc(legalDb, 'recoveryTasks', 'legal-unassigned')));
+  await assertSucceeds(getDoc(doc(legalDb, 'recoveryTasks', 'legal-mine')));
+  await assertFails(getDoc(doc(legalDb, 'recoveryTasks', 'legal-other')));
+  await assertFails(getDoc(doc(legalDb, 'recoveryTasks', 'recovery-unassigned')));
+  await assertSucceeds(getDoc(doc(recoveryDb, 'recoveryTasks/recovery-mine/logs', 'log')));
+  await assertFails(getDoc(doc(recoveryDb, 'recoveryTasks/legal-mine/logs', 'log')));
+  await assertSucceeds(getDoc(doc(legalDb, 'recoveryTasks/legal-mine/logs', 'log')));
+});
+
+test('operational staff can query only their queue and cannot forge case logs', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    const dueDate = Timestamp.fromDate(new Date('2026-08-10T00:00:00Z'));
+    await setDoc(doc(db, 'recoveryTasks', 'mine'), { status: 'OVERDUE', assigneeId: 'recovery', dueDate });
+    await setDoc(doc(db, 'recoveryTasks', 'legal'), { status: 'DEMAND_ISSUED', assigneeId: 'legal', dueDate });
+  });
+  const recoveryDb = env.authenticatedContext('recovery').firestore();
+  const legalDb = env.authenticatedContext('legal').firestore();
+  await assertSucceeds(getDocs(query(collection(recoveryDb, 'recoveryTasks'), where('status', 'in', ['OVERDUE']), where('assigneeId', '==', 'recovery'), orderBy('dueDate'))));
+  await assertSucceeds(getDocs(query(collection(legalDb, 'recoveryTasks'), where('status', 'in', ['DEMAND_ISSUED']), where('assigneeId', '==', 'legal'), orderBy('dueDate'))));
+  await assertFails(setDoc(doc(recoveryDb, 'recoveryTasks/mine/logs', 'forged'), { text: 'Forged from browser' }));
+  await assertFails(setDoc(doc(legalDb, 'recoveryTasks/legal/logs', 'forged'), { text: 'Forged from browser' }));
+});
+
+test('legal staff cannot enumerate unrelated financial or user records', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, 'transactions', 'private'), { userId: 'client', amount: 500 });
+    await setDoc(doc(db, 'repayments', 'private'), { clientId: 'client', amount: 500 });
+  });
+  const legalDb = env.authenticatedContext('legal').firestore();
+  await assertSucceeds(getDoc(doc(legalDb, 'users', 'legal')));
+  await assertFails(getDoc(doc(legalDb, 'users', 'client')));
+  await assertFails(getDocs(collection(legalDb, 'users')));
+  await assertFails(getDoc(doc(legalDb, 'transactions', 'private')));
+  await assertFails(getDoc(doc(legalDb, 'repayments', 'private')));
 });

@@ -80,12 +80,26 @@ service cloud.firestore {
        return hasRole('Marketer') || hasPersona('MARKETER');
     }
 
+    function isRecoveryQueueStatus(status) {
+      return status in ['UPCOMING', 'DUE', 'OVERDUE', 'PROMISE_TO_PAY', 'BROKEN_PROMISE', 'Due_Recovery'];
+    }
+
+    function isLegalQueueStatus(status) {
+      return status in ['ESCALATED_LEGAL', 'NOTICE_PREPARATION', 'DEMAND_ISSUED', 'NEGOTIATION', 'COURT_PROCEEDINGS', 'JUDGMENT', 'SETTLED', 'Escalated_Legal'];
+    }
+
+    function canReadOperationalCase(caseData) {
+      return canAdminRead()
+        || (isRecovery() && isRecoveryQueueStatus(caseData.status)
+          && caseData.assigneeId in [null, request.auth.uid])
+        || (isLegal() && isLegalQueueStatus(caseData.status)
+          && caseData.assigneeId in [null, request.auth.uid]);
+    }
+
     // Rules for the 'users' collection
     match /users/{userId} {
-      // Admins can get any user. Owners can get their own data. Legal/Marketer can read their own.
-      allow get: if canAdminRead() || isOwner(userId) || isLegal();
-      // Admins and Legal can list all users.
-      allow list: if canAdminRead() || isLegal();
+      allow get: if canAdminRead() || isOwner(userId);
+      allow list: if canAdminRead();
       
       // Allow any unauthenticated or authenticated user to create a new user document (e.g., during signup).
       allow create: if true;
@@ -101,28 +115,43 @@ service cloud.firestore {
     
     // Rules for the 'recoveryTasks' collection
     match /recoveryTasks/{taskId} {
-      // Recovery users can see tasks assigned to them or unassigned. Legal and Admin can see all.
-      allow list: if canAdminRead() || isLegal() || 
-                    (isRecovery() && resource.data.status == 'Due_Recovery' && 
-                      (!('assigneeId' in resource.data) || resource.data.assigneeId == request.auth.uid));
-                      
-      // Admins can read all tasks. Legal can read escalated tasks. Recovery can read tasks they can list.
-      allow get, read: if canAdminRead() || 
-                    (isLegal() && resource.data.status == 'Escalated_Legal') || 
-                    (isRecovery() && resource.data.status == 'Due_Recovery' && 
-                      (!('assigneeId' in resource.data) || resource.data.assigneeId == request.auth.uid));
+      allow get, list, read: if canReadOperationalCase(resource.data);
       
       // Allow server-side updates (by admin) and log creation by assigned roles.
       allow create, update: if isAdmin();
       
       // Rules for the 'logs' sub-collection
       match /logs/{logId} {
-      	allow read, list: if canAdminRead() || isLegal() || isRecovery();
-        // Allow creating a log if the user is an Admin, or a Recovery/Legal user for the correct task status.
-        allow create: if isAdmin() || 
-        							 (isRecovery() && get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data.status == 'Due_Recovery') ||
-                       (isLegal() && get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data.status == 'Escalated_Legal');
+        allow read, list: if canReadOperationalCase(get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data);
+        allow create, update, delete: if false;
       }
+
+      match /evidence/{evidenceId} {
+        allow read, list: if canReadOperationalCase(get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data);
+        allow create, update, delete: if false;
+      }
+
+      match /notices/{noticeId} {
+        allow read, list: if canAdminRead()
+          || (isLegal() && isLegalQueueStatus(get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data.status));
+        allow create, update, delete: if false;
+      }
+
+      match /expenses/{expenseId} {
+        allow read, list: if canAdminRead()
+          || (isLegal() && isLegalQueueStatus(get(/databases/$(database)/documents/recoveryTasks/$(taskId)).data.status));
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /automationHealth/{healthId} {
+      allow read: if canAdminRead();
+      allow write: if false;
+    }
+
+    match /automationRuns/{runId} {
+      allow read: if canAdminRead();
+      allow write: if false;
     }
 
 
@@ -130,11 +159,11 @@ service cloud.firestore {
     match /deals/{dealId} {
         // Admins, Investors, and Legal can list all deals. Marketers can see deals they are linked to.
         // Clients can see deals they are associated with.
-        allow list: if canAdminRead() || isInvestor() || isLegal() || (isMarketer() && resource.data.marketerId == request.auth.uid) || (isClient() && resource.data.clientId == request.auth.uid);
+        allow list: if canAdminRead() || isInvestor() || (isMarketer() && resource.data.marketerId == request.auth.uid) || (isClient() && resource.data.clientId == request.auth.uid);
         
         // Admins, Investors, Legal can get any single deal.
         // Clients can only get deals they are associated with.
-        allow get: if canAdminRead() || isInvestor() || isLegal() || (isClient() && resource.data.clientId == request.auth.uid);
+        allow get: if canAdminRead() || isInvestor() || (isClient() && resource.data.clientId == request.auth.uid);
         
         // Only Admins can create, update or delete deals
         allow create, update, delete: if isAdmin();
@@ -166,7 +195,7 @@ service cloud.firestore {
       // Admins can write.
       allow write: if isAdmin();
       // Admins can read all. Investors can read their own investments. Legal can read all.
-      allow read, list: if canAdminRead() || (isInvestor() && resource.data.investorId == request.auth.uid) || isLegal();
+      allow read, list: if canAdminRead() || (isInvestor() && resource.data.investorId == request.auth.uid);
     }
     
     // Rules for 'fundBatches' and 'transactions'
@@ -181,14 +210,12 @@ service cloud.firestore {
         // Admin can do anything
         allow write: if isAdmin();
         // Investor/Client/Marketer can read their own transactions, Admins can read all.
-        // Legal can read all.
-        allow read, list: if canAdminRead() || (isOwner(resource.data.userId)) || isLegal();
+        allow read, list: if canAdminRead() || (isOwner(resource.data.userId));
     }
 
     // Rules for 'repayments'
     match /repayments/{repaymentId} {
-      // Admins can read and update all repayments. Legal can read all.
-      allow get, list: if canAdminRead() || isLegal();
+      allow get, list: if canAdminRead();
       allow update: if isAdmin();
       // Clients can create their own repayments and read their own.
       allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
