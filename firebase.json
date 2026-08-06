@@ -1,4 +1,18 @@
 {
+  "apphosting": [
+    {
+      "backendId": "nal-web",
+      "rootDir": "./",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "functions"
+      ],
+      "alwaysDeployFromSource": true
+    }
+  ],
   "functions": [
     {
       "source": "functions",
@@ -22,7 +36,11 @@
     "rules": "storage.rules"
   },
   "emulators": {
-    "firestore": { "port": 8088 },
-    "ui": { "enabled": false }
+    "firestore": {
+      "port": 8088
+    },
+    "ui": {
+      "enabled": false
+    }
   }
 }
