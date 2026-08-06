@@ -72,6 +72,17 @@ const commercialModels = [
   ['Qard Hasan', 'Benevolent advance', 'A non-interest-bearing advance structured on benevolent terms where appropriate.'],
 ];
 
+const heroIslamicStructures = [
+  ['Murabaha', 'مرابحة'],
+  ['Mudaraba', 'مضاربة'],
+  ['Ijara', 'إجارة'],
+  ['Musharaka', 'مشاركة'],
+  ['Salam', 'سلم'],
+  ['Istisna', 'استصناع'],
+  ['Wakalah', 'وكالة'],
+  ['Kafaalah', 'كفالة'],
+];
+
 const audiences = [
   { icon: BriefcaseBusiness, title: 'MSMEs', copy: 'Structured access to inventory, productive assets, procurement and project opportunities.' },
   { icon: Users, title: 'Individuals and cooperatives', copy: 'Documented commercial arrangements for real goods, assets and collective ventures.' },
@@ -113,8 +124,22 @@ export default function Home() {
               <Image src="/business_hub.png" alt="NAL Business Hub" width={360} height={141} priority className="h-auto w-[220px] sm:w-[285px]" />
               <NonInterestInstitutionMark className="h-14 w-24 border-l border-border/70 pl-4 sm:h-16 sm:w-28" priority />
             </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-              <ShieldCheck className="h-3.5 w-3.5" /> Trade-based · Asset-backed · Partnership-oriented
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                <ShieldCheck className="h-3.5 w-3.5" /> Trade-based · Asset-backed · Partnership-oriented
+              </div>
+              <div className="flex max-w-3xl flex-wrap gap-2" aria-label="Islamic commercial structures available through NAL">
+                {heroIslamicStructures.map(([name, arabic]) => (
+                  <span key={name} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-700/20 bg-emerald-950/[0.04] px-3 py-1.5 text-sm font-semibold text-emerald-900 shadow-sm dark:border-emerald-300/20 dark:bg-emerald-300/[0.07] dark:text-emerald-200">
+                    <span>{name}</span>
+                    <span aria-hidden="true" className="text-emerald-700/45 dark:text-emerald-300/40">•</span>
+                    <span lang="ar" dir="rtl" className="font-serif text-[0.95rem] font-bold">{arabic}</span>
+                  </span>
+                ))}
+              </div>
+              <p className="max-w-2xl text-sm font-medium leading-relaxed text-muted-foreground">
+                Recognised non-interest structures for transparent trade, leasing, agency, guarantees and partnership ventures.
+              </p>
             </div>
             <div className="space-y-5">
               <h1 className="max-w-3xl font-headline text-4xl font-bold tracking-[-0.035em] sm:text-5xl lg:text-6xl lg:leading-[1.04]">
