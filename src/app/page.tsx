@@ -73,14 +73,14 @@ const commercialModels = [
 ];
 
 const heroIslamicStructures = [
-  ['Murabaha', 'مرابحة'],
-  ['Mudaraba', 'مضاربة'],
-  ['Ijara', 'إجارة'],
-  ['Musharaka', 'مشاركة'],
-  ['Salam', 'سلم'],
-  ['Istisna', 'استصناع'],
-  ['Wakalah', 'وكالة'],
-  ['Kafaalah', 'كفالة'],
+  ['Murabaha', 'Cost-plus Sale'],
+  ['Mudaraba', 'Profit-sharing Investment'],
+  ['Ijara', 'Leasing'],
+  ['Musharaka', 'Joint-venture Partnership'],
+  ['Salam', 'Advance Purchase'],
+  ['Istisna', 'Manufacturing or Construction'],
+  ['Wakalah', 'Agency'],
+  ['Kafaalah', 'Guarantee'],
 ];
 
 const audiences = [
@@ -129,11 +129,9 @@ export default function Home() {
                 <ShieldCheck className="h-3.5 w-3.5" /> Trade-based · Asset-backed · Partnership-oriented
               </div>
               <div className="flex max-w-3xl flex-wrap gap-2" aria-label="Islamic commercial structures available through NAL">
-                {heroIslamicStructures.map(([name, arabic]) => (
+                {heroIslamicStructures.map(([name, meaning]) => (
                   <span key={name} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-700/20 bg-emerald-950/[0.04] px-3 py-1.5 text-sm font-semibold text-emerald-900 shadow-sm dark:border-emerald-300/20 dark:bg-emerald-300/[0.07] dark:text-emerald-200">
-                    <span>{name}</span>
-                    <span aria-hidden="true" className="text-emerald-700/45 dark:text-emerald-300/40">•</span>
-                    <span lang="ar" dir="rtl" className="font-serif text-[0.95rem] font-bold">{arabic}</span>
+                    <span>{name} <span className="font-medium text-emerald-800/70 dark:text-emerald-200/70">({meaning})</span></span>
                   </span>
                 ))}
               </div>

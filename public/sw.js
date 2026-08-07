@@ -1,4 +1,4 @@
-const STATIC_CACHE = "nal-static-v2";
+const STATIC_CACHE = "nal-static-v3";
 const OFFLINE_URL = "/offline.html";
 const PRECACHE_URLS = [
   OFFLINE_URL,
