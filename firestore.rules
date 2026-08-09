@@ -103,7 +103,8 @@ service cloud.firestore {
         || (isOwner(userId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'fcmTokens', 'name', 'phoneNumber', 'address', 'bankName',
-            'bankAccountName', 'bankAccountNumber', 'photoURL', 'photoStoragePath'
+            'bankAccountName', 'bankAccountNumber', 'photoURL', 'photoStoragePath',
+            'preferredLanguage'
           ])
           && (
             !request.resource.data.diff(resource.data).affectedKeys().hasAny([
@@ -125,6 +126,10 @@ service cloud.firestore {
               && request.resource.data.bankAccountNumber is string
               && request.resource.data.bankAccountNumber.matches('^$|^[0-9]{10}$')
             )
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['preferredLanguage'])
+            || request.resource.data.preferredLanguage in ['en', 'ha', 'ig', 'yo']
           )
           && (
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['photoURL', 'photoStoragePath'])

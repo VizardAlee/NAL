@@ -3,6 +3,7 @@ import { formatAgreementCurrency, formatAgreementDate } from './mudaraba';
 import { buildWakalahClauses, type WakalahAgreementModel } from './wakalah';
 import type { AgreementSignerRole, AgreementSigningState } from './signing';
 import { buildAgreementVerificationQr } from './verification-qr';
+import { LANGUAGE_NAMES, normalizeLanguage } from '@/lib/localization';
 
 const A4: [number, number] = [595.28, 841.89];
 const GREEN = rgb(0.027, 0.353, 0.235);
@@ -102,6 +103,7 @@ export async function buildWakalahAgreementPdf(model: WakalahAgreementModel, sig
   page.drawText('WAKALAH AGREEMENT', { x: margin, y, size: 17, font: bold, color: GREEN });
   y -= 28;
   draw(`Agreement Reference: ${model.agreementId}`, { font: bold });
+  draw(`Agreement Language: ${LANGUAGE_NAMES[normalizeLanguage(model.language)]}`);
   draw(`Deal: ${model.deal.name}`);
   draw(`Approved Asset: ${model.deal.assetDescription}`);
   draw(`Approved Supplier: ${model.deal.supplierName}`);

@@ -5,7 +5,7 @@ const cronSecret = defineSecret("CRON_SECRET");
 
 export const runDailyAutomation = onSchedule(
   {
-    schedule: "5 0 * * *",
+    schedule: "0 16 * * *",
     timeZone: "Africa/Lagos",
     region: "us-central1",
     secrets: [cronSecret],

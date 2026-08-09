@@ -7,6 +7,7 @@ import {
 } from './mudaraba';
 import type { AgreementSignerRole, AgreementSigningState } from './signing';
 import { buildAgreementVerificationQr } from './verification-qr';
+import { LANGUAGE_NAMES, normalizeLanguage } from '@/lib/localization';
 
 const A4: [number, number] = [595.28, 841.89];
 const GREEN = rgb(0.027, 0.353, 0.235);
@@ -164,6 +165,7 @@ export async function buildMudarabaAgreementPdf(model: MudarabaAgreementModel, s
   });
   y -= 28;
   drawTableRow('Agreement Date', formatAgreementDate(model.agreementDate), 0);
+  drawTableRow('Agreement Language', LANGUAGE_NAMES[normalizeLanguage(model.language)], 1);
   drawTableRow('Investment Capital', formatAgreementCurrency(model.amount), 1);
   drawTableRow('Term', model.termLabel, 2);
   drawTableRow('Maturity', `Close of business on ${formatAgreementDate(model.maturityDate)}`, 3);

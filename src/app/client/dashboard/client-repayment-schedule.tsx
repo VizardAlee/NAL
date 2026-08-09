@@ -45,6 +45,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { roundCurrency } from '@/lib/financial-integrity';
+import { repaymentAmountForInstallment, remainingScheduledAmount } from '@/lib/repayment-allocation';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -59,6 +60,7 @@ interface ScheduledPayment extends ScheduleInstallment {
   amountAvailableToLodge: number;
   paymentHistory: Repayment[];
   openingBalance: number;
+  dealBalanceRemaining: number;
 }
 
 function SubmitLodgePaymentButton() {
@@ -122,7 +124,8 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
                 <DialogHeader>
                     <DialogTitle>Lodge a Payment</DialogTitle>
                     <DialogDescription>
-                        Lodge a full or partial payment for installment #{installment.installment}.
+                        Lodge a full, partial, or advance payment starting from installment #{installment.installment}.
+                        Any approved excess automatically pays down future installments in order.
                         Ensure you have made the payment to the platform's bank account first.
                     </DialogDescription>
                 </DialogHeader>
@@ -137,7 +140,7 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
                             step="0.01"
                             value={amountToPay}
                             onChange={(e) => setAmountToPay(parseFloat(e.target.value) || 0)}
-                            max={roundCurrency(installment.amountAvailableToLodge)}
+                            max={roundCurrency(installment.dealBalanceRemaining)}
                             min="0.01"
                         />
                     </div>
@@ -231,15 +234,21 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
   const enhancedSchedule = useMemo((): ScheduledPayment[] => {
     if (!schedule) return [];
     
+    const dealBalanceRemaining = remainingScheduledAmount(schedule, allRepayments || [], ['Approved']);
     return schedule.map((installment, index) => {
       const openingBalance = index === 0 ? deal.principal : schedule[index - 1].balance;
 
-      const relatedRepayments = allRepayments?.filter(r => 
-          r.installmentNumber === installment.installment
+      const relatedRepayments = allRepayments?.filter(r =>
+          repaymentAmountForInstallment(r, installment.installment) > 0 ||
+          (r.status === 'Pending' && r.installmentNumber === installment.installment)
       ) || [];
 
-      const approvedAmountPaid = roundCurrency(relatedRepayments.filter(r => r.status === 'Approved').reduce((sum, r) => sum + r.amount, 0));
-      const pendingAmount = roundCurrency(relatedRepayments.filter(r => r.status === 'Pending').reduce((sum, r) => sum + r.amount, 0));
+      const approvedAmountPaid = roundCurrency(relatedRepayments.filter(r => r.status === 'Approved').reduce(
+        (sum, r) => sum + repaymentAmountForInstallment(r, installment.installment), 0
+      ));
+      const pendingAmount = roundCurrency(relatedRepayments.filter(r => r.status === 'Pending').reduce(
+        (sum, r) => sum + repaymentAmountForInstallment(r, installment.installment), 0
+      ));
       const amountRemaining = Math.max(0, roundCurrency(installment.payment - approvedAmountPaid));
       const amountAvailableToLodge = Math.max(0, roundCurrency(amountRemaining - pendingAmount));
 
@@ -256,11 +265,11 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
 
       let isActionable = false;
       const firstActionableInstallment = schedule.find(inst => {
-          const payments = allRepayments?.filter(r => r.installmentNumber === inst.installment) || [];
+          const payments = allRepayments || [];
           const paid = roundCurrency(
             payments
               .filter((payment) => payment.status === 'Approved')
-              .reduce((sum, payment) => sum + payment.amount, 0)
+              .reduce((sum, payment) => sum + repaymentAmountForInstallment(payment, inst.installment), 0)
           ) >= inst.payment;
           return !paid;
       });
@@ -279,6 +288,7 @@ export function ClientRepaymentSchedule({ deal, initialRepayments, repaymentsLoa
         amountAvailableToLodge,
         paymentHistory: relatedRepayments,
         openingBalance,
+        dealBalanceRemaining,
       };
     });
   }, [schedule, allRepayments, deal.principal]);

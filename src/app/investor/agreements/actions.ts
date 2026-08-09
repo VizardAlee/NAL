@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { adminDb } from '@/firebase/admin-app';
+import { normalizeLanguage } from '@/lib/localization';
 import { verifyAuthToken } from '@/lib/server/auth';
 import {
   calculateMaturityDate,
@@ -85,6 +86,7 @@ async function createAgreementModel(
   return {
     type: 'MUDARABA_INVESTMENT',
     version: MUDARABA_AGREEMENT_VERSION,
+    language: normalizeLanguage(profile.preferredLanguage),
     agreementId: `NAL-MUD-${batchSnapshot.id.toUpperCase()}`,
     batchId: batchSnapshot.id,
     agreementDate: agreementDate.toISOString(),

@@ -3,6 +3,7 @@ import { formatAgreementCurrency, formatAgreementDate } from './mudaraba';
 import { buildMurabahaClauses, type MurabahaAgreementModel } from './murabaha';
 import type { AgreementSignerRole, AgreementSigningState } from './signing';
 import { buildAgreementVerificationQr } from './verification-qr';
+import { LANGUAGE_NAMES, normalizeLanguage } from '@/lib/localization';
 
 const A4: [number, number] = [595.28, 841.89];
 const GREEN = rgb(0.027, 0.353, 0.235);
@@ -108,6 +109,7 @@ export async function buildMurabahaAgreementPdf(model: MurabahaAgreementModel, s
   page.drawText('MURABAHA SALES CONTRACT AGREEMENT', { x: margin, y, size: 15, font: bold, color: GREEN });
   y -= 23;
   draw(`Agreement Reference: ${model.agreementId}`, { font: bold });
+  draw(`Agreement Language: ${LANGUAGE_NAMES[normalizeLanguage(model.language)]}`);
   draw(`Effective Date: ${formatAgreementDate(model.agreementDate)}`);
   const summary = [
     ['Customer', model.client.name],

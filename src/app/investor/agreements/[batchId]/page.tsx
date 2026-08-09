@@ -22,6 +22,7 @@ import { NonInterestInstitutionMark } from '@/components/non-interest-institutio
 import { AgreementSigningPanel } from '@/components/agreement-signing-panel';
 import { AgreementElectronicSignature } from '@/components/agreement-electronic-signature';
 import type { AgreementDocumentModel, AgreementSigningState } from '@/lib/agreements/signing';
+import { AgreementLanguageNotice } from '@/components/agreement-language-notice';
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -108,6 +109,7 @@ export default function InvestorAgreementPage() {
       <div className="mb-5"><AgreementSigningPanel agreementType="MUDARABA" sourceId={batchId} primaryRole="INVESTOR" disabled={!canExport} onStateChange={setSigningState} onFrozenDocument={useFrozenDocument} /></div>
 
       <article id="printable-agreement" className="agreement-paper bg-white px-8 py-7 text-[13px] leading-[1.55] text-slate-950 shadow-xl sm:px-14 sm:py-10">
+        <AgreementLanguageNotice language={agreement.language} />
         {signingState?.status !== 'EXECUTED' && <div className="mb-4 border-2 border-red-200 bg-red-50 py-2 text-center font-bold tracking-widest text-red-700">DRAFT — NOT YET FULLY EXECUTED</div>}
         <header className="mb-6 flex items-center gap-4 border-b-2 border-[#075a3c] pb-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}

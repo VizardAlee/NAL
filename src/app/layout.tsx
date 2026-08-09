@@ -9,6 +9,7 @@ import React from 'react';
 import { CompanyLogoProvider } from '@/components/company-logo-provider';
 import { NotificationProvider } from '@/components/notification-provider';
 import { PwaRegistration } from '@/components/pwa-registration';
+import { LanguageProvider } from '@/components/language-provider';
 
 
 export default function RootLayout({
@@ -47,11 +48,13 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <FirebaseClientProvider>
-            <CompanyLogoProvider>
-              <NotificationProvider>
-                {children}
-              </NotificationProvider>
-            </CompanyLogoProvider>
+            <LanguageProvider>
+              <CompanyLogoProvider>
+                <NotificationProvider>
+                  {children}
+                </NotificationProvider>
+              </CompanyLogoProvider>
+            </LanguageProvider>
           </FirebaseClientProvider>
           <Toaster />
         </ThemeProvider>

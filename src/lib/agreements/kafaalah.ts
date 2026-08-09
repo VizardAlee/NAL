@@ -1,8 +1,10 @@
 export const KAFAALAH_BOND_VERSION = '1.0';
+import type { SupportedLanguage } from '@/lib/localization';
 
 export type KafaalahBondModel = {
   type: 'KAFAALAH_GUARANTEE';
   version: string;
+  language: SupportedLanguage;
   bondId: string;
   dealId: string;
   bondDate: string;

@@ -1,8 +1,10 @@
 export const WAKALAH_AGREEMENT_VERSION = '1.0';
+import type { SupportedLanguage } from '@/lib/localization';
 
 export type WakalahAgreementModel = {
   type: 'WAKALAH_PROCUREMENT';
   version: string;
+  language: SupportedLanguage;
   agreementId: string;
   dealId: string;
   agreementDate: string;

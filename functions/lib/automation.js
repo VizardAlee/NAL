@@ -5,7 +5,7 @@ const params_1 = require("firebase-functions/params");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const cronSecret = (0, params_1.defineSecret)("CRON_SECRET");
 exports.runDailyAutomation = (0, scheduler_1.onSchedule)({
-    schedule: "5 0 * * *",
+    schedule: "0 16 * * *",
     timeZone: "Africa/Lagos",
     region: "us-central1",
     secrets: [cronSecret],

@@ -8,6 +8,7 @@ import { KAFAALAH_BOND_VERSION, type KafaalahBondModel } from '@/lib/agreements/
 import { MURABAHA_AGREEMENT_VERSION, type MurabahaAgreementModel } from '@/lib/agreements/murabaha';
 import { generateAmortizationSchedule } from '@/lib/amortization';
 import type { Deal } from '@/lib/types';
+import { normalizeLanguage } from '@/lib/localization';
 
 const requestSchema = z.object({ authToken: z.string().min(1) });
 const agreementSchema = requestSchema.extend({ dealId: z.string().min(1) });
@@ -45,6 +46,7 @@ async function createModel(userId: string, snapshot: FirebaseFirestore.DocumentS
   return {
     type: 'WAKALAH_PROCUREMENT',
     version: WAKALAH_AGREEMENT_VERSION,
+    language: normalizeLanguage(profile.preferredLanguage),
     agreementId: `NAL-WAK-${snapshot.id.toUpperCase()}`,
     dealId: snapshot.id,
     agreementDate: toDate(deal.wakalahAgreementDate || deal.startDate || deal.createdAt).toISOString(),
@@ -97,6 +99,7 @@ async function createKafaalahModel(userId: string, snapshot: FirebaseFirestore.D
   return {
     type: 'KAFAALAH_GUARANTEE',
     version: KAFAALAH_BOND_VERSION,
+    language: normalizeLanguage(profile.preferredLanguage),
     bondId: `NAL-KAF-${snapshot.id.toUpperCase()}`,
     dealId: snapshot.id,
     bondDate: agreementDate.toISOString(),
@@ -157,6 +160,7 @@ async function createMurabahaModel(userId: string, snapshot: FirebaseFirestore.D
   return {
     type: 'MURABAHA_SALE',
     version: MURABAHA_AGREEMENT_VERSION,
+    language: normalizeLanguage(profile.preferredLanguage),
     agreementId: `NAL-MUR-${snapshot.id.toUpperCase()}`,
     dealId: snapshot.id,
     agreementDate: toDate(deal.startDate || deal.createdAt).toISOString(),

@@ -30,3 +30,18 @@ test('a lodged repayment remains awaiting approval until an admin approves it', 
   ], new Date('2026-04-01T00:00:00Z'));
   assert.equal(approved[0].status, 'Paid');
 });
+
+test('an approved overpayment marks future installments as paid', () => {
+  const rows = buildRepaymentStatementRows(schedule, [{
+    installmentNumber: 1,
+    amount: 250,
+    status: 'Approved',
+    allocations: [
+      { installmentNumber: 1, amount: 125, principalApplied: 100, interestApplied: 25 },
+      { installmentNumber: 2, amount: 125, principalApplied: 100, interestApplied: 25 },
+    ],
+  }], new Date('2026-01-15T00:00:00Z'));
+  assert.equal(rows[0].status, 'Paid');
+  assert.equal(rows[1].status, 'Paid');
+  assert.equal(rows[2].status, 'Upcoming');
+});

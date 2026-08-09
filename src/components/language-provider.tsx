@@ -1,0 +1,33 @@
+'use client';
+
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { normalizeLanguage, translate, type SupportedLanguage, type TranslationKey } from '@/lib/localization';
+
+const STORAGE_KEY = 'nal-preferred-language';
+type LanguageContextValue = {
+  language: SupportedLanguage;
+  setLanguage: (language: SupportedLanguage) => void;
+  t: (key: TranslationKey) => string;
+};
+const LanguageContext = createContext<LanguageContextValue | null>(null);
+
+export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  const [language, setLanguageState] = useState<SupportedLanguage>('en');
+  useEffect(() => {
+    setLanguageState(normalizeLanguage(window.localStorage.getItem(STORAGE_KEY)));
+  }, []);
+  const setLanguage = useCallback((next: SupportedLanguage) => {
+    setLanguageState(next);
+    window.localStorage.setItem(STORAGE_KEY, next);
+    document.documentElement.lang = next;
+  }, []);
+  useEffect(() => { document.documentElement.lang = language; }, [language]);
+  const value = useMemo(() => ({ language, setLanguage, t: (key: TranslationKey) => translate(language, key) }), [language, setLanguage]);
+  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
+}
+
+export function useLanguage() {
+  const value = useContext(LanguageContext);
+  if (!value) throw new Error('useLanguage must be used inside LanguageProvider.');
+  return value;
+}

@@ -31,6 +31,9 @@ import { AdminShortcut } from "@/components/admin-shortcut";
 import { clearStoredActivePortal, resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 import { NotificationBell } from "@/components/notification-bell";
 import { cn } from "@/lib/utils";
+import { LanguageSwitcher } from '@/components/language-switcher';
+import { useLanguage } from '@/components/language-provider';
+import type { TranslationKey } from '@/lib/localization';
 
 function InvestorSkeleton() {
     return (
@@ -66,15 +69,16 @@ const investorOnboardingSteps = [
 ];
 
 const investorNavItems = [
-  { href: "/investor/dashboard", label: "Home", icon: Wallet },
-  { href: "/investor/transactions", label: "Activity", icon: History },
-  { href: "/investor/agreements", label: "Agreements", icon: FileSignature },
-  { href: "/investor/financing-modes", label: "Modes", icon: BookOpen },
-  { href: "/investor/settings", label: "Settings", icon: Settings },
+  { href: "/investor/dashboard", label: "home" as TranslationKey, icon: Wallet },
+  { href: "/investor/transactions", label: "activity" as TranslationKey, icon: History },
+  { href: "/investor/agreements", label: "agreements" as TranslationKey, icon: FileSignature },
+  { href: "/investor/financing-modes", label: "modes" as TranslationKey, icon: BookOpen },
+  { href: "/investor/settings", label: "settings" as TranslationKey, icon: Settings },
 ];
 
 function InvestorMobileNav() {
   const pathname = usePathname();
+  const { t } = useLanguage();
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/90 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-14px_36px_hsla(var(--primary)/0.14)] backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 lg:hidden">
@@ -93,7 +97,7 @@ function InvestorMobileNav() {
               )}
             >
               <Icon className="h-5 w-5" />
-              <span className="leading-none">{item.label}</span>
+              <span className="leading-none">{t(item.label)}</span>
             </Link>
           );
         })}
@@ -160,6 +164,7 @@ export default function InvestorLayout({
   const { user, loading } = useUser();
   const router = useRouter();
   const { logoUrl, loading: logoLoading } = useCompanyLogo();
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -198,25 +203,25 @@ export default function InvestorLayout({
                     <Button variant="ghost" asChild>
                         <Link href="/investor/agreements">
                             <FileSignature className="h-4 w-4 mr-2" />
-                            Agreements
+                            {t('agreements')}
                         </Link>
                     </Button>
                     <Button variant="ghost" asChild>
                         <Link href="/investor/dashboard">
                             <Wallet className="h-4 w-4 mr-2" />
-                            Dashboard
+                            {t('dashboard')}
                         </Link>
                     </Button>
                     <Button variant="ghost" asChild>
                         <Link href="/investor/transactions">
                             <History className="h-4 w-4 mr-2" />
-                            Transactions
+                            {t('transactions')}
                         </Link>
                     </Button>
                     <Button variant="ghost" asChild>
                         <Link href="/investor/financing-modes">
                             <BookOpen className="h-4 w-4 mr-2" />
-                            Financing Modes
+                            {t('financingModes')}
                         </Link>
                     </Button>
                     <Button variant="ghost" asChild>
@@ -228,7 +233,7 @@ export default function InvestorLayout({
                     <Button variant="ghost" asChild>
                         <Link href="/investor/settings">
                             <Settings className="h-4 w-4 mr-2" />
-                            Settings
+                            {t('settings')}
                         </Link>
                     </Button>
                 </nav>
@@ -239,6 +244,7 @@ export default function InvestorLayout({
                   <AdminShortcut currentPortal="investor" />
                 </div>
                 <RoleSwitcher currentPortal="investor" />
+                <LanguageSwitcher />
                 <div className="hidden lg:block">
                   <ThemeToggle />
                 </div>

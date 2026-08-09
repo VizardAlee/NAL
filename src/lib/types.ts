@@ -91,6 +91,7 @@ export type User = AuthUser & DocumentData & {
     bankName?: string;
     bankAccountName?: string;
     bankAccountNumber?: string;
+    preferredLanguage?: 'en' | 'ha' | 'ig' | 'yo';
 };
 
 export type Repayment = DocumentData & {
@@ -101,4 +102,10 @@ export type Repayment = DocumentData & {
   lodgedAt: Timestamp;
   dueDate: Timestamp;
   installmentNumber: number;
+  allocations?: Array<{
+    installmentNumber: number;
+    amount: number;
+    principalApplied: number;
+    interestApplied: number;
+  }>;
 };

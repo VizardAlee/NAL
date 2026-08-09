@@ -48,7 +48,10 @@ test('users may edit safe profile fields but not access fields', async () => {
     bankName: 'Taj Bank',
     bankAccountName: 'Updated Client',
     bankAccountNumber: '0123456789',
+    preferredLanguage: 'ha',
   }));
+  await assertSucceeds(updateDoc(doc(db, 'users', 'client'), { preferredLanguage: 'yo' }));
+  await assertFails(updateDoc(doc(db, 'users', 'client'), { preferredLanguage: 'fr' }));
   await assertFails(updateDoc(doc(db, 'users', 'client'), { bankAccountNumber: 'not-an-account' }));
   await assertFails(updateDoc(doc(db, 'users', 'client'), { accessRole: 'ADMIN' }));
 });

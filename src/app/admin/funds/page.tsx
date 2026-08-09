@@ -34,7 +34,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { CalendarIcon } from "lucide-react";
-import { generateAmortizationSchedule } from "@/lib/amortization";
+import { calculateRemainingRepaymentBalance } from "@/lib/amortization";
 import { Calendar } from "@/components/ui/calendar";
 import {
     DropdownMenu,
@@ -1355,14 +1355,10 @@ export default function PlatformFundsPage() {
         if (deals && repayments) {
             const activeDeals = deals.filter(d => d.status === 'Active');
             for (const deal of activeDeals) {
-                const schedule = generateAmortizationSchedule(deal);
                 const approvedRepaymentsForDeal = repayments.filter(r => r.dealId === deal.id);
-                const paidInstallmentNumbers = approvedRepaymentsForDeal.map(r => r.installmentNumber);
-
-                const remainingInstallments = schedule.filter(inst => !paidInstallmentNumbers.includes(inst.installment));
-
-                totalClientDebt += remainingInstallments.reduce((sum, inst) => sum + inst.payment, 0);
-                totalInvested += remainingInstallments.reduce((sum, inst) => sum + inst.principal, 0);
+                const remaining = calculateRemainingRepaymentBalance(deal, approvedRepaymentsForDeal);
+                totalClientDebt += remaining.totalRemaining;
+                totalInvested += remaining.remainingPrincipal;
             }
         }
 

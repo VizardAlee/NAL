@@ -25,6 +25,7 @@ import { RepaymentHistory } from "@/components/deals/repayment-history";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { generateAmortizationSchedule } from "@/lib/amortization";
+import { repaymentAmountForInstallment } from '@/lib/repayment-allocation';
 import { RepaymentMilestoneGauge } from "@/components/deals/repayment-milestone-gauge";
 import {
     AlertDialog,
@@ -475,8 +476,8 @@ export default function ClientDashboard() {
             const schedule = generateAmortizationSchedule(deal);
             schedule.forEach((installment) => {
                 const paid = approvedOrPendingRepayments
-                    .filter((repayment) => repayment.dealId === deal.id && repayment.installmentNumber === installment.installment)
-                    .reduce((sum, repayment) => sum + Number(repayment.amount || 0), 0);
+                    .filter((repayment) => repayment.dealId === deal.id)
+                    .reduce((sum, repayment) => sum + repaymentAmountForInstallment(repayment, installment.installment), 0);
                 const remaining = Math.max(0, installment.payment - paid);
                 if (remaining <= 0.01) return;
 

@@ -10,6 +10,7 @@ import { verifyAuthTokenForUser } from '@/lib/server/auth';
 import { calculateRemainingRepaymentBalance, generateAmortizationSchedule } from '@/lib/amortization';
 import { Deal } from '@/lib/types';
 import { roundCurrency } from '@/lib/financial-integrity';
+import { planRepaymentAllocations, remainingScheduledAmount, type RepaymentAllocation } from '@/lib/repayment-allocation';
 
 // --- Lodge Payment Action ---
 const lodgePaymentSchema = z.object({
@@ -30,6 +31,7 @@ type RepaymentData = {
     lodgedAt: { _seconds: number; _nanoseconds: number; };
     dueDate: { _seconds: number; _nanoseconds: number; };
     installmentNumber: number;
+    allocations: RepaymentAllocation[];
 }
 
 type LodgePaymentState = {
@@ -99,22 +101,23 @@ export async function lodgePaymentAction(
 
       const repaymentsQuery = firestore
         .collection('repayments')
-        .where('dealId', '==', dealId)
-        .where('clientId', '==', userId)
-        .where('installmentNumber', '==', installmentNumber);
+        .where('dealId', '==', dealId);
       const existingRepayments = await trx.get(repaymentsQuery);
       const repaymentRecords = existingRepayments.docs.map((doc) => doc.data());
       if (repaymentRecords.some((repayment) => repayment.status === 'Pending')) {
-        throw new Error('A payment request for this installment is already awaiting administrator approval.');
+        throw new Error('A payment request for this deal is already awaiting administrator approval.');
       }
-      const alreadyApproved = roundCurrency(repaymentRecords
-        .filter((repayment) => repayment.status === 'Approved')
-        .reduce((sum, repayment) => sum + Number(repayment.amount || 0), 0));
-      const amountRemaining = Math.max(0, roundCurrency(installment.payment - alreadyApproved));
+      const amountRemaining = remainingScheduledAmount(schedule, repaymentRecords, ['Approved']);
 
       if (normalizedAmount > amountRemaining) {
-        throw new Error(`Amount exceeds the remaining installment balance of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amountRemaining)}.`);
+        throw new Error(`Amount exceeds the remaining deal balance of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amountRemaining)}.`);
       }
+      const allocations = planRepaymentAllocations({
+        amount: normalizedAmount,
+        startingInstallment: installmentNumber,
+        schedule,
+        approvedRepayments: repaymentRecords.filter((repayment) => repayment.status === 'Approved'),
+      });
 
       const dueDateTimestamp = Timestamp.fromDate(installment.dueDate);
       const newRepaymentRef = firestore.collection('repayments').doc();
@@ -126,6 +129,7 @@ export async function lodgePaymentAction(
         lodgedAt,
         dueDate: dueDateTimestamp,
         installmentNumber,
+        allocations,
       });
 
       return {
@@ -137,6 +141,7 @@ export async function lodgePaymentAction(
         lodgedAt: { _seconds: lodgedAt.seconds, _nanoseconds: lodgedAt.nanoseconds },
         dueDate: { _seconds: dueDateTimestamp.seconds, _nanoseconds: dueDateTimestamp.nanoseconds },
         installmentNumber,
+        allocations,
       };
     });
 

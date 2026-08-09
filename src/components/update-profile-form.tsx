@@ -23,6 +23,9 @@ import { useAuth, useFirestore, useUser } from '@/firebase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Skeleton } from './ui/skeleton';
 import { ProfilePhotoUploader } from './profile-photo-uploader';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { LANGUAGE_NAMES, SUPPORTED_LANGUAGES } from '@/lib/localization';
+import { useLanguage } from './language-provider';
 
 const profileSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -32,6 +35,7 @@ const profileSchema = z.object({
   bankName: z.string().trim().refine((value) => !value || value.length >= 2, { message: 'Enter a valid bank name.' }),
   bankAccountName: z.string().trim().refine((value) => !value || value.length >= 2, { message: 'Enter a valid account name.' }),
   bankAccountNumber: z.string().trim().refine((value) => !value || /^\d{10}$/.test(value), { message: 'Account number must contain exactly 10 digits.' }),
+  preferredLanguage: z.enum(['en', 'ha', 'ig', 'yo']).default('en'),
 });
 
 type ProfileData = z.infer<typeof profileSchema>;
@@ -43,6 +47,7 @@ export function UpdateProfileForm() {
   const { user } = useUser();
   const auth = useAuth();
   const firestore = useFirestore();
+  const { setLanguage } = useLanguage();
 
   const form = useForm<ProfileData>({
     resolver: zodResolver(profileSchema),
@@ -54,6 +59,7 @@ export function UpdateProfileForm() {
       bankName: '',
       bankAccountName: '',
       bankAccountNumber: '',
+      preferredLanguage: 'en',
     },
   });
 
@@ -69,6 +75,7 @@ export function UpdateProfileForm() {
           bankName: user.bankName || '',
           bankAccountName: user.bankAccountName || '',
           bankAccountNumber: user.bankAccountNumber || '',
+          preferredLanguage: user.preferredLanguage || 'en',
         });
         setIsFetching(false);
       }
@@ -91,7 +98,9 @@ export function UpdateProfileForm() {
           bankName: values.bankName,
           bankAccountName: values.bankAccountName,
           bankAccountNumber: values.bankAccountNumber,
+          preferredLanguage: values.preferredLanguage,
         });
+        setLanguage(values.preferredLanguage);
         await updateProfile(auth.currentUser!, { displayName: values.name });
             toast({
               title: 'Profile Updated',
@@ -125,6 +134,20 @@ export function UpdateProfileForm() {
             <ProfilePhotoUploader />
             <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 max-w-2xl">
+                <FormField
+                control={form.control}
+                name="preferredLanguage"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Preferred app and agreement language</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>{SUPPORTED_LANGUAGES.map((code) => <SelectItem key={code} value={code}>{LANGUAGE_NAMES[code]}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
                 <FormField
                 control={form.control}
                 name="name"

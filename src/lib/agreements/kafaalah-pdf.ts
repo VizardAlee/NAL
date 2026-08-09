@@ -3,6 +3,7 @@ import { formatAgreementCurrency, formatAgreementDate } from './mudaraba';
 import { buildKafaalahClauses, type KafaalahBondModel } from './kafaalah';
 import type { AgreementSignerRole, AgreementSigningState } from './signing';
 import { buildAgreementVerificationQr } from './verification-qr';
+import { LANGUAGE_NAMES, normalizeLanguage } from '@/lib/localization';
 
 const A4: [number, number] = [595.28, 841.89];
 const GREEN = rgb(0.027, 0.353, 0.235);
@@ -53,7 +54,7 @@ export async function buildKafaalahBondPdf(model: KafaalahBondModel, signing?: A
   const drawSignature = (role: AgreementSignerRole, fallback: string) => { const signature = signing?.signatures[role]; const image = signatureImages.get(role); if (!signature || !image) { draw(fallback); return; } ensure(75); page.drawImage(image, { x: margin, y: y - 42, width: 145, height: 48 }); y -= 48; draw(`Electronically signed by ${signature.signerName}\n${new Date(signature.signedAt).toLocaleString('en-NG')} | Verification ref ${signature.signatureHash.slice(0, 16).toUpperCase()}`, { size: 7.5 }); };
   addPage();
   page.drawText('KAFAALAH BOND', { x: margin, y, size: 17, font: bold, color: GREEN }); y -= 20; page.drawText('GUARANTEE AND INDEMNITY', { x: margin, y, size: 11, font: bold, color: TEXT }); y -= 24;
-  draw(`Bond Reference: ${model.bondId}`, { font: bold }); draw(`Principal Agreement: ${model.deal.name} (${model.deal.financingMode})`); draw(`Contract Amount: ${formatAgreementCurrency(model.deal.principal)}`);
+  draw(`Bond Reference: ${model.bondId}`, { font: bold }); draw(`Agreement Language: ${LANGUAGE_NAMES[normalizeLanguage(model.language)]}`); draw(`Principal Agreement: ${model.deal.name} (${model.deal.financingMode})`); draw(`Contract Amount: ${formatAgreementCurrency(model.deal.principal)}`);
   draw(`THIS BOND OF KAFAALAH (GUARANTEE) is made this ${formatAgreementDate(model.bondDate)} by ${model.guarantor.name.toUpperCase()}, of ${model.guarantor.address} (hereinafter referred to as the “Guarantor” or “Kafeel”).`, { font: bold });
   draw('WHEREAS', { font: bold, size: 10 });
   draw(`The Guarantor has agreed to guarantee the obligations of ${model.client.name.toUpperCase()}, of ${model.client.address} (hereinafter referred to as the “Customer”), under the substantive agreement dated ${formatAgreementDate(model.principalAgreementDate)} between the Customer and ${model.company.name} (the “Principal Agreement”).`);

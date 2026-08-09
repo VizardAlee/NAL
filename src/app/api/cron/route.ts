@@ -10,6 +10,7 @@ import { isZakatApplicable } from '@/lib/zakat-eligibility';
 import { calculateInvestorPortfolioValue, roundCurrency } from '@/lib/financial-integrity';
 import { calculateZakatAmount, isZakatDue } from '@/lib/zakat';
 import { calculateInstallmentOutstanding, deriveAutomatedRecoveryStatus, isClosedRecoveryStatus, recoveryStatusLabel, recoveryTaskId } from '@/lib/recovery';
+import { isRepaymentReminderDue, repaymentReminderText } from '@/lib/repayment-reminders';
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -300,13 +301,38 @@ async function processRecoveryTasks() {
                     });
                     const formatted = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(balance.amountOutstanding);
                     await Promise.allSettled([
-                        notifyUser(deal.clientId, daysUntilDue >= 0 ? 'Upcoming payment reminder' : 'Payment overdue', `${formatted} remains payable for "${deal.dealName}".`, '/client/dashboard', 'repayment'),
                         notifyOperationalTeam(nextStatus === 'ESCALATED_LEGAL' ? 'LEGAL' : 'RECOVERY', 'New account action required', `${client.name || deal.clientName} — ${formatted} for "${deal.dealName}".`, nextStatus === 'ESCALATED_LEGAL' ? '/legal/dashboard' : '/recovery/dashboard', 'overdue'),
                     ]);
-                    clientNotificationsSent++;
                     teamNotificationsSent++;
                 } else {
                     tasksUpdated++;
+                }
+
+                if (balance.amountOutstanding > 0 && isRepaymentReminderDue({
+                    frequency: deal.repaymentFrequency,
+                    dueDate: installment.dueDate,
+                })) {
+                    const reminderRef = adminDb.collection('repaymentReminderReceipts').doc(`${dealId}_${installment.installment}`);
+                    const reserved = await adminDb.runTransaction(async (transaction) => {
+                        const existing = await transaction.get(reminderRef);
+                        if (existing.exists) return false;
+                        transaction.create(reminderRef, {
+                            dealId, clientId: deal.clientId, installmentNumber: installment.installment,
+                            dueDate: Timestamp.fromDate(installment.dueDate), createdAt: FieldValue.serverTimestamp(),
+                        });
+                        return true;
+                    });
+                    if (reserved) {
+                        const formatted = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(balance.amountOutstanding);
+                        await notifyUser(
+                            deal.clientId,
+                            'Repayment reminder',
+                            `${repaymentReminderText(deal.repaymentFrequency, client.preferredLanguage)} ${formatted} remains payable for "${deal.dealName}".`,
+                            '/client/dashboard',
+                            'repayment'
+                        );
+                        clientNotificationsSent++;
+                    }
                 }
 
                 if (previousStatus && previousStatus !== nextStatus) {

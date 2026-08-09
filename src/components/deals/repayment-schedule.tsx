@@ -28,6 +28,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import { InstallmentDetailsDialog } from './installment-details-dialog';
+import { repaymentAmountForInstallment } from '@/lib/repayment-allocation';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -57,11 +58,11 @@ export function RepaymentSchedule({ deal, initialRepayments, repaymentsLoading }
             const openingBalance = index === 0 ? deal.principal : schedule[index - 1].balance;
 
             const relatedRepayments = initialRepayments?.filter(r =>
-                r.installmentNumber === installment.installment
+                repaymentAmountForInstallment(r, installment.installment) > 0
             ) || [];
 
-            const approvedAmountPaid = relatedRepayments.filter(r => r.status === 'Approved').reduce((sum, r) => sum + r.amount, 0);
-            const pendingAmount = relatedRepayments.filter(r => r.status === 'Pending').reduce((sum, r) => sum + r.amount, 0);
+            const approvedAmountPaid = relatedRepayments.filter(r => r.status === 'Approved').reduce((sum, r) => sum + repaymentAmountForInstallment(r, installment.installment), 0);
+            const pendingAmount = relatedRepayments.filter(r => r.status === 'Pending').reduce((sum, r) => sum + repaymentAmountForInstallment(r, installment.installment), 0);
             const amountRemaining = Math.max(0, installment.payment - approvedAmountPaid);
 
             let status: RepaymentStatus = 'Upcoming';

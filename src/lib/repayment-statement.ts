@@ -1,4 +1,5 @@
 import type { ScheduleInstallment } from '@/lib/amortization';
+import { repaymentAmountForInstallment, type RepaymentAllocation } from '@/lib/repayment-allocation';
 
 export type RepaymentStatementStatus = 'Paid' | 'Awaiting approval' | 'Part-paid' | 'Due' | 'Upcoming';
 
@@ -6,6 +7,7 @@ type StatementRepayment = {
   installmentNumber?: number;
   amount?: number;
   status?: string;
+  allocations?: RepaymentAllocation[];
 };
 
 const toKobo = (value: number) => Math.round(Number(value || 0) * 100);
@@ -23,13 +25,13 @@ export function buildRepaymentStatementRows(
     const openingBalance = (totalRepaymentInKobo - scheduledInKobo) / 100;
     scheduledInKobo += installmentInKobo;
     const closingBalance = Math.max(0, totalRepaymentInKobo - scheduledInKobo) / 100;
-    const related = (repayments || []).filter((repayment) => Number(repayment.installmentNumber) === installment.installment);
+    const related = (repayments || []).filter((repayment) => repaymentAmountForInstallment(repayment, installment.installment) > 0);
     const approvedInKobo = related
       .filter((repayment) => repayment.status === 'Approved')
-      .reduce((sum, repayment) => sum + toKobo(Number(repayment.amount || 0)), 0);
+      .reduce((sum, repayment) => sum + toKobo(repaymentAmountForInstallment(repayment, installment.installment)), 0);
     const pendingInKobo = related
       .filter((repayment) => repayment.status === 'Pending')
-      .reduce((sum, repayment) => sum + toKobo(Number(repayment.amount || 0)), 0);
+      .reduce((sum, repayment) => sum + toKobo(repaymentAmountForInstallment(repayment, installment.installment)), 0);
     const status: RepaymentStatementStatus = approvedInKobo >= installmentInKobo
       ? 'Paid'
       : pendingInKobo > 0

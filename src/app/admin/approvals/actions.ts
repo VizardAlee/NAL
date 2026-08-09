@@ -8,10 +8,10 @@ import { calculateRemainingRepaymentBalance, generateAmortizationSchedule } from
 import { processOwnerProfitAllocations } from '@/lib/server/owner-profit';
 import {
   allocateCurrencyByWeights,
-  allocatePartialRepayment,
   calculateAvailableProfit,
   roundCurrency,
 } from '@/lib/financial-integrity';
+import { planRepaymentAllocations } from '@/lib/repayment-allocation';
 import { loadFundBatchAnniversaryWindow } from '@/lib/server/fund-batch-anniversary';
 
 const decisionSchema = z.object({
@@ -163,12 +163,7 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
     const [dealSnapshot, investmentsSnapshot, approvedRepaymentsSnapshot] = await Promise.all([
       trx.get(dealRef),
       trx.get(adminDb.collection('investments').where('dealId', '==', repayment.dealId)),
-      trx.get(
-        adminDb.collection('repayments')
-          .where('dealId', '==', repayment.dealId)
-          .where('installmentNumber', '==', repayment.installmentNumber || 1)
-          .where('status', '==', 'Approved')
-      ),
+      trx.get(adminDb.collection('repayments').where('dealId', '==', repayment.dealId)),
     ]);
     if (!dealSnapshot.exists) throw new Error('Associated deal not found.');
     if (investmentsSnapshot.empty) throw new Error('No investors found for this deal.');
@@ -177,18 +172,21 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
       return fundBatchId ? trx.get(adminDb.collection('fundBatches').doc(fundBatchId)) : Promise.resolve(null);
     }));
     const deal = { id: dealSnapshot.id, ...dealSnapshot.data() } as any;
-    const installment = generateAmortizationSchedule(deal).find((item) => item.installment === (repayment.installmentNumber || 1));
+    const schedule = generateAmortizationSchedule(deal);
+    const installment = schedule.find((item) => item.installment === (repayment.installmentNumber || 1));
     if (!installment) throw new Error('Matching repayment installment was not found.');
     const repaymentAmount = roundCurrency(Number(repayment.amount));
-    const alreadyApproved = roundCurrency(approvedRepaymentsSnapshot.docs.reduce(
-      (sum, item) => sum + Number(item.data().amount || 0),
-      0
-    ));
     if (!Number.isFinite(repaymentAmount) || repaymentAmount <= 0) throw new Error('Repayment amount is invalid.');
-    if (roundCurrency(alreadyApproved + repaymentAmount) > installment.payment) {
-      throw new Error('Approving this repayment would exceed the scheduled installment.');
-    }
-    const allocation = allocatePartialRepayment(repaymentAmount, installment);
+    const allocations = planRepaymentAllocations({
+      amount: repaymentAmount,
+      startingInstallment: repayment.installmentNumber || 1,
+      schedule,
+      approvedRepayments: approvedRepaymentsSnapshot.docs.map((item) => item.data()).filter((item) => item.status === 'Approved'),
+    });
+    const allocation = allocations.reduce((total, item) => ({
+      principal: roundCurrency(total.principal + item.principalApplied),
+      interest: roundCurrency(total.interest + item.interestApplied),
+    }), { principal: 0, interest: 0 });
     const totalInvested = investmentsSnapshot.docs.reduce((sum, item) => sum + Number(item.data().amount), 0);
     if (!Number.isFinite(totalInvested) || totalInvested <= 0) throw new Error('Investment total is invalid.');
     const investments = investmentsSnapshot.docs.map((snapshot, index) => ({
@@ -245,6 +243,7 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
       approvedAt: now,
       principalApplied: allocation.principal,
       interestApplied: allocation.interest,
+      allocations,
     });
   });
   if (data.decision === 'Approved') await processOwnerProfitAllocations({ includeHistorical: false, limit: 200 });

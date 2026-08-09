@@ -1,4 +1,5 @@
 import { addDays, addMonths, addWeeks, addYears, format, subDays } from 'date-fns';
+import type { SupportedLanguage } from '@/lib/localization';
 
 export const MUDARABA_AGREEMENT_VERSION = 'NAL-MUDARABA-2026-02';
 
@@ -11,6 +12,7 @@ export type AgreementAccount = {
 export type MudarabaAgreementModel = {
   type: 'MUDARABA_INVESTMENT';
   version: string;
+  language: SupportedLanguage;
   agreementId: string;
   batchId: string;
   agreementDate: string;

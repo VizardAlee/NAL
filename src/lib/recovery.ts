@@ -1,3 +1,5 @@
+import { repaymentAmountForInstallment } from '@/lib/repayment-allocation';
+
 export const RECOVERY_STATUSES = [
   'UPCOMING',
   'DUE',
@@ -32,6 +34,7 @@ export type RecoveryPayment = {
   amount?: number;
   installmentNumber?: number;
   status?: string;
+  allocations?: Array<{ installmentNumber: number; amount: number; principalApplied: number; interestApplied: number }>;
 };
 
 export const RECOVERY_OUTCOMES = [
@@ -64,8 +67,8 @@ export function calculateInstallmentOutstanding(
 ) {
   const scheduledKobo = Math.max(0, Math.round((Number(scheduledAmount) || 0) * 100));
   const approvedKobo = repayments
-    .filter((repayment) => repayment.status === 'Approved' && Number(repayment.installmentNumber) === installmentNumber)
-    .reduce((sum, repayment) => sum + Math.max(0, Math.round((Number(repayment.amount) || 0) * 100)), 0);
+    .filter((repayment) => repayment.status === 'Approved')
+    .reduce((sum, repayment) => sum + Math.max(0, Math.round(repaymentAmountForInstallment(repayment, installmentNumber) * 100)), 0);
   const paidKobo = Math.min(scheduledKobo, approvedKobo);
   return {
     scheduledAmount: scheduledKobo / 100,

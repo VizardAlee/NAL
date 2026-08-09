@@ -1,10 +1,12 @@
 import type { ScheduleInstallment } from '@/lib/amortization';
 import type { Deal } from '@/lib/types';
+import { repaymentAmountForInstallment, type RepaymentAllocation } from '@/lib/repayment-allocation';
 
 export type RepaymentProgressRecord = {
   amount?: number;
   installmentNumber?: number;
   status?: string;
+  allocations?: RepaymentAllocation[];
 };
 
 export type RepaymentCheckpoint = {
@@ -150,23 +152,13 @@ export function calculateRepaymentProgress(
   const approvedByInstallment = new Map<number, number>();
   const pendingByInstallment = new Map<number, number>();
 
-  repayments.forEach((repayment) => {
-    const installment = Number(repayment.installmentNumber);
-    const amount = toKobo(repayment.amount);
-    if (!Number.isInteger(installment) || installment <= 0 || amount <= 0) return;
-
-    if (repayment.status === 'Approved') {
-      approvedByInstallment.set(
-        installment,
-        (approvedByInstallment.get(installment) || 0) + amount
-      );
-    } else if (repayment.status === 'Pending') {
-      pendingByInstallment.set(
-        installment,
-        (pendingByInstallment.get(installment) || 0) + amount
-      );
-    }
-  });
+  schedule.forEach((installment) => repayments.forEach((repayment) => {
+    const amount = toKobo(repaymentAmountForInstallment(repayment, installment.installment));
+    if (amount <= 0) return;
+    const target = repayment.status === 'Approved' ? approvedByInstallment
+      : repayment.status === 'Pending' ? pendingByInstallment : null;
+    if (target) target.set(installment.installment, (target.get(installment.installment) || 0) + amount);
+  }));
 
   const grouped = new Map<
     string,

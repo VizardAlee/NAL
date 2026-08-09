@@ -1,4 +1,5 @@
 export const MURABAHA_AGREEMENT_VERSION = '1.0';
+import type { SupportedLanguage } from '@/lib/localization';
 
 export type MurabahaScheduleRow = {
   installment: number;
@@ -13,6 +14,7 @@ export type MurabahaScheduleRow = {
 export type MurabahaAgreementModel = {
   type: 'MURABAHA_SALE';
   version: string;
+  language: SupportedLanguage;
   agreementId: string;
   dealId: string;
   agreementDate: string;

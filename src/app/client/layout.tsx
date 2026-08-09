@@ -31,6 +31,9 @@ import { AdminShortcut } from "@/components/admin-shortcut";
 import { clearStoredActivePortal, resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 import { NotificationBell } from "@/components/notification-bell";
 import { cn } from "@/lib/utils";
+import { LanguageSwitcher } from '@/components/language-switcher';
+import { useLanguage } from '@/components/language-provider';
+import type { TranslationKey } from '@/lib/localization';
 
 function ClientSkeleton() {
     return (
@@ -64,16 +67,17 @@ const clientOnboardingSteps = [
 ];
 
 const clientNavItems = [
-  { href: "/client/dashboard", label: "Home", icon: FileText },
-  { href: "/client/deals", label: "Deals", icon: History },
-  { href: "/client/agreements", label: "Agreements", icon: ScrollText },
-  { href: "/client/deals/request", label: "Request", icon: PlusCircle },
-  { href: "/client/financing-modes", label: "Modes", icon: BookOpen },
-  { href: "/client/settings", label: "Settings", icon: Settings },
+  { href: "/client/dashboard", label: "home" as TranslationKey, icon: FileText },
+  { href: "/client/deals", label: "deals" as TranslationKey, icon: History },
+  { href: "/client/agreements", label: "agreements" as TranslationKey, icon: ScrollText },
+  { href: "/client/deals/request", label: "request" as TranslationKey, icon: PlusCircle },
+  { href: "/client/financing-modes", label: "modes" as TranslationKey, icon: BookOpen },
+  { href: "/client/settings", label: "settings" as TranslationKey, icon: Settings },
 ];
 
 function ClientMobileNav() {
   const pathname = usePathname();
+  const { t } = useLanguage();
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/90 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-14px_36px_hsla(var(--primary)/0.14)] backdrop-blur-xl supports-[backdrop-filter]:bg-background/75 lg:hidden">
@@ -92,7 +96,7 @@ function ClientMobileNav() {
               )}
             >
               <Icon className="h-5 w-5" />
-              <span className="leading-none">{item.label}</span>
+              <span className="leading-none">{t(item.label)}</span>
             </Link>
           );
         })}
@@ -149,6 +153,7 @@ export default function ClientLayout({
   const { user, loading } = useUser();
   const router = useRouter();
   const { logoUrl, loading: logoLoading } = useCompanyLogo();
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -187,25 +192,25 @@ export default function ClientLayout({
                     <Button variant="ghost" asChild>
                         <Link href="/client/dashboard">
                             <FileText className="h-4 w-4 mr-2" />
-                            Dashboard
+                            {t('dashboard')}
                         </Link>
                     </Button>
                     <Button variant="ghost" asChild>
                         <Link href="/client/deals">
                             <History className="h-4 w-4 mr-2" />
-                            All Deals
+                            {t('allDeals')}
                         </Link>
                     </Button>
                     <Button variant="ghost" asChild>
                         <Link href="/client/agreements">
                             <ScrollText className="h-4 w-4 mr-2" />
-                            Agreements
+                            {t('agreements')}
                         </Link>
                     </Button>
                     <Button variant="ghost" asChild>
                         <Link href="/client/financing-modes">
                             <BookOpen className="h-4 w-4 mr-2" />
-                            Financing Modes
+                            {t('financingModes')}
                         </Link>
                     </Button>
                     <Button variant="ghost" asChild>
@@ -217,7 +222,7 @@ export default function ClientLayout({
                     <Button variant="ghost" asChild>
                         <Link href="/client/settings">
                             <Settings className="h-4 w-4 mr-2" />
-                            Settings
+                            {t('settings')}
                         </Link>
                     </Button>
                 </nav>
@@ -228,6 +233,7 @@ export default function ClientLayout({
                   <AdminShortcut currentPortal="client" />
                 </div>
                 <RoleSwitcher currentPortal="client" />
+                <LanguageSwitcher />
                 <div className="hidden lg:block">
                   <ThemeToggle />
                 </div>

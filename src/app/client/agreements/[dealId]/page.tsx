@@ -18,6 +18,7 @@ import { NonInterestInstitutionMark } from '@/components/non-interest-institutio
 import { AgreementSigningPanel } from '@/components/agreement-signing-panel';
 import { AgreementElectronicSignature } from '@/components/agreement-electronic-signature';
 import type { AgreementDocumentModel, AgreementSigningState } from '@/lib/agreements/signing';
+import { AgreementLanguageNotice } from '@/components/agreement-language-notice';
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="grid grid-cols-[minmax(8.5rem,34%)_1fr] border-b border-slate-200 last:border-b-0"><div className="bg-[#075a3c] px-3 py-2 font-bold text-white">{label}</div><div className="bg-[#f6f1e2] px-3 py-2 text-slate-950">{children}</div></div>;
@@ -74,6 +75,7 @@ export default function ClientWakalahAgreementPage() {
       <div className="mb-5"><AgreementSigningPanel agreementType="WAKALAH" sourceId={dealId} primaryRole="CLIENT" disabled={!canExport} onStateChange={setSigningState} onFrozenDocument={useFrozenDocument} /></div>
 
       <article id="printable-agreement" className="agreement-paper bg-white px-8 py-7 text-[13px] leading-[1.55] text-slate-950 shadow-xl sm:px-14 sm:py-10">
+        <AgreementLanguageNotice language={agreement.language} />
         {signingState?.status !== 'EXECUTED' && <div className="mb-4 border-2 border-red-200 bg-red-50 py-2 text-center font-bold tracking-widest text-red-700">DRAFT — NOT YET FULLY EXECUTED</div>}
         <header className="mb-6 flex items-center gap-4 border-b-2 border-[#075a3c] pb-4"><img src="/NAL%20LOGO.jpg" alt="NAL logo" className="h-16 w-20 rounded object-cover" /><div><div className="font-serif text-lg font-bold text-[#075a3c]">{agreement.company.name}</div><div className="max-w-xl text-[11px] text-slate-600">{agreement.company.address}</div></div><NonInterestInstitutionMark className="ml-auto h-14 w-24" /></header>
         <h2 className="mb-5 text-center font-serif text-2xl font-bold text-[#075a3c]">WAKALAH AGREEMENT</h2>
