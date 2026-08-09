@@ -270,7 +270,7 @@ export default function TerminationsPage() {
 
             toast({
                 title: newStatus === 'Approved' ? 'Full Payment Confirmed' : 'Request Rejected',
-                description: result.message,
+                description: result.warning ? `${result.message} ${result.warning}` : result.message,
             });
 
         } catch (error) {

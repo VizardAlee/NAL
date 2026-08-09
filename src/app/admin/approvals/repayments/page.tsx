@@ -15,8 +15,8 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, Clock, CalendarCheck, AlertTriangle } from 'lucide-react';
 import { useCallback, useState, useMemo } from 'react';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { collection, query, where, DocumentData, Timestamp, runTransaction, doc, writeBatch, orderBy, getDocs, addDoc } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
+import { collection, query, where, DocumentData, Timestamp, orderBy } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -24,7 +24,6 @@ import { Deal } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { generateAmortizationSchedule } from '@/lib/amortization';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
     Tooltip,
@@ -32,7 +31,6 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { runOwnerProfitAllocationAction } from '@/app/admin/funds/actions';
 import { getRequiredIdToken } from '@/firebase/auth-token';
 import { processRepaymentRequestAction } from '@/app/admin/approvals/actions';
 
@@ -54,14 +52,6 @@ type User = {
     name: string;
 }
 
-type Investment = {
-    id: string;
-    investorId: string;
-    amount: number;
-    dealId: string;
-    specialInvestment?: boolean;
-}
-
 type RepaymentRow = Repayment & {
     clientName: string;
     dealName: string;
@@ -75,14 +65,18 @@ function RepaymentsTable({
     repayments: RepaymentRow[],
     isLoading: boolean,
     showApproveButton: boolean,
-    onApprove?: (repayment: RepaymentRow) => void
+    onApprove?: (repayment: RepaymentRow) => Promise<void>
 }) {
     const [approvingId, setApprovingId] = useState<string | null>(null);
     const isMobile = useIsMobile();
 
-    const handleApproveClick = (repayment: RepaymentRow) => {
+    const handleApproveClick = async (repayment: RepaymentRow) => {
         setApprovingId(repayment.id);
-        onApprove?.(repayment);
+        try {
+            await onApprove?.(repayment);
+        } finally {
+            setApprovingId(null);
+        }
     };
     
     const formatDate = (date: Date | Timestamp | undefined) => {
@@ -203,7 +197,6 @@ function RepaymentsTable({
 export default function RepaymentsPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
-    const [approvingId, setApprovingId] = useState<string | null>(null);
     const isMobile = useIsMobile();
     // Queries for each tab
     const pendingRepaymentsQuery = useMemo(() => firestore ? query(collection(firestore, 'repayments'), where('status', '==', 'Pending'), orderBy('lodgedAt', 'asc')) : null, [firestore]);
@@ -213,7 +206,6 @@ export default function RepaymentsPage() {
     // We need deals and users to enrich the repayment data for all tabs
     const dealsQuery = useMemo(() => firestore ? collection(firestore, 'deals') : null, [firestore]);
     const usersQuery = useMemo(() => firestore ? collection(firestore, 'users') : null, [firestore]);
-    const investmentsQuery = useMemo(() => firestore ? collection(firestore, 'investments') : null, [firestore]);
 
     const { data: pendingRepayments, loading: pendingLoading } = useCollection<Repayment>(pendingRepaymentsQuery);
     const { data: confirmedRepayments, loading: confirmedLoading } = useCollection<Repayment>(confirmedRepaymentsQuery);
@@ -221,9 +213,7 @@ export default function RepaymentsPage() {
 
     const { data: deals, loading: dealsLoading } = useCollection<Deal>(dealsQuery);
     const { data: users, loading: usersLoading } = useCollection<User>(usersQuery);
-    const { data: investments, loading: investmentsLoading } = useCollection<Investment>(investmentsQuery);
-
-    const isLoading = dealsLoading || usersLoading || investmentsLoading;
+    const isLoading = dealsLoading || usersLoading;
 
     const enrichRepayments = useCallback((repayments: Repayment[] | null): RepaymentRow[] => {
         if (!repayments || !deals || !users) return [];
@@ -244,13 +234,18 @@ export default function RepaymentsPage() {
 
 
     const handleApprove = async (repayment: RepaymentRow) => {
-        setApprovingId(repayment.id);
         try {
-            await processRepaymentRequestAction({ authToken: await getRequiredIdToken(), requestId: repayment.id, decision: 'Approved' });
+            const result = await processRepaymentRequestAction({
+                authToken: await getRequiredIdToken(),
+                requestId: repayment.id,
+                decision: 'Approved',
+            });
 
             toast({
                 title: "Repayment Approved",
-                description: `Profit and principal from ${repayment.dealName} has been distributed.`,
+                description: result.warning
+                    ? `Profit and principal from ${repayment.dealName} have been distributed. ${result.warning}`
+                    : `Profit and principal from ${repayment.dealName} have been distributed.`,
             });
         } catch (error) {
             console.error("Approval Error: ", error);
@@ -259,8 +254,6 @@ export default function RepaymentsPage() {
                 title: "Approval Failed",
                 description: error instanceof Error ? error.message : "An unknown error occurred.",
             });
-        } finally {
-            setApprovingId(null);
         }
     };
   

@@ -28,6 +28,23 @@ type DecisionInput = {
   specialInvestment?: boolean;
 };
 
+async function processOwnerProfitAllocationsAfterApproval(context: string): Promise<string | undefined> {
+  try {
+    const result = await processOwnerProfitAllocations({ includeHistorical: false, limit: 200 });
+    if (result.errors > 0) {
+      console.error('Owner profit allocation completed with errors after %s.', context, {
+        errors: result.errors,
+        processed: result.processed,
+      });
+      return 'The approval was completed, but some owner-profit allocations remain pending for an administrator to review.';
+    }
+  } catch (error) {
+    console.error('Owner profit allocation failed after %s.', context, error);
+    return 'The approval was completed, but owner-profit allocation remains pending until its configuration is completed.';
+  }
+  return undefined;
+}
+
 function parseDecision(input: DecisionInput) {
   const parsed = decisionSchema.safeParse(input);
   if (!parsed.success) throw new Error('Invalid approval request.');
@@ -246,8 +263,10 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
       allocations,
     });
   });
-  if (data.decision === 'Approved') await processOwnerProfitAllocations({ includeHistorical: false, limit: 200 });
-  return { success: true, message: `Repayment ${data.decision.toLowerCase()}.` };
+  const warning = data.decision === 'Approved'
+    ? await processOwnerProfitAllocationsAfterApproval(`repayment ${data.requestId}`)
+    : undefined;
+  return { success: true, message: `Repayment ${data.decision.toLowerCase()}.`, warning };
 }
 
 export async function processTerminationRequestAction(input: Omit<DecisionInput, 'specialInvestment'>) {
@@ -374,9 +393,11 @@ export async function processTerminationRequestAction(input: Omit<DecisionInput,
       platformEarning: platformProfit,
     });
   });
-  if (data.decision === 'Approved') await processOwnerProfitAllocations({ includeHistorical: false, limit: 200 });
+  const warning = data.decision === 'Approved'
+    ? await processOwnerProfitAllocationsAfterApproval(`termination ${data.requestId}`)
+    : undefined;
   const message = data.decision === 'Approved' && confirmedSettlementAmount !== null
     ? `Full settlement of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(confirmedSettlementAmount)} confirmed and deal terminated.`
     : 'Termination request rejected.';
-  return { success: true, message };
+  return { success: true, message, warning };
 }
