@@ -5,6 +5,7 @@ import { Logo } from "@/components/icons";
 import Link from "next/link";
 import { LoginForm } from "./login-form";
 import { useCompanyLogo } from "@/components/company-logo-provider";
+import { LanguageSwitcher } from '@/components/language-switcher';
 
 export default function LoginPage() {
   const { logoUrl } = useCompanyLogo();
@@ -12,6 +13,9 @@ export default function LoginPage() {
   return (
     <div className="auth-shell">
       <div className="w-full max-w-md">
+        <div className="mb-4 flex justify-end">
+          <LanguageSwitcher compact={false} />
+        </div>
         <div className="auth-lockup">
           <Link href="/" className="auth-brand">
             <Logo imageUrl={logoUrl} className="h-9 w-9" />

@@ -4,7 +4,7 @@
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy, HandCoins, Gavel, Download, BookOpen, History, ScrollText } from "lucide-react";
+import { FileText, ShieldAlert, Loader2, ArrowRight, PlusCircle, MessageSquare, Landmark, Copy, HandCoins, Gavel, Download, History, ScrollText } from "lucide-react";
 import { useMemo, useTransition, useEffect, useState } from 'react';
 import { useAuth, useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, doc } from 'firebase/firestore';
@@ -28,6 +28,7 @@ import { generateAmortizationSchedule } from "@/lib/amortization";
 import { repaymentAmountForInstallment } from '@/lib/repayment-allocation';
 import { RepaymentMilestoneGauge } from "@/components/deals/repayment-milestone-gauge";
 import { selectClientDashboardDeal } from '@/lib/client-dashboard-deal';
+import { useLanguage } from '@/components/language-provider';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -217,6 +218,7 @@ function DealCard({ deal }: { deal: Deal }) {
     const { user } = useUser();
     const { toast } = useToast();
     const [isPendingTermination, startTransition] = useTransition();
+    const { locale } = useLanguage();
 
     const repaymentsQuery = useMemo(() => {
         if (!firestore || !user?.uid || !deal?.id) return null;
@@ -272,7 +274,7 @@ function DealCard({ deal }: { deal: Deal }) {
                 <div className="flex items-center justify-between p-3 rounded-md bg-muted/50">
                     <span className="text-sm text-muted-foreground">Principal Amount</span>
                     <span className="font-bold">
-                        {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.principal)}
+                        {new Intl.NumberFormat(locale, { style: 'currency', currency: 'NGN' }).format(deal.principal)}
                     </span>
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
@@ -305,7 +307,7 @@ function DealCard({ deal }: { deal: Deal }) {
                         <span className="text-muted-foreground">Management Fee</span>
                     </div>
                     <span className="font-medium">
-                        {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)}
+                        {new Intl.NumberFormat(locale, { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)}
                         <span className="text-xs text-muted-foreground"> ({deal.managementFeeRate || 0}%)</span>
                     </span>
                 </div>
@@ -398,6 +400,7 @@ type ClientRequest = DocumentData & {
 export default function ClientDashboard() {
     const firestore = useFirestore();
     const router = useRouter();
+    const { locale } = useLanguage();
     const { user, loading: userLoading } = useUser();
 
     const userProfileRef = useMemo(() => {
@@ -527,7 +530,7 @@ export default function ClientDashboard() {
             .slice(0, 5);
     }, [dealRequests, terminationRequests]);
 
-    const formatCurrency = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+    const formatCurrency = (amount: number) => new Intl.NumberFormat(locale, { style: 'currency', currency: 'NGN' }).format(amount);
 
     if (isLoading) {
         return <DealsSkeleton />;
@@ -638,7 +641,7 @@ export default function ClientDashboard() {
                                 {dashboardMetrics.nextPayment ? formatCurrency(dashboardMetrics.nextPayment.amount) : 'None'}
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                {dashboardMetrics.nextPayment ? `${dashboardMetrics.nextPayment.dealName} due ${dashboardMetrics.nextPayment.dueDate.toLocaleDateString()}` : 'No upcoming active installment'}
+                                {dashboardMetrics.nextPayment ? `${dashboardMetrics.nextPayment.dealName} due ${dashboardMetrics.nextPayment.dueDate.toLocaleDateString(locale)}` : 'No upcoming active installment'}
                             </p>
                         </CardContent>
                     </Card>

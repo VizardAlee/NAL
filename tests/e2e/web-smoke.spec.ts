@@ -9,6 +9,19 @@ test('public entry points render and password reset is available', async ({ page
   await expect(page.getByRole('button', { name: /send reset link/i })).toBeVisible();
 });
 
+test('changing the app language updates the UI immediately and persists', async ({ page }) => {
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  await page.getByRole('combobox', { name: /choose language/i }).click();
+  await page.getByRole('option', { name: 'Hausa' }).click();
+
+  await expect(page.getByRole('button', { name: 'Shiga' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Ka manta kalmar sirri?' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ha');
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('button', { name: 'Shiga' })).toBeVisible();
+});
+
 test('production security headers are emitted', async ({ request }) => {
   const response = await request.get('/');
   expect(response.headers()['content-security-policy']).toContain("frame-ancestors 'none'");
