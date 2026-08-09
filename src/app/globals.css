@@ -58,6 +58,24 @@ html {
   background: #e8f1f5 !important;
 }
 
+.financial-report-table th,
+.financial-report-table td {
+  border: 1px solid #cbd5e1;
+  padding: 5px 6px;
+  vertical-align: top;
+}
+
+.financial-report-table th {
+  background: #075a3c !important;
+  color: white !important;
+  font-weight: 700;
+  text-align: left;
+}
+
+.financial-report-table tbody tr:nth-child(even) td {
+  background: #f1f5f9 !important;
+}
+
 @page deal-statement {
   size: A4 landscape;
   margin: 10mm;
@@ -96,6 +114,31 @@ html {
     page: deal-statement;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  .financial-user-report {
+    display: block !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .financial-report-dialog {
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform: none !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .financial-report-table thead {
+    display: table-header-group;
+  }
+
+  .financial-report-table tr {
+    break-inside: avoid;
   }
 }
 

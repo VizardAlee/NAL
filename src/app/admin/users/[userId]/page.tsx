@@ -10,7 +10,7 @@ import { doc, collection, query, where, DocumentData, Timestamp, orderBy, limit 
 import { useAuth, useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { User, Landmark, History, Banknote, PlusCircle, HandCoins, Loader2, FileText, ArrowRight, Phone, MessageSquare, Star, Gavel, Download, UserPlus, Briefcase, Copy, DollarSign } from 'lucide-react';
+import { User, Landmark, History, PlusCircle, Loader2, FileText, ArrowRight, Phone, MessageSquare, Star, Gavel, Download, UserPlus, Copy } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +41,7 @@ import { getMarketerStats } from '@/app/marketer/dashboard/actions';
 import { canWriteAdmin, hasPersona, isReadOnlyOwner, normalizeAccessModel } from '@/lib/access-control';
 import { isZakatApplicable } from '@/lib/zakat-eligibility';
 import { calculateZakatAmount, getNextZakatAssessmentDate } from '@/lib/zakat';
+import { UserFinancialReport } from '@/components/admin/user-financial-report';
 
 type UserProfile = DocumentData & {
     id: string;
@@ -407,6 +408,15 @@ export default function UserDetailPage() {
                 icon={User}
             >
                 <div className="flex items-center gap-2">
+                    <UserFinancialReport
+                        user={userProfile}
+                        transactions={transactions || []}
+                        fundBatches={fundBatches || []}
+                        deals={clientDeals || []}
+                        repayments={clientRepayments || []}
+                        portfolioValue={financialMetrics.portfolioValue}
+                        investibleBalance={financialMetrics.investibleBalance}
+                    />
                     <Button onClick={handleInitiateChat} disabled={isChatPending || ownerReadOnly}>
                         {isChatPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquare className="mr-2 h-4 w-4" />}
                         Chat with User
