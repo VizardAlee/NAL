@@ -27,6 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { generateAmortizationSchedule } from "@/lib/amortization";
 import { repaymentAmountForInstallment } from '@/lib/repayment-allocation';
 import { RepaymentMilestoneGauge } from "@/components/deals/repayment-milestone-gauge";
+import { selectClientDashboardDeal } from '@/lib/client-dashboard-deal';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -451,7 +452,7 @@ export default function ClientDashboard() {
         } as UserProfile;
     }, [user, userProfile]);
 
-    const mostRecentDeal = useMemo(() => deals?.[0], [deals]);
+    const dashboardDeal = useMemo(() => selectClientDashboardDeal(deals), [deals]);
 
     const dashboardMetrics = useMemo<{
         activePrincipal: number;
@@ -542,7 +543,7 @@ export default function ClientDashboard() {
             <div>
                 <PageHeader
                     title="Client Dashboard"
-                    description="Here is an overview of your most recent financing deal."
+                    description="Here is an overview of your current financing position."
                     icon={FileText}
                 />
                 <Alert variant="destructive">
@@ -565,7 +566,7 @@ export default function ClientDashboard() {
         <div>
             <PageHeader
                 title="Client Dashboard"
-                description="Here is an overview of your most recent financing deal."
+                description="Here is an overview of your current financing position."
                 icon={FileText}
             >
                 <div className="flex gap-2">
@@ -718,8 +719,8 @@ export default function ClientDashboard() {
                     </Card>
                 )}
 
-                {mostRecentDeal ? (
-                    <DealCard deal={mostRecentDeal} />
+                {dashboardDeal ? (
+                    <DealCard deal={dashboardDeal} />
                 ) : (
                     <Card className="mt-6 border-dashed">
                         <CardContent className="p-12 text-center">
