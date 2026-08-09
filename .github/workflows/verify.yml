@@ -64,3 +64,9 @@ jobs:
           --project studio-1298078893-e7941
           --only functions:createUser,functions:createDeal,functions:runDailyAutomation,firestore,storage
           --non-interactive
+      - name: Deploy App Hosting frontend
+        run: >-
+          firebase deploy
+          --project studio-1298078893-e7941
+          --only apphosting:nal-web
+          --non-interactive
