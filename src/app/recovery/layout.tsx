@@ -28,7 +28,6 @@ import { RoleSwitcher } from "@/components/role-switcher";
 import { AdminShortcut } from "@/components/admin-shortcut";
 import { clearStoredActivePortal, resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 import { NotificationBell } from "@/components/notification-bell";
-import { LanguageSwitcher } from '@/components/language-switcher';
 
 function RecoverySkeleton() {
     return (
@@ -135,7 +134,6 @@ export default function RecoveryLayout({
               <AdminShortcut currentPortal="recovery" />
             </div>
             <RoleSwitcher currentPortal="recovery" />
-            <LanguageSwitcher />
             <div className="hidden lg:block">
               <ThemeToggle />
             </div>

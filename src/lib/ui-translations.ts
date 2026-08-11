@@ -36,7 +36,13 @@ const phrases: Record<string, LocalizedPhrase> = {
   'Reports': { ha: 'Rahotanni', ig: 'Akụkọ', yo: 'Àwọn Ìròyìn' },
   'Tax': { ha: 'Haraji', ig: 'Ụtụ Isi', yo: 'Owó-orí' },
   'Language': { ha: 'Harshe', ig: 'Asụsụ', yo: 'Èdè' },
+  'App Language': { ha: 'Harshen Manhaja', ig: 'Asụsụ Ngwa', yo: 'Èdè Ohun Èlò' },
   'Choose language': { ha: 'Zaɓi harshe', ig: 'Họrọ asụsụ', yo: 'Yan èdè' },
+  'Choose the language used throughout your dashboard and personalised documents.': {
+    ha: 'Zaɓi harshen da za a yi amfani da shi a duk shafinka da takardunka na musamman.',
+    ig: 'Họrọ asụsụ a ga-eji n’ogwe nchịkwa gị niile na akwụkwọ ahaziri maka gị.',
+    yo: 'Yan èdè tí a ó lò káàkiri pátákó rẹ àti àwọn ìwé tí a ṣe fún ọ.',
+  },
   'Login': { ha: 'Shiga', ig: 'Banye', yo: 'Wọlé' },
   'Enter your credentials to access your workspace.': { ha: 'Shigar da bayananka don samun damar aikinka.', ig: 'Tinye nkọwa gị iji banye n’ebe ọrụ gị.', yo: 'Tẹ àlàyé rẹ láti wọ ibi iṣẹ́ rẹ.' },
   'Password': { ha: 'Kalmar Sirri', ig: 'Okwuntughe', yo: 'Ọ̀rọ̀ Aṣínà' },

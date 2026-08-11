@@ -9,11 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
 import { useRef, useState, useEffect, useActionState, useMemo } from "react";
-import { useFormStatus } from 'react-dom';
 import { useToast } from "@/hooks/use-toast";
 import { useDoc } from "@/firebase/firestore/use-doc";
 import { doc } from 'firebase/firestore';
-import { useFirestore, useUser } from "@/firebase";
+import { useFirestore } from "@/firebase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { setNisabAction } from "./actions";
 import { setLogoAction } from "./logo-actions";
@@ -24,6 +23,7 @@ import { useNotification } from "@/components/notification-provider";
 import { setOwnerWithdrawalWindowAction } from './actions';
 import { PlusCircle, Trash2, CalendarRange } from 'lucide-react';
 import { useIdToken } from '@/firebase/auth-token';
+import { LanguageSettingsCard } from '@/components/language-settings-card';
 
 function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoading: boolean }) {
     const authToken = useIdToken();
@@ -390,6 +390,7 @@ export default function SettingsPage() {
                 icon={Settings}
             />
             <div className="space-y-6">
+                <LanguageSettingsCard />
                 <UpdateProfileForm />
                 <NotificationSettingsCard />
                 <CompanyLogoForm />

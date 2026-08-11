@@ -28,7 +28,6 @@ import { RoleSwitcher } from "@/components/role-switcher";
 import { AdminShortcut } from "@/components/admin-shortcut";
 import { clearStoredActivePortal, resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 import { NotificationBell } from "@/components/notification-bell";
-import { LanguageSwitcher } from '@/components/language-switcher';
 
 function LegalSkeleton() {
     return (
@@ -135,7 +134,6 @@ export default function LegalLayout({
               <AdminShortcut currentPortal="legal" />
             </div>
             <RoleSwitcher currentPortal="legal" />
-            <LanguageSwitcher />
             <div className="hidden lg:block">
               <ThemeToggle />
             </div>

@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { normalizeLanguage, translate, type SupportedLanguage, type TranslationKey } from '@/lib/localization';
 import { translateUiText } from '@/lib/ui-translations';
 import { UiLanguageBridge } from '@/components/ui-language-bridge';
+import { useUser } from '@/firebase';
 
 const STORAGE_KEY = 'nal-preferred-language';
 type LanguageContextValue = {
@@ -17,6 +18,7 @@ const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<SupportedLanguage>('en');
+  const { user } = useUser();
   useEffect(() => {
     setLanguageState(normalizeLanguage(window.localStorage.getItem(STORAGE_KEY)));
   }, []);
@@ -25,6 +27,13 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem(STORAGE_KEY, next);
     document.documentElement.lang = next;
   }, []);
+  useEffect(() => {
+    if (!user?.preferredLanguage) return;
+    const savedLanguage = normalizeLanguage(user.preferredLanguage);
+    setLanguageState(savedLanguage);
+    window.localStorage.setItem(STORAGE_KEY, savedLanguage);
+    document.documentElement.lang = savedLanguage;
+  }, [user?.preferredLanguage]);
   useEffect(() => { document.documentElement.lang = language; }, [language]);
   const locale = language === 'en' ? 'en-NG' : `${language}-NG`;
   const value = useMemo(() => ({

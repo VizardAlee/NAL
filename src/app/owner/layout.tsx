@@ -27,7 +27,6 @@ import { RoleSwitcher } from '@/components/role-switcher';
 import { AdminShortcut } from "@/components/admin-shortcut";
 import { clearStoredActivePortal, resolvePreferredPortal, setStoredActivePortal } from '@/lib/active-portal';
 import { NotificationBell } from '@/components/notification-bell';
-import { LanguageSwitcher } from '@/components/language-switcher';
 
 function OwnerSkeleton() {
   return (
@@ -140,7 +139,6 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
           <AdminShortcut currentPortal="owner" />
         </div>
         <RoleSwitcher currentPortal="owner" />
-        <LanguageSwitcher />
         <div className="hidden lg:block">
           <ThemeToggle />
         </div>

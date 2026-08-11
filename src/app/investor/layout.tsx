@@ -31,7 +31,6 @@ import { AdminShortcut } from "@/components/admin-shortcut";
 import { clearStoredActivePortal, resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 import { NotificationBell } from "@/components/notification-bell";
 import { cn } from "@/lib/utils";
-import { LanguageSwitcher } from '@/components/language-switcher';
 import { useLanguage } from '@/components/language-provider';
 import type { TranslationKey } from '@/lib/localization';
 
@@ -244,7 +243,6 @@ export default function InvestorLayout({
                   <AdminShortcut currentPortal="investor" />
                 </div>
                 <RoleSwitcher currentPortal="investor" />
-                <LanguageSwitcher />
                 <div className="hidden lg:block">
                   <ThemeToggle />
                 </div>

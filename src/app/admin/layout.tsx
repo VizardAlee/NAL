@@ -39,7 +39,6 @@ import { canAccessPortal, getDefaultRouteForUser, isReadOnlyOwner } from "@/lib/
 import { RoleSwitcher } from "@/components/role-switcher";
 import { clearStoredActivePortal, resolvePreferredPortal, setStoredActivePortal } from "@/lib/active-portal";
 import { NotificationBell } from "@/components/notification-bell";
-import { LanguageSwitcher } from '@/components/language-switcher';
 
 
 function AdminSkeleton() {
@@ -199,7 +198,6 @@ export default function AdminLayout({
               <DigitalClock />
             </div>
             <RoleSwitcher currentPortal="admin" />
-            <LanguageSwitcher />
             <div className="hidden lg:block">
               <ThemeToggle />
             </div>

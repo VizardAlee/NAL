@@ -1,11 +1,12 @@
 
 
 import { PageHeader } from "@/components/page-header";
-import { Settings, Bell } from "lucide-react";
+import { Settings } from "lucide-react";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { UpdateProfileForm } from "@/components/update-profile-form";
 import { NotificationSettingsCard } from "@/components/notification-provider";
+import { LanguageSettingsCard } from "@/components/language-settings-card";
 
 export default function SettingsPage() {
   return (
@@ -16,6 +17,7 @@ export default function SettingsPage() {
             icon={Settings}
         />
         <div className="space-y-6">
+            <LanguageSettingsCard />
             <UpdateProfileForm />
             <NotificationSettingsCard />
             <Card>
