@@ -21,6 +21,8 @@ test('Wakalah authority is limited to the approved asset and supplier', () => {
   assert.match(clauses[0].body, /500 bags of cement/);
   assert.match(clauses[0].body, /Approved Cement Limited/);
   assert.match(clauses[4].body, /limited strictly to the procurement/);
+  assert.match(clauses[2].body, /where required by the Company/);
+  assert.match(clauses[2].body, /reasonably be requested/);
 });
 
 test('Wakalah agreement generates a real PDF', async () => {

@@ -1,4 +1,4 @@
-export const MURABAHA_AGREEMENT_VERSION = '1.0';
+export const MURABAHA_AGREEMENT_VERSION = '1.1';
 import type { SupportedLanguage } from '@/lib/localization';
 
 export type MurabahaScheduleRow = {
@@ -68,6 +68,16 @@ function money(value: number): string {
   return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 2 }).format(value);
 }
 
+export function murabahaDefaultPeriod(repaymentFrequency: string): string {
+  const periods: Record<string, string> = {
+    daily: 'one (1) calendar day',
+    weekly: 'seven (7) calendar days',
+    fortnightly: 'fourteen (14) calendar days',
+    monthly: 'thirty (30) calendar days',
+  };
+  return periods[repaymentFrequency.trim().toLowerCase()] || 'thirty (30) calendar days';
+}
+
 export function buildMurabahaClauses(model: MurabahaAgreementModel): MurabahaClause[] {
   const { deal, company } = model;
   const paymentDescription = deal.installmentMinimum === deal.installmentMaximum
@@ -97,7 +107,7 @@ export function buildMurabahaClauses(model: MurabahaAgreementModel): MurabahaCla
       title: 'PURCHASE AGENCY AND DELIVERY',
       paragraphs: [
         deal.wakalahGranted
-          ? 'The Customer has been separately appointed as the Company’s disclosed purchasing agent under a Wakalah agreement. The Customer shall purchase only the approved assets from approved suppliers and shall provide invoices, receipts and delivery evidence to the Company.'
+          ? 'The Customer has been separately appointed as the Company’s disclosed purchasing agent under a Wakalah agreement. The Customer shall purchase only the approved assets from approved suppliers and shall, where required by the Company, provide such available invoices, receipts or delivery evidence as the Company may reasonably request.'
           : 'The Customer has not been granted procurement authority under this Agreement. Where the Customer is later appointed as the Company’s disclosed purchasing agent, that appointment must be recorded under a separate Wakalah agreement before the Customer acquires any asset for the Company.',
         'Title to and risk in the assets shall pass to the Customer only after the Company has acquired the assets and completed the Murabaha sale to the Customer. The Company shall disclose the Cost Price and profit before the Customer becomes bound to purchase.',
         'The Customer shall inspect the assets on delivery and promptly notify the Company of any shortage, defect or non-conformity. Nothing in this Agreement excludes any non-excludable right or remedy under applicable Nigerian law.',
@@ -124,7 +134,7 @@ export function buildMurabahaClauses(model: MurabahaAgreementModel): MurabahaCla
       number: 6,
       title: 'DEFAULT AND NOTICE',
       paragraphs: [
-        'A default occurs where the Customer fails to pay an instalment and the failure continues for thirty (30) days after its due date, provides materially false information, unlawfully disposes of or conceals the assets, or commits another material breach of this Agreement.',
+        `A default occurs where the Customer fails to pay an instalment and the failure continues for ${murabahaDefaultPeriod(deal.repaymentFrequency)} after its due date, based on the agreed ${deal.repaymentFrequency.toLowerCase()} repayment frequency; provides materially false information; unlawfully disposes of or conceals the assets; or commits another material breach of this Agreement.`,
         'Before repossession or enforcement, the Company shall, where reasonably practicable, issue a written default notice stating the breach, outstanding amount and a reasonable period to remedy the default, except where urgent action is reasonably necessary to preserve the assets or prevent fraud.',
       ],
     },
@@ -148,7 +158,7 @@ export function buildMurabahaClauses(model: MurabahaAgreementModel): MurabahaCla
     {
       number: 9,
       title: 'CUSTOMER PROCEEDS AND PAYMENT SOURCE',
-      paragraphs: ['The Customer shall make payments from lawful business proceeds and other lawful income sources. The Customer may route agreed business proceeds through the designated payment arrangement where separately documented, but this Agreement shall not be interpreted as an unrestricted assignment of all of the Customer’s business income.'],
+      paragraphs: ['The Customer shall make payments from lawful business proceeds and other lawful income sources. Where separately agreed, the Customer may route specified business proceeds through the Company’s designated payment arrangement. For clarity, this does not give the Company automatic control over, or entitlement to, all of the Customer’s business income.'],
     },
     {
       number: 10,

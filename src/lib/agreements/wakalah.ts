@@ -1,4 +1,4 @@
-export const WAKALAH_AGREEMENT_VERSION = '1.0';
+export const WAKALAH_AGREEMENT_VERSION = '1.1';
 import type { SupportedLanguage } from '@/lib/localization';
 
 export type WakalahAgreementModel = {
@@ -53,7 +53,7 @@ export function buildWakalahClauses(model: WakalahAgreementModel): AgreementClau
     {
       number: 3,
       title: 'PURCHASE DOCUMENTS',
-      body: 'The Customer shall obtain and provide the Company with all available purchase documents, including invoices, receipts, delivery notes, warranty documents and any other evidence confirming that the asset was acquired for and in the name of the Company.',
+      body: 'The Customer shall, where required by the Company, provide such available purchase documents as may reasonably be requested, including invoices, receipts, delivery notes, warranty documents or other evidence relating to the acquisition of the Asset.',
     },
     {
       number: 4,

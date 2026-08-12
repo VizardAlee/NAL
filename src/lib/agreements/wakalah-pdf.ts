@@ -124,7 +124,6 @@ export async function buildWakalahAgreementPdf(model: WakalahAgreementModel, sig
   ensure(stamp ? 350 : 225);
   draw('EXECUTION', { font: bold, size: 11 });
   draw('IN WITNESS WHEREOF, the Parties have executed this Agreement on the date first above written.', { font: italic });
-  if (photo) page.drawImage(photo, { x: A4[0] - margin - 72, y: y - 72, width: 62, height: 72 });
   draw('SIGNED FOR AND ON BEHALF OF NAL GENERAL MERCHANT LTD.', { font: bold });
   drawSignature('NAL_SIGNATORY_1', 'Authorised Signatory 1\nSignature: ________________________    Date: ____________________');
   drawSignature('NAL_SIGNATORY_2', 'Authorised Signatory 2\nSignature: ________________________    Date: ____________________');
@@ -134,11 +133,13 @@ export async function buildWakalahAgreementPdf(model: WakalahAgreementModel, sig
     page.drawImage(stamp, { x: margin, y: y - 120, width: 180, height: 120 });
     y -= 130;
   }
+  ensure(150);
   draw('SIGNED BY THE CUSTOMER', { font: bold });
+  if (photo) page.drawImage(photo, { x: A4[0] - margin - 72, y: y - 72, width: 62, height: 72 });
   draw(`Name: ${model.client.name.toUpperCase()}\nCapacity: Customer / Wakil`, { gap: 1 });
   drawSignature('CLIENT', 'Signature: ________________________    Date: ____________________');
   draw('IN THE PRESENCE OF A WITNESS', { font: bold });
-  drawSignature('WITNESS', 'Name: ______________________________\nPhone Number: _______________________\nSignature: __________________________    Date: ____________________');
+  drawSignature('WITNESS', 'Name: ______________________________\nPhone Number: _______________________\nAddress: ____________________________\nOccupation: _________________________\nSignature: __________________________    Date: ____________________');
 
   if (verification && verificationQr) {
     ensure(108);
