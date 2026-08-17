@@ -27,6 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { generateAmortizationSchedule } from "@/lib/amortization";
 import { repaymentAmountForInstallment } from '@/lib/repayment-allocation';
 import { RepaymentMilestoneGauge } from "@/components/deals/repayment-milestone-gauge";
+import { ConsolidatedActiveDealsReport } from '@/components/deals/consolidated-active-deals-report';
 import { selectClientDashboardDeal } from '@/lib/client-dashboard-deal';
 import { useLanguage } from '@/components/language-provider';
 import {
@@ -212,7 +213,15 @@ function ContactAdminSheet() {
     );
 }
 
-function DealCard({ deal }: { deal: Deal }) {
+function DealCard({
+    deal,
+    suppliedRepayments,
+    suppliedRepaymentsLoading,
+}: {
+    deal: Deal;
+    suppliedRepayments?: Repayment[] | null;
+    suppliedRepaymentsLoading?: boolean;
+}) {
     const firestore = useFirestore();
     const auth = useAuth();
     const { user } = useUser();
@@ -221,13 +230,15 @@ function DealCard({ deal }: { deal: Deal }) {
     const { locale } = useLanguage();
 
     const repaymentsQuery = useMemo(() => {
-        if (!firestore || !user?.uid || !deal?.id) return null;
+        if (suppliedRepayments !== undefined || !firestore || !user?.uid || !deal?.id) return null;
         return query(collection(firestore, 'repayments'), where('clientId', '==', user.uid), where('dealId', '==', deal.id));
-    }, [firestore, user?.uid, deal?.id]);
+    }, [firestore, user?.uid, deal?.id, suppliedRepayments]);
 
-    const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(
+    const { data: queriedRepayments, loading: queriedRepaymentsLoading } = useCollection<Repayment>(
         repaymentsQuery as any
     );
+    const repayments = suppliedRepayments !== undefined ? suppliedRepayments : queriedRepayments;
+    const repaymentsLoading = suppliedRepaymentsLoading ?? queriedRepaymentsLoading;
 
     const lodgedRepayments = useMemo(() => {
         if (!repayments) return [];
@@ -456,6 +467,10 @@ export default function ClientDashboard() {
     }, [user, userProfile]);
 
     const dashboardDeal = useMemo(() => selectClientDashboardDeal(deals), [deals]);
+    const activeDeals = useMemo(
+        () => (deals || []).filter((deal) => deal.status === 'Active'),
+        [deals]
+    );
 
     const dashboardMetrics = useMemo<{
         activePrincipal: number;
@@ -667,6 +682,12 @@ export default function ClientDashboard() {
                     </Card>
                 </div>
 
+                <ConsolidatedActiveDealsReport
+                    deals={activeDeals}
+                    repayments={repayments || []}
+                    locale={locale}
+                />
+
                 {pendingRequests.length > 0 && (
                     <Alert>
                         <History className="h-4 w-4" />
@@ -722,8 +743,35 @@ export default function ClientDashboard() {
                     </Card>
                 )}
 
-                {dashboardDeal ? (
-                    <DealCard deal={dashboardDeal} />
+                {activeDeals.length > 0 ? (
+                    <section className="space-y-6">
+                        <div>
+                            <h2 className="font-headline text-2xl font-bold">Ongoing deals</h2>
+                            <p className="text-sm text-muted-foreground">
+                                Milestones, upcoming schedules, and repayment history for every active deal.
+                            </p>
+                        </div>
+                        {activeDeals.map((deal) => (
+                            <DealCard
+                                key={deal.id}
+                                deal={deal}
+                                suppliedRepayments={(repayments || []).filter((repayment) => repayment.dealId === deal.id)}
+                                suppliedRepaymentsLoading={repaymentsLoading}
+                            />
+                        ))}
+                    </section>
+                ) : dashboardDeal ? (
+                    <section className="space-y-3">
+                        <div>
+                            <h2 className="font-headline text-2xl font-bold">Most recent deal</h2>
+                            <p className="text-sm text-muted-foreground">There are currently no ongoing deals.</p>
+                        </div>
+                        <DealCard
+                            deal={dashboardDeal}
+                            suppliedRepayments={(repayments || []).filter((repayment) => repayment.dealId === dashboardDeal.id)}
+                            suppliedRepaymentsLoading={repaymentsLoading}
+                        />
+                    </section>
                 ) : (
                     <Card className="mt-6 border-dashed">
                         <CardContent className="p-12 text-center">

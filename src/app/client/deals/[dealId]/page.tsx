@@ -25,6 +25,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { RepaymentPlanChangeDialog } from '@/components/deals/repayment-plan-change-dialog';
 import { PrintableDealStatement } from '@/components/deals/printable-deal-statement';
+import { RepaymentMilestoneGauge } from '@/components/deals/repayment-milestone-gauge';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -267,6 +268,15 @@ export default function ClientDealDetailPage() {
                     </Card>
                 )}
             </div>
+            {(deal.status === 'Active' || deal.status === 'Completed') && (
+                <div className="mt-8">
+                    <RepaymentMilestoneGauge
+                        deal={deal}
+                        repayments={repayments}
+                        loading={repaymentsLoading}
+                    />
+                </div>
+            )}
             <div className="mt-8">
                  <Tabs defaultValue="schedule" className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
