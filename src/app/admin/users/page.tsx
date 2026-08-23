@@ -43,6 +43,9 @@ type User = DocumentData & {
   accessRole?: 'OWNER' | 'ADMIN' | 'STAFF' | 'USER';
   personas?: ('INVESTOR' | 'CLIENT' | 'LEGAL' | 'RECOVERY' | 'MARKETER' | 'STAFF_MEMBER')[];
   primaryPortal?: 'owner' | 'admin' | 'investor' | 'client' | 'legal' | 'recovery' | 'marketer';
+  accountType?: 'Individual' | 'Organization';
+  representativeName?: string;
+  organizationRegistrationNumber?: string;
 };
 
 function UsersTable({ users, loading }: { users: User[] | null, loading: boolean }) {
@@ -89,6 +92,7 @@ function UsersTable({ users, loading }: { users: User[] | null, loading: boolean
                     {normalizeAccessModel(user).accessRole}
                   </Badge>
                   <Badge variant="outline">{user.role}</Badge>
+                  <Badge variant="outline">{user.accountType || 'Individual'}</Badge>
                   {(normalizeAccessModel(user).personas || []).map((persona) => (
                     <Badge key={`${user.id}-${persona}`} variant="outline">{persona}</Badge>
                   ))}
@@ -131,6 +135,7 @@ function UsersTable({ users, loading }: { users: User[] | null, loading: boolean
                     {normalizeAccessModel(user).accessRole}
                   </Badge>
                   <Badge variant="outline">{user.role}</Badge>
+                  <Badge variant="outline">{user.accountType || 'Individual'}</Badge>
                   {(normalizeAccessModel(user).personas || []).map((persona) => (
                     <Badge key={`${user.id}-${persona}`} variant="outline">{persona}</Badge>
                   ))}
@@ -171,6 +176,9 @@ export default function UsersPage() {
         u.name,
         u.email,
         u.role,
+        u.accountType,
+        u.representativeName,
+        u.organizationRegistrationNumber,
         model.accessRole,
         model.primaryPortal,
         ...(model.personas || []),

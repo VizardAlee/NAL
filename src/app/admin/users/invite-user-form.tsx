@@ -38,6 +38,7 @@ const formSchema = z
     accessRole: z.enum(['OWNER', 'ADMIN', 'STAFF', 'USER']),
     personas: z.array(z.enum(['INVESTOR', 'CLIENT', 'LEGAL', 'RECOVERY', 'MARKETER', 'STAFF_MEMBER'])).default([]),
     primaryPortal: z.enum(['owner', 'admin', 'investor', 'client', 'legal', 'recovery', 'marketer']),
+    accountType: z.enum(['Individual', 'Organization']),
     isMuslim: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
@@ -76,6 +77,7 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
       personas: ['INVESTOR'],
       primaryPortal: 'investor',
       isMuslim: undefined,
+      accountType: 'Individual',
     },
   });
 
@@ -115,6 +117,7 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
         accessRole,
         personas,
         primaryPortal,
+        accountType: values.accountType,
         isMuslim: personas.includes('INVESTOR') ? values.isMuslim : undefined,
         inviterId: user.uid,
         inviterName,
@@ -284,6 +287,26 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
               )}
             />
           )}
+          <FormField
+            control={form.control}
+            name="accountType"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Contracting party</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    <SelectItem value="Individual">Individual</SelectItem>
+                    <SelectItem value="Organization">Organization / Business</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  Applies to Client and Investor personas. An organization remains the legal party; its representative receives access and signs on its behalf.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
           <FormField
             control={form.control}
             name="primaryPortal"

@@ -11,6 +11,7 @@ import {
   nairaAmountInWords,
   type MudarabaAgreementModel,
 } from '@/lib/agreements/mudaraba';
+import { legalPartyFromProfile, legalPartyMissingFields } from '@/lib/legal-party';
 
 const requestSchema = z.object({ authToken: z.string().min(1) });
 const agreementRequestSchema = requestSchema.extend({ batchId: z.string().min(1) });
@@ -71,10 +72,8 @@ async function createAgreementModel(
     bankName: String(companyBank.bankName || ''),
   };
 
-  const missingFields: string[] = [];
-  if (!profile.name) missingFields.push('full name');
-  if (!profile.address) missingFields.push('residential address');
-  if (!profile.photoURL) missingFields.push('profile photograph');
+  const investor = legalPartyFromProfile(profile);
+  const missingFields: string[] = legalPartyMissingFields(profile, 'investor');
   if (!investorAccount.accountName) missingFields.push('verified account name');
   if (!investorAccount.accountNumber) missingFields.push('verified account number');
   if (!investorAccount.bankName) missingFields.push('verified bank name');
@@ -100,11 +99,7 @@ async function createAgreementModel(
     maturityDate: calculateMaturityDate(agreementDate, tenureValue, tenureUnit).toISOString(),
     investor: {
       id: userId,
-      name: String(profile.name || ''),
-      address: String(profile.address || ''),
-      email: String(profile.email || ''),
-      phoneNumber: String(profile.phoneNumber || ''),
-      ...(profile.photoURL ? { photoURL: String(profile.photoURL) } : {}),
+      ...investor,
       ...(typeof profile.isMuslim === 'boolean' ? { isMuslim: profile.isMuslim } : {}),
       account: investorAccount,
     },

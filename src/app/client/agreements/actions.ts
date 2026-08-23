@@ -9,6 +9,7 @@ import { MURABAHA_AGREEMENT_VERSION, type MurabahaAgreementModel } from '@/lib/a
 import { generateAmortizationSchedule } from '@/lib/amortization';
 import type { Deal } from '@/lib/types';
 import { normalizeLanguage } from '@/lib/localization';
+import { legalPartyFromProfile, legalPartyMissingFields } from '@/lib/legal-party';
 
 const requestSchema = z.object({ authToken: z.string().min(1) });
 const agreementSchema = requestSchema.extend({ dealId: z.string().min(1) });
@@ -35,10 +36,8 @@ async function createModel(userId: string, snapshot: FirebaseFirestore.DocumentS
   const profile = profileSnapshot.data() || {};
   const assetDescription = String(deal.wakalahAssetDescription || '');
   const supplierName = String(deal.wakalahSupplierName || '');
-  const missingFields: string[] = [];
-  if (!profile.name) missingFields.push('full name');
-  if (!profile.address) missingFields.push('residential address');
-  if (!profile.photoURL) missingFields.push('profile photograph');
+  const client = legalPartyFromProfile(profile, String(deal.clientName || ''));
+  const missingFields: string[] = legalPartyMissingFields(profile, 'client');
   if (!assetDescription) missingFields.push('approved asset description');
   if (!supplierName) missingFields.push('approved supplier');
   if (!Number.isFinite(Number(deal.principal)) || Number(deal.principal) <= 0) missingFields.push('procurement amount');
@@ -50,14 +49,7 @@ async function createModel(userId: string, snapshot: FirebaseFirestore.DocumentS
     agreementId: `NAL-WAK-${snapshot.id.toUpperCase()}`,
     dealId: snapshot.id,
     agreementDate: toDate(deal.wakalahAgreementDate || deal.startDate || deal.createdAt).toISOString(),
-    client: {
-      id: userId,
-      name: String(profile.name || deal.clientName || ''),
-      address: String(profile.address || ''),
-      email: String(profile.email || ''),
-      phoneNumber: String(profile.phoneNumber || ''),
-      ...(profile.photoURL ? { photoURL: String(profile.photoURL) } : {}),
-    },
+    client: { id: userId, ...client },
     company: {
       name: 'NAL GENERAL MERCHANT LTD',
       rcNumber: '9374407',
@@ -83,9 +75,8 @@ async function createKafaalahModel(userId: string, snapshot: FirebaseFirestore.D
   const profileSnapshot = await adminDb.collection('users').doc(userId).get();
   if (!profileSnapshot.exists) throw new Error('Client profile not found.');
   const profile = profileSnapshot.data() || {};
-  const missingFields: string[] = [];
-  if (!profile.name) missingFields.push('client full name');
-  if (!profile.address) missingFields.push('client residential address');
+  const client = legalPartyFromProfile(profile, String(deal.clientName || ''));
+  const missingFields: string[] = legalPartyMissingFields(profile, 'client');
   if (!deal.guarantorName) missingFields.push('guarantor full name');
   if (!deal.guarantorAddress) missingFields.push('guarantor residential address');
   if (!deal.guarantorPhoneNumber) missingFields.push('guarantor phone number');
@@ -109,7 +100,7 @@ async function createKafaalahModel(userId: string, snapshot: FirebaseFirestore.D
       address: 'Block 03, Shop No. 02A/03A, Civic Center Ultra Modern Market, Civic Center Road, Kano State',
       email: 'info@nalgm.com', website: 'nalgm.com', phoneNumbers: '+234(0)8032869067, +234(0)8032056880',
     },
-    client: { id: userId, name: String(profile.name || deal.clientName || ''), address: String(profile.address || '') },
+    client: { id: userId, ...client },
     guarantor: {
       name: String(deal.guarantorName || ''), address: String(deal.guarantorAddress || ''),
       phoneNumber: String(deal.guarantorPhoneNumber || ''), occupation: String(deal.guarantorOccupation || ''),
@@ -146,10 +137,8 @@ async function createMurabahaModel(userId: string, snapshot: FirebaseFirestore.D
   });
   const payments = schedule.map((installment) => installment.payment);
   const assetDescription = String(deal.wakalahAssetDescription || deal.dealName || '');
-  const missingFields: string[] = [];
-  if (!profile.name) missingFields.push('client full name');
-  if (!profile.address) missingFields.push('client residential address');
-  if (!profile.photoURL) missingFields.push('client passport photograph');
+  const client = legalPartyFromProfile(profile, String(deal.clientName || ''));
+  const missingFields: string[] = legalPartyMissingFields(profile, 'client');
   if (!assetDescription) missingFields.push('approved asset description');
   if (!deal.guarantorName) missingFields.push('guarantor full name');
   if (!deal.guarantorAddress) missingFields.push('guarantor residential address');
@@ -164,14 +153,7 @@ async function createMurabahaModel(userId: string, snapshot: FirebaseFirestore.D
     agreementId: `NAL-MUR-${snapshot.id.toUpperCase()}`,
     dealId: snapshot.id,
     agreementDate: toDate(deal.startDate || deal.createdAt).toISOString(),
-    client: {
-      id: userId,
-      name: String(profile.name || deal.clientName || ''),
-      address: String(profile.address || ''),
-      email: String(profile.email || ''),
-      phoneNumber: String(profile.phoneNumber || ''),
-      ...(profile.photoURL ? { photoURL: String(profile.photoURL) } : {}),
-    },
+    client: { id: userId, ...client },
     guarantor: {
       name: String(deal.guarantorName || ''),
       address: String(deal.guarantorAddress || ''),

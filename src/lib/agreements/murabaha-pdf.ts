@@ -4,6 +4,7 @@ import { buildMurabahaClauses, type MurabahaAgreementModel } from './murabaha';
 import type { AgreementSignerRole, AgreementSigningState } from './signing';
 import { buildAgreementVerificationQr } from './verification-qr';
 import { LANGUAGE_NAMES, normalizeLanguage } from '@/lib/localization';
+import { legalPartyIntroduction, legalPartySignerCapacity, legalPartySignerName } from '@/lib/legal-party';
 
 const A4: [number, number] = [595.28, 841.89];
 const GREEN = rgb(0.027, 0.353, 0.235);
@@ -126,7 +127,7 @@ export async function buildMurabahaAgreementPdf(model: MurabahaAgreementModel, s
   draw(`THIS MURABAHA SALES CONTRACT AGREEMENT (the “Agreement”) is made on ${formatAgreementDate(model.agreementDate)} between:`, { font: bold });
   draw('PARTIES', { font: bold, size: 10 });
   draw(`${model.company.name}, RC No. ${model.company.rcNumber}, of ${model.company.address} (the “Company” or “Seller”); and`);
-  draw(`${model.client.name.toUpperCase()}, of ${model.client.address} (the “Customer” or “Buyer”).`);
+  draw(`${legalPartyIntroduction(model.client, 'Customer')}, also referred to as the “Buyer”.`);
   draw('The Company and the Customer are collectively referred to as the “Parties”.');
   draw('RECITALS', { font: bold, size: 10 });
   draw(`A. The Customer has requested the Company to purchase ${model.deal.assetDescription} and resell the assets to the Customer on a disclosed cost-plus-profit basis.`);
@@ -152,9 +153,9 @@ export async function buildMurabahaAgreementPdf(model: MurabahaAgreementModel, s
     y -= 124;
   }
   ensure(150);
-  draw('SIGNED BY THE CUSTOMER', { font: bold });
+  draw(model.client.accountType === 'Organization' ? `SIGNED FOR AND ON BEHALF OF ${model.client.name.toUpperCase()}` : 'SIGNED BY THE CUSTOMER', { font: bold });
   if (photo) page.drawImage(photo, { x: A4[0] - margin - 65, y: y - 72, width: 58, height: 70 });
-  draw(`Name: ${model.client.name.toUpperCase()}\nAddress: ${model.client.address}`, { gap: 1 });
+  draw(`Name: ${legalPartySignerName(model.client).toUpperCase()}\nCapacity: ${legalPartySignerCapacity(model.client, 'Customer / Buyer')}\nAddress: ${model.client.address}`, { gap: 1 });
   drawSignature('CLIENT', 'Signature: __________________________    Date: ____________________');
   draw('IN THE PRESENCE OF A WITNESS', { font: bold });
   drawSignature('WITNESS', 'Name: ______________________________\nAddress: ____________________________\nPhone No.: __________________________\nOccupation: _________________________\nSignature: __________________________    Date: ____________________');

@@ -25,12 +25,35 @@ import { getInviteDetailsAction, signUpWithEmailAction } from './actions';
 import { useCompanyLogo } from '@/components/company-logo-provider';
 
 const formSchema = z.object({
-  name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
+  name: z.string().optional().default(''),
+  accountType: z.enum(['Individual', 'Organization']),
+  organizationName: z.string().optional(),
+  organizationRegistrationNumber: z.string().optional(),
+  organizationAddress: z.string().optional(),
+  representativeName: z.string().optional(),
+  representativeTitle: z.string().optional(),
+  representativePhoneNumber: z.string().optional(),
+  representativeIdType: z.string().optional(),
+  representativeIdNumber: z.string().optional(),
   email: z.string().email({ message: 'Please enter a valid email address.' }),
   password: z.string().min(8, { message: 'Password must be at least 8 characters.' }),
   phoneNumber: z.string().optional(),
   inviteToken: z.string().min(20, { message: 'Invalid invite token.' }),
   referralCode: z.string().optional(),
+}).superRefine((data, ctx) => {
+  const require = (field: keyof typeof data, value: string | undefined, message: string) => {
+    if (!value?.trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message });
+  };
+  if (data.accountType === 'Organization') {
+    require('organizationName', data.organizationName, 'Organization name is required.');
+    require('organizationRegistrationNumber', data.organizationRegistrationNumber, 'Registration number is required.');
+    require('organizationAddress', data.organizationAddress, 'Registered address is required.');
+    require('representativeName', data.representativeName, 'Representative name is required.');
+    require('representativeTitle', data.representativeTitle, 'Representative capacity is required.');
+    require('representativePhoneNumber', data.representativePhoneNumber, 'Representative phone is required.');
+    require('representativeIdType', data.representativeIdType, 'Identity type is required.');
+    require('representativeIdNumber', data.representativeIdNumber, 'Identity number is required.');
+  } else require('name', data.name, 'Full name is required.');
 });
 
 type InviteState = {
@@ -42,6 +65,7 @@ type InviteState = {
   personas?: string[];
   primaryPortal?: string;
   isMuslim?: boolean;
+  accountType?: 'Individual' | 'Organization';
   message?: string;
 };
 
@@ -63,6 +87,10 @@ function SignupPageContent() {
       phoneNumber: '',
       inviteToken: inviteToken,
       referralCode: '',
+      accountType: 'Individual',
+      organizationName: '', organizationRegistrationNumber: '', organizationAddress: '',
+      representativeName: '', representativeTitle: '', representativePhoneNumber: '',
+      representativeIdType: '', representativeIdNumber: '',
     },
   });
 
@@ -87,9 +115,11 @@ function SignupPageContent() {
           personas: result.personas,
           primaryPortal: result.primaryPortal,
           isMuslim: result.isMuslim,
+          accountType: result.accountType,
         });
         form.setValue('email', result.email || '');
         form.setValue('inviteToken', inviteToken);
+        form.setValue('accountType', result.accountType || 'Individual');
       } else {
         setInviteState({ loading: false, valid: false, message: result.message || 'Invalid invite.' });
       }
@@ -155,7 +185,20 @@ function SignupPageContent() {
                     onSubmit={form.handleSubmit(onSubmit)}
                     className="space-y-4"
                 >
-                    <FormField
+                    <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                      Contracting party: <strong>{inviteState.accountType || 'Individual'}</strong>
+                    </div>
+                    {inviteState.accountType === 'Organization' ? <>
+                    <FormField control={form.control} name="organizationName" render={({ field }) => <FormItem><FormLabel>Registered Organization Name</FormLabel><FormControl><Input placeholder="Kamal Babbangari General Enterprise" {...field} /></FormControl><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name="organizationRegistrationNumber" render={({ field }) => <FormItem><FormLabel>Registration Number</FormLabel><FormControl><Input placeholder="RC or BN number" {...field} /></FormControl><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name="organizationAddress" render={({ field }) => <FormItem><FormLabel>Registered Business Address</FormLabel><FormControl><Input placeholder="Registered office address" {...field} /></FormControl><FormMessage /></FormItem>} />
+                    <div className="border-t pt-4"><p className="font-medium">Authorised representative</p><p className="text-sm text-muted-foreground">This person will access the account and sign agreements for the organization.</p></div>
+                    <FormField control={form.control} name="representativeName" render={({ field }) => <FormItem><FormLabel>Representative Full Legal Name</FormLabel><FormControl><Input placeholder="Full legal name" {...field} /></FormControl><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name="representativeTitle" render={({ field }) => <FormItem><FormLabel>Capacity / Title</FormLabel><FormControl><Input placeholder="Director, Proprietor, Partner, Trustee…" {...field} /></FormControl><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name="representativePhoneNumber" render={({ field }) => <FormItem><FormLabel>Representative Phone Number</FormLabel><FormControl><Input placeholder="+2348012345678" {...field} /></FormControl><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name="representativeIdType" render={({ field }) => <FormItem><FormLabel>Identity Document Type</FormLabel><FormControl><Input placeholder="NIN, passport, driver's licence…" {...field} /></FormControl><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name="representativeIdNumber" render={({ field }) => <FormItem><FormLabel>Identity Document Number</FormLabel><FormControl><Input placeholder="Document number" {...field} /></FormControl><FormMessage /></FormItem>} />
+                    </> : <FormField
                         control={form.control}
                         name="name"
                         render={({ field }) => (
@@ -167,7 +210,7 @@ function SignupPageContent() {
                             <FormMessage />
                             </FormItem>
                         )}
-                    />
+                    />}
                     <FormField
                         control={form.control}
                         name="email"
@@ -194,7 +237,7 @@ function SignupPageContent() {
                             </FormItem>
                         )}
                     />
-                     <FormField
+                     {inviteState.accountType !== 'Organization' && <FormField
                         control={form.control}
                         name="phoneNumber"
                         render={({ field }) => (
@@ -206,7 +249,8 @@ function SignupPageContent() {
                             <FormMessage />
                             </FormItem>
                         )}
-                    />
+                    />}
+                    <input type="hidden" {...form.register('accountType')} />
                     <FormField
                         control={form.control}
                         name="password"

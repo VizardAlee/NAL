@@ -58,6 +58,16 @@ type UserProfile = DocumentData & {
     personas?: ('INVESTOR' | 'CLIENT' | 'LEGAL' | 'RECOVERY' | 'MARKETER' | 'STAFF_MEMBER')[];
     primaryPortal?: 'owner' | 'admin' | 'investor' | 'client' | 'legal' | 'recovery' | 'marketer';
     isMuslim?: boolean;
+    accountType?: 'Individual' | 'Organization';
+    organizationName?: string;
+    organizationRegistrationNumber?: string;
+    organizationAddress?: string;
+    representativeName?: string;
+    representativeTitle?: string;
+    representativePhoneNumber?: string;
+    representativeEmail?: string;
+    representativeIdType?: string;
+    representativeIdNumber?: string;
 };
 
 type FundBatch = DocumentData & {
@@ -437,6 +447,7 @@ export default function UserDetailPage() {
                                 <div className='flex gap-2 items-center mt-1'>
                                     <Badge variant="secondary">{targetAccess.accessRole}</Badge>
                                     <Badge variant="outline">{userProfile.role}</Badge>
+                                    <Badge variant="outline">{userProfile.accountType || 'Individual'}</Badge>
                                     {targetAccess.personas.map((persona) => (
                                         <Badge key={`${userProfile.id}-${persona}`} variant="outline">{persona}</Badge>
                                     ))}
@@ -460,6 +471,20 @@ export default function UserDetailPage() {
                             </div>
                         </CardHeader>
                     </Card>
+
+                    {userProfile.accountType === 'Organization' && (
+                        <Card>
+                            <CardHeader><CardTitle className="text-base">Legal entity & authorised representative</CardTitle></CardHeader>
+                            <CardContent className="space-y-3 text-sm">
+                                <div><p className="text-muted-foreground">Registered organization</p><p className="font-medium">{userProfile.organizationName || userProfile.name}</p></div>
+                                <div><p className="text-muted-foreground">Registration number</p><p className="font-medium">{userProfile.organizationRegistrationNumber || 'Not recorded'}</p></div>
+                                <div><p className="text-muted-foreground">Registered address</p><p className="font-medium">{userProfile.organizationAddress || 'Not recorded'}</p></div>
+                                <div className="border-t pt-3"><p className="text-muted-foreground">Authorised representative</p><p className="font-medium">{userProfile.representativeName || 'Not recorded'}</p><p>{userProfile.representativeTitle || 'Capacity not recorded'}</p></div>
+                                <div><p className="text-muted-foreground">Representative contact</p><p>{userProfile.representativeEmail || userProfile.email}</p><p>{userProfile.representativePhoneNumber || userProfile.phoneNumber || 'Phone not recorded'}</p></div>
+                                <div><p className="text-muted-foreground">Identity credential</p><p>{userProfile.representativeIdType || 'Type not recorded'} · {userProfile.representativeIdNumber || 'Number not recorded'}</p></div>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {(hasInvestorPersona || hasClientPersona || hasMarketerPersona) && (
                         <Card>

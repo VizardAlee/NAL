@@ -83,6 +83,16 @@ export type User = AuthUser & DocumentData & {
     personas?: Persona[];
     primaryPortal?: PrimaryPortal;
     isMuslim?: boolean;
+    accountType?: 'Individual' | 'Organization';
+    organizationName?: string;
+    organizationRegistrationNumber?: string;
+    organizationAddress?: string;
+    representativeName?: string;
+    representativeTitle?: string;
+    representativePhoneNumber?: string;
+    representativeEmail?: string;
+    representativeIdType?: string;
+    representativeIdNumber?: string;
     referralCode?: string;
     rating?: number;
     photoURL?: string;

@@ -1,5 +1,6 @@
-export const MURABAHA_AGREEMENT_VERSION = '1.1';
+export const MURABAHA_AGREEMENT_VERSION = '1.2';
 import type { SupportedLanguage } from '@/lib/localization';
+import type { LegalParty } from '@/lib/legal-party';
 
 export type MurabahaScheduleRow = {
   installment: number;
@@ -18,13 +19,8 @@ export type MurabahaAgreementModel = {
   agreementId: string;
   dealId: string;
   agreementDate: string;
-  client: {
+  client: LegalParty & {
     id: string;
-    name: string;
-    address: string;
-    email: string;
-    phoneNumber: string;
-    photoURL?: string;
   };
   guarantor: {
     name: string;

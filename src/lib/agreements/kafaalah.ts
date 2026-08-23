@@ -1,5 +1,6 @@
-export const KAFAALAH_BOND_VERSION = '1.0';
+export const KAFAALAH_BOND_VERSION = '1.1';
 import type { SupportedLanguage } from '@/lib/localization';
+import type { LegalParty } from '@/lib/legal-party';
 
 export type KafaalahBondModel = {
   type: 'KAFAALAH_GUARANTEE';
@@ -10,7 +11,7 @@ export type KafaalahBondModel = {
   bondDate: string;
   principalAgreementDate: string;
   company: { name: string; rcNumber: string; address: string; email: string; website: string; phoneNumbers: string };
-  client: { id: string; name: string; address: string };
+  client: LegalParty & { id: string };
   guarantor: { name: string; address: string; phoneNumber: string; occupation: string; photoURL?: string };
   deal: { name: string; principal: number; profitRate: number; financingMode: 'Murabaha' | 'Ijara' | 'Mudaraba' };
   missingFields: string[];

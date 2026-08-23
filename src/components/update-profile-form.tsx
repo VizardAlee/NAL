@@ -25,6 +25,7 @@ import { Skeleton } from './ui/skeleton';
 import { ProfilePhotoUploader } from './profile-photo-uploader';
 
 const profileSchema = z.object({
+  accountType: z.enum(['Individual', 'Organization']),
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email(),
   phoneNumber: z.string().optional(),
@@ -32,6 +33,24 @@ const profileSchema = z.object({
   bankName: z.string().trim().refine((value) => !value || value.length >= 2, { message: 'Enter a valid bank name.' }),
   bankAccountName: z.string().trim().refine((value) => !value || value.length >= 2, { message: 'Enter a valid account name.' }),
   bankAccountNumber: z.string().trim().refine((value) => !value || /^\d{10}$/.test(value), { message: 'Account number must contain exactly 10 digits.' }),
+  organizationRegistrationNumber: z.string().optional(),
+  representativeName: z.string().optional(),
+  representativeTitle: z.string().optional(),
+  representativeIdType: z.string().optional(),
+  representativeIdNumber: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.accountType !== 'Organization') return;
+  const required: Array<[keyof typeof data, string | undefined, string]> = [
+    ['organizationRegistrationNumber', data.organizationRegistrationNumber, 'Registration number is required.'],
+    ['representativeName', data.representativeName, 'Representative name is required.'],
+    ['representativeTitle', data.representativeTitle, 'Representative capacity is required.'],
+    ['phoneNumber', data.phoneNumber, 'Representative phone number is required.'],
+    ['representativeIdType', data.representativeIdType, 'Identity type is required.'],
+    ['representativeIdNumber', data.representativeIdNumber, 'Identity number is required.'],
+  ];
+  required.forEach(([path, value, message]) => {
+    if (!value?.trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+  });
 });
 
 type ProfileData = z.infer<typeof profileSchema>;
@@ -47,6 +66,7 @@ export function UpdateProfileForm() {
   const form = useForm<ProfileData>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
+      accountType: 'Individual',
       name: '',
       email: '',
       phoneNumber: '',
@@ -54,6 +74,8 @@ export function UpdateProfileForm() {
       bankName: '',
       bankAccountName: '',
       bankAccountNumber: '',
+      organizationRegistrationNumber: '', representativeName: '', representativeTitle: '',
+      representativeIdType: '', representativeIdNumber: '',
     },
   });
 
@@ -62,6 +84,7 @@ export function UpdateProfileForm() {
       if (user) {
         setIsFetching(true);
         form.reset({
+          accountType: user.accountType === 'Organization' ? 'Organization' : 'Individual',
           name: user.name || user.displayName || '',
           email: user.email || '',
           phoneNumber: user.phoneNumber || '',
@@ -69,6 +92,11 @@ export function UpdateProfileForm() {
           bankName: user.bankName || '',
           bankAccountName: user.bankAccountName || '',
           bankAccountNumber: user.bankAccountNumber || '',
+          organizationRegistrationNumber: user.organizationRegistrationNumber || '',
+          representativeName: user.representativeName || '',
+          representativeTitle: user.representativeTitle || '',
+          representativeIdType: user.representativeIdType || '',
+          representativeIdNumber: user.representativeIdNumber || '',
         });
         setIsFetching(false);
       }
@@ -84,6 +112,7 @@ export function UpdateProfileForm() {
     
     startTransition(async () => {
       try {
+        const organization = values.accountType === 'Organization';
         await updateDoc(doc(firestore, 'users', user.uid), {
           name: values.name,
           phoneNumber: values.phoneNumber || '',
@@ -91,6 +120,16 @@ export function UpdateProfileForm() {
           bankName: values.bankName,
           bankAccountName: values.bankAccountName,
           bankAccountNumber: values.bankAccountNumber,
+          ...(organization ? {
+            organizationName: values.name,
+            organizationRegistrationNumber: values.organizationRegistrationNumber?.trim() || '',
+            organizationAddress: values.address,
+            representativeName: values.representativeName?.trim() || '',
+            representativeTitle: values.representativeTitle?.trim() || '',
+            representativePhoneNumber: values.phoneNumber || '',
+            representativeIdType: values.representativeIdType?.trim() || '',
+            representativeIdNumber: values.representativeIdNumber?.trim() || '',
+          } : {}),
         });
         await updateProfile(auth.currentUser!, { displayName: values.name });
             toast({
@@ -110,8 +149,8 @@ export function UpdateProfileForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Personal Information</CardTitle>
-        <CardDescription>Keep your identity and verified payment account current for agreements and withdrawals.</CardDescription>
+        <CardTitle>{user?.accountType === 'Organization' ? 'Organization & Representative' : 'Personal Information'}</CardTitle>
+        <CardDescription>Keep the contracting party, authorised signer and verified payment account current for agreements and withdrawals.</CardDescription>
       </CardHeader>
       <CardContent>
         {isFetching ? (
@@ -130,7 +169,7 @@ export function UpdateProfileForm() {
                 name="name"
                 render={({ field }) => (
                     <FormItem>
-                    <FormLabel>Full Name</FormLabel>
+                    <FormLabel>{form.watch('accountType') === 'Organization' ? 'Registered Organization Name' : 'Full Name'}</FormLabel>
                     <FormControl>
                         <Input {...field} />
                     </FormControl>
@@ -143,12 +182,20 @@ export function UpdateProfileForm() {
                 name="address"
                 render={({ field }) => (
                     <FormItem>
-                    <FormLabel>Residential Address</FormLabel>
-                    <FormControl><Input placeholder="Your full residential address" {...field} /></FormControl>
+                    <FormLabel>{form.watch('accountType') === 'Organization' ? 'Registered Business Address' : 'Residential Address'}</FormLabel>
+                    <FormControl><Input placeholder={form.watch('accountType') === 'Organization' ? 'Registered office address' : 'Your full residential address'} {...field} /></FormControl>
                     <FormMessage />
                     </FormItem>
                 )}
                 />
+                {form.watch('accountType') === 'Organization' && <div className="space-y-4 rounded-lg border p-4">
+                  <div><p className="font-medium">Authorised representative</p><p className="text-sm text-muted-foreground">This individual accesses the account and signs on behalf of the organization.</p></div>
+                  <FormField control={form.control} name="organizationRegistrationNumber" render={({ field }) => <FormItem><FormLabel>Registration Number</FormLabel><FormControl><Input placeholder="RC or BN number" {...field} /></FormControl><FormMessage /></FormItem>} />
+                  <FormField control={form.control} name="representativeName" render={({ field }) => <FormItem><FormLabel>Representative Full Legal Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
+                  <FormField control={form.control} name="representativeTitle" render={({ field }) => <FormItem><FormLabel>Capacity / Title</FormLabel><FormControl><Input placeholder="Director, Proprietor, Partner, Trustee…" {...field} /></FormControl><FormMessage /></FormItem>} />
+                  <FormField control={form.control} name="representativeIdType" render={({ field }) => <FormItem><FormLabel>Identity Document Type</FormLabel><FormControl><Input placeholder="NIN, passport, driver's licence…" {...field} /></FormControl><FormMessage /></FormItem>} />
+                  <FormField control={form.control} name="representativeIdNumber" render={({ field }) => <FormItem><FormLabel>Identity Document Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>} />
+                </div>}
                 <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                 control={form.control}

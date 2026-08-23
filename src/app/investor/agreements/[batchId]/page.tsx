@@ -23,6 +23,7 @@ import { AgreementSigningPanel } from '@/components/agreement-signing-panel';
 import { AgreementElectronicSignature } from '@/components/agreement-electronic-signature';
 import type { AgreementDocumentModel, AgreementSigningState } from '@/lib/agreements/signing';
 import { AgreementLanguageNotice } from '@/components/agreement-language-notice';
+import { legalPartyIntroduction, legalPartySignerCapacity, legalPartySignerName } from '@/lib/legal-party';
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -134,7 +135,7 @@ export default function InvestorAgreementPage() {
         <p><strong>{agreement.company.name}</strong>, RC No. {agreement.company.rcNumber}, of {agreement.company.address} (the “Company” or “Mudarib”);</p>
         <h3 className="agreement-heading">AND</h3>
         <div className="mb-4 flex items-start gap-4">
-          <p className="flex-1"><strong>{agreement.investor.name.toUpperCase()}</strong>, of {agreement.investor.address} (the “Investor” or “Rabb al-Mal”).</p>
+          <p className="flex-1"><strong>{legalPartyIntroduction(agreement.investor, 'Investor')}</strong>, also referred to as the “Rabb al-Mal”.</p>
           {agreement.investor.photoURL && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={agreement.investor.photoURL} alt={agreement.investor.name} className="h-24 w-20 rounded border object-cover" />
@@ -157,7 +158,7 @@ export default function InvestorAgreementPage() {
             <div><strong>FOR NAL GENERAL MERCHANT LTD.</strong><AgreementElectronicSignature signature={signingState?.signatures.NAL_SIGNATORY_1} /></div>
             <div><strong>FOR NAL GENERAL MERCHANT LTD.</strong><AgreementElectronicSignature signature={signingState?.signatures.NAL_SIGNATORY_2} /></div>
             {signingState?.status === 'EXECUTED' && <AgreementCompanyStamp />}
-            <div className="relative"><strong>SIGNED BY THE INVESTOR</strong><p className="mt-3">Name: {agreement.investor.name.toUpperCase()}<br />Capacity: Investor / Rabb al-Mal</p><AgreementElectronicSignature signature={signingState?.signatures.INVESTOR} /></div>
+            <div className="relative"><strong>{agreement.investor.accountType === 'Organization' ? `SIGNED FOR AND ON BEHALF OF ${agreement.investor.name.toUpperCase()}` : 'SIGNED BY THE INVESTOR'}</strong><p className="mt-3">Name: {legalPartySignerName(agreement.investor).toUpperCase()}<br />Capacity: {legalPartySignerCapacity(agreement.investor, 'Investor / Rabb al-Mal')}</p><AgreementElectronicSignature signature={signingState?.signatures.INVESTOR} /></div>
           </div>
         </section>
 

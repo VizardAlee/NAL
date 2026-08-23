@@ -8,6 +8,7 @@ import {
 import type { AgreementSignerRole, AgreementSigningState } from './signing';
 import { buildAgreementVerificationQr } from './verification-qr';
 import { LANGUAGE_NAMES, normalizeLanguage } from '@/lib/localization';
+import { legalPartyIntroduction, legalPartySignerCapacity, legalPartySignerName } from '@/lib/legal-party';
 
 const A4: [number, number] = [595.28, 841.89];
 const GREEN = rgb(0.027, 0.353, 0.235);
@@ -175,7 +176,7 @@ export async function buildMudarabaAgreementPdf(model: MudarabaAgreementModel, s
   drawWrapped('BETWEEN', { font: bold, size: 10 });
   drawWrapped(`${model.company.name}, RC No. ${model.company.rcNumber}, of ${model.company.address} (the “Company” or “Mudarib”);`);
   drawWrapped('AND', { font: bold, size: 10 });
-  drawWrapped(`${model.investor.name.toUpperCase()}, of ${model.investor.address} (the “Investor” or “Rabb al-Mal”).`);
+  drawWrapped(`${legalPartyIntroduction(model.investor, 'Investor')}, also referred to as the “Rabb al-Mal”.`);
   drawWrapped('RECITAL', { font: bold, size: 10 });
   drawWrapped('The Investor has agreed to provide capital to the Company for lawful, commercially reasonable and Sharia-compliant business activities, and the Company has agreed to manage the investment on the terms set out below.');
 
@@ -200,8 +201,8 @@ export async function buildMudarabaAgreementPdf(model: MudarabaAgreementModel, s
     page.drawImage(stamp, { x: margin, y: y - 120, width: 180, height: 120 });
     y -= 130;
   }
-  drawWrapped('SIGNED BY THE INVESTOR', { font: bold });
-  drawWrapped(`Name: ${model.investor.name.toUpperCase()}\nCapacity: Investor / Rabb al-Mal`, { gap: 1 });
+  drawWrapped(model.investor.accountType === 'Organization' ? `SIGNED FOR AND ON BEHALF OF ${model.investor.name.toUpperCase()}` : 'SIGNED BY THE INVESTOR', { font: bold });
+  drawWrapped(`Name: ${legalPartySignerName(model.investor).toUpperCase()}\nCapacity: ${legalPartySignerCapacity(model.investor, 'Investor / Rabb al-Mal')}`, { gap: 1 });
   drawSignature('INVESTOR', 'Signature: ________________________    Date: ____________________\nThumbprint (optional): ____________________');
   drawWrapped('WITNESSES', { font: bold });
   drawWrapped('WITNESS 1', { font: bold, gap: 1 });

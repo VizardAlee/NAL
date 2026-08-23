@@ -1,5 +1,6 @@
 import { addDays, addMonths, addWeeks, addYears, format, subDays } from 'date-fns';
 import type { SupportedLanguage } from '@/lib/localization';
+import type { LegalParty } from '@/lib/legal-party';
 
 export const MUDARABA_AGREEMENT_VERSION = 'NAL-MUDARABA-2026-02';
 
@@ -24,13 +25,8 @@ export type MudarabaAgreementModel = {
   tenureUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
   termLabel: string;
   maturityDate: string;
-  investor: {
+  investor: LegalParty & {
     id: string;
-    name: string;
-    address: string;
-    email: string;
-    phoneNumber: string;
-    photoURL?: string;
     isMuslim?: boolean;
     account: AgreementAccount;
   };

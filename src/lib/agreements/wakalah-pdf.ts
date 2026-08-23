@@ -4,6 +4,7 @@ import { buildWakalahClauses, type WakalahAgreementModel } from './wakalah';
 import type { AgreementSignerRole, AgreementSigningState } from './signing';
 import { buildAgreementVerificationQr } from './verification-qr';
 import { LANGUAGE_NAMES, normalizeLanguage } from '@/lib/localization';
+import { legalPartyIntroduction, legalPartySignerCapacity, legalPartySignerName } from '@/lib/legal-party';
 
 const A4: [number, number] = [595.28, 841.89];
 const GREEN = rgb(0.027, 0.353, 0.235);
@@ -113,7 +114,7 @@ export async function buildWakalahAgreementPdf(model: WakalahAgreementModel, sig
   draw('BETWEEN', { font: bold, size: 10 });
   draw(`${model.company.name}, RC No. ${model.company.rcNumber}, of ${model.company.address}, hereinafter referred to as the “Company” or “Financier”, which expression shall, where the context permits, include its successors-in-title and permitted assigns;`);
   draw('AND', { font: bold, size: 10 });
-  draw(`${model.client.name.toUpperCase()}, of ${model.client.address}, hereinafter referred to as the “Customer” or “Agent”, which expression shall, where the context permits, include the Customer’s lawful representatives, heirs and permitted assigns.`);
+  draw(`${legalPartyIntroduction(model.client, 'Customer')}, also acting as the procurement Agent, which expression shall, where the context permits, include its lawful successors and permitted assigns.`);
   draw(`At the request of the Customer and strictly for operational convenience, the Company hereby appoints the Customer as its disclosed procurement agent (Wakil), solely for the purpose of identifying, negotiating and purchasing ${model.deal.assetDescription} from ${model.deal.supplierName} on behalf of and in the name of the Company.`);
   draw('The Customer hereby agrees to be bound by the following terms and undertakings:');
   for (const clause of buildWakalahClauses(model)) {
@@ -134,9 +135,9 @@ export async function buildWakalahAgreementPdf(model: WakalahAgreementModel, sig
     y -= 130;
   }
   ensure(150);
-  draw('SIGNED BY THE CUSTOMER', { font: bold });
+  draw(model.client.accountType === 'Organization' ? `SIGNED FOR AND ON BEHALF OF ${model.client.name.toUpperCase()}` : 'SIGNED BY THE CUSTOMER', { font: bold });
   if (photo) page.drawImage(photo, { x: A4[0] - margin - 72, y: y - 72, width: 62, height: 72 });
-  draw(`Name: ${model.client.name.toUpperCase()}\nCapacity: Customer / Wakil`, { gap: 1 });
+  draw(`Name: ${legalPartySignerName(model.client).toUpperCase()}\nCapacity: ${legalPartySignerCapacity(model.client, 'Customer / Wakil')}`, { gap: 1 });
   drawSignature('CLIENT', 'Signature: ________________________    Date: ____________________');
   draw('IN THE PRESENCE OF A WITNESS', { font: bold });
   drawSignature('WITNESS', 'Name: ______________________________\nPhone Number: _______________________\nAddress: ____________________________\nOccupation: _________________________\nSignature: __________________________    Date: ____________________');

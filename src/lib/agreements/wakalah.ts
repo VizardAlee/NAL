@@ -1,5 +1,6 @@
-export const WAKALAH_AGREEMENT_VERSION = '1.1';
+export const WAKALAH_AGREEMENT_VERSION = '1.2';
 import type { SupportedLanguage } from '@/lib/localization';
+import type { LegalParty } from '@/lib/legal-party';
 
 export type WakalahAgreementModel = {
   type: 'WAKALAH_PROCUREMENT';
@@ -8,13 +9,8 @@ export type WakalahAgreementModel = {
   agreementId: string;
   dealId: string;
   agreementDate: string;
-  client: {
+  client: LegalParty & {
     id: string;
-    name: string;
-    address: string;
-    email: string;
-    phoneNumber: string;
-    photoURL?: string;
   };
   company: {
     name: string;

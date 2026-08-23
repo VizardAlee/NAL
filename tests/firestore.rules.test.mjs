@@ -24,6 +24,15 @@ beforeEach(async () => {
     await setDoc(doc(db, 'users', 'admin'), { role: 'Admin', accessRole: 'ADMIN', name: 'Admin' });
     await setDoc(doc(db, 'users', 'owner'), { role: 'Owner', accessRole: 'OWNER', name: 'Owner' });
     await setDoc(doc(db, 'users', 'client'), { role: 'Client', accessRole: 'USER', personas: ['CLIENT'], name: 'Client' });
+    await setDoc(doc(db, 'users', 'organization'), {
+      role: 'Client', accessRole: 'USER', personas: ['CLIENT'], accountType: 'Organization',
+      name: 'Example Enterprise', phoneNumber: '+2348012345678', address: '12 Market Road, Kano',
+      bankName: '', bankAccountName: '', bankAccountNumber: '',
+      organizationName: 'Example Enterprise', organizationRegistrationNumber: 'BN 1234567',
+      organizationAddress: '12 Market Road, Kano', representativeName: 'Amina Yusuf',
+      representativeTitle: 'Director', representativePhoneNumber: '+2348012345678',
+      representativeIdType: 'NIN', representativeIdNumber: '12345678901',
+    });
     await setDoc(doc(db, 'users', 'recovery'), { role: 'Recovery', accessRole: 'USER', personas: ['RECOVERY'], name: 'Recovery Officer' });
     await setDoc(doc(db, 'users', 'recovery2'), { role: 'Recovery', accessRole: 'USER', personas: ['RECOVERY'], name: 'Second Recovery Officer' });
     await setDoc(doc(db, 'users', 'legal'), { role: 'Legal', accessRole: 'USER', personas: ['LEGAL'], name: 'Legal Officer' });
@@ -54,6 +63,25 @@ test('users may edit safe profile fields but not access fields', async () => {
   await assertFails(updateDoc(doc(db, 'users', 'client'), { preferredLanguage: 'fr' }));
   await assertFails(updateDoc(doc(db, 'users', 'client'), { bankAccountNumber: 'not-an-account' }));
   await assertFails(updateDoc(doc(db, 'users', 'client'), { accessRole: 'ADMIN' }));
+});
+
+test('organization users may maintain representative details but cannot remove required identity data', async () => {
+  const db = env.authenticatedContext('organization').firestore();
+  await assertSucceeds(updateDoc(doc(db, 'users', 'organization'), {
+    name: 'Updated Example Enterprise', phoneNumber: '+2348099999999', address: '20 New Market Road, Kano',
+    bankName: '', bankAccountName: '', bankAccountNumber: '',
+    organizationName: 'Updated Example Enterprise', organizationRegistrationNumber: 'BN 1234567',
+    organizationAddress: '20 New Market Road, Kano', representativeName: 'Amina Yusuf',
+    representativeTitle: 'Managing Director', representativePhoneNumber: '+2348099999999',
+    representativeIdType: 'NIN', representativeIdNumber: '12345678901',
+  }));
+  await assertFails(updateDoc(doc(db, 'users', 'organization'), {
+    name: 'Updated Example Enterprise', phoneNumber: '', address: '20 New Market Road, Kano',
+    bankName: '', bankAccountName: '', bankAccountNumber: '',
+    organizationName: 'Updated Example Enterprise', organizationRegistrationNumber: '',
+    organizationAddress: '20 New Market Road, Kano', representativeName: '', representativeTitle: '',
+    representativePhoneNumber: '', representativeIdType: '', representativeIdNumber: '',
+  }));
 });
 
 test('owners have read-only oversight and cannot grant administrative access', async () => {

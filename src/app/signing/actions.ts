@@ -480,7 +480,10 @@ export async function submitAuthenticatedSignatureAction(input: {
     const envelopeReference = adminDb.collection('agreementEnvelopes').doc(envelopeId);
     const profileSnapshot = await adminDb.collection('users').doc(decoded.uid).get();
     const profile = profileSnapshot.data() || {};
-    const signerName = String(profile.name || decoded.name || decoded.email || '').trim();
+    const organizationSigner = profile.accountType === 'Organization';
+    const signerName = String(
+      organizationSigner ? profile.representativeName : profile.name || decoded.name || decoded.email || ''
+    ).trim();
     if (!signerName) throw new Error('Your verified profile name is required before signing.');
     const access = normalizeAccessModel(profile);
     const metadata = await requestMetadata();
@@ -522,7 +525,9 @@ export async function submitAuthenticatedSignatureAction(input: {
         role: validated.data.role,
         signerName,
         signerUserId: decoded.uid,
-        ...(profile.phoneNumber ? { signerPhoneNumber: String(profile.phoneNumber) } : {}),
+        ...((organizationSigner ? profile.representativePhoneNumber : profile.phoneNumber)
+          ? { signerPhoneNumber: String(organizationSigner ? profile.representativePhoneNumber : profile.phoneNumber) }
+          : {}),
         signatureDataUrl: validated.data.signatureDataUrl,
         signedAt: now.toDate().toISOString(),
         signatureHash: signatureDigest,

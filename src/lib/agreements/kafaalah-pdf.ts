@@ -4,6 +4,7 @@ import { buildKafaalahClauses, type KafaalahBondModel } from './kafaalah';
 import type { AgreementSignerRole, AgreementSigningState } from './signing';
 import { buildAgreementVerificationQr } from './verification-qr';
 import { LANGUAGE_NAMES, normalizeLanguage } from '@/lib/localization';
+import { legalPartyIntroduction } from '@/lib/legal-party';
 
 const A4: [number, number] = [595.28, 841.89];
 const GREEN = rgb(0.027, 0.353, 0.235);
@@ -57,7 +58,7 @@ export async function buildKafaalahBondPdf(model: KafaalahBondModel, signing?: A
   draw(`Bond Reference: ${model.bondId}`, { font: bold }); draw(`Agreement Language: ${LANGUAGE_NAMES[normalizeLanguage(model.language)]}`); draw(`Principal Agreement: ${model.deal.name} (${model.deal.financingMode})`); draw(`Contract Amount: ${formatAgreementCurrency(model.deal.principal)}`);
   draw(`THIS BOND OF KAFAALAH (GUARANTEE) is made this ${formatAgreementDate(model.bondDate)} by ${model.guarantor.name.toUpperCase()}, of ${model.guarantor.address} (hereinafter referred to as the “Guarantor” or “Kafeel”).`, { font: bold });
   draw('WHEREAS', { font: bold, size: 10 });
-  draw(`The Guarantor has agreed to guarantee the obligations of ${model.client.name.toUpperCase()}, of ${model.client.address} (hereinafter referred to as the “Customer”), under the substantive agreement dated ${formatAgreementDate(model.principalAgreementDate)} between the Customer and ${model.company.name} (the “Principal Agreement”).`);
+  draw(`The Guarantor has agreed to guarantee the obligations of ${legalPartyIntroduction(model.client, 'Customer')}, under the substantive agreement dated ${formatAgreementDate(model.principalAgreementDate)} between the Customer and ${model.company.name} (the “Principal Agreement”).`);
   draw('The Guarantor agrees to secure the Customer’s performance of the terms and obligations contained in the Principal Agreement.');
   draw('NOW THIS DEED WITNESSES AS FOLLOWS', { font: bold, size: 10 });
   for (const clause of buildKafaalahClauses(model)) { ensure(35); draw(`${clause.number}. ${clause.title}`, { font: bold, size: 9.4, gap: 2 }); draw(clause.body, { size: 8.5, gap: 8 }); }
