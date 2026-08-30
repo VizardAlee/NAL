@@ -105,6 +105,10 @@ service cloud.firestore {
       // Only admins can delete users.
       allow delete: if isAdmin();
     }
+
+    match /userKycProfiles/{userId} {
+      allow read, write: if false;
+    }
     
     // Rules for the 'recoveryTasks' collection
     match /recoveryTasks/{taskId} {

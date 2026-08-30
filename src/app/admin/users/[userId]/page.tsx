@@ -68,6 +68,14 @@ type UserProfile = DocumentData & {
     representativeEmail?: string;
     representativeIdType?: string;
     representativeIdNumber?: string;
+    bankName?: string;
+    bankAccountName?: string;
+    bankAccountNumber?: string;
+    kycStatus?: 'SUBMITTED' | 'VERIFIED' | 'REJECTED';
+    governmentIdType?: string;
+    governmentIdLast4?: string;
+    bvnLast4?: string;
+    tinLast4?: string;
 };
 
 type FundBatch = DocumentData & {
@@ -482,6 +490,26 @@ export default function UserDetailPage() {
                                 <div className="border-t pt-3"><p className="text-muted-foreground">Authorised representative</p><p className="font-medium">{userProfile.representativeName || 'Not recorded'}</p><p>{userProfile.representativeTitle || 'Capacity not recorded'}</p></div>
                                 <div><p className="text-muted-foreground">Representative contact</p><p>{userProfile.representativeEmail || userProfile.email}</p><p>{userProfile.representativePhoneNumber || userProfile.phoneNumber || 'Phone not recorded'}</p></div>
                                 <div><p className="text-muted-foreground">Identity credential</p><p>{userProfile.representativeIdType || 'Type not recorded'} · {userProfile.representativeIdNumber || 'Number not recorded'}</p></div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {(hasInvestorPersona || hasClientPersona) && (
+                        <Card>
+                            <CardHeader className="pb-3">
+                                <div className="flex items-center justify-between gap-3">
+                                    <CardTitle className="text-base">KYC & payment details</CardTitle>
+                                    <Badge variant={userProfile.kycStatus === 'VERIFIED' ? 'default' : 'secondary'}>
+                                        {(userProfile.kycStatus || 'NOT_SUBMITTED').replaceAll('_', ' ')}
+                                    </Badge>
+                                </div>
+                                <CardDescription>Only masked identifiers are shown here. Full values remain in the restricted server KYC record.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3 text-sm">
+                                <div><p className="text-muted-foreground">Government ID</p><p className="font-medium">{userProfile.governmentIdType || userProfile.representativeIdType || 'Not submitted'}{(userProfile.governmentIdLast4 || userProfile.representativeIdNumber) ? ` · ending ${userProfile.governmentIdLast4 || userProfile.representativeIdNumber?.slice(-4)}` : ''}</p></div>
+                                <div><p className="text-muted-foreground">BVN</p><p className="font-medium">{userProfile.bvnLast4 ? `Ending ${userProfile.bvnLast4}` : 'Not submitted'}</p></div>
+                                {hasInvestorPersona && <div><p className="text-muted-foreground">TIN</p><p className="font-medium">{userProfile.tinLast4 ? `Ending ${userProfile.tinLast4}` : 'Not submitted'}</p></div>}
+                                <div className="border-t pt-3"><p className="text-muted-foreground">Payment account</p><p className="font-medium">{userProfile.bankAccountName || 'Not submitted'}</p><p>{userProfile.bankName || 'Bank not submitted'}{userProfile.bankAccountNumber ? ` · ••••••${userProfile.bankAccountNumber.slice(-4)}` : ''}</p></div>
                             </CardContent>
                         </Card>
                     )}

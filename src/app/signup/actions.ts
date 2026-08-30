@@ -2,7 +2,7 @@
 'use server';
 
 import { getAdminApp } from '@/firebase/admin-app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
@@ -13,6 +13,16 @@ import {
   normalizeAccessModel,
   toLegacyRoleFromAccess,
 } from '@/lib/access-control';
+import {
+  isGovernmentIdType,
+  isValidBvn,
+  isValidGovernmentIdNumber,
+  isValidNigerianAccountNumber,
+  isValidTin,
+  maskIdentifier,
+  normalizeDigits,
+  normalizeGovernmentIdNumber,
+} from '@/lib/kyc';
 
 const signUpSchema = z.object({
   name: z.string().optional().default(''),
@@ -25,6 +35,13 @@ const signUpSchema = z.object({
   representativePhoneNumber: z.string().optional(),
   representativeIdType: z.string().optional(),
   representativeIdNumber: z.string().optional(),
+  governmentIdType: z.string().optional(),
+  governmentIdNumber: z.string().optional(),
+  bvn: z.string().optional(),
+  bankName: z.string().optional(),
+  bankAccountName: z.string().optional(),
+  bankAccountNumber: z.string().optional(),
+  tin: z.string().optional(),
   email: z.string().email("Please enter a valid email address."),
   password: z.string().min(8, "Password must be at least 8 characters."),
   phoneNumber: z.string().optional(),
@@ -73,7 +90,8 @@ export async function signUpWithEmailAction(
     const { name, email, password, inviteToken, phoneNumber, referralCode, accountType,
       organizationName, organizationRegistrationNumber, organizationAddress,
       representativeName, representativeTitle, representativePhoneNumber,
-      representativeIdType, representativeIdNumber } = validated.data;
+      representativeIdType, representativeIdNumber, governmentIdType, governmentIdNumber,
+      bvn, bankName, bankAccountName, bankAccountNumber, tin } = validated.data;
     const app = getAdminApp();
     const auth = getAuth(app);
     const adminDb = getFirestore(app);
@@ -116,11 +134,36 @@ export async function signUpWithEmailAction(
         });
         const role = toLegacyRoleFromAccess(accessModel);
         const isInvestor = accessModel.personas.includes('INVESTOR');
+        const requiresKyc = isInvestor || accessModel.personas.includes('CLIENT');
         if (isInvestor && typeof inviteData.isMuslim !== 'boolean') {
             return {
                 success: false,
                 message: 'This investor invite is missing the Muslim/non-Muslim classification. Ask an administrator to regenerate it.',
             };
+        }
+
+        const suppliedGovernmentIdType = accountType === 'Organization'
+            ? representativeIdType?.trim() || ''
+            : governmentIdType?.trim() || '';
+        const suppliedGovernmentIdNumber = accountType === 'Organization'
+            ? representativeIdNumber?.trim() || ''
+            : governmentIdNumber?.trim() || '';
+        if (requiresKyc) {
+            if (!isGovernmentIdType(suppliedGovernmentIdType)
+                || !isValidGovernmentIdNumber(suppliedGovernmentIdType, suppliedGovernmentIdNumber)) {
+                return { success: false, message: 'Enter a valid supported government-issued identity number.' };
+            }
+            if (!bvn || !isValidBvn(bvn)) {
+                return { success: false, message: 'BVN must contain exactly 11 digits.' };
+            }
+            if (!bankName?.trim() || bankName.trim().length < 2
+                || !bankAccountName?.trim() || bankAccountName.trim().length < 2
+                || !bankAccountNumber || !isValidNigerianAccountNumber(bankAccountNumber)) {
+                return { success: false, message: 'Enter complete bank details and a valid 10-digit account number.' };
+            }
+            if (isInvestor && (!tin || !isValidTin(tin))) {
+                return { success: false, message: 'Investor TIN must contain between 8 and 14 digits.' };
+            }
         }
 
         const userExists = await auth.getUserByEmail(email).catch(() => null);
@@ -155,6 +198,20 @@ export async function signUpWithEmailAction(
             personas: accessModel.personas,
             primaryPortal: accessModel.primaryPortal,
         };
+        if (requiresKyc) {
+            const normalizedGovernmentId = normalizeGovernmentIdNumber(suppliedGovernmentIdNumber);
+            const normalizedBvn = normalizeDigits(bvn!);
+            Object.assign(userData, {
+                bankName: bankName!.trim(),
+                bankAccountName: bankAccountName!.trim(),
+                bankAccountNumber: normalizeDigits(bankAccountNumber!),
+                kycStatus: 'SUBMITTED',
+                governmentIdType: suppliedGovernmentIdType,
+                governmentIdLast4: normalizedGovernmentId.slice(-4),
+                bvnLast4: normalizedBvn.slice(-4),
+                ...(isInvestor ? { tinLast4: normalizeDigits(tin!).slice(-4) } : {}),
+            });
+        }
         if (accountType === 'Organization') {
             Object.assign(userData, {
                 organizationName: legalName,
@@ -164,8 +221,8 @@ export async function signUpWithEmailAction(
                 representativeTitle: representativeTitle!.trim(),
                 representativePhoneNumber: representativePhoneNumber!.trim(),
                 representativeEmail: email,
-                representativeIdType: representativeIdType!.trim(),
-                representativeIdNumber: representativeIdNumber!.trim(),
+                representativeIdType: suppliedGovernmentIdType,
+                representativeIdNumber: maskIdentifier(normalizeGovernmentIdNumber(suppliedGovernmentIdNumber)),
                 address: organizationAddress!.trim(),
                 phoneNumber: representativePhoneNumber!.trim(),
             });
@@ -185,6 +242,22 @@ export async function signUpWithEmailAction(
 
         const batch = adminDb.batch();
         batch.set(adminDb.collection('users').doc(userRecord.uid), userData);
+        if (requiresKyc) {
+            batch.set(adminDb.collection('userKycProfiles').doc(userRecord.uid), {
+                userId: userRecord.uid,
+                accountType,
+                governmentIdType: suppliedGovernmentIdType,
+                governmentIdNumber: normalizeGovernmentIdNumber(suppliedGovernmentIdNumber),
+                bvn: normalizeDigits(bvn!),
+                bankName: bankName!.trim(),
+                bankAccountName: bankAccountName!.trim(),
+                bankAccountNumber: normalizeDigits(bankAccountNumber!),
+                ...(isInvestor ? { tin: normalizeDigits(tin!) } : {}),
+                status: 'SUBMITTED',
+                submittedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
         batch.update(inviteRef, {
             status: 'Used',
             usedBy: userRecord.uid,

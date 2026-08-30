@@ -15,6 +15,7 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Logo } from '@/components/icons';
 import Link from 'next/link';
@@ -23,6 +24,14 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getInviteDetailsAction, signUpWithEmailAction } from './actions';
 import { useCompanyLogo } from '@/components/company-logo-provider';
+import {
+  GOVERNMENT_ID_LABELS,
+  GOVERNMENT_ID_TYPES,
+  isValidBvn,
+  isValidGovernmentIdNumber,
+  isValidNigerianAccountNumber,
+  isValidTin,
+} from '@/lib/kyc';
 
 const formSchema = z.object({
   name: z.string().optional().default(''),
@@ -35,6 +44,13 @@ const formSchema = z.object({
   representativePhoneNumber: z.string().optional(),
   representativeIdType: z.string().optional(),
   representativeIdNumber: z.string().optional(),
+  governmentIdType: z.string().optional(),
+  governmentIdNumber: z.string().optional(),
+  bvn: z.string().optional(),
+  bankName: z.string().optional(),
+  bankAccountName: z.string().optional(),
+  bankAccountNumber: z.string().optional(),
+  tin: z.string().optional(),
   email: z.string().email({ message: 'Please enter a valid email address.' }),
   password: z.string().min(8, { message: 'Password must be at least 8 characters.' }),
   phoneNumber: z.string().optional(),
@@ -91,6 +107,8 @@ function SignupPageContent() {
       organizationName: '', organizationRegistrationNumber: '', organizationAddress: '',
       representativeName: '', representativeTitle: '', representativePhoneNumber: '',
       representativeIdType: '', representativeIdNumber: '',
+      governmentIdType: '', governmentIdNumber: '', bvn: '',
+      bankName: '', bankAccountName: '', bankAccountNumber: '', tin: '',
     },
   });
 
@@ -134,6 +152,36 @@ function SignupPageContent() {
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     if (!inviteState.valid) return;
 
+    if (requiresKyc) {
+      const idType = values.accountType === 'Organization' ? values.representativeIdType : values.governmentIdType;
+      const idNumber = values.accountType === 'Organization' ? values.representativeIdNumber : values.governmentIdNumber;
+      const idNumberField = values.accountType === 'Organization' ? 'representativeIdNumber' : 'governmentIdNumber';
+      if (!idType || !idNumber || !isValidGovernmentIdNumber(idType, idNumber)) {
+        form.setError(idNumberField, { message: 'Enter a valid number for the selected government ID.' });
+        return;
+      }
+      if (!values.bvn || !isValidBvn(values.bvn)) {
+        form.setError('bvn', { message: 'BVN must contain exactly 11 digits.' });
+        return;
+      }
+      if (!values.bankName?.trim()) {
+        form.setError('bankName', { message: 'Bank name is required.' });
+        return;
+      }
+      if (!values.bankAccountName?.trim()) {
+        form.setError('bankAccountName', { message: 'Account name is required.' });
+        return;
+      }
+      if (!values.bankAccountNumber || !isValidNigerianAccountNumber(values.bankAccountNumber)) {
+        form.setError('bankAccountNumber', { message: 'Account number must contain exactly 10 digits.' });
+        return;
+      }
+      if (requiresTin && (!values.tin || !isValidTin(values.tin))) {
+        form.setError('tin', { message: 'TIN must contain between 8 and 14 digits.' });
+        return;
+      }
+    }
+
     startTransition(async () => {
         const result = await signUpWithEmailAction(values);
         if (result.success) {
@@ -144,6 +192,11 @@ function SignupPageContent() {
         }
     });
   }
+
+  const requiresKyc = Boolean(
+    inviteState.personas?.some((persona) => persona === 'CLIENT' || persona === 'INVESTOR')
+  );
+  const requiresTin = Boolean(inviteState.personas?.includes('INVESTOR'));
 
 
   return (
@@ -196,7 +249,7 @@ function SignupPageContent() {
                     <FormField control={form.control} name="representativeName" render={({ field }) => <FormItem><FormLabel>Representative Full Legal Name</FormLabel><FormControl><Input placeholder="Full legal name" {...field} /></FormControl><FormMessage /></FormItem>} />
                     <FormField control={form.control} name="representativeTitle" render={({ field }) => <FormItem><FormLabel>Capacity / Title</FormLabel><FormControl><Input placeholder="Director, Proprietor, Partner, Trustee…" {...field} /></FormControl><FormMessage /></FormItem>} />
                     <FormField control={form.control} name="representativePhoneNumber" render={({ field }) => <FormItem><FormLabel>Representative Phone Number</FormLabel><FormControl><Input placeholder="+2348012345678" {...field} /></FormControl><FormMessage /></FormItem>} />
-                    <FormField control={form.control} name="representativeIdType" render={({ field }) => <FormItem><FormLabel>Identity Document Type</FormLabel><FormControl><Input placeholder="NIN, passport, driver's licence…" {...field} /></FormControl><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name="representativeIdType" render={({ field }) => <FormItem><FormLabel>Government ID Type</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a government-issued ID" /></SelectTrigger></FormControl><SelectContent>{GOVERNMENT_ID_TYPES.map((type) => <SelectItem key={type} value={type}>{GOVERNMENT_ID_LABELS[type]}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>} />
                     <FormField control={form.control} name="representativeIdNumber" render={({ field }) => <FormItem><FormLabel>Identity Document Number</FormLabel><FormControl><Input placeholder="Document number" {...field} /></FormControl><FormMessage /></FormItem>} />
                     </> : <FormField
                         control={form.control}
@@ -211,6 +264,20 @@ function SignupPageContent() {
                             </FormItem>
                         )}
                     />}
+                    {requiresKyc && <div className="space-y-4 rounded-lg border p-4">
+                      <div><p className="font-medium">Identity and payment verification</p><p className="text-sm text-muted-foreground">Required for Client and Investor accounts. Sensitive identifiers are held in a restricted KYC record.</p></div>
+                      {inviteState.accountType !== 'Organization' && <>
+                        <FormField control={form.control} name="governmentIdType" render={({ field }) => <FormItem><FormLabel>Government ID Type</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a government-issued ID" /></SelectTrigger></FormControl><SelectContent>{GOVERNMENT_ID_TYPES.map((type) => <SelectItem key={type} value={type}>{GOVERNMENT_ID_LABELS[type]}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>} />
+                        <FormField control={form.control} name="governmentIdNumber" render={({ field }) => <FormItem><FormLabel>Government ID Number</FormLabel><FormControl><Input autoComplete="off" placeholder="Enter the ID number" {...field} required /></FormControl><FormMessage /></FormItem>} />
+                      </>}
+                      <FormField control={form.control} name="bvn" render={({ field }) => <FormItem><FormLabel>{inviteState.accountType === 'Organization' ? 'Representative BVN' : 'BVN'}</FormLabel><FormControl><Input inputMode="numeric" autoComplete="off" maxLength={11} placeholder="11-digit BVN" {...field} required /></FormControl><FormDescription>Used for identity verification and never displayed in full.</FormDescription><FormMessage /></FormItem>} />
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <FormField control={form.control} name="bankName" render={({ field }) => <FormItem><FormLabel>Bank Name</FormLabel><FormControl><Input placeholder="e.g. Sterling Bank" {...field} required /></FormControl><FormMessage /></FormItem>} />
+                        <FormField control={form.control} name="bankAccountNumber" render={({ field }) => <FormItem><FormLabel>Account Number</FormLabel><FormControl><Input inputMode="numeric" autoComplete="off" maxLength={10} placeholder="10-digit account number" {...field} required /></FormControl><FormMessage /></FormItem>} />
+                      </div>
+                      <FormField control={form.control} name="bankAccountName" render={({ field }) => <FormItem><FormLabel>Account Name</FormLabel><FormControl><Input placeholder="Name registered with the bank" {...field} required /></FormControl><FormMessage /></FormItem>} />
+                      {requiresTin && <FormField control={form.control} name="tin" render={({ field }) => <FormItem><FormLabel>Tax Identification Number (TIN)</FormLabel><FormControl><Input inputMode="numeric" autoComplete="off" placeholder="Investor TIN" {...field} required /></FormControl><FormDescription>Required for every Investor account.</FormDescription><FormMessage /></FormItem>} />}
+                    </div>}
                     <FormField
                         control={form.control}
                         name="email"

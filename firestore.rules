@@ -178,6 +178,12 @@ service cloud.firestore {
       // Only admins can delete users.
       allow delete: if isAdmin();
     }
+
+    // Full BVN, TIN and government-ID values are available only to trusted
+    // server workflows. Browser clients use masked summaries on /users.
+    match /userKycProfiles/{userId} {
+      allow read, write: if false;
+    }
     
     // Rules for the 'recoveryTasks' collection
     match /recoveryTasks/{taskId} {

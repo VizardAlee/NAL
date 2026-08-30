@@ -170,6 +170,20 @@ test('repayment-plan requests are readable by the client and admin but writable 
   await assertFails(updateDoc(doc(adminDb, 'repaymentPlanChangeRequests', 'request'), { status: 'Approved' }));
 });
 
+test('full KYC identifiers cannot be read or written by browser clients, including admins', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'userKycProfiles', 'client'), {
+      bvn: '12345678901', governmentIdNumber: '12345678901', tin: '123456780001',
+    });
+  });
+  const clientDb = env.authenticatedContext('client').firestore();
+  const adminDb = env.authenticatedContext('admin').firestore();
+  await assertFails(getDoc(doc(clientDb, 'userKycProfiles', 'client')));
+  await assertFails(getDoc(doc(adminDb, 'userKycProfiles', 'client')));
+  await assertFails(setDoc(doc(clientDb, 'userKycProfiles', 'forged'), { bvn: '12345678901' }));
+  await assertFails(setDoc(doc(adminDb, 'userKycProfiles', 'forged'), { bvn: '12345678901' }));
+});
+
 test('transactional pending check permits only one concurrent approval', async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();

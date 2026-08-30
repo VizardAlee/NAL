@@ -101,6 +101,11 @@ export type User = AuthUser & DocumentData & {
     bankName?: string;
     bankAccountName?: string;
     bankAccountNumber?: string;
+    kycStatus?: 'SUBMITTED' | 'VERIFIED' | 'REJECTED';
+    governmentIdType?: string;
+    governmentIdLast4?: string;
+    bvnLast4?: string;
+    tinLast4?: string;
     preferredLanguage?: 'en' | 'ha' | 'ig' | 'yo';
 };
 

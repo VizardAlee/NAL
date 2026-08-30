@@ -56,7 +56,10 @@ exports.createUser = (0, https_1.onCall)(async (request) => {
     if (!validated.success) {
         throw new https_1.HttpsError('invalid-argument', 'Invalid data provided.');
     }
-    const { name, email, password, role, phoneNumber, referralCode, isMuslim } = validated.data;
+    const { name, email, password, role, phoneNumber, referralCode } = validated.data;
+    if (role === 'Investor' || role === 'Client') {
+        throw new https_1.HttpsError('failed-precondition', 'Client and Investor accounts must be created through the invitation workflow so mandatory KYC details are collected.');
+    }
     const accessModel = deriveAccessModel(role);
     try {
         const userRecord = await admin.auth().createUser({
@@ -75,8 +78,6 @@ exports.createUser = (0, https_1.onCall)(async (request) => {
             userData.phoneNumber = phoneNumber;
         if (referralCode)
             userData.referredByCode = referralCode;
-        if (role === 'Investor')
-            userData.isMuslim = isMuslim;
         if (role === 'Marketer') {
             userData.referralCode = generateReferralCode(name);
             userData.rating = 0;

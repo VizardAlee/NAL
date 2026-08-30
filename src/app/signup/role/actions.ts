@@ -50,6 +50,14 @@ export async function setRoleAction(
     const accessModel = normalizeAccessModel({ role });
 
     try {
+        const kycProfile = await adminDb.collection('userKycProfiles').doc(userId).get();
+        if (!kycProfile.exists || !['SUBMITTED', 'VERIFIED'].includes(String(kycProfile.data()?.status || ''))) {
+            return {
+                success: false,
+                message: 'Client and Investor accounts must be created through an administrator invitation so the required KYC details can be submitted.',
+            };
+        }
+
         // 1. Set Custom Claim for Security Rules
         await auth.setCustomUserClaims(userId, {
             role,
