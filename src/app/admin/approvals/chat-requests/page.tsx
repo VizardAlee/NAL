@@ -48,7 +48,7 @@ export default function ChatRequestsPage() {
 
     const handleInitiateChat = async (request: ChatRequest) => {
         const currentUser = auth?.currentUser;
-        if (!adminUser || !adminUser.displayName || !currentUser) {
+        if (!adminUser || !currentUser) {
             toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in as an admin to perform this action.' });
             return;
         };
@@ -64,7 +64,7 @@ export default function ChatRequestsPage() {
                 request.userName,
                 request.userRole,
                 adminUser.uid,
-                adminUser.displayName
+                adminUser.displayName || adminUser.email || 'Administrator'
             );
 
             if (!result.success) {

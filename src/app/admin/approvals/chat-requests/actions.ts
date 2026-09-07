@@ -3,7 +3,8 @@
 import { adminDb } from '@/firebase/admin-app';
 import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
-import { verifyAuthTokenForUser } from '@/lib/server/auth';
+import { verifyAdminWrite } from '@/lib/server/auth';
+import { canViewAdmin } from '@/lib/access-control';
 
 export async function initiateChat(
     authToken: string,
@@ -15,7 +16,22 @@ export async function initiateChat(
     adminName: string
 ) {
   try {
-    await verifyAuthTokenForUser(authToken, adminId);
+    const actor = await verifyAdminWrite(authToken);
+    if (actor.uid !== adminId) throw new Error('Invalid administrator identity.');
+    const [requestSnapshot, adminSnapshot, userSnapshot] = await Promise.all([
+      adminDb.doc(`chatRequests/${requestId}`).get(),
+      adminDb.collection('users').doc(adminId).get(),
+      adminDb.collection('users').doc(userId).get(),
+    ]);
+    const request = requestSnapshot.data();
+    if (!requestSnapshot.exists || request?.status !== 'Pending' || request?.userId !== userId) {
+      throw new Error('This chat request is no longer pending.');
+    }
+    if (!adminSnapshot.exists || !canViewAdmin(adminSnapshot.data() as any)) throw new Error('Administrator profile not found.');
+    if (!userSnapshot.exists) throw new Error('User profile not found.');
+    const verifiedAdminName = adminSnapshot.data()?.name || adminSnapshot.data()?.email || adminName || 'Administrator';
+    const verifiedUserName = userSnapshot.data()?.name || userSnapshot.data()?.email || userName || 'User';
+    const verifiedUserRole = request?.userRole === 'Investor' ? 'Investor' : 'Client';
 
     // Check for existing conversation to avoid duplicates
     const existingConvoQuery = adminDb.collection('conversations')
@@ -37,8 +53,8 @@ export async function initiateChat(
     // If no conversation exists, create a deterministic conversation to avoid duplicates on concurrent clicks.
     const conversationId = [adminId, userId].sort().join('_');
     const newConversationRef = adminDb.collection('conversations').doc(conversationId);
-    const initialMessage = `Hi ${userName}, this is ${adminName}. How can I help you today?`;
-    const userLink = userRole === 'Investor'
+    const initialMessage = `Hi ${verifiedUserName}, this is ${verifiedAdminName}. How can I help you today?`;
+    const userLink = verifiedUserRole === 'Investor'
       ? `/investor/messages/${conversationId}`
       : `/client/messages/${conversationId}`;
 
@@ -53,7 +69,7 @@ export async function initiateChat(
       // 1. Create the new conversation document
       trx.set(newConversationRef, {
         participantIds: [adminId, userId],
-        participantNames: [adminName, userName],
+        participantNames: [verifiedAdminName, verifiedUserName],
         participantAvatars: ['', ''],
         lastMessage: initialMessage,
         lastMessageSenderId: adminId,
@@ -73,7 +89,7 @@ export async function initiateChat(
       // 3. Create a notification for the user
       const notificationRef = adminDb.collection('notifications').doc();
       trx.set(notificationRef, {
-          title: `New message from ${adminName}`,
+          title: `New message from ${verifiedAdminName}`,
           message: initialMessage,
           link: userLink,
           category: 'message',

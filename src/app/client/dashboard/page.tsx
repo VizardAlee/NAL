@@ -158,7 +158,7 @@ function ContactAdminSheet() {
 
     const handleSelectAdmin = (admin: { id: string; name: string }) => {
         const currentUser = auth?.currentUser;
-        if (!user?.displayName || !currentUser) return;
+        if (!user || !currentUser) return;
         startTransition(async () => {
             const authToken = await currentUser.getIdToken();
             const result = await getOrCreateConversation({
@@ -166,7 +166,7 @@ function ContactAdminSheet() {
                 adminId: admin.id,
                 adminName: admin.name,
                 userId: user.uid,
-                userName: user.displayName || 'User'
+                userName: user.displayName || user.email || 'User'
             });
 
             if (result.success && result.conversationId) {

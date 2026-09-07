@@ -122,6 +122,33 @@ const messageSchema = z.object({
   attachmentName: z.string().optional(),
 });
 
+const markConversationReadSchema = z.object({
+  authToken: z.string().min(1),
+  conversationId: z.string().min(1),
+  userId: z.string().min(1),
+});
+
+export async function markConversationReadAction(input: z.infer<typeof markConversationReadSchema>) {
+  const validated = markConversationReadSchema.safeParse(input);
+  if (!validated.success) return { success: false, message: 'Invalid read-state request.' };
+
+  try {
+    await verifyAuthTokenForUser(validated.data.authToken, validated.data.userId);
+    const conversationRef = getFirestore(getAdminApp()).collection('conversations').doc(validated.data.conversationId);
+    await getFirestore(getAdminApp()).runTransaction(async (trx) => {
+      const conversation = await trx.get(conversationRef);
+      if (!conversation.exists || !conversation.data()?.participantIds?.includes(validated.data.userId)) {
+        throw new Error('You are not a participant in this conversation.');
+      }
+      trx.update(conversationRef, { readBy: FieldValue.arrayUnion(validated.data.userId) });
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('MARK CONVERSATION READ ERROR:', error);
+    return { success: false, message: error instanceof Error ? error.message : 'Failed to update message status.' };
+  }
+}
+
 export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
   const validated = messageSchema.safeParse(input);
   if (!validated.success) {

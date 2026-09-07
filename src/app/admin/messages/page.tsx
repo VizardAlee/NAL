@@ -59,7 +59,7 @@ function ConversationItem({ conversation, currentUserId }: { conversation: Conve
     const otherParticipantName = otherParticipantIndex !== -1 ? conversation.participantNames[otherParticipantIndex] : 'Unknown User';
     const otherParticipantAvatar = otherParticipantIndex !== -1 ? conversation.participantAvatars[otherParticipantIndex] : '/placeholder.svg';
 
-    const isUnread = !conversation.readBy.includes(currentUserId);
+    const isUnread = !(conversation.readBy || []).includes(currentUserId);
 
     return (
         <Card

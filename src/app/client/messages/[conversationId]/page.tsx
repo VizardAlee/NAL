@@ -4,7 +4,7 @@
 import { useMemo, useState, useTransition, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useDoc, useCollection, useUser, useFirestore, useAuth, useFirebaseApp } from '@/firebase';
-import { doc, collection, query, orderBy, Timestamp, updateDoc } from 'firebase/firestore';
+import { doc, collection, query, orderBy, Timestamp } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Loader2, Send, Paperclip, X, Download } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -15,6 +15,8 @@ import { sendMessageAction } from './actions';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
 import { uploadAuthenticatedFile } from '@/firebase/storage-upload';
+import { markConversationReadAction } from '@/app/common/actions/chat-actions';
+import { useToast } from '@/hooks/use-toast';
 
 type Conversation = {
     id: string;
@@ -53,6 +55,7 @@ export default function ClientConversationPage() {
     const firestore = useFirestore();
     const auth = useAuth();
     const app = useFirebaseApp();
+    const { toast } = useToast();
     const [newMessage, setNewMessage] = useState('');
     const [attachment, setAttachment] = useState<File | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -77,12 +80,13 @@ export default function ClientConversationPage() {
 
     // Mark messages as read by the current user
     useEffect(() => {
-        if (conversation && user && !conversation.readBy.includes(user.uid)) {
-            updateDoc(conversationRef as any, {
-                readBy: [...conversation.readBy, user.uid]
-            });
+        const currentUser = auth?.currentUser;
+        if (conversation && user && currentUser && !(conversation.readBy || []).includes(user.uid)) {
+            currentUser.getIdToken()
+                .then((authToken) => markConversationReadAction({ authToken, conversationId, userId: user.uid }))
+                .catch((error) => console.error('Failed to mark conversation as read:', error));
         }
-    }, [conversation, user, conversationRef]);
+    }, [auth, conversation, conversationId, user]);
 
     const handleSendMessage = async (formData: FormData) => {
         const text = formData.get('messageText') as string;
@@ -90,32 +94,22 @@ export default function ClientConversationPage() {
         const currentUser = auth?.currentUser;
         if (!user || !conversationId || !currentUser) return;
 
-        let attachmentUrl: string | undefined;
-        let attachmentName: string | undefined;
-
-        if (attachment) {
-            attachmentUrl = (await uploadAuthenticatedFile(
-                app,
-                attachment,
-                ['conversations', conversationId, user.uid],
-                ['application/pdf']
-            )).url;
-            attachmentName = attachment.name;
+        try {
+            let attachmentUrl: string | undefined;
+            let attachmentName: string | undefined;
+            if (attachment) {
+                attachmentUrl = (await uploadAuthenticatedFile(app, attachment, ['conversations', conversationId, user.uid], ['application/pdf'])).url;
+                attachmentName = attachment.name;
+            }
+            const authToken = await currentUser.getIdToken();
+            const result = await sendMessageAction({ authToken, conversationId, senderId: user.uid, text: text?.trim(), attachmentUrl, attachmentName });
+            if (!result.success) throw new Error(result.message);
+            setNewMessage('');
+            setAttachment(null);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Message Not Sent', description: error instanceof Error ? error.message : 'Please try again.' });
         }
-
-        setNewMessage('');
-        setAttachment(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-
-        const authToken = await currentUser.getIdToken();
-        await sendMessageAction({
-            authToken,
-            conversationId,
-            senderId: user.uid,
-            text,
-            attachmentUrl,
-            attachmentName,
-        });
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

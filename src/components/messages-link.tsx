@@ -33,7 +33,7 @@ export function MessagesLink({ basePath }: { basePath: '/client' | '/investor' |
     const hasUnread = useMemo(() => {
         if (!conversations || !user) return false;
         return conversations.some(convo => 
-          !convo.readBy.includes(user.uid)
+          !(convo.readBy || []).includes(user.uid)
         );
     }, [conversations, user]);
     
