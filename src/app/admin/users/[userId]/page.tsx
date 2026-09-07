@@ -42,6 +42,7 @@ import { canWriteAdmin, hasPersona, isReadOnlyOwner, normalizeAccessModel } from
 import { isZakatApplicable } from '@/lib/zakat-eligibility';
 import { calculateZakatAmount, getNextZakatAssessmentDate } from '@/lib/zakat';
 import { UserFinancialReport } from '@/components/admin/user-financial-report';
+import { durationToDays } from '@/lib/deal-duration';
 
 type UserProfile = DocumentData & {
     id: string;
@@ -104,21 +105,8 @@ type MarketerStats = {
     totalDealValue: number;
 }
 
-const DURATION_IN_DAYS = {
-    Days: 1,
-    Weeks: 7,
-    Fortnights: 14,
-    Months: 30.4375,
-    Years: 365.25,
-};
-
 const ITEMS_PER_PAGE = 10;
-
-function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): number {
-    return value * (DURATION_IN_DAYS[unit] || 0);
-}
-
-const TWELVE_MONTHS_IN_DAYS = 12 * DURATION_IN_DAYS.Months;
+const TWELVE_MONTHS_IN_DAYS = 360;
 
 function UserDetailSkeleton() {
     return (
@@ -347,7 +335,7 @@ export default function UserDetailPage() {
     const processedFundBatches = useMemo(() => {
         if (!fundBatches) return [];
         return fundBatches.map(batch => {
-            const batchTenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
+            const batchTenureInDays = durationToDays(batch.tenureValue, batch.tenureUnit);
             const type = batchTenureInDays <= TWELVE_MONTHS_IN_DAYS ? 'Short-Term' : 'Long-Term';
             return { ...batch, type };
         });
@@ -699,12 +687,12 @@ export default function UserDetailPage() {
                                     <DialogTrigger asChild>
                                         <Button className="w-full" disabled={ownerReadOnly}>
                                             <PlusCircle className="mr-2 h-4 w-4" />
-                                            Add Funds
+                                            Start Deposit
                                         </Button>
                                     </DialogTrigger>
                                     <DialogContent>
                                         <DialogHeader>
-                                            <DialogTitle>Add Funds to Investor Account</DialogTitle>
+                                            <DialogTitle>Start Investor Deposit</DialogTitle>
                                         </DialogHeader>
                                         <AddFundForm userId={userId} />
                                     </DialogContent>

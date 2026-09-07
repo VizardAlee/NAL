@@ -13,6 +13,11 @@ export type Deal = DocumentData & {
   managementFeeRate?: number;
   managementFeeAmount?: number;
   managementFeePaid?: boolean;
+  requiresManagementFee?: boolean;
+  agreementSigningRequired?: boolean;
+  agreementSigningWaived?: boolean;
+  agreementSigningWaivedBy?: string;
+  agreementSigningWaivedAt?: Timestamp;
   financingMode?: 'Murabaha' | 'Ijara' | 'Mudaraba';
   wakalahGranted?: boolean;
   wakalahAssetDescription?: string;

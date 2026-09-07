@@ -12,6 +12,8 @@ const createDealSchema = z.object({
   principal: z.coerce.number().positive(),
   profitRate: z.coerce.number().min(0),
   managementFeeRate: z.coerce.number().min(0),
+  requiresManagementFee: z.boolean().default(true),
+  agreementSigningRequired: z.boolean().default(true),
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).default('Murabaha'),
   durationValue: z.coerce.number().positive().int(),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
@@ -56,6 +58,10 @@ export const createDeal = onCall(
     if (!isAdminCaller(request.auth?.token)) {
         throw new HttpsError('unauthenticated', 'The function must be called by an authenticated admin.');
     }
+    const callerUid = request.auth?.uid;
+    if (!callerUid) {
+        throw new HttpsError('unauthenticated', 'The function must be called by an authenticated admin.');
+    }
     
     const validated = createDealSchema.safeParse(request.data);
     if (!validated.success) {
@@ -71,7 +77,11 @@ export const createDeal = onCall(
     }
     
     const { principal, managementFeeRate, startDate, ...restOfData } = validated.data;
-    const managementFeeAmount = (principal * managementFeeRate) / 100;
+    const managementFeeAmount = validated.data.requiresManagementFee ? (principal * managementFeeRate) / 100 : 0;
+    const parsedStartDate = startDate ? new Date(startDate) : null;
+    if (!validated.data.agreementSigningRequired && (!parsedStartDate || parsedStartDate >= new Date())) {
+      throw new HttpsError('failed-precondition', 'Agreement signing can be waived only for a genuinely back-dated deal.');
+    }
     
     const dealData = {
         ...restOfData,
@@ -79,9 +89,15 @@ export const createDeal = onCall(
         managementFeeRate,
         managementFeeAmount,
         managementFeePaid: false,
+        createdBy: callerUid,
+        agreementSigningWaived: !validated.data.agreementSigningRequired,
+        ...(!validated.data.agreementSigningRequired ? {
+          agreementSigningWaivedBy: callerUid,
+          agreementSigningWaivedAt: admin.firestore.FieldValue.serverTimestamp(),
+        } : {}),
         status: 'Pending',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        startDate: startDate ? admin.firestore.Timestamp.fromDate(new Date(startDate)) : admin.firestore.FieldValue.serverTimestamp(),
+        startDate: parsedStartDate ? admin.firestore.Timestamp.fromDate(parsedStartDate) : admin.firestore.FieldValue.serverTimestamp(),
     };
     
     try {

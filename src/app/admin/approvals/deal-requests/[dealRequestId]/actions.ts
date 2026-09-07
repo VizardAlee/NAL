@@ -12,6 +12,7 @@ const formSchema = z.object({
   principal: z.coerce.number().positive(),
   profitRate: z.coerce.number().min(0),
   managementFeeRate: z.coerce.number().min(0),
+  requiresManagementFee: z.boolean().default(true),
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']),
   wakalahGranted: z.boolean().default(false),
   wakalahAssetDescription: z.string().trim().optional(),
@@ -39,7 +40,7 @@ export async function approveDealAction(
     clientName: string,
     values: z.infer<typeof formSchema>
 ) {
-  await verifyAdminWrite(authToken);
+  const authorized = await verifyAdminWrite(authToken);
   if (!requestId) return { success: false, message: 'Request ID is missing.' };
 
   const validated = formSchema.safeParse(values);
@@ -57,8 +58,22 @@ export async function approveDealAction(
       transaction.update(requestRef, { status: 'Approved', processedAt: FieldValue.serverTimestamp() });
       const newDealRef = adminDb.collection('deals').doc();
       const now = Timestamp.now();
-      const managementFeeAmount = (validated.data.principal * validated.data.managementFeeRate) / 100;
-      transaction.set(newDealRef, { ...validated.data, managementFeeAmount, managementFeePaid: false, clientId, clientName, status: 'Pending', createdAt: now, startDate: now });
+      const managementFeeAmount = validated.data.requiresManagementFee
+        ? (validated.data.principal * validated.data.managementFeeRate) / 100
+        : 0;
+      transaction.set(newDealRef, {
+        ...validated.data,
+        managementFeeAmount,
+        managementFeePaid: false,
+        agreementSigningRequired: true,
+        agreementSigningWaived: false,
+        clientId,
+        clientName,
+        createdBy: authorized.uid,
+        status: 'Pending',
+        createdAt: now,
+        startDate: now,
+      });
     });
 
     revalidatePath('/admin/approvals/deal-requests');

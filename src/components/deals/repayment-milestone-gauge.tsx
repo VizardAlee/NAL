@@ -129,7 +129,7 @@ function CheckpointCard({
         : 'Upcoming';
 
   return (
-    <article className="group w-[17rem] shrink-0 snap-start">
+    <article className="group min-w-0 w-full">
       <div className="relative mb-3 h-8">
         <div className="absolute left-0 right-0 top-3 h-1.5 overflow-hidden bg-red-200 dark:bg-red-950">
           <div
@@ -335,7 +335,7 @@ export function RepaymentMilestoneGauge({
               <h4 className="font-headline text-lg font-bold">Milestone timeline</h4>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Scroll through each checkpoint to see confirmed, pending, and outstanding values.
+              Review each checkpoint to see confirmed, pending, and outstanding values.
             </p>
           </div>
           <div className="flex items-center gap-3 rounded-full border bg-white/70 px-3 py-1.5 text-[10px] font-semibold text-muted-foreground shadow-sm dark:bg-slate-950/60">
@@ -348,8 +348,7 @@ export function RepaymentMilestoneGauge({
           </div>
         </div>
 
-        <div className="-mx-1 snap-x snap-proximity overflow-x-auto px-1 pb-4">
-          <div className="flex min-w-max gap-3 pr-3">
+        <div className="grid min-w-0 gap-3 pb-4 sm:grid-cols-2 xl:grid-cols-3">
             {progress.checkpoints.map((checkpoint, index) => (
               <CheckpointCard
                 key={checkpoint.key}
@@ -358,7 +357,6 @@ export function RepaymentMilestoneGauge({
                 total={progress.checkpoints.length}
               />
             ))}
-          </div>
         </div>
 
         <div className="mt-1 flex items-start gap-2 rounded-xl border border-slate-200/70 bg-white/60 px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground dark:border-slate-800 dark:bg-slate-950/50">

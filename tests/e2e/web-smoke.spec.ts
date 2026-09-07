@@ -1,5 +1,26 @@
 import { expect, test } from '@playwright/test';
 
+const responsiveWidths = [320, 360, 375, 390, 412, 430, 768, 1024, 1440];
+
+for (const width of responsiveWidths) {
+  test(`public application shell stays within a ${width}px viewport`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    for (const path of ['/', '/login', '/forgot-password', '/terms', '/privacy']) {
+      await page.goto(path, { waitUntil: 'domcontentloaded' });
+      const dimensions = await page.evaluate(() => {
+        const clientWidth = document.documentElement.clientWidth;
+        const offenders = Array.from(document.querySelectorAll<HTMLElement>('body *'))
+          .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+          .filter(({ rect }) => rect.right > clientWidth + 0.5 || rect.left < -0.5)
+          .slice(0, 5)
+          .map(({ element, rect }) => `${element.tagName.toLowerCase()}.${element.className} [${Math.round(rect.left)}, ${Math.round(rect.right)}]`);
+        return { scrollWidth: document.documentElement.scrollWidth, clientWidth, offenders };
+      });
+      expect(dimensions.scrollWidth, `${path} overflowed at ${width}px: ${dimensions.offenders.join('; ')}`).toBeLessThanOrEqual(dimensions.clientWidth);
+    }
+  });
+}
+
 test('public entry points render and password reset is available', async ({ page }) => {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveTitle(/NAL/i);

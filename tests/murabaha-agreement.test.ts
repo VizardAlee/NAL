@@ -18,7 +18,7 @@ const agreement: MurabahaAgreementModel = {
     costPrice: 1_050_000, profitRate: 50, profit: 525_000, contractPrice: 1_575_000,
     durationValue: 8, durationUnit: 'Months', repaymentFrequency: 'Daily', installmentCount: 2,
     installmentMinimum: 787_500, installmentMaximum: 787_500, managementFeeRate: 6,
-    managementFeeAmount: 63_000, wakalahGranted: false,
+    managementFeeAmount: 63_000, requiresManagementFee: true, wakalahGranted: false,
     schedule: [
       { installment: 1, dueDate: '2026-07-31T00:00:00.000Z', openingBalance: 1_575_000, profit: 262_500, principal: 525_000, payment: 787_500, closingBalance: 787_500 },
       { installment: 2, dueDate: '2026-08-01T00:00:00.000Z', openingBalance: 787_500, profit: 262_500, principal: 525_000, payment: 787_500, closingBalance: 0 },
@@ -66,6 +66,15 @@ test('Murabaha clause 8 remains the same for every repayment frequency', () => {
   clause8Versions.forEach((clause) => assert.deepEqual(clause, clause8Versions[0]));
   assert.match(clause8Versions[0].paragraphs.join(' '), /more than thirty \(30\) days/);
   assert.match(clause8Versions[0].paragraphs.join(' '), /1% per month/);
+});
+
+test('fee-free Murabaha agreements do not create a management-fee obligation', () => {
+  const clauses = buildMurabahaClauses({
+    ...agreement,
+    deal: { ...agreement.deal, requiresManagementFee: false, managementFeeRate: 0, managementFeeAmount: 0 },
+  });
+  assert.match(clauses[1].paragraphs.join(' '), /no management or documentation fee is required/i);
+  assert.doesNotMatch(clauses[1].paragraphs.join(' '), /upfront management/i);
 });
 
 test('Murabaha PDF includes the attached repayment schedule as additional pages', async () => {

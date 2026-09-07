@@ -48,6 +48,7 @@ import { useDoc } from "@/firebase/firestore/use-doc";
 import { runOwnerProfitAllocationAction, setOwnershipPartnerActiveAction, upsertOwnershipPartnerAction, upsertOwnerProfitPolicyAction } from "./actions";
 import { canWriteAdmin } from "@/lib/access-control";
 import { getRequiredIdToken } from '@/firebase/auth-token';
+import { MoneyInput } from '@/components/ui/money-input';
 
 type OwnerAllocationRunResult = Awaited<ReturnType<typeof runOwnerProfitAllocationAction>>;
 
@@ -298,7 +299,7 @@ function AdminTransactionForm({ type, onTransactionComplete }: { type: "AdminDep
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel>{type === 'AssetAcquisition' ? 'Acquisition Cost' : 'Amount'}</FormLabel>
-                            <FormControl><Input type="number" {...field} /></FormControl>
+                            <FormControl><MoneyInput value={field.value} onValueChange={field.onChange} /></FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
@@ -479,7 +480,7 @@ function RecognizeAssetForm({ onAssetRecognized }: { onAssetRecognized: () => vo
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel>Original Cost (if known)</FormLabel>
-                            <FormControl><Input type="number" {...field} /></FormControl>
+                            <FormControl><MoneyInput value={field.value} onValueChange={field.onChange} /></FormControl>
                             <FormDescription>Enter 0 if the cost is unknown or not applicable. This will not affect the administrative balance.</FormDescription>
                             <FormMessage />
                         </FormItem>
@@ -595,7 +596,7 @@ function SellAssetForm({ asset, onAssetSold }: { asset: Asset, onAssetSold: () =
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel>Sale Price</FormLabel>
-                            <FormControl><Input type="number" {...field} /></FormControl>
+                            <FormControl><MoneyInput value={field.value} onValueChange={field.onChange} /></FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
@@ -723,7 +724,7 @@ function TransferFundsForm({
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Amount to Transfer</FormLabel>
-                                <FormControl><Input type="number" {...field} /></FormControl>
+                                <FormControl><MoneyInput value={field.value} onValueChange={field.onChange} /></FormControl>
                                 <FormDescription>Max available: {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(maxAmount)}</FormDescription>
                                 <FormMessage />
                             </FormItem>
@@ -837,7 +838,7 @@ function BorrowFromEarningsForm({
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Amount</FormLabel>
-                                <FormControl><Input type="number" {...field} /></FormControl>
+                                <FormControl><MoneyInput value={field.value} onValueChange={field.onChange} /></FormControl>
                                 <FormDescription>Max available: {formatCurrency(maxBorrowAmount)}</FormDescription>
                                 <FormMessage />
                             </FormItem>
@@ -1008,7 +1009,7 @@ function RepayPlatformLoanForm({
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Repayment Amount</FormLabel>
-                                <FormControl><Input type="number" {...field} /></FormControl>
+                                <FormControl><MoneyInput value={field.value} onValueChange={field.onChange} /></FormControl>
                                 <FormDescription>
                                     Max repayable now: {formatCurrency(maxRepayable)}
                                 </FormDescription>

@@ -41,6 +41,7 @@ import { Calendar } from '@/components/ui/calendar';
 import Link from 'next/link';
 import { hasPersona, type LegacyRole, type Persona } from '@/lib/access-control';
 import { getRequiredIdToken } from '@/firebase/auth-token';
+import { MoneyInput } from '@/components/ui/money-input';
 
 
 const formSchema = z.object({
@@ -49,6 +50,8 @@ const formSchema = z.object({
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
   managementFeeRate: z.coerce.number().min(0, { message: 'Management fee rate cannot be negative.' }),
+  requiresManagementFee: z.boolean().default(true),
+  agreementSigningRequired: z.boolean().default(true),
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).optional().default('Murabaha'),
   wakalahGranted: z.boolean().default(false),
   wakalahAssetDescription: z.string().trim().optional(),
@@ -64,6 +67,8 @@ const formSchema = z.object({
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   startDate: z.date().optional(),
 }).superRefine((values, context) => {
+  if (values.requiresManagementFee && values.managementFeeRate <= 0) context.addIssue({ code: z.ZodIssueCode.custom, path: ['managementFeeRate'], message: 'Enter a fee rate or turn off the management-fee requirement.' });
+  if (!values.agreementSigningRequired && (!values.startDate || values.startDate >= new Date())) context.addIssue({ code: z.ZodIssueCode.custom, path: ['agreementSigningRequired'], message: 'Only genuinely back-dated deals may waive signing.' });
   if ((values.financingMode || 'Murabaha') === 'Murabaha' && (!values.wakalahAssetDescription || values.wakalahAssetDescription.length < 3)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahAssetDescription'], message: 'Describe the approved asset for the Murabaha sales contract.' });
   if (!values.wakalahGranted) return;
   if (values.financingMode !== 'Murabaha') context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahGranted'], message: 'Available only for Murabaha deals.' });
@@ -114,6 +119,8 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
       guarantorOccupation: deal.guarantorOccupation || '',
       guarantorPhotoURL: deal.guarantorPhotoURL || '',
       managementFeeRate: deal.managementFeeRate || 0,
+      requiresManagementFee: typeof deal.requiresManagementFee === 'boolean' ? deal.requiresManagementFee : Number(deal.managementFeeAmount || deal.managementFeeRate || 0) > 0,
+      agreementSigningRequired: deal.agreementSigningRequired !== false,
       startDate: deal.startDate?.toDate(),
     },
   });
@@ -230,7 +237,7 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Principal Amount</FormLabel>
-                <FormControl><Input type="number" placeholder="10000" {...field} /></FormControl>
+                <FormControl><MoneyInput placeholder="10,000" value={field.value} onValueChange={field.onChange} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -247,13 +254,14 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
             )}
           />
         </div>
+        <FormField control={form.control} name="requiresManagementFee" render={({ field }) => <FormItem className="flex items-center justify-between gap-4 rounded-lg border p-4"><div><FormLabel>Require management fee</FormLabel><FormDescription>Turn off only when this deal has no fee stage.</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>} />
         <FormField
           control={form.control}
           name="managementFeeRate"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Management Fee Rate (%)</FormLabel>
-              <FormControl><Input type="number" step="0.1" placeholder="2" {...field} /></FormControl>
+              <FormControl><Input type="number" step="0.1" placeholder="2" disabled={!form.watch('requiresManagementFee')} {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )}
@@ -370,6 +378,24 @@ export function EditDealForm({ deal, onDealUpdated }: EditDealFormProps) {
               <FormDescription>
                 The official start of the loan term.
               </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="agreementSigningRequired"
+          render={({ field }) => (
+            <FormItem className="flex items-center justify-between gap-4 rounded-lg border p-4">
+              <div>
+                <FormLabel>Require agreement signing</FormLabel>
+                <FormDescription>
+                  Keep enabled for current and future deals. Only a genuinely back-dated deal may use an auditable signing waiver.
+                </FormDescription>
+              </div>
+              <FormControl>
+                <Switch checked={field.value} onCheckedChange={field.onChange} />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}

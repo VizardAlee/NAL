@@ -42,10 +42,10 @@ import {
   DialogTrigger,
   DialogClose
 } from "@/components/ui/dialog"
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { roundCurrency } from '@/lib/financial-integrity';
 import { repaymentAmountForInstallment, remainingScheduledAmount } from '@/lib/repayment-allocation';
+import { MoneyInput } from '@/components/ui/money-input';
 
 const ITEMS_PER_PAGE = 5;
 
@@ -78,7 +78,7 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
     const { toast } = useToast();
     const auth = useAuth();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [amountToPay, setAmountToPay] = useState(installment.amountAvailableToLodge);
+    const [amountToPay, setAmountToPay] = useState<number | ''>(installment.amountAvailableToLodge);
     const [authToken, setAuthToken] = useState('');
 
     useEffect(() => {
@@ -132,17 +132,12 @@ function LodgePaymentButton({ installment, dealId, userId, onPaymentLodged }: { 
                 <form action={formAction} className="space-y-4 pt-4">
                     <div className="space-y-2">
                         <Label htmlFor="amount">Amount to Pay</Label>
-                        <Input
+                        <MoneyInput
                             id="amount"
-                            name="amount"
-                            type="number"
-                            inputMode="decimal"
-                            step="0.01"
                             value={amountToPay}
-                            onChange={(e) => setAmountToPay(parseFloat(e.target.value) || 0)}
-                            max={roundCurrency(installment.dealBalanceRemaining)}
-                            min="0.01"
+                            onValueChange={setAmountToPay}
                         />
+                        <input type="hidden" name="amount" value={amountToPay === '' ? '' : roundCurrency(amountToPay)} />
                     </div>
                     <input type="hidden" name="dealId" value={dealId} />
                     <input type="hidden" name="authToken" value={authToken} />

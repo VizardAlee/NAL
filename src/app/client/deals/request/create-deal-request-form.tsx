@@ -32,6 +32,7 @@ import { Textarea } from '@/components/ui/textarea';
 import Link from 'next/link';
 import { uploadAuthenticatedFile } from '@/firebase/storage-upload';
 import { GuarantorPhotoField } from '@/components/guarantor-photo-field';
+import { MoneyInput } from '@/components/ui/money-input';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const ACCEPTED_FILE_TYPES = ["application/pdf"];
@@ -195,7 +196,7 @@ export function CreateDealRequestForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Principal Amount</FormLabel>
-                  <FormControl><Input type="number" placeholder="10000" {...field} /></FormControl>
+                  <FormControl><MoneyInput value={field.value} onValueChange={field.onChange} placeholder="10,000" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}

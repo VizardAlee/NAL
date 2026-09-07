@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -265,11 +266,6 @@ export default function TaxPage() {
         return dateValue ? format(dateValue, "LLL dd, y") : <span>Pick a date</span>;
     }
 
-    const handleNumericInput = (value: string, setter: (value: number) => void) => {
-        const parsed = Number(value);
-        setter(value === '' || !Number.isFinite(parsed) ? 0 : Math.max(0, parsed));
-    };
-
     const updateWhtEntry = (id: string, changes: Partial<WhtScheduleEntry>) => {
         setWhtSchedule(current => current.map(entry => entry.id === id ? { ...entry, ...changes } : entry));
     };
@@ -443,12 +439,11 @@ export default function TaxPage() {
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="fixedAssetAdjustment">Asset-value adjustment</Label>
-                                <Input
+                                <MoneyInput
                                     id="fixedAssetAdjustment"
-                                    type="number"
                                     step="0.01"
-                                    value={fixedAssetAdjustment || ''}
-                                    onChange={(event) => setFixedAssetAdjustment(Number(event.target.value) || 0)}
+                                    value={fixedAssetAdjustment}
+                                    onValueChange={(value) => setFixedAssetAdjustment(value === '' ? 0 : value)}
                                 />
                                 <p className="text-xs text-muted-foreground">Signed audited adjustment; final value: {formatCurrency(taxCalculations.fixedAssets)}.</p>
                             </div>
@@ -483,64 +478,58 @@ export default function TaxPage() {
                         <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                             <div className="space-y-2">
                                 <Label htmlFor="disallowedExpenses">Disallowed expenses</Label>
-                                <Input
+                                <MoneyInput
                                     id="disallowedExpenses"
-                                    type="number"
                                     min="0"
-                                    value={disallowedExpenses || ''}
-                                    onChange={(event) => handleNumericInput(event.target.value, setDisallowedExpenses)}
+                                    value={disallowedExpenses}
+                                    onValueChange={(value) => setDisallowedExpenses(value === '' ? 0 : value)}
                                 />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="exemptIncome">Exempt income</Label>
-                                <Input
+                                <MoneyInput
                                     id="exemptIncome"
-                                    type="number"
                                     min="0"
-                                    value={exemptIncome || ''}
-                                    onChange={(event) => handleNumericInput(event.target.value, setExemptIncome)}
+                                    value={exemptIncome}
+                                    onValueChange={(value) => setExemptIncome(value === '' ? 0 : value)}
                                 />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="lossRelief">Loss relief</Label>
-                                <Input
+                                <MoneyInput
                                     id="lossRelief"
-                                    type="number"
                                     min="0"
-                                    value={lossRelief || ''}
-                                    onChange={(event) => handleNumericInput(event.target.value, setLossRelief)}
+                                    value={lossRelief}
+                                    onValueChange={(value) => setLossRelief(value === '' ? 0 : value)}
                                 />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="capitalAllowances">Capital allowances</Label>
-                                <Input
+                                <MoneyInput
                                     id="capitalAllowances"
-                                    type="number"
                                     min="0"
-                                    value={capitalAllowances || ''}
-                                    onChange={(event) => handleNumericInput(event.target.value, setCapitalAllowances)}
+                                    value={capitalAllowances}
+                                    onValueChange={(value) => setCapitalAllowances(value === '' ? 0 : value)}
                                 />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="etrNetIncomeAdjustment">ETR net-income adjustment</Label>
-                                <Input
+                                <MoneyInput
                                     id="etrNetIncomeAdjustment"
-                                    type="number"
                                     step="0.01"
-                                    value={etrNetIncomeAdjustment || ''}
-                                    onChange={(event) => setEtrNetIncomeAdjustment(Number(event.target.value) || 0)}
+                                    value={etrNetIncomeAdjustment}
+                                    onValueChange={(value) => setEtrNetIncomeAdjustment(value === '' ? 0 : value)}
                                 />
                                 <p className="text-xs text-muted-foreground">Signed adjustment to recorded PBT for audited net income (excluding franked investment income and unrealised gains/losses).</p>
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="prioritySectorTaxCredit">Priority-sector tax credit</Label>
-                                <Input
+                                <MoneyInput
                                     id="prioritySectorTaxCredit"
-                                    type="number"
                                     min="0"
                                     step="0.01"
-                                    value={prioritySectorTaxCredit || ''}
-                                    onChange={(event) => handleNumericInput(event.target.value, setPrioritySectorTaxCredit)}
+                                    value={prioritySectorTaxCredit}
+                                    onValueChange={(value) => setPrioritySectorTaxCredit(value === '' ? 0 : value)}
                                 />
                                 <p className="text-xs text-muted-foreground">Included as a covered tax only for the minimum effective tax test.</p>
                             </div>
@@ -560,13 +549,12 @@ export default function TaxPage() {
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="additionalStandardRatedSupplies">Additional standard-rated supplies</Label>
-                                <Input
+                                <MoneyInput
                                     id="additionalStandardRatedSupplies"
-                                    type="number"
                                     min="0"
                                     step="0.01"
-                                    value={additionalStandardRatedSupplies || ''}
-                                    onChange={(event) => handleNumericInput(event.target.value, setAdditionalStandardRatedSupplies)}
+                                    value={additionalStandardRatedSupplies}
+                                    onValueChange={(value) => setAdditionalStandardRatedSupplies(value === '' ? 0 : value)}
                                 />
                             </div>
                             <div className="space-y-2">
@@ -576,13 +564,12 @@ export default function TaxPage() {
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="eligibleInputVat">Eligible input VAT</Label>
-                                <Input
+                                <MoneyInput
                                     id="eligibleInputVat"
-                                    type="number"
                                     min="0"
                                     step="0.01"
-                                    value={eligibleInputVat || ''}
-                                    onChange={(event) => handleNumericInput(event.target.value, setEligibleInputVat)}
+                                    value={eligibleInputVat}
+                                    onValueChange={(value) => setEligibleInputVat(value === '' ? 0 : value)}
                                 />
                                 <p className="text-xs text-muted-foreground">Enter only invoice-supported VAT attributable to taxable supplies.</p>
                             </div>
@@ -600,14 +587,12 @@ export default function TaxPage() {
                             <div className="grid gap-4 md:grid-cols-3">
                                 <div className="space-y-2">
                                     <Label htmlFor="whtCredits">WHT suffered / credit notes</Label>
-                                    <Input
+                                    <MoneyInput
                                         id="whtCredits"
-                                        type="number"
-                                        inputMode="decimal"
                                         step="0.01"
                                         min="0"
-                                        value={whtCredits || ''}
-                                        onChange={(event) => handleNumericInput(event.target.value, setWhtCredits)}
+                                        value={whtCredits}
+                                        onValueChange={(value) => setWhtCredits(value === '' ? 0 : value)}
                                     />
                                     <p className="text-xs text-muted-foreground">Tax withheld from income received by the company and available as a CIT credit.</p>
                                 </div>
@@ -704,7 +689,7 @@ export default function TaxPage() {
                                             </div>
                                             <div className="space-y-2">
                                                 <Label>Gross amount</Label>
-                                                <Input type="number" min="0" step="0.01" value={entry.grossAmount || ''} onChange={(event) => updateWhtEntry(entry.id, { grossAmount: Math.max(0, Number(event.target.value) || 0) })} />
+                                                <MoneyInput min="0" step="0.01" value={entry.grossAmount} onValueChange={(value) => updateWhtEntry(entry.id, { grossAmount: value === '' ? 0 : Math.max(0, value) })} />
                                             </div>
                                             <div className="space-y-2">
                                                 <Label>Treaty rate (%)</Label>
@@ -727,7 +712,7 @@ export default function TaxPage() {
                                             </div>
                                             <div className="space-y-2">
                                                 <Label>Amount remitted</Label>
-                                                <Input type="number" min="0" step="0.01" value={entry.remittedAmount || ''} onChange={(event) => updateWhtEntry(entry.id, { remittedAmount: Math.max(0, Number(event.target.value) || 0) })} />
+                                                <MoneyInput min="0" step="0.01" value={entry.remittedAmount} onValueChange={(value) => updateWhtEntry(entry.id, { remittedAmount: value === '' ? 0 : Math.max(0, value) })} />
                                             </div>
                                             <div className="space-y-2">
                                                 <Label>Rule applied</Label>

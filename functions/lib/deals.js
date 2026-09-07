@@ -13,6 +13,8 @@ const createDealSchema = zod_1.z.object({
     principal: zod_1.z.coerce.number().positive(),
     profitRate: zod_1.z.coerce.number().min(0),
     managementFeeRate: zod_1.z.coerce.number().min(0),
+    requiresManagementFee: zod_1.z.boolean().default(true),
+    agreementSigningRequired: zod_1.z.boolean().default(true),
     financingMode: zod_1.z.enum(['Murabaha', 'Ijara', 'Mudaraba']).default('Murabaha'),
     durationValue: zod_1.z.coerce.number().positive().int(),
     durationUnit: zod_1.z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
@@ -52,6 +54,10 @@ exports.createDeal = (0, https_1.onCall)({
     if (!isAdminCaller(request.auth?.token)) {
         throw new https_1.HttpsError('unauthenticated', 'The function must be called by an authenticated admin.');
     }
+    const callerUid = request.auth?.uid;
+    if (!callerUid) {
+        throw new https_1.HttpsError('unauthenticated', 'The function must be called by an authenticated admin.');
+    }
     const validated = createDealSchema.safeParse(request.data);
     if (!validated.success) {
         firebase_functions_1.logger.warn('createDeal validation failed', {
@@ -61,16 +67,26 @@ exports.createDeal = (0, https_1.onCall)({
         throw new https_1.HttpsError('invalid-argument', 'Invalid data provided for deal creation.', validated.error.flatten());
     }
     const { principal, managementFeeRate, startDate, ...restOfData } = validated.data;
-    const managementFeeAmount = (principal * managementFeeRate) / 100;
+    const managementFeeAmount = validated.data.requiresManagementFee ? (principal * managementFeeRate) / 100 : 0;
+    const parsedStartDate = startDate ? new Date(startDate) : null;
+    if (!validated.data.agreementSigningRequired && (!parsedStartDate || parsedStartDate >= new Date())) {
+        throw new https_1.HttpsError('failed-precondition', 'Agreement signing can be waived only for a genuinely back-dated deal.');
+    }
     const dealData = {
         ...restOfData,
         principal,
         managementFeeRate,
         managementFeeAmount,
         managementFeePaid: false,
+        createdBy: callerUid,
+        agreementSigningWaived: !validated.data.agreementSigningRequired,
+        ...(!validated.data.agreementSigningRequired ? {
+            agreementSigningWaivedBy: callerUid,
+            agreementSigningWaivedAt: admin.firestore.FieldValue.serverTimestamp(),
+        } : {}),
         status: 'Pending',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        startDate: startDate ? admin.firestore.Timestamp.fromDate(new Date(startDate)) : admin.firestore.FieldValue.serverTimestamp(),
+        startDate: parsedStartDate ? admin.firestore.Timestamp.fromDate(parsedStartDate) : admin.firestore.FieldValue.serverTimestamp(),
     };
     try {
         const newDealRef = await admin.firestore().collection('deals').add(dealData);

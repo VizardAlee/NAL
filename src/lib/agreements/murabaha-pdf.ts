@@ -120,7 +120,7 @@ export async function buildMurabahaAgreementPdf(model: MurabahaAgreementModel, s
     ['Contract Price', formatAgreementCurrency(model.deal.contractPrice)],
     ['Tenor', `${model.deal.durationValue} ${model.deal.durationUnit}`],
     ['Repayments', `${model.deal.installmentCount} ${model.deal.repaymentFrequency} instalments`],
-    ['Management Fee', `${formatAgreementCurrency(model.deal.managementFeeAmount)} (${model.deal.managementFeeRate}% of Cost Price; separate from Contract Price)`],
+    ['Management Fee', model.deal.requiresManagementFee ? `${formatAgreementCurrency(model.deal.managementFeeAmount)} (${model.deal.managementFeeRate}% of Cost Price; separate from Contract Price)` : 'Not required'],
   ];
   for (const [label, value] of summary) draw(`${label}: ${value}`, { size: 8.3, gap: 2 });
   y -= 5;

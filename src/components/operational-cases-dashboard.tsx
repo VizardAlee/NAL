@@ -35,6 +35,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { sortDefaulterRecords } from '@/lib/operational-ordering';
 
 const RECOVERY_QUEUE = ['UPCOMING', 'DUE', 'OVERDUE', 'PROMISE_TO_PAY', 'BROKEN_PROMISE', 'Due_Recovery'];
 const LEGAL_QUEUE = [...LEGAL_STATUSES, 'Escalated_Legal'];
@@ -46,6 +47,7 @@ type CaseRecord = DocumentData & {
   dealId: string; dealName: string; financingMode?: string; repaymentId: string; installmentNumber?: number;
   scheduledAmount?: number; amountPaid?: number; amountOutstanding?: number; amountDue?: number; dueDate: Timestamp;
   daysPastDue?: number; status: string; assigneeId?: string | null; assigneeName?: string | null;
+  repaymentFrequency?: string; repaymentFrequencyPriority?: number;
   nextActionAt?: Timestamp | null; promiseAmount?: number; promiseDueAt?: Timestamp; lastLog?: string;
   externalCounsel?: string; courtReference?: string; hearingAt?: Timestamp; settlementAmount?: number;
   settlementTerms?: string; totalLegalExpenses?: number; escalationReason?: string;
@@ -245,14 +247,14 @@ export function OperationalCasesDashboard({ portal }: { portal: 'recovery' | 'le
     if (current) setSelected(current);
     else if (!loading) setSelected(null);
   }, [cases, loading, selected]);
-  const filtered = useMemo(() => cases.filter((item) => {
+  const filtered = useMemo(() => sortDefaulterRecords(cases.filter((item) => {
     const haystack = `${item.clientName} ${item.dealName} ${item.clientEmail || ''} ${item.clientPhoneNumber || ''}`.toLowerCase();
     if (search && !haystack.includes(search.toLowerCase())) return false;
     if (status !== 'ALL' && item.status !== status) return false;
     if (ownership === 'MINE' && item.assigneeId !== user?.uid) return false;
     if (ownership === 'UNASSIGNED' && item.assigneeId) return false;
     return true;
-  }), [cases, ownership, search, status, user?.uid]);
+  })), [cases, ownership, search, status, user?.uid]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);

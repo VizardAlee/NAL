@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/tooltip";
 import { getRequiredIdToken } from '@/firebase/auth-token';
 import { processRepaymentRequestAction } from '@/app/admin/approvals/actions';
+import { sortRepaymentRecords } from '@/lib/operational-ordering';
 
 
 type Repayment = DocumentData & {
@@ -217,7 +218,7 @@ export default function RepaymentsPage() {
 
     const enrichRepayments = useCallback((repayments: Repayment[] | null): RepaymentRow[] => {
         if (!repayments || !deals || !users) return [];
-        return repayments.map(repayment => {
+        return sortRepaymentRecords(repayments.map(repayment => {
             const deal = deals.find(d => d.id === repayment.dealId);
             const client = users.find(u => u.id === repayment.clientId);
             return {
@@ -225,7 +226,7 @@ export default function RepaymentsPage() {
                 dealName: deal?.dealName || 'Unknown Deal',
                 clientName: client?.name || 'Unknown Client',
             }
-        });
+        }));
     }, [deals, users]);
 
     const pendingRows = useMemo(() => enrichRepayments(pendingRepayments), [enrichRepayments, pendingRepayments]);

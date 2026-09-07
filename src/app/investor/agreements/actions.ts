@@ -39,13 +39,13 @@ async function createAgreementModel(
   batchSnapshot: FirebaseFirestore.DocumentSnapshot
 ): Promise<MudarabaAgreementModel> {
   const batch = batchSnapshot.data() || {};
-  if (batch.sourceId !== userId) throw new Error('You are not allowed to view this agreement.');
+  if ((batch.sourceId || batch.investorId) !== userId) throw new Error('You are not allowed to view this agreement.');
 
   const [userSnapshot, bankSnapshot, requestSnapshot] = await Promise.all([
     adminDb.collection('users').doc(userId).get(),
     adminDb.collection('platformSettings').doc('bankDetails').get(),
-    batch.sourceRequestId
-      ? adminDb.collection('depositRequests').doc(String(batch.sourceRequestId)).get()
+    batch.sourceRequestId || batch.investorId
+      ? adminDb.collection('depositRequests').doc(String(batch.sourceRequestId || batchSnapshot.id)).get()
       : Promise.resolve(null),
   ]);
   if (!userSnapshot.exists) throw new Error('Investor profile not found.');
@@ -125,8 +125,17 @@ export async function listInvestorAgreementsAction(input: { authToken: string })
 
   try {
     const decoded = await verifyAuthToken(validated.data.authToken);
-    const batches = await adminDb.collection('fundBatches').where('sourceId', '==', decoded.uid).get();
-    const agreementBatches = batches.docs.filter((batch) => Number(batch.data().tenureValue || 0) > 0);
+    const [batches, requests] = await Promise.all([
+      adminDb.collection('fundBatches').where('sourceId', '==', decoded.uid).get(),
+      adminDb.collection('depositRequests').where('investorId', '==', decoded.uid).get(),
+    ]);
+    const batchIds = new Set(batches.docs.map((batch) => batch.id));
+    const pendingAgreementRequests = requests.docs.filter((request) =>
+      request.data().agreementSigningRequired === true &&
+      ['Pending', 'Approved'].includes(String(request.data().status)) &&
+      !batchIds.has(request.id)
+    );
+    const agreementBatches = [...batches.docs.filter((batch) => Number(batch.data().tenureValue || 0) > 0), ...pendingAgreementRequests];
     const agreements = await Promise.all(agreementBatches.map((batch) => createAgreementModel(decoded.uid, batch)));
     agreements.sort((a, b) => new Date(b.agreementDate).getTime() - new Date(a.agreementDate).getTime());
     return { success: true, agreements };
@@ -145,7 +154,8 @@ export async function loadInvestorAgreementAction(input: { authToken: string; ba
 
   try {
     const decoded = await verifyAuthToken(validated.data.authToken);
-    const batch = await adminDb.collection('fundBatches').doc(validated.data.batchId).get();
+    let batch = await adminDb.collection('fundBatches').doc(validated.data.batchId).get();
+    if (!batch.exists) batch = await adminDb.collection('depositRequests').doc(validated.data.batchId).get();
     if (!batch.exists) return { success: false, message: 'Agreement investment record not found.' };
     if (Number(batch.data()?.tenureValue || 0) <= 0) {
       return { success: false, message: 'This fund movement does not create an investment agreement.' };

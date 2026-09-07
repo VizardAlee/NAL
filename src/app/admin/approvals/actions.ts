@@ -13,6 +13,8 @@ import {
 } from '@/lib/financial-integrity';
 import { planRepaymentAllocations } from '@/lib/repayment-allocation';
 import { loadFundBatchAnniversaryWindow } from '@/lib/server/fund-batch-anniversary';
+import { assertInvestmentAgreementExecuted } from '@/lib/server/agreement-eligibility';
+import { isProfitDistributionLocked } from '@/lib/workflow-eligibility';
 
 const decisionSchema = z.object({
   authToken: z.string().min(1),
@@ -59,10 +61,16 @@ export async function processDepositRequestAction(input: DecisionInput) {
     const snapshot = await trx.get(requestRef);
     if (!snapshot.exists || snapshot.data()?.status !== 'Pending') throw new Error('This deposit request has already been processed.');
     const request = snapshot.data()!;
+    if (data.decision === 'Approved') {
+      await assertInvestmentAgreementExecuted(trx, data.requestId, {
+        // Requests created before the signing-first rollout remain processable.
+        allowHistoricalWithoutEnvelope: request.agreementSigningRequired === undefined,
+      });
+    }
     trx.update(requestRef, { status: data.decision, processedAt: FieldValue.serverTimestamp() });
     if (data.decision === 'Rejected') return;
     const now = Timestamp.now();
-    trx.set(adminDb.collection('fundBatches').doc(), {
+    trx.set(adminDb.collection('fundBatches').doc(data.requestId), {
       sourceId: request.investorId, amount: request.amount, remainingAmount: request.amount,
       createdAt: now,
       tenureValue: Number(request.tenureValue || 36),
@@ -142,13 +150,34 @@ export async function processWithdrawalRequestAction(input: DecisionInput) {
     if (isOwnerWithdrawal) {
       eligibleBatchesQuery = eligibleBatchesQuery.where('sourceType', '==', 'OwnerProfitAutoAllocation');
     }
-    const batchesSnapshot = data.decision === 'Approved'
-      ? await trx.get(eligibleBatchesQuery.orderBy('createdAt', 'asc'))
-      : null;
+    if (data.decision === 'Rejected') {
+      trx.update(requestRef, { status: data.decision, processedAt: FieldValue.serverTimestamp() });
+      return;
+    }
+    const batchesSnapshot = await trx.get(eligibleBatchesQuery.orderBy('createdAt', 'asc'));
+    if (!isOwnerWithdrawal && request.source !== 'Capital') {
+      const [transactionsSnapshot, allBatchesSnapshot, pendingSnapshot] = await Promise.all([
+        trx.get(adminDb.collection('transactions').where('userId', '==', userId)),
+        trx.get(adminDb.collection('fundBatches').where('sourceId', '==', userId)),
+        trx.get(adminDb.collection('withdrawalRequests').where('investorId', '==', userId)),
+      ]);
+      const batches = new Map(allBatchesSnapshot.docs.map((doc) => [doc.id, doc.data()]));
+      const eligibleEntries = transactionsSnapshot.docs.map((doc) => doc.data()).filter((entry) => {
+        if (entry.type !== 'ProfitDistribution' || !entry.fundBatchId) return true;
+        const batch = batches.get(String(entry.fundBatchId));
+        return !batch || !isProfitDistributionLocked(batch, entry);
+      });
+      const otherReserved = pendingSnapshot.docs
+        .filter((doc) => doc.id !== data.requestId && doc.data().status === 'Pending' && doc.data().source !== 'Capital')
+        .reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0);
+      const withdrawableProfit = calculateAvailableProfit(eligibleEntries, otherReserved);
+      if (Number(request.amount) > withdrawableProfit + 0.01) {
+        throw new Error('This withdrawal includes profit that has not reached its applicable 30-day period boundary or investment maturity date.');
+      }
+    }
     trx.update(requestRef, { status: data.decision, processedAt: FieldValue.serverTimestamp() });
-    if (data.decision === 'Rejected') return;
     let remaining = Math.abs(Number(request.amount));
-    for (const batch of batchesSnapshot!.docs) {
+    for (const batch of batchesSnapshot.docs) {
       if (remaining <= 0) break;
       const deduction = Math.min(Number(batch.data().remainingAmount), remaining);
       trx.update(batch.ref, { remainingAmount: FieldValue.increment(-deduction) });
@@ -231,7 +260,7 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
       const principalReturned = principalShares[index];
       trx.set(adminDb.collection('transactions').doc(), {
         userId: investment.investorId, dealId: repayment.dealId, type: 'ProfitDistribution', amount: investorProfit,
-        createdAt: now, dealName: deal.dealName, sourceRequestId: data.requestId,
+        createdAt: now, profitEarnedAt: repayment.lodgedAt || now, dealName: deal.dealName, sourceRequestId: data.requestId,
         investmentId: investmentSnapshot.id,
         ...(investment.fundBatchId ? { fundBatchId: investment.fundBatchId } : {}),
       });

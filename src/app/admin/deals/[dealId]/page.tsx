@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { notFound, useParams } from 'next/navigation';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { useCollection } from '@/firebase/firestore/use-collection';
@@ -23,8 +23,11 @@ import { ViewPageNav } from '@/components/view-page-nav';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RepaymentSchedule, RepaymentHistory } from '@/components/deals/page';
-import { approveManagementFeeAction } from '../actions';
+import { approveManagementFeeAction, getDealProgressEligibilityAction } from '../actions';
 import { PrintableDealStatement } from '@/components/deals/printable-deal-statement';
+import { durationToDays } from '@/lib/deal-duration';
+import { requiresManagementFee } from '@/lib/workflow-eligibility';
+import { getRequiredIdToken } from '@/firebase/auth-token';
 
 type User = {
     id: string;
@@ -45,19 +48,7 @@ type FundBatch = DocumentData & {
     specialInvestment?: boolean;
 };
 
-const DURATION_IN_DAYS = {
-    Days: 1,
-    Weeks: 7,
-    Fortnights: 14,
-    Months: 30.4375, // Average days in month
-    Years: 365.25,
-};
-
-function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): number {
-    return value * (DURATION_IN_DAYS[unit] || 0);
-}
-
-const TWELVE_MONTHS_IN_DAYS = 12 * DURATION_IN_DAYS.Months;
+const TWELVE_MONTHS_IN_DAYS = 360;
 
 
 function DealDetailSkeleton() {
@@ -90,6 +81,7 @@ export default function DealDetailPage() {
     const [isPending, startTransition] = useTransition();
     const [isFeePending, startFeeTransition] = useTransition();
     const isMobile = useIsMobile();
+    const [eligibility, setEligibility] = useState<{ canFund: boolean; outstandingAgreements: string[] } | null>(null);
 
     const dealRef = useMemo(() => {
         if (!firestore || !dealId) return null;
@@ -115,6 +107,15 @@ export default function DealDetailPage() {
     }, [firestore, deal]);
 
     const { data: repayments, loading: repaymentsLoading } = useCollection<Repayment>(repaymentsQuery);
+
+    useEffect(() => {
+        let cancelled = false;
+        if (!dealId || !auth?.currentUser) return;
+        void getRequiredIdToken().then((authToken) => getDealProgressEligibilityAction(authToken, dealId)).then((result) => {
+            if (!cancelled && result.success) setEligibility({ canFund: result.canFund, outstandingAgreements: result.outstandingAgreements });
+        });
+        return () => { cancelled = true; };
+    }, [auth, dealId, deal?.managementFeePaid]);
 
 
     const isLoading = dealLoading || investmentsLoading || usersLoading || fundBatchesLoading || repaymentsLoading || isMobile === undefined;
@@ -152,12 +153,12 @@ export default function DealDetailPage() {
     const eligibleFundBatches = useMemo(() => {
         if (!deal || !fundBatches || !users) return [];
 
-        const dealDurationInDays = convertToDays(deal.durationValue, deal.durationUnit);
+        const dealDurationInDays = durationToDays(deal.durationValue, deal.durationUnit);
         const today = new Date();
 
         return fundBatches
             .map(batch => {
-                const originalBatchTenureInDays = convertToDays(batch.tenureValue, batch.tenureUnit);
+                const originalBatchTenureInDays = durationToDays(batch.tenureValue, batch.tenureUnit);
                 const isShortTermBatch = originalBatchTenureInDays <= TWELVE_MONTHS_IN_DAYS;
 
                 let isEligible = false;
@@ -278,7 +279,7 @@ export default function DealDetailPage() {
                             <div className="font-medium">Repayment Frequency</div><div>{deal.repaymentFrequency}</div>
                             <div className="font-medium">Term Start Date</div><div>{formatDate(deal.startDate)}</div>
                             <div className="font-medium">Date Created</div><div>{formatDate(deal.createdAt)}</div>
-                            <div className="font-medium">Management Fee</div><div>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)} ({deal.managementFeeRate || 0}%)</div>
+                            <div className="font-medium">Management Fee</div><div>{requiresManagementFee(deal) ? `${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)} (${deal.managementFeeRate || 0}%)` : 'Not required'}</div>
                             <div className="font-medium">Client Procurement Authority</div><div>{deal.wakalahGranted && deal.financingMode === 'Murabaha' ? <div><Badge>Granted</Badge><p className="mt-1 text-xs text-muted-foreground">{deal.wakalahAssetDescription} · {deal.wakalahSupplierName}</p></div> : <Badge variant="outline">Not granted</Badge>}</div>
                             <div className="font-medium">Guarantor</div><div>{deal.guarantorName ? <div><p className="font-medium">{deal.guarantorName}</p><p className="text-xs text-muted-foreground">{deal.guarantorPhoneNumber} · {deal.guarantorOccupation}</p><p className="text-xs text-muted-foreground">{deal.guarantorAddress}</p></div> : <Badge variant="destructive">Missing — edit required</Badge>}</div>
                         </CardContent>
@@ -412,14 +413,15 @@ export default function DealDetailPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {deal.status === 'Pending' && !deal.managementFeePaid && (
+                            {deal.status === 'Pending' && requiresManagementFee(deal) && !deal.managementFeePaid && (
                                 <Card className="bg-muted border-primary">
                                     <CardHeader>
                                         <CardTitle className="text-base flex items-center gap-2"><HandCoins /> Management Fee</CardTitle>
                                     </CardHeader>
                                     <CardContent className="space-y-4">
                                         <p className="text-sm text-muted-foreground">This deal requires a management fee of <span className="font-bold text-foreground">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)}</span> to be paid before it can be funded.</p>
-                                        <Button className="w-full" onClick={handleApproveFee} disabled={isFeePending}>
+                                        {eligibility?.outstandingAgreements.length ? <p className="text-sm font-medium text-amber-700">Unavailable until fully signed: {eligibility.outstandingAgreements.join(', ')}.</p> : null}
+                                        <Button className="w-full" onClick={handleApproveFee} disabled={isFeePending || Boolean(eligibility?.outstandingAgreements.length)}>
                                             {isFeePending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
                                             Approve Fee Payment
                                         </Button>
@@ -434,7 +436,7 @@ export default function DealDetailPage() {
                                 <Progress value={fundingProgress} />
                             </div>
                             {deal.status === 'Pending' && (
-                                <Button className="w-full" onClick={handleFundDeal} disabled={isPending || isFullyFunded || !deal.managementFeePaid}>
+                                <Button className="w-full" onClick={handleFundDeal} disabled={isPending || isFullyFunded || eligibility?.canFund !== true}>
                                     {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                                     {isFullyFunded ? 'Fully Funded' : 'Auto-Fund Deal'}
                                 </Button>

@@ -32,12 +32,14 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { approveDealAction, rejectDealAction } from './actions';
 import { useRouter } from 'next/navigation';
 import { getRequiredIdToken } from '@/firebase/auth-token';
+import { MoneyInput } from '@/components/ui/money-input';
 
 const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
   managementFeeRate: z.coerce.number().min(0, { message: 'Management fee rate cannot be negative.' }),
+  requiresManagementFee: z.boolean().default(true),
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']),
   wakalahGranted: z.boolean().default(false),
   wakalahAssetDescription: z.string().trim().optional(),
@@ -75,6 +77,7 @@ export function DealRequestForm({ dealRequest }: DealRequestFormProps) {
       principal: dealRequest.principal,
       profitRate: dealRequest.profitRate,
       managementFeeRate: dealRequest.managementFeeRate || 0,
+      requiresManagementFee: dealRequest.requiresManagementFee ?? true,
       financingMode: dealRequest.financingMode || 'Murabaha',
       wakalahGranted: false,
       wakalahAssetDescription: dealRequest.dealName || '',
@@ -160,7 +163,7 @@ export function DealRequestForm({ dealRequest }: DealRequestFormProps) {
                     render={({ field }) => (
                         <FormItem>
                         <FormLabel>Principal Amount</FormLabel>
-                        <FormControl><Input type="number" {...field} /></FormControl>
+                        <FormControl><MoneyInput value={field.value} onValueChange={field.onChange} /></FormControl>
                         <FormMessage />
                         </FormItem>
                     )}
@@ -176,7 +179,8 @@ export function DealRequestForm({ dealRequest }: DealRequestFormProps) {
                         </FormItem>
                     )}
                     />
-                    <FormField control={form.control} name="managementFeeRate" render={({ field }) => <FormItem><FormLabel>Management Fee (%)</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormDescription>Charged separately from the Murabaha contract price.</FormDescription><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name="requiresManagementFee" render={({ field }) => <FormItem className="flex items-center justify-between gap-4 rounded-lg border p-3"><div><FormLabel>Management fee required</FormLabel><FormDescription>Turn this off when this deal carries no management fee.</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name="managementFeeRate" render={({ field }) => <FormItem><FormLabel>Management Fee (%)</FormLabel><FormControl><Input type="number" step="0.01" disabled={!form.watch('requiresManagementFee')} {...field} /></FormControl><FormDescription>{form.watch('requiresManagementFee') ? 'Charged separately from the Murabaha contract price.' : 'Not required for this deal.'}</FormDescription><FormMessage /></FormItem>} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField

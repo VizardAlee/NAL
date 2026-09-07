@@ -18,15 +18,15 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
 import { CalendarIcon, Loader2 } from 'lucide-react';
-import { doc, collection, writeBatch, Timestamp } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
-import { FirebaseError } from 'firebase/app';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
+import { MoneyInput } from '@/components/ui/money-input';
+import { getRequiredIdToken } from '@/firebase/auth-token';
+import { createAdminDepositRequestAction } from './actions';
 
 const formSchema = z.object({
   amount: z.coerce.number().positive({ message: 'Amount must be a positive number.' }),
@@ -43,7 +43,6 @@ type AddFundFormProps = {
 export function AddFundForm({ userId }: AddFundFormProps) {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const firestore = useFirestore();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -57,51 +56,27 @@ export function AddFundForm({ userId }: AddFundFormProps) {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    if (!firestore) {
-      toast({ variant: "destructive", title: "Error", description: "Database not available." });
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      const batch = writeBatch(firestore);
-      const timestamp = values.createdAt ? Timestamp.fromDate(values.createdAt) : Timestamp.now();
-
-      const fundBatchRef = doc(collection(firestore, 'fundBatches'));
-      batch.set(fundBatchRef, {
-        sourceId: userId,
+      const result = await createAdminDepositRequestAction({
+        authToken: await getRequiredIdToken(),
+        userId,
         amount: values.amount,
-        remainingAmount: values.amount,
         tenureValue: values.tenureValue,
         tenureUnit: values.tenureUnit,
         specialInvestment: values.specialInvestment,
-        createdAt: timestamp,
+        paymentDate: values.createdAt ? format(values.createdAt, 'yyyy-MM-dd') : undefined,
       });
-
-      const transactionRef = doc(collection(firestore, 'transactions'));
-      batch.set(transactionRef, {
-        userId: userId,
-        type: 'Deposit',
-        amount: values.amount,
-        createdAt: timestamp,
-      });
-
-      await batch.commit();
+      if (!result.success) throw new Error(result.message);
 
       toast({
-        title: 'Funds Added',
-        description: `${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(values.amount)} added to investor's account.`,
+        title: 'Deposit Request Created',
+        description: result.message,
       });
       form.reset();
       // Note: We won't close the dialog here, let the user close it manually.
     } catch (error) {
-      console.error('Add Fund Error:', error);
-      let errorMessage = 'An unknown error occurred while adding funds.';
-      if (error instanceof FirebaseError) {
-        errorMessage = `An unexpected Firebase error occurred: ${error.message}`;
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-      }
+      console.error('Create Deposit Request Error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred while creating the request.';
       toast({ variant: 'destructive', title: 'Failed to Add Funds', description: errorMessage });
     } finally {
       setIsLoading(false);
@@ -120,7 +95,7 @@ export function AddFundForm({ userId }: AddFundFormProps) {
               <FormControl>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₦</span>
-                  <Input type="number" placeholder="50000" className="pl-8" {...field} />
+                  <MoneyInput value={field.value} onValueChange={field.onChange} placeholder="50,000" className="pl-8" />
                 </div>
               </FormControl>
               <FormMessage />
@@ -167,7 +142,7 @@ export function AddFundForm({ userId }: AddFundFormProps) {
           name="createdAt"
           render={({ field }) => (
             <FormItem className="flex flex-col">
-              <FormLabel>Deposit Date (Optional)</FormLabel>
+              <FormLabel>Payment Date (Optional)</FormLabel>
               <Popover>
                 <PopoverTrigger asChild>
                   <FormControl>
@@ -222,7 +197,7 @@ export function AddFundForm({ userId }: AddFundFormProps) {
         />
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Deposit Funds
+          Create Deposit Request
         </Button>
       </form>
     </Form>

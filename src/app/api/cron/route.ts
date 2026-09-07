@@ -266,6 +266,8 @@ async function processRecoveryTasks() {
                     dealId,
                     dealName: deal.dealName,
                     financingMode: deal.financingMode || '',
+                    repaymentFrequency: deal.repaymentFrequency || '',
+                    repaymentFrequencyPriority: deal.repaymentFrequency === 'Daily' ? 0 : 1,
                     repaymentId,
                     installmentNumber: installment.installment,
                     scheduledAmount: balance.scheduledAmount,

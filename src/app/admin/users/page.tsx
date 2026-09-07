@@ -244,7 +244,7 @@ export default function UsersPage() {
       </div>
 
       <Tabs defaultValue="all" className="w-full">
-        <TabsList className="flex h-auto w-full justify-start overflow-x-auto">
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
           <TabsTrigger value="all">All ({filteredUsers.all.length})</TabsTrigger>
           <TabsTrigger value="owners">Owners ({filteredUsers.owners.length})</TabsTrigger>
           <TabsTrigger value="staff">Staff ({filteredUsers.staff.length})</TabsTrigger>

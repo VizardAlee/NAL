@@ -42,7 +42,7 @@ export default function InvestorAgreementsPage() {
     <div>
       <PageHeader
         title="My Agreements"
-        description="Review, download, and print the agreement for each approved investment fund batch."
+        description="Review and sign each investment agreement before its deposit can be approved."
         icon={FileSignature}
       />
 
@@ -62,7 +62,7 @@ export default function InvestorAgreementsPage() {
           <CardContent className="py-16 text-center">
             <FileCheck2 className="mx-auto h-12 w-12 text-muted-foreground" />
             <h2 className="mt-4 text-lg font-semibold">No investment agreements yet</h2>
-            <p className="mt-1 text-sm text-muted-foreground">An agreement will appear after an investment deposit is approved.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Create an investment request first; its agreement will appear here for signing before approval.</p>
           </CardContent>
         </Card>
       ) : (

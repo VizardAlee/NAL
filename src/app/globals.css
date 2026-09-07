@@ -146,6 +146,84 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+img,
+svg,
+canvas {
+  max-width: 100%;
+}
+
+main,
+main > *,
+.grid > *,
+.flex > * {
+  min-width: 0;
+}
+
+p,
+dd,
+td,
+[data-wrap-safe] {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .responsive-table,
+  .responsive-table tbody,
+  .responsive-table tr,
+  .responsive-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .responsive-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .responsive-table tbody {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .responsive-table tbody tr {
+    overflow: hidden;
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.75rem;
+    background: hsl(var(--card));
+  }
+
+  .responsive-table tbody td {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 40%) minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    text-align: right;
+    white-space: normal;
+  }
+
+  .responsive-table tbody td::before {
+    content: attr(data-label);
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .responsive-table tbody td[colspan] {
+    display: block;
+    text-align: center;
+  }
+
+  .responsive-table tbody td[colspan]::before {
+    display: none;
+  }
+}
+
 @layer base {
   :root {
     --background: 210 33% 98%;
@@ -236,32 +314,6 @@ body {
       radial-gradient(60rem 42rem at 10% -10%, hsla(var(--primary) / 0.16), transparent 62%),
       radial-gradient(50rem 36rem at 100% 0%, hsla(var(--accent) / 0.08), transparent 64%),
       hsl(var(--background));
-  }
-}
-
-@layer components {
-  @media (max-width: 768px) {
-    .responsive-table table {
-      @apply block;
-    }
-    .responsive-table thead {
-      @apply hidden;
-    }
-    .responsive-table tbody {
-      @apply block w-full;
-    }
-    .responsive-table tr {
-      @apply mb-4 block rounded-lg border bg-card p-4;
-    }
-    .responsive-table td {
-      @apply flex items-center justify-between text-right;
-      text-align: right;
-    }
-    .responsive-table td::before {
-      content: attr(data-label);
-      @apply float-left text-left font-medium text-muted-foreground;
-      text-align: left;
-    }
   }
 }
 

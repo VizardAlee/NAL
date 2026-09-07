@@ -25,8 +25,8 @@ const DURATION_IN_DAYS = {
   Days: 1,
   Weeks: 7,
   Fortnights: 14,
-  Months: 30.4375,
-  Years: 365.25,
+  Months: 30,
+  Years: 365,
 } as const;
 
 const DAY_MS = 24 * 60 * 60 * 1000;

@@ -10,6 +10,8 @@ import { verifyAuthTokenForUser } from '@/lib/server/auth';
 import { calculateAvailableProfit } from '@/lib/financial-integrity';
 import { loadFundBatchAnniversaryWindow } from '@/lib/server/fund-batch-anniversary';
 import { ownerWithdrawalRequestId } from '@/lib/server/owner-withdrawal';
+import { durationToDays } from '@/lib/deal-duration';
+import { isProfitDistributionLocked } from '@/lib/workflow-eligibility';
 
 // --- Withdrawal Action ---
 const withdrawalSchema = z.object({
@@ -140,6 +142,12 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
             const relevantPendingRequests = isOwnerAccount
                 ? pendingRequests.filter((request) => request.type === 'OwnerWithdrawal')
                 : pendingRequests;
+            const batchesById = new Map(anniversaryContext.fundBatches.map((batch) => [batch.id, batch]));
+            const withdrawableEntries = anniversaryContext.entries.filter((entry) => {
+                if (entry.type !== 'ProfitDistribution' || !entry.fundBatchId) return true;
+                const batch = batchesById.get(entry.fundBatchId);
+                return !batch || !isProfitDistributionLocked(batch, entry);
+            });
             const investible = eligibleBatches.reduce(
                 (sum, batch) => sum + Math.max(0, Number(batch.remainingAmount || 0)),
                 0
@@ -167,7 +175,7 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
                     if (!anniversaryContext.window.isOpen) {
                         throw new Error('The annual five-day profit withdrawal window is currently closed.');
                     }
-                    const globallyAvailableProfit = calculateAvailableProfit(anniversaryContext.entries);
+                    const globallyAvailableProfit = calculateAvailableProfit(withdrawableEntries);
                     const anniversaryAvailable = Math.min(
                         anniversaryContext.window.availableToWithdraw,
                         globallyAvailableProfit
@@ -179,9 +187,9 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
                     const reservedProfit = pendingRequests
                         .filter((request) => request.source === 'ShortTermProfit' || request.type === 'InvestorWithdrawal')
                         .reduce((sum, request) => sum + Number(request.amount || 0), 0);
-                    const availableProfit = calculateAvailableProfit(anniversaryContext.entries, reservedProfit);
+                    const availableProfit = calculateAvailableProfit(withdrawableEntries, reservedProfit);
                     if (amount > availableProfit + 0.01) {
-                        throw new Error('Amount exceeds your available, unreserved profit.');
+                        throw new Error('Amount exceeds available profit. Ninety-day investment profit unlocks only after each completed 30-day period; longer-term profit remains locked until maturity.');
                     }
                 }
             }
@@ -264,8 +272,14 @@ export async function reinvestAction(input: { authToken: string; amount: number;
             const reserved = requests.docs
                 .filter((doc) => doc.data().status === 'Pending')
                 .reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0);
+            const batchesById = new Map(anniversaryContext.fundBatches.map((batch) => [batch.id, batch]));
+            const reinvestibleEntries = anniversaryContext.entries.filter((entry) => {
+                if (entry.type !== 'ProfitDistribution' || !entry.fundBatchId) return true;
+                const batch = batchesById.get(entry.fundBatchId);
+                return !batch || !isProfitDistributionLocked(batch, entry);
+            });
             const available = calculateAvailableProfit(
-                anniversaryContext.entries,
+                reinvestibleEntries,
                 reserved + anniversaryContext.window.reinvestmentReserve
             );
             if (amount > available + 0.01) {
@@ -321,8 +335,6 @@ export async function requestCapitalWithdrawalAction(input: z.infer<typeof capit
     }
 
     const { authToken, batchId, userId, userName } = validated.data;
-    const DURATION_IN_DAYS = { Days: 1, Weeks: 7, Fortnights: 14, Months: 30.4375, Years: 365.25 };
-
     try {
         await verifyAuthTokenForUser(authToken, userId);
         const batchRef = adminDb.collection('fundBatches').doc(batchId);
@@ -337,9 +349,9 @@ export async function requestCapitalWithdrawalAction(input: z.infer<typeof capit
         }
 
         // Server-side validation
-        const isShortTerm = (batchData.tenureValue * (DURATION_IN_DAYS[batchData.tenureUnit as keyof typeof DURATION_IN_DAYS] || 0)) <= (12 * 30.4375);
+        const isShortTerm = durationToDays(batchData.tenureValue, batchData.tenureUnit) <= 360;
         const isUninvested = batchData.amount === batchData.remainingAmount;
-        const isOverOneMonthOld = differenceInDays(new Date(), batchData.createdAt.toDate()) > 30;
+        const isOverOneMonthOld = differenceInDays(new Date(), batchData.createdAt.toDate()) >= 30;
 
         if (!(isShortTerm && isUninvested && isOverOneMonthOld)) {
             return { success: false, message: "This fund batch is not eligible for withdrawal." };

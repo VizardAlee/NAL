@@ -1,6 +1,7 @@
 
-import { add, differenceInCalendarMonths, differenceInDays, differenceInWeeks } from 'date-fns';
+import { addDays } from 'date-fns';
 import { Deal } from './types';
+import { addDealDuration, contractualPeriodCount, repaymentFrequencyDays } from './deal-duration';
 
 export interface ScheduleInstallment {
   installment: number;
@@ -26,48 +27,13 @@ type RepaymentTerms = Pick<Deal, 'durationValue' | 'durationUnit' | 'repaymentFr
 
 function getPeriodsForTerms(termStartDate: Date | undefined, terms: RepaymentTerms, fixedEndDate?: Date): { totalPeriods: number; addPeriod: (date: Date, count: number) => Date } {
   if (!termStartDate) {
-      return { totalPeriods: 0, addPeriod: (date, count) => add(date, { days: count }) };
+      return { totalPeriods: 0, addPeriod: (date, count) => addDays(date, count) };
   }
 
-  let totalPeriods = 0;
-  let addPeriod: (date: Date, count: number) => Date;
-
-  const endDate = fixedEndDate || (() => {
-    switch (terms.durationUnit) {
-      case 'Days': return add(termStartDate, { days: terms.durationValue });
-      case 'Weeks': return add(termStartDate, { weeks: terms.durationValue });
-      case 'Fortnights': return add(termStartDate, { weeks: terms.durationValue * 2 });
-      case 'Months': return add(termStartDate, { months: terms.durationValue });
-      case 'Years': return add(termStartDate, { years: terms.durationValue });
-      default: return termStartDate;
-    }
-  })();
-
-  switch (terms.repaymentFrequency) {
-    case 'Daily':
-      totalPeriods = differenceInDays(endDate, termStartDate);
-      addPeriod = (date, count) => add(date, { days: count });
-      break;
-    case 'Weekly':
-      totalPeriods = differenceInWeeks(endDate, termStartDate);
-      addPeriod = (date, count) => add(date, { weeks: count });
-      break;
-    case 'Fortnightly':
-      totalPeriods = Math.floor(differenceInWeeks(endDate, termStartDate) / 2);
-      addPeriod = (date, count) => add(date, { weeks: count * 2 });
-      break;
-    case 'Monthly':
-      totalPeriods = differenceInCalendarMonths(endDate, termStartDate);
-       if (totalPeriods === 0) { // Handle cases where duration is less than a month
-          totalPeriods = Math.floor(differenceInDays(endDate, termStartDate) / 30);
-      }
-      addPeriod = (date, count) => add(date, { months: count });
-      break;
-    default:
-      totalPeriods = differenceInCalendarMonths(endDate, termStartDate);
-      addPeriod = (date, count) => add(date, { months: count });
-      break;
-  }
+  const endDate = fixedEndDate || addDealDuration(termStartDate, terms.durationValue, terms.durationUnit);
+  const totalPeriods = contractualPeriodCount(termStartDate, endDate, terms.repaymentFrequency);
+  const intervalDays = repaymentFrequencyDays(terms.repaymentFrequency);
+  const addPeriod = (date: Date, count: number) => addDays(date, count * intervalDays);
   return { totalPeriods: Math.max(1, totalPeriods), addPeriod };
 }
 

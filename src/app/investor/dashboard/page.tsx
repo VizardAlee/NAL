@@ -31,8 +31,9 @@ import { getOrCreateConversation, listContactAdmins } from "@/app/common/actions
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { generateAmortizationSchedule } from "@/lib/amortization";
-import { calculateFundBatchAnniversaryWindow } from '@/lib/financial-integrity';
 import { getRequiredIdToken } from '@/firebase/auth-token';
+import { durationToDays } from '@/lib/deal-duration';
+import { isProfitDistributionLocked } from '@/lib/workflow-eligibility';
 
 
 type Transaction = DocumentData & {
@@ -84,19 +85,7 @@ type UserProfile = DocumentData & {
 };
 
 
-const DURATION_IN_DAYS = {
-    Days: 1,
-    Weeks: 7,
-    Fortnights: 14,
-    Months: 30.4375,
-    Years: 365.25,
-};
-
-function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): number {
-    return value * (DURATION_IN_DAYS[unit] || 0);
-}
-
-const TWELVE_MONTHS_IN_DAYS = 12 * 30.4375;
+const TWELVE_MONTHS_IN_DAYS = 360;
 
 
 const chartConfig = {
@@ -319,9 +308,9 @@ function UninvestedCapitalCard({ batches, user }: { batches: FundBatch[] | null,
     const eligibleBatches = useMemo(() => {
         if (!batches) return [];
         return batches.filter(batch => {
-            const isShortTerm = (batch.tenureValue * (DURATION_IN_DAYS[batch.tenureUnit as keyof typeof DURATION_IN_DAYS] || 0)) <= TWELVE_MONTHS_IN_DAYS;
+            const isShortTerm = durationToDays(batch.tenureValue, batch.tenureUnit) <= TWELVE_MONTHS_IN_DAYS;
             const isUninvested = batch.amount === batch.remainingAmount;
-            const isOverOneMonthOld = differenceInDays(new Date(), batch.createdAt.toDate()) > 30;
+            const isOverOneMonthOld = differenceInDays(new Date(), batch.createdAt.toDate()) >= 30;
             return isShortTerm && isUninvested && isOverOneMonthOld;
         });
     }, [batches]);
@@ -380,7 +369,6 @@ export default function InvestorDashboard() {
     const firestore = useFirestore();
     const { user, loading: userLoading } = useUser();
     const [isWithdrawOpen, setWithdrawOpen] = useState(false);
-    const [isAnniversaryWithdrawOpen, setAnniversaryWithdrawOpen] = useState(false);
     const [isDepositOpen, setDepositOpen] = useState(false);
     const [chartRange, setChartRange] = useState<'4w' | '12w' | '52w' | 'all'>('12w');
     const isMobile = useIsMobile();
@@ -459,27 +447,23 @@ export default function InvestorDashboard() {
 
     const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || allDealInvestmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || withdrawalRequestsLoading || depositRequestsLoading || reinvestmentRequestsLoading;
 
-    const { longTermProfits, withdrawableBalance, expectedIncome, totalProfitsEarned } = useMemo(() => {
+    const { lockedProfits, withdrawableBalance, expectedIncome, totalProfitsEarned } = useMemo(() => {
         if (!allTransactions || !deals || !investments || !allDealInvestments) {
-            return { longTermProfits: 0, withdrawableBalance: 0, expectedIncome: 0, totalProfitsEarned: 0 };
+            return { lockedProfits: 0, withdrawableBalance: 0, expectedIncome: 0, totalProfitsEarned: 0 };
         }
 
         const profitTransactions = allTransactions.filter(tx => tx.type === 'ProfitDistribution');
         const totalProfitsEarned = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-        let totalLongTermProfit = 0;
-        let totalShortTermProfit = 0;
+        let totalLockedProfit = 0;
+        let totalWithdrawableProfit = 0;
         let totalExpectedIncome = 0;
 
         for (const profitTx of profitTransactions) {
-            const deal = deals.find(d => d.id === profitTx.dealId);
-            if (!deal) continue;
-
-            const dealDurationInDays = convertToDays(deal.durationValue, deal.durationUnit);
-
-            if (dealDurationInDays > TWELVE_MONTHS_IN_DAYS) {
-                totalLongTermProfit += profitTx.amount;
+            const batch = fundBatches?.find((item) => item.id === profitTx.fundBatchId);
+            if (batch && isProfitDistributionLocked(batch, profitTx)) {
+                totalLockedProfit += profitTx.amount;
             } else {
-                totalShortTermProfit += profitTx.amount;
+                totalWithdrawableProfit += profitTx.amount;
             }
         }
 
@@ -503,12 +487,12 @@ export default function InvestorDashboard() {
             .reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0);
 
         return {
-            longTermProfits: totalLongTermProfit,
-            withdrawableBalance: Math.max(0, totalShortTermProfit - totalWithdrawnShortTerm),
+            lockedProfits: totalLockedProfit,
+            withdrawableBalance: Math.max(0, totalWithdrawableProfit - totalWithdrawnShortTerm),
             expectedIncome: totalExpectedIncome,
             totalProfitsEarned
         };
-    }, [allTransactions, deals, investments, allDealInvestments, user]);
+    }, [allTransactions, deals, investments, allDealInvestments, fundBatches, user]);
 
 
     const financialMetrics = useMemo(() => {
@@ -535,12 +519,6 @@ export default function InvestorDashboard() {
 
         return { totalCapital, portfolioValue, investableBalance, simpleROI };
     }, [allTransactions, fundBatches]);
-
-    const anniversaryWindow = useMemo(() => calculateFundBatchAnniversaryWindow({
-        fundBatches: fundBatches || [],
-        entries: allTransactions || [],
-        withdrawalRequests: withdrawalRequests || [],
-    }), [allTransactions, fundBatches, withdrawalRequests]);
 
     const pendingRequests = useMemo(() => {
         const formatAmount = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
@@ -606,7 +584,6 @@ export default function InvestorDashboard() {
 
     const handleWithdrawalSuccess = () => {
         setWithdrawOpen(false);
-        setAnniversaryWithdrawOpen(false);
     };
 
     const formatDate = (timestamp: Timestamp | Date | undefined) => {
@@ -793,7 +770,7 @@ export default function InvestorDashboard() {
             <div className="mt-6 grid gap-4 md:grid-cols-3">
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">Short-Term Profit</CardTitle>
+                        <CardTitle className="text-sm font-medium">Matured / Short-Term Profit</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="text-xl font-bold">{formatCurrency(withdrawableBalance)}</div>
@@ -802,58 +779,11 @@ export default function InvestorDashboard() {
                 </Card>
                 <Card className="md:col-span-2">
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">Annual Long-Term Profit Window</CardTitle>
+                        <CardTitle className="text-sm font-medium">Profit Locked Until Maturity</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                        {anniversaryWindow.isOpen ? (
-                            <>
-                                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                                    <div>
-                                        <div className="text-xl font-bold">{formatCurrency(anniversaryWindow.availableToWithdraw)}</div>
-                                        <p className="text-xs text-muted-foreground">
-                                            Remaining from a {formatCurrency(anniversaryWindow.allowance)} allowance—20% of {formatCurrency(anniversaryWindow.generatedProfit)} generated in the preceding investment year.
-                                        </p>
-                                    </div>
-                                    <Badge>Five-day window open</Badge>
-                                </div>
-                                <div className="space-y-1 text-xs text-muted-foreground">
-                                    {anniversaryWindow.activeWindows.map((window) => (
-                                        <p key={window.id}>
-                                            Fund batch year {window.anniversaryYear}: closes {format(window.closesAt, 'PPP p')}.
-                                        </p>
-                                    ))}
-                                </div>
-                                <Dialog open={isAnniversaryWithdrawOpen} onOpenChange={setAnniversaryWithdrawOpen}>
-                                    <DialogTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={anniversaryWindow.availableToWithdraw <= 0}
-                                        >
-                                            <Download className="mr-2 h-4 w-4" />
-                                            Withdraw Annual Allowance
-                                        </Button>
-                                    </DialogTrigger>
-                                    <DialogContent>
-                                        <DialogHeader>
-                                            <DialogTitle>Annual Profit Withdrawal</DialogTitle>
-                                        </DialogHeader>
-                                        <WithdrawForm
-                                            withdrawableBalance={anniversaryWindow.availableToWithdraw}
-                                            onWithdrawalRequested={handleWithdrawalSuccess}
-                                            source="AnniversaryProfit"
-                                        />
-                                    </DialogContent>
-                                </Dialog>
-                            </>
-                        ) : (
-                            <>
-                                <div className="text-xl font-bold">{formatCurrency(longTermProfits)}</div>
-                                <p className="text-xs text-muted-foreground">
-                                    Closed. Fund batches locked for more than two years receive a five-day window on each annual anniversary. During that window, 20% of the preceding year&apos;s generated profit is reserved from reinvestment.
-                                </p>
-                            </>
-                        )}
+                        <div className="text-xl font-bold">{formatCurrency(lockedProfits)}</div>
+                        <p className="text-xs text-muted-foreground">For a 90-day investment, profit unlocks only at the end of each completed 30-day period. Investments longer than 90 days keep all generated profit locked until full maturity.</p>
                     </CardContent>
                 </Card>
             </div>
@@ -1020,7 +950,7 @@ export default function InvestorDashboard() {
                             )}
                         </div>
                     ) : (
-                        <div className="relative w-full overflow-auto">
+                        <div className="relative min-w-0 w-full">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -1094,7 +1024,7 @@ export default function InvestorDashboard() {
                             )}
                         </div>
                     ) : (
-                        <div className="relative w-full overflow-auto">
+                        <div className="relative min-w-0 w-full">
                             <Table>
                                 <TableHeader>
                                     <TableRow>

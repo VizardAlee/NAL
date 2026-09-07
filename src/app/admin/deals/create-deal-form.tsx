@@ -39,6 +39,7 @@ import Link from 'next/link';
 import { hasPersona, type LegacyRole, type Persona } from '@/lib/access-control';
 import { createDealAction } from './actions';
 import { getRequiredIdToken } from '@/firebase/auth-token';
+import { MoneyInput } from '@/components/ui/money-input';
 
 type CallableError = Error & {
   code?: string;
@@ -73,6 +74,8 @@ const formSchema = z.object({
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
   managementFeeRate: z.coerce.number().min(0, { message: 'Management fee rate cannot be negative.' }),
+  requiresManagementFee: z.boolean().default(true),
+  agreementSigningRequired: z.boolean().default(true),
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).default('Murabaha'),
   wakalahGranted: z.boolean().default(false),
   wakalahAssetDescription: z.string().trim().optional(),
@@ -88,6 +91,8 @@ const formSchema = z.object({
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   startDate: z.date().optional(),
 }).superRefine((values, context) => {
+  if (values.requiresManagementFee && values.managementFeeRate <= 0) context.addIssue({ code: z.ZodIssueCode.custom, path: ['managementFeeRate'], message: 'Enter a fee rate or turn off the management-fee requirement.' });
+  if (!values.agreementSigningRequired && (!values.startDate || values.startDate >= new Date())) context.addIssue({ code: z.ZodIssueCode.custom, path: ['agreementSigningRequired'], message: 'Only genuinely back-dated deals may waive signing.' });
   if (values.financingMode === 'Murabaha' && (!values.wakalahAssetDescription || values.wakalahAssetDescription.length < 3)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahAssetDescription'], message: 'Describe the approved asset for the Murabaha sales contract.' });
   if (!values.wakalahGranted) return;
   if (values.financingMode !== 'Murabaha') context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahGranted'], message: 'Available only for Murabaha deals.' });
@@ -146,6 +151,8 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
       principal: 10000,
       profitRate: 5,
       managementFeeRate: 2,
+      requiresManagementFee: true,
+      agreementSigningRequired: true,
       durationValue: 12,
       durationUnit: 'Months',
       repaymentType: 'Equal Installments',
@@ -341,7 +348,7 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Principal Amount</FormLabel>
-                <FormControl><Input type="number" placeholder="10000" {...field} /></FormControl>
+                <FormControl><MoneyInput placeholder="10,000" value={field.value} onValueChange={field.onChange} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -360,11 +367,16 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
         </div>
         <FormField
           control={form.control}
+          name="requiresManagementFee"
+          render={({ field }) => <FormItem className="flex items-center justify-between gap-4 rounded-lg border p-4"><div><FormLabel>Require management fee</FormLabel><FormDescription>Turn off only when this deal has no management-fee stage.</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>}
+        />
+        <FormField
+          control={form.control}
           name="managementFeeRate"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Management Fee Rate (%)</FormLabel>
-              <FormControl><Input type="number" step="0.1" placeholder="2" {...field} /></FormControl>
+              <FormControl><Input type="number" step="0.1" placeholder="2" disabled={!form.watch('requiresManagementFee')} {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )}
@@ -404,6 +416,11 @@ export function CreateDealForm({ onDealCreated }: CreateDealFormProps) {
             )}
           />
         </div>
+        <FormField
+          control={form.control}
+          name="agreementSigningRequired"
+          render={({ field }) => <FormItem className="flex items-center justify-between gap-4 rounded-lg border p-4"><div><FormLabel>Require agreement signing</FormLabel><FormDescription>Required by default. It can be waived only when the selected start date is before today; the waiver is audited.</FormDescription></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormMessage /></FormItem>}
+        />
         <FormField
           control={form.control}
           name="repaymentType"

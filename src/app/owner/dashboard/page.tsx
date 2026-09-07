@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth, useUser } from '@/firebase';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { MoneyInput } from '@/components/ui/money-input';
 import {
   Dialog,
   DialogContent,
@@ -138,13 +138,12 @@ function WithdrawDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-sm font-medium block mb-1">Amount (NGN)</label>
-            <Input
-              type="number"
+            <MoneyInput
               min="1"
               step="any"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="e.g. 50000"
+              onValueChange={(value) => setAmount(value === '' ? '' : String(value))}
+              placeholder="e.g. 50,000"
               required
             />
             <p className="text-xs text-muted-foreground mt-1">
@@ -439,7 +438,7 @@ export default function OwnerDashboardPage() {
               {isLoading ? <div className="space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div> :
                 !myWithdrawals || myWithdrawals.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No withdrawal requests found.</p> : (
                   <>
-                    <div className="overflow-x-auto rounded-md border">
+                    <div className="min-w-0 rounded-md border">
                       <Table>
                         <TableHeader>
                           <TableRow>

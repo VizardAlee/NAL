@@ -6,6 +6,10 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getAuthErrorStatus, verifyAdminWrite } from '@/lib/server/auth';
+import { getOutstandingDealAgreements } from '@/lib/server/agreement-eligibility';
+import { requiresManagementFee } from '@/lib/workflow-eligibility';
+import { agreementEnvelopeId } from '@/lib/agreements/signing';
+import { requiredDealAgreementTypes } from '@/lib/workflow-eligibility';
 
 const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
@@ -14,6 +18,8 @@ const formSchema = z.object({
   principal: z.coerce.number().positive({ message: 'Principal must be a positive number.' }),
   profitRate: z.coerce.number().min(0, { message: 'Profit rate cannot be negative.' }),
   managementFeeRate: z.coerce.number().min(0, { message: 'Management fee rate cannot be negative.' }),
+  requiresManagementFee: z.boolean().default(true),
+  agreementSigningRequired: z.boolean().default(true),
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).optional(),
   wakalahGranted: z.boolean().default(false),
   wakalahAssetDescription: z.string().trim().optional(),
@@ -29,6 +35,8 @@ const formSchema = z.object({
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   startDate: z.date().optional(),
 }).superRefine((values, context) => {
+  if (values.requiresManagementFee && values.managementFeeRate <= 0) context.addIssue({ code: z.ZodIssueCode.custom, path: ['managementFeeRate'], message: 'Enter a management fee rate or mark this deal as not requiring a fee.' });
+  if (!values.agreementSigningRequired && (!values.startDate || values.startDate >= new Date())) context.addIssue({ code: z.ZodIssueCode.custom, path: ['agreementSigningRequired'], message: 'Signing can be waived only for a genuinely back-dated deal.' });
   if ((values.financingMode || 'Murabaha') === 'Murabaha' && (!values.wakalahAssetDescription || values.wakalahAssetDescription.length < 3)) context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahAssetDescription'], message: 'Describe the approved asset for the Murabaha sales contract.' });
   if (!values.wakalahGranted) return;
   if (values.financingMode !== 'Murabaha') context.addIssue({ code: z.ZodIssueCode.custom, path: ['wakalahGranted'], message: 'Wakalah procurement authority is available only for Murabaha deals.' });
@@ -36,8 +44,9 @@ const formSchema = z.object({
 });
 
 export async function createDealAction(authToken: string, clientName: string, values: z.infer<typeof formSchema>) {
+    let authorizedUserId: string;
     try {
-        await verifyAdminWrite(authToken);
+        authorizedUserId = (await verifyAdminWrite(authToken)).uid;
     } catch (error: unknown) {
         const status = getAuthErrorStatus(error);
         if (status) {
@@ -59,16 +68,22 @@ export async function createDealAction(authToken: string, clientName: string, va
     }
 
     const { principal, managementFeeRate, startDate, ...restOfData } = validated.data;
-    const managementFeeAmount = (principal * managementFeeRate) / 100;
+    const managementFeeAmount = validated.data.requiresManagementFee ? (principal * managementFeeRate) / 100 : 0;
 
     try {
         const dealRef = await adminDb.collection('deals').add({
             ...restOfData,
             clientName,
+            createdBy: authorizedUserId,
             principal,
             managementFeeRate,
             managementFeeAmount,
             managementFeePaid: false,
+            agreementSigningWaived: !validated.data.agreementSigningRequired,
+            ...(!validated.data.agreementSigningRequired ? {
+              agreementSigningWaivedBy: authorizedUserId,
+              agreementSigningWaivedAt: FieldValue.serverTimestamp(),
+            } : {}),
             status: 'Pending',
             createdAt: FieldValue.serverTimestamp(),
             startDate: startDate || FieldValue.serverTimestamp(),
@@ -94,7 +109,7 @@ export async function createDealAction(authToken: string, clientName: string, va
 
 
 export async function updateDealAction(authToken: string, dealId: string, clientName: string, values: z.infer<typeof formSchema>) {
-    await verifyAdminWrite(authToken);
+    const authorized = await verifyAdminWrite(authToken);
     if (!dealId) {
         return { success: false, message: 'Deal ID is missing.' };
     }
@@ -105,16 +120,21 @@ export async function updateDealAction(authToken: string, dealId: string, client
     }
     
     const { principal, managementFeeRate, ...restOfData } = validated.data;
-    const managementFeeAmount = (principal * managementFeeRate) / 100;
+    const managementFeeAmount = validated.data.requiresManagementFee ? (principal * managementFeeRate) / 100 : 0;
 
     try {
         const dealRef = adminDb.collection('deals').doc(dealId);
+        const existing = await dealRef.get();
+        if (!existing.exists) return { success: false, message: 'Deal not found.' };
+        const newlyWaived = existing.data()?.agreementSigningRequired !== false && validated.data.agreementSigningRequired === false;
         await dealRef.update({
             ...restOfData,
             principal,
             managementFeeRate,
             managementFeeAmount,
             clientName, // Keep client name in sync
+            agreementSigningWaived: validated.data.agreementSigningRequired === false,
+            ...(newlyWaived ? { agreementSigningWaivedBy: authorized.uid, agreementSigningWaivedAt: FieldValue.serverTimestamp() } : {}),
             startDate: validated.data.startDate ? validated.data.startDate : FieldValue.serverTimestamp()
         });
 
@@ -153,6 +173,27 @@ export async function deleteDealAction(authToken: string, dealId: string) {
     }
 }
 
+export async function getDealProgressEligibilityAction(authToken: string, dealId: string) {
+    await verifyAdminWrite(authToken);
+    const dealSnapshot = await adminDb.collection('deals').doc(dealId).get();
+    if (!dealSnapshot.exists) return { success: false as const, message: 'Deal not found.' };
+    const deal = dealSnapshot.data() || {};
+    const requiredTypes = requiredDealAgreementTypes(deal);
+    const envelopes = await Promise.all(requiredTypes.map((type) =>
+        adminDb.collection('agreementEnvelopes').doc(agreementEnvelopeId(type, dealId)).get()
+    ));
+    const outstandingAgreements = requiredTypes.filter((_, index) =>
+        !envelopes[index].exists || envelopes[index].data()?.status !== 'EXECUTED'
+    );
+    const feeRequired = requiresManagementFee(deal);
+    return {
+        success: true as const,
+        outstandingAgreements,
+        canApproveManagementFee: feeRequired && outstandingAgreements.length === 0 && deal.managementFeePaid !== true,
+        canFund: outstandingAgreements.length === 0 && (!feeRequired || deal.managementFeePaid === true),
+    };
+}
+
 export async function approveManagementFeeAction(authToken: string, dealId: string) {
     await verifyAdminWrite(authToken);
     if (!dealId) return { success: false, message: 'Deal ID is missing.' };
@@ -163,9 +204,14 @@ export async function approveManagementFeeAction(authToken: string, dealId: stri
             const dealDoc = await transaction.get(dealRef);
             if (!dealDoc.exists) throw new Error('Deal not found.');
             const dealData = dealDoc.data()!;
+            if (!requiresManagementFee(dealData)) throw new Error('This deal does not require a management fee.');
             const managementFeeAmount = Number(dealData.managementFeeAmount || 0);
             if (managementFeeAmount <= 0) throw new Error('Fee amount is invalid.');
             if (dealData.managementFeePaid === true) throw new Error('Management fee has already been approved.');
+            const outstandingAgreements = await getOutstandingDealAgreements(transaction, dealId, dealData);
+            if (outstandingAgreements.length) {
+              throw new Error(`Management fee is unavailable until these agreements are fully signed: ${outstandingAgreements.join(', ')}.`);
+            }
             transaction.update(dealRef, { managementFeePaid: true });
             transaction.set(adminDb.collection('administrativeTransactions').doc(), {
                 type: 'ManagementFee', amount: managementFeeAmount,

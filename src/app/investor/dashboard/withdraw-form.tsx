@@ -13,13 +13,13 @@ import {
   FormMessage,
   FormDescription,
 } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useActionState, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useUser } from '@/firebase';
 import { requestWithdrawalAction } from './withdrawal-actions';
 import { getRequiredIdToken } from '@/firebase/auth-token';
+import { MoneyInput } from '@/components/ui/money-input';
 
 type WithdrawFormProps = {
   withdrawableBalance: number;
@@ -115,7 +115,7 @@ export function WithdrawForm({
               <FormControl>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₦</span>
-                  <Input type="number" placeholder="10000" className="pl-8" {...field} disabled={isPending} />
+                  <MoneyInput placeholder="10,000" className="pl-8" value={field.value} onValueChange={field.onChange} disabled={isPending} />
                 </div>
               </FormControl>
               <FormDescription>

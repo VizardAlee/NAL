@@ -82,7 +82,7 @@ export function PrintableDealStatement({
             <Field label="Bank" value={clientProfile?.bankName || 'Not provided'} />
             <Field label="Account Name" value={clientProfile?.bankAccountName || deal.clientName} />
             <Field label="Account Number" value={clientProfile?.bankAccountNumber || 'Not provided'} />
-            <Field label="Management Fee" value={money(deal.managementFeeAmount || 0)} />
+            <Field label="Management Fee" value={deal.requiresManagementFee === false ? 'Not required' : money(deal.managementFeeAmount || 0)} />
             <Field label="Total Profit" value={money(totalProfit)} />
             <Field label="Total Repayment" value={money(totalRepayment)} />
             <Field label="Periodic Installment" value={periodicInstallment} />

@@ -26,6 +26,7 @@ import Link from "next/link";
 import { RepaymentPlanChangeDialog } from '@/components/deals/repayment-plan-change-dialog';
 import { PrintableDealStatement } from '@/components/deals/printable-deal-statement';
 import { RepaymentMilestoneGauge } from '@/components/deals/repayment-milestone-gauge';
+import { requiresManagementFee } from '@/lib/workflow-eligibility';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -190,10 +191,7 @@ export default function ClientDealDetailPage() {
                                 <HandCoins className="h-4 w-4 text-muted-foreground" />
                                 <span className="text-muted-foreground">Management Fee</span>
                             </div>
-                            <span className="font-medium">
-                                {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)}
-                                <span className="text-xs text-muted-foreground"> ({deal.managementFeeRate || 0}%)</span>
-                            </span>
+                            <span className="font-medium">{requiresManagementFee(deal) ? <>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)}<span className="text-xs text-muted-foreground"> ({deal.managementFeeRate || 0}%)</span></> : 'Not required'}</span>
                         </div>
                         {deal.wakalahGranted && deal.financingMode === 'Murabaha' && (
                             <div className="rounded-lg border border-primary/25 bg-primary/5 p-4">

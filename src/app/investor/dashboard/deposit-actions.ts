@@ -63,6 +63,7 @@ export async function requestDepositAction(input: {
       paymentReference: transactionReference,
       tenureValue,
       tenureUnit,
+      agreementSigningRequired: true,
     });
 
     const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);

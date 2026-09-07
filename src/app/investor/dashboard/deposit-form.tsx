@@ -23,6 +23,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
+import { MoneyInput } from '@/components/ui/money-input';
 
 type DepositFormProps = {
   onDepositRequested: () => void;
@@ -105,7 +106,7 @@ export function DepositForm({ onDepositRequested }: DepositFormProps) {
             <Info className="h-4 w-4" />
             <AlertTitle>How this works</AlertTitle>
             <AlertDescription>
-                Submit a deposit request and an admin will contact you for further engagement. Your account will be credited upon confirmation.
+                Submit an investment request, then open Agreements and complete all required signatures. The deposit cannot be approved or credited until the agreement is fully signed.
             </AlertDescription>
         </Alert>
         <Form {...form}>
@@ -119,7 +120,7 @@ export function DepositForm({ onDepositRequested }: DepositFormProps) {
                 <FormControl>
                     <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₦</span>
-                    <Input type="number" placeholder="50000" className="pl-8" {...field} />
+                    <MoneyInput placeholder="50,000" className="pl-8" value={field.value} onValueChange={field.onChange} />
                     </div>
                 </FormControl>
                 <FormMessage />

@@ -5,6 +5,9 @@ import { differenceInDays } from 'date-fns';
 import { getAuthErrorStatus, verifyAdminWrite } from '@/lib/server/auth';
 import { getAdminApp } from '@/firebase/admin-app';
 import { hasCompleteGuarantor } from '@/lib/deals/guarantor';
+import { durationToDays } from '@/lib/deal-duration';
+import { agreementEnvelopeId } from '@/lib/agreements/signing';
+import { requiredDealAgreementTypes, requiresManagementFee } from '@/lib/workflow-eligibility';
 
 // Defines the shape of the data for a Deal document
 interface Deal {
@@ -20,6 +23,13 @@ interface Deal {
     guarantorPhoneNumber?: string;
     guarantorOccupation?: string;
     guarantorPhotoURL?: string;
+    requiresManagementFee?: boolean;
+    managementFeeAmount?: number;
+    managementFeeRate?: number;
+    managementFeePaid?: boolean;
+    agreementSigningRequired?: boolean;
+    wakalahGranted?: boolean;
+    financingMode?: string;
 }
 
 // Defines the shape of the data for a FundBatch document
@@ -33,19 +43,7 @@ interface FundBatch {
     sourceType?: string;
 }
 
-const DURATION_IN_DAYS = {
-    Days: 1,
-    Weeks: 7,
-    Fortnights: 14,
-    Months: 30.4375, // Average days in month
-    Years: 365.25,
-};
-
-function convertToDays(value: number, unit: keyof typeof DURATION_IN_DAYS): number {
-    return value * (DURATION_IN_DAYS[unit] || 0);
-}
-
-const TWELVE_MONTHS_IN_DAYS = 12 * DURATION_IN_DAYS.Months;
+const TWELVE_MONTHS_IN_DAYS = 360;
 
 export async function POST(request: NextRequest) {
     const { dealId } = await request.json();
@@ -85,6 +83,17 @@ export async function POST(request: NextRequest) {
             if (!hasCompleteGuarantor(dealData)) {
                 throw new Error('This deal cannot be funded until the required guarantor details and photograph are complete.');
             }
+            if (requiresManagementFee(dealData as unknown as Record<string, unknown>) && dealData.managementFeePaid !== true) {
+                throw new Error('The required management fee must be approved before funding this deal.');
+            }
+            if (dealData.agreementSigningRequired !== false) {
+                const requiredTypes = requiredDealAgreementTypes(dealData as unknown as Record<string, unknown>);
+                const envelopes = await Promise.all(requiredTypes.map((type) =>
+                    transaction.get(firestore.collection('agreementEnvelopes').doc(agreementEnvelopeId(type, dealId)))
+                ));
+                const outstanding = requiredTypes.filter((_, index) => !envelopes[index].exists || envelopes[index].data()?.status !== 'EXECUTED');
+                if (outstanding.length) throw new Error(`Complete all required agreements before funding: ${outstanding.join(', ')}.`);
+            }
             
             const investmentsSnapshot = await transaction.get(
                 firestore.collection('investments').where('dealId', '==', dealId)
@@ -98,7 +107,7 @@ export async function POST(request: NextRequest) {
                 return; // Exit transaction early if already funded
             }
             
-            const dealDurationInDays = convertToDays(dealData.durationValue, dealData.durationUnit);
+            const dealDurationInDays = durationToDays(dealData.durationValue, dealData.durationUnit);
             const today = new Date();
 
             const fundBatchesQuery = firestore.collection('fundBatches')
@@ -109,7 +118,7 @@ export async function POST(request: NextRequest) {
             
             const eligibleBatches = fundBatchesSnapshot.docs.filter(doc => {
                 const batchData = doc.data() as FundBatch;
-                const originalBatchTenureInDays = convertToDays(batchData.tenureValue, batchData.tenureUnit);
+                const originalBatchTenureInDays = durationToDays(batchData.tenureValue, batchData.tenureUnit);
                 const isShortTermBatch = originalBatchTenureInDays <= TWELVE_MONTHS_IN_DAYS;
 
                 if (isShortTermBatch) {

@@ -52,6 +52,7 @@ export type MurabahaAgreementModel = {
     installmentMaximum: number;
     managementFeeRate: number;
     managementFeeAmount: number;
+    requiresManagementFee: boolean;
     wakalahGranted: boolean;
     schedule: MurabahaScheduleRow[];
   };
@@ -79,6 +80,9 @@ export function buildMurabahaClauses(model: MurabahaAgreementModel): MurabahaCla
   const paymentDescription = deal.installmentMinimum === deal.installmentMaximum
     ? `${deal.installmentCount} equal ${deal.repaymentFrequency.toLowerCase()} instalments of ${money(deal.installmentMaximum)}`
     : `${deal.installmentCount} ${deal.repaymentFrequency.toLowerCase()} instalments ranging from ${money(deal.installmentMinimum)} to ${money(deal.installmentMaximum)} due to exact kobo allocation`;
+  const managementFeeParagraph = deal.requiresManagementFee
+    ? `The Customer shall also pay an upfront management and documentation fee of ${money(deal.managementFeeAmount)}, representing ${deal.managementFeeRate}% of the Cost Price. This fee is separate from the Contract Price and shall be clearly receipted.`
+    : 'No management or documentation fee is required for this transaction.';
   return [
     {
       number: 1,
@@ -94,7 +98,7 @@ export function buildMurabahaClauses(model: MurabahaAgreementModel): MurabahaCla
       title: 'PAYMENT TERMS',
       paragraphs: [
         `The Customer shall pay the Contract Price in ${paymentDescription} over ${deal.durationValue} ${deal.durationUnit.toLowerCase()}, subject to the dated payment schedule attached to this Agreement.`,
-        `The Customer shall also pay an upfront management and documentation fee of ${money(deal.managementFeeAmount)}, representing ${deal.managementFeeRate}% of the Cost Price. This fee is separate from the Contract Price and shall be clearly receipted.`,
+        managementFeeParagraph,
         `All payments shall be made into the Company’s designated account: ${company.account.accountName}, ${company.account.bankName}, Account No. ${company.account.accountNumber}, or any replacement account formally notified by the Company in writing.`,
       ],
     },

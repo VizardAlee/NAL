@@ -128,7 +128,27 @@ test('non-admin users cannot write financial ledgers', async () => {
   const clientDb = env.authenticatedContext('client').firestore();
   const adminDb = env.authenticatedContext('admin').firestore();
   await assertFails(setDoc(doc(clientDb, 'fundBatches', 'forged'), { sourceId: 'client', remainingAmount: 999999 }));
-  await assertSucceeds(setDoc(doc(adminDb, 'fundBatches', 'valid'), { sourceId: 'client', remainingAmount: 100 }));
+  await assertFails(setDoc(doc(adminDb, 'fundBatches', 'investor-bypass'), { sourceId: 'client', remainingAmount: 100 }));
+  await assertSucceeds(setDoc(doc(adminDb, 'fundBatches', 'platform'), { sourceId: 'platform', remainingAmount: 100 }));
+  await assertFails(setDoc(doc(adminDb, 'investments', 'bypass'), { investorId: 'client', dealId: 'deal' }));
+  await assertFails(setDoc(doc(adminDb, 'transactions', 'deposit-bypass'), { userId: 'client', type: 'Deposit', amount: 100 }));
+  await assertSucceeds(setDoc(doc(adminDb, 'transactions', 'earning'), { userId: 'platform', type: 'PlatformEarning', amount: 100 }));
+});
+
+test('critical contractual and approval transitions require trusted server code even for admins', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, 'deals', 'deal'), { status: 'Pending', clientId: 'client' });
+    await setDoc(doc(db, 'depositRequests', 'deposit'), { status: 'Pending', investorId: 'client' });
+    await setDoc(doc(db, 'repayments', 'repayment'), { status: 'Pending', clientId: 'client' });
+    await setDoc(doc(db, 'withdrawalRequests', 'withdrawal'), { status: 'Pending', investorId: 'client' });
+  });
+  const adminDb = env.authenticatedContext('admin').firestore();
+  await assertFails(setDoc(doc(adminDb, 'deals', 'forged'), { status: 'Active', agreementSigningWaived: true }));
+  await assertFails(updateDoc(doc(adminDb, 'deals', 'deal'), { managementFeePaid: true }));
+  await assertFails(updateDoc(doc(adminDb, 'depositRequests', 'deposit'), { status: 'Approved' }));
+  await assertFails(updateDoc(doc(adminDb, 'repayments', 'repayment'), { status: 'Approved' }));
+  await assertFails(updateDoc(doc(adminDb, 'withdrawalRequests', 'withdrawal'), { status: 'Approved' }));
 });
 
 test('conversation participants cannot rewrite membership', async () => {

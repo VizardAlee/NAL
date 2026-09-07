@@ -184,6 +184,9 @@ async function createMurabahaModel(userId: string, snapshot: FirebaseFirestore.D
       installmentMaximum: payments.length ? Math.max(...payments) : 0,
       managementFeeRate: Number(deal.managementFeeRate || 0),
       managementFeeAmount: Number(deal.managementFeeAmount || 0),
+      requiresManagementFee: typeof deal.requiresManagementFee === 'boolean'
+        ? deal.requiresManagementFee
+        : Number(deal.managementFeeAmount || deal.managementFeeRate || 0) > 0,
       wakalahGranted: deal.wakalahGranted === true,
       schedule: scheduleRows,
     },

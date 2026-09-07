@@ -49,9 +49,9 @@ test('agreement amount words match the supplied investment capital', () => {
   assert.equal(nairaAmountInWords(1_250.5), 'One Thousand Two Hundred and Fifty Naira and Fifty Kobo Only');
 });
 
-test('36 calendar months from 23 March 2026 matures on 22 March 2029', () => {
+test('36 fixed 30-day months from 23 March 2026 matures after 1,080 days', () => {
   const maturity = calculateMaturityDate(new Date('2026-03-23T11:00:00.000Z'), 36, 'Months');
-  assert.equal(formatAgreementDate(maturity), '22 March 2029');
+  assert.equal(formatAgreementDate(maturity), '6 March 2029');
 });
 
 test('duration and early-termination clauses always use the same computed maturity date', () => {
@@ -75,6 +75,16 @@ test('permitted activities expressly include Mudaraba', () => {
   const permittedActivities = buildMudarabaClauses(sampleAgreement)
     .find((clause) => clause.number === 3)?.body || '';
   assert.match(permittedActivities, /including Murabaha, Mudaraba, Salam/);
+});
+
+test('profit withdrawal terms match the 90-day period-release rule', () => {
+  const withdrawalClause = buildMudarabaClauses(sampleAgreement)
+    .find((clause) => clause.number === 10)?.body || '';
+  assert.match(withdrawalClause, /completion of day 30/i);
+  assert.match(withdrawalClause, /completion of day 60/i);
+  assert.match(withdrawalClause, /days 61 to 90/i);
+  assert.match(withdrawalClause, /early Client repayment shall not accelerate/i);
+  assert.match(withdrawalClause, /longer than ninety \(90\) days.*until full maturity/i);
 });
 
 test('the generated agreement is a real PDF document', async () => {

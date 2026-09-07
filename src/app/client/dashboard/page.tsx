@@ -30,6 +30,7 @@ import { RepaymentMilestoneGauge } from "@/components/deals/repayment-milestone-
 import { ConsolidatedActiveDealsReport } from '@/components/deals/consolidated-active-deals-report';
 import { selectClientDashboardDeal } from '@/lib/client-dashboard-deal';
 import { useLanguage } from '@/components/language-provider';
+import { requiresManagementFee } from '@/lib/workflow-eligibility';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -317,10 +318,7 @@ function DealCard({
                         <HandCoins className="h-4 w-4 text-muted-foreground" />
                         <span className="text-muted-foreground">Management Fee</span>
                     </div>
-                    <span className="font-medium">
-                        {new Intl.NumberFormat(locale, { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)}
-                        <span className="text-xs text-muted-foreground"> ({deal.managementFeeRate || 0}%)</span>
-                    </span>
+                    <span className="font-medium">{requiresManagementFee(deal) ? <>{new Intl.NumberFormat(locale, { style: 'currency', currency: 'NGN' }).format(deal.managementFeeAmount || 0)}<span className="text-xs text-muted-foreground"> ({deal.managementFeeRate || 0}%)</span></> : 'Not required'}</span>
                 </div>
                 {(deal.status === 'Active' || deal.status === 'Completed') && (
                     <RepaymentMilestoneGauge

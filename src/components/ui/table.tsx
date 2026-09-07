@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
@@ -5,15 +7,31 @@ import { cn } from "@/lib/utils"
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto rounded-md">
-    <table
-      ref={ref}
-      className={cn("w-full caption-bottom text-sm", className)}
-      {...props}
-    />
-  </div>
-))
+>(({ className, ...props }, forwardedRef) => {
+  const tableRef = React.useRef<HTMLTableElement | null>(null)
+  React.useImperativeHandle(forwardedRef, () => tableRef.current as HTMLTableElement)
+  React.useEffect(() => {
+    const table = tableRef.current
+    if (!table) return
+    const labelCells = () => {
+      const labels = Array.from(table.querySelectorAll('thead th')).map((cell) => cell.textContent?.trim() || 'Details')
+      table.querySelectorAll('tbody tr').forEach((row) => {
+        Array.from(row.children).forEach((cell, index) => {
+          if (cell instanceof HTMLElement && !cell.dataset.label) cell.dataset.label = labels[index] || 'Details'
+        })
+      })
+    }
+    labelCells()
+    const observer = new MutationObserver(labelCells)
+    observer.observe(table, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [])
+  return (
+    <div className="relative min-w-0 w-full overflow-hidden rounded-md">
+      <table ref={tableRef} className={cn("responsive-table w-full caption-bottom text-sm", className)} {...props} />
+    </div>
+  )
+})
 Table.displayName = "Table"
 
 const TableHeader = React.forwardRef<
@@ -87,7 +105,7 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)}
+    className={cn("min-w-0 p-4 align-middle break-words [&:has([role=checkbox])]:pr-0", className)}
     {...props}
   />
 ))

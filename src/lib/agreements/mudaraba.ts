@@ -1,4 +1,5 @@
-import { addDays, addMonths, addWeeks, addYears, format, subDays } from 'date-fns';
+import { format } from 'date-fns';
+import { calculateInclusiveMaturityDate } from '@/lib/deal-duration';
 import type { SupportedLanguage } from '@/lib/localization';
 import type { LegalParty } from '@/lib/legal-party';
 
@@ -98,25 +99,7 @@ export function calculateMaturityDate(
   tenureValue: number,
   tenureUnit: MudarabaAgreementModel['tenureUnit']
 ): Date {
-  let exclusiveEnd: Date;
-  switch (tenureUnit) {
-    case 'Days':
-      exclusiveEnd = addDays(startsAt, tenureValue);
-      break;
-    case 'Weeks':
-      exclusiveEnd = addWeeks(startsAt, tenureValue);
-      break;
-    case 'Fortnights':
-      exclusiveEnd = addDays(startsAt, tenureValue * 14);
-      break;
-    case 'Months':
-      exclusiveEnd = addMonths(startsAt, tenureValue);
-      break;
-    case 'Years':
-      exclusiveEnd = addYears(startsAt, tenureValue);
-      break;
-  }
-  return subDays(exclusiveEnd, 1);
+  return calculateInclusiveMaturityDate(startsAt, tenureValue, tenureUnit);
 }
 
 export function formatAgreementDate(value: string | Date): string {
@@ -137,7 +120,8 @@ export function formatAgreementTerm(
   unit: MudarabaAgreementModel['tenureUnit']
 ): string {
   const singular = unit.endsWith('s') ? unit.slice(0, -1) : unit;
-  return `${value} calendar ${value === 1 ? singular.toLowerCase() : unit.toLowerCase()}`;
+  if (unit === 'Months') return `${value} fixed 30-day ${value === 1 ? 'month' : 'months'}`;
+  return `${value} ${value === 1 ? singular.toLowerCase() : unit.toLowerCase()}`;
 }
 
 export function buildMudarabaClauses(model: MudarabaAgreementModel): AgreementClause[] {
@@ -192,8 +176,8 @@ export function buildMudarabaClauses(model: MudarabaAgreementModel): AgreementCl
     { number: 9, title: 'ZAKAT', body: zakatText },
     {
       number: 10,
-      title: 'ANNUAL PROFIT WITHDRAWAL',
-      body: 'Where this particular fund batch is locked for more than two (2) years, the Investor shall have five (5) calendar days from each completed anniversary date to request withdrawal of up to twenty per cent (20%) of the Investor’s allocated realised net profit for that completed year. The request may be made through the app or an approved manual channel. The right applies only to profit after applicable Zakat and statutory deductions and not to the investment capital. The reserved twenty per cent (20%) shall not be reinvestible during the five-day window. Approved withdrawals shall be paid within ten (10) Business Days after the window closes.',
+      title: 'PROFIT WITHDRAWAL AVAILABILITY',
+      body: 'For an Investment with a term of exactly ninety (90) days, allocated realised net profit attributable to the first thirty (30) days shall become eligible for withdrawal only after completion of day 30; profit attributable to days 31 to 60 shall become eligible only after completion of day 60; and profit attributable to days 61 to 90 shall become eligible only at maturity. Receipt of an early Client repayment shall not accelerate any applicable release date. For an Investment longer than ninety (90) days, all allocated realised net profit shall remain unavailable for withdrawal until full maturity. Every withdrawal remains subject to applicable Zakat, statutory deductions, available realised profit and the Company’s approval process.',
     },
     {
       number: 11,
@@ -203,7 +187,7 @@ export function buildMudarabaClauses(model: MudarabaAgreementModel): AgreementCl
     {
       number: 12,
       title: 'EARLY TERMINATION',
-      body: `The Investment Capital shall remain committed until the maturity date of ${maturityDate}, and the Investor shall not be entitled to terminate the Investment or demand the return of the Investment Capital before that date. The annual profit-withdrawal right under Clause 10 applies only to the permitted portion of realised profit and shall not constitute early termination or capital withdrawal. The Company may terminate the Agreement before maturity where it reasonably determines that continuation has become hazardous, materially risky, unlawful, commercially impracticable, materially unprofitable or otherwise prejudicial to the safety, viability or legitimate interests of the business. Where reasonably practicable, the Company shall notify the Investor, prepare a final account and settle any amount properly due after accounting for realised profit or loss, liabilities, Zakat and statutory deductions. Nothing in this Clause shall prevent compliance with a binding order of a court or competent authority or any mandatory provision of Nigerian law.`,
+      body: `The Investment Capital shall remain committed until the maturity date of ${maturityDate}, and the Investor shall not be entitled to terminate the Investment or demand the return of the Investment Capital before that date. Any profit made available under Clause 10 shall not constitute early termination or capital withdrawal. The Company may terminate the Agreement before maturity where it reasonably determines that continuation has become hazardous, materially risky, unlawful, commercially impracticable, materially unprofitable or otherwise prejudicial to the safety, viability or legitimate interests of the business. Where reasonably practicable, the Company shall notify the Investor, prepare a final account and settle any amount properly due after accounting for realised profit or loss, liabilities, Zakat and statutory deductions. Nothing in this Clause shall prevent compliance with a binding order of a court or competent authority or any mandatory provision of Nigerian law.`,
     },
     {
       number: 13,

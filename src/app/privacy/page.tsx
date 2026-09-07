@@ -12,10 +12,10 @@ export default function PrivacyPolicyPage() {
   return (
     <div className="app-shell">
       <header className="app-topbar sticky top-0 z-50 w-full">
-        <div className="container flex h-16 items-center">
-          <Link href="/" className="mr-6 flex items-center space-x-2">
+        <div className="container flex h-16 min-w-0 items-center px-3 sm:px-4">
+          <Link href="/" className="mr-2 flex min-w-0 items-center space-x-2 sm:mr-6">
             <Logo imageUrl={logoUrl} className="h-6 w-6 text-primary" />
-            <span className="font-bold font-headline">NAL General Marchant</span>
+            <span className="hidden truncate font-bold font-headline min-[360px]:inline">NAL General Marchant</span>
           </Link>
           <div className="flex flex-1 items-center justify-end">
             <Button variant="ghost" asChild>
