@@ -27,6 +27,7 @@ export default function HistoricalImportsPage() {
   const { toast } = useToast();
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [search, setSearch] = useState('');
@@ -39,8 +40,14 @@ export default function HistoricalImportsPage() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try { setWorkspace(await getHistoricalImportWorkspaceAction(await getRequiredIdToken())); }
-    catch (error) { toast({ variant: 'destructive', title: 'Historical imports unavailable', description: error instanceof Error ? error.message : 'Could not load the migration workspace.' }); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not load the migration workspace.';
+      setWorkspace(null);
+      setLoadError(message);
+      toast({ variant: 'destructive', title: 'Historical imports unavailable', description: message });
+    }
     finally { setLoading(false); }
   }, [toast]);
   useEffect(() => { void refresh(); }, [refresh]);
@@ -63,34 +70,38 @@ export default function HistoricalImportsPage() {
     } catch (error) { toast({ variant: 'destructive', title: 'Import case not created', description: error instanceof Error ? error.message : 'Check the supplied information.' }); }
   });
 
-  const toggleAvailability = () => startTransition(async () => {
-    if (!workspace) return;
+  const changeAvailability = (enabled: boolean) => startTransition(async () => {
     try {
-      await setHistoricalImportAvailabilityAction({ authToken: await getRequiredIdToken(), enabled: !workspace.setting.enabled, recordsAccurateThrough: asOfDate });
+      await setHistoricalImportAvailabilityAction({ authToken: await getRequiredIdToken(), enabled, recordsAccurateThrough: asOfDate });
       await refresh();
-      toast({ title: workspace.setting.enabled ? 'New imports disabled' : 'Historical importing enabled' });
+      toast({ title: enabled ? 'Historical importing enabled' : 'New imports disabled' });
     } catch (error) { toast({ variant: 'destructive', title: 'Setting not changed', description: error instanceof Error ? error.message : 'Try again.' }); }
   });
+
+  const toggleAvailability = () => {
+    if (workspace) changeAvailability(!workspace.setting.enabled);
+  };
 
   const posted = workspace?.cases.filter((item) => item.status === 'POSTED').length || 0;
   const attention = workspace?.cases.filter((item) => item.status === 'NEEDS_ATTENTION').length || 0;
   return <div className="space-y-6">
     <PageHeader title="Historical Records Migration" description="Temporarily reconstruct pre-app accounts and deals from administrator-supplied evidence." icon={ArchiveRestore}>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild><Button disabled={!workspace?.setting.enabled}><Plus className="mr-2 h-4 w-4" />Start Import</Button></DialogTrigger>
+        <DialogTrigger asChild><Button disabled={loading || Boolean(loadError) || workspace?.setting.enabled === false}><Plus className="mr-2 h-4 w-4" />Start Import</Button></DialogTrigger>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>Start a historical import</DialogTitle><DialogDescription>Use an existing account whenever possible. A new profile remains unclaimed until the customer accepts an invitation.</DialogDescription></DialogHeader>
           <div className="grid gap-5 py-2">
             <div className="grid gap-2"><Label>Customer source</Label><Select value={partyMode} onValueChange={(value: 'EXISTING' | 'NEW') => setPartyMode(value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="EXISTING">Use existing client or investor</SelectItem><SelectItem value="NEW">Create an unclaimed profile</SelectItem></SelectContent></Select></div>
             {partyMode === 'EXISTING' ? <div className="grid gap-2"><Label>Find account</Label><div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name or email" /></div><Select value={existingUserId} onValueChange={selectExisting}><SelectTrigger><SelectValue placeholder="Select the matching account" /></SelectTrigger><SelectContent>{matchingUsers.map((user) => <SelectItem key={user.id} value={user.id}>{user.name}{user.email ? ` · ${user.email}` : ''}{user.accountClaimStatus === 'UNCLAIMED' ? ' · Unclaimed' : ''}</SelectItem>)}</SelectContent></Select></div> : <><div className="grid gap-2"><Label>Customer or organisation name</Label><Input value={partyName} onChange={(event) => setPartyName(event.target.value)} /></div><div className="grid gap-2"><Label>Account type</Label><Select value={accountType} onValueChange={(value: 'Individual' | 'Organization') => setAccountType(value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Individual">Individual</SelectItem><SelectItem value="Organization">Organisation / Business</SelectItem></SelectContent></Select></div></>}
             <div className="grid gap-2"><Label>Business relationship</Label><Select value={partyKind} onValueChange={(value: 'CLIENT' | 'INVESTOR' | 'BOTH') => setPartyKind(value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="CLIENT">Client</SelectItem><SelectItem value="INVESTOR">Investor</SelectItem><SelectItem value="BOTH">Client and investor</SelectItem></SelectContent></Select></div>
-            <div className="grid gap-2"><Label>Records accurate as of</Label><Input type="date" value={asOfDate} max={new Date().toISOString().slice(0, 10)} onChange={(event) => setAsOfDate(event.target.value)} /></div>
+            <div className="grid gap-2"><Label>Financial snapshot date (records accurate through)</Label><Input type="date" value={asOfDate} max={new Date().toISOString().slice(0, 10)} onChange={(event) => setAsOfDate(event.target.value)} /><p className="text-xs text-muted-foreground">This is the date through which balances and payments are being reconstructed. It is not the deal start date; each deal keeps its own original start date.</p></div>
             <Button onClick={createCase} disabled={pending || !partyName || (partyMode === 'EXISTING' && !existingUserId)}>{pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Create Import Workspace</Button>
           </div>
         </DialogContent>
       </Dialog>
     </PageHeader>
-    {!workspace?.setting.enabled && <Alert><CalendarCheck className="h-4 w-4" /><AlertTitle>Historical importing is closed</AlertTitle><AlertDescription>Existing evidence and posted records remain available. Re-enable the workspace only if older records still need migration.</AlertDescription></Alert>}
+    {loadError && <Alert variant="destructive"><FileWarning className="h-4 w-4" /><AlertTitle>The migration workspace could not be loaded</AlertTitle><AlertDescription className="space-y-3"><p>This is a loading error; it does not mean imports were intentionally disabled.</p><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => void refresh()} disabled={loading || pending}>Retry loading</Button><Button size="sm" variant="outline" onClick={() => changeAvailability(true)} disabled={loading || pending}>Re-enable imports</Button></div></AlertDescription></Alert>}
+    {workspace && !workspace.setting.enabled && <Alert><CalendarCheck className="h-4 w-4" /><AlertTitle>Historical importing is closed</AlertTitle><AlertDescription>Existing evidence and posted records remain available. Re-enable the workspace only if older records still need migration.</AlertDescription></Alert>}
     <div className="grid gap-4 md:grid-cols-3">
       <Card><CardHeader className="pb-2"><CardDescription>Total cases</CardDescription><CardTitle>{workspace?.cases.length || 0}</CardTitle></CardHeader></Card>
       <Card><CardHeader className="pb-2"><CardDescription>Successfully posted</CardDescription><CardTitle className="text-emerald-700">{posted}</CardTitle></CardHeader></Card>

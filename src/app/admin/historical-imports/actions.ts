@@ -70,16 +70,18 @@ function plainTimestamp(value: unknown) {
   return value instanceof Timestamp ? value.toDate().toISOString() : null;
 }
 
+function serializeForClient(value: unknown): any {
+  if (value instanceof Timestamp) return value.toDate().toISOString();
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(serializeForClient);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, nestedValue]) => [key, serializeForClient(nestedValue)]));
+  }
+  return value;
+}
+
 function serializeCase(snapshot: FirebaseFirestore.DocumentSnapshot): Record<string, any> {
-  const data = snapshot.data() || {};
-  return {
-    id: snapshot.id,
-    ...data,
-    createdAt: plainTimestamp(data.createdAt),
-    updatedAt: plainTimestamp(data.updatedAt),
-    postedAt: plainTimestamp(data.postedAt),
-    documents: (data.documents || []).map((document: Record<string, unknown>) => ({ ...document, uploadedAt: plainTimestamp(document.uploadedAt) })),
-  };
+  return { id: snapshot.id, ...serializeForClient(snapshot.data() || {}) };
 }
 
 async function assertImportEnabled() {
