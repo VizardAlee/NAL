@@ -111,6 +111,7 @@ export async function signUpWithEmailAction(
             primaryPortal?: PrimaryPortal;
             isMuslim?: boolean;
             accountType?: 'Individual' | 'Organization';
+            existingProfileId?: string;
             status: 'Pending' | 'Used';
         };
         if (!inviteData || inviteData.status !== 'Pending') {
@@ -166,18 +167,35 @@ export async function signUpWithEmailAction(
             }
         }
 
+        const existingProfileId = inviteData.existingProfileId;
         const userExists = await auth.getUserByEmail(email).catch(() => null);
-        if (userExists) {
+        if (userExists && userExists.uid !== existingProfileId) {
             return { success: false, message: "An account with this email already exists." };
         }
 
-        // 1. Create user in Firebase Auth
-        const userRecord = await auth.createUser({
-            email,
-            password,
-            displayName: legalName,
-            emailVerified: true,
-        });
+        // Imported accounts retain one stable UID so their existing deals,
+        // documents and balances become visible without copying ledger data.
+        let userRecord;
+        if (existingProfileId) {
+            const profileSnapshot = await adminDb.collection('users').doc(existingProfileId).get();
+            if (!profileSnapshot.exists || profileSnapshot.data()?.accountClaimStatus !== 'UNCLAIMED') {
+                return { success: false, message: 'This historical account has already been claimed or is unavailable.' };
+            }
+            userRecord = await auth.updateUser(existingProfileId, {
+                email,
+                password,
+                displayName: legalName,
+                emailVerified: true,
+                disabled: false,
+            });
+        } else {
+            userRecord = await auth.createUser({
+                email,
+                password,
+                displayName: legalName,
+                emailVerified: true,
+            });
+        }
 
         // 2. Set Custom Claim for Security Rules
         await auth.setCustomUserClaims(userRecord.uid, {
@@ -197,6 +215,11 @@ export async function signUpWithEmailAction(
             accessRole: accessModel.accessRole,
             personas: accessModel.personas,
             primaryPortal: accessModel.primaryPortal,
+            accountClaimStatus: 'ACTIVE',
+            partyId: userRecord.uid,
+            claimedAt: FieldValue.serverTimestamp(),
+            invitationStatus: 'USED',
+            pendingEmail: FieldValue.delete(),
         };
         if (requiresKyc) {
             const normalizedGovernmentId = normalizeGovernmentIdNumber(suppliedGovernmentIdNumber);
@@ -241,7 +264,7 @@ export async function signUpWithEmailAction(
 
 
         const batch = adminDb.batch();
-        batch.set(adminDb.collection('users').doc(userRecord.uid), userData);
+        batch.set(adminDb.collection('users').doc(userRecord.uid), userData, { merge: Boolean(existingProfileId) });
         if (requiresKyc) {
             batch.set(adminDb.collection('userKycProfiles').doc(userRecord.uid), {
                 userId: userRecord.uid,
@@ -262,6 +285,7 @@ export async function signUpWithEmailAction(
             status: 'Used',
             usedBy: userRecord.uid,
             usedAt: new Date(),
+            claimedExistingProfile: Boolean(existingProfileId),
         });
         await batch.commit();
 
@@ -289,6 +313,17 @@ export async function getInviteDetailsAction(inviteToken: string): Promise<{
     primaryPortal?: PrimaryPortal;
     isMuslim?: boolean;
     accountType?: 'Individual' | 'Organization';
+    profileClaim?: boolean;
+    profile?: {
+      name?: string;
+      phoneNumber?: string;
+      address?: string;
+      organizationName?: string;
+      organizationRegistrationNumber?: string;
+      organizationAddress?: string;
+      bankName?: string;
+      bankAccountName?: string;
+    };
     message?: string;
 }> {
     if (!inviteToken) return { valid: false, message: 'Missing invite token.' };
@@ -310,6 +345,7 @@ export async function getInviteDetailsAction(inviteToken: string): Promise<{
             primaryPortal?: PrimaryPortal;
             isMuslim?: boolean;
             accountType?: 'Individual' | 'Organization';
+            existingProfileId?: string;
             status: 'Pending' | 'Used';
         };
         if (!inviteData || inviteData.status !== 'Pending') {
@@ -322,6 +358,9 @@ export async function getInviteDetailsAction(inviteToken: string): Promise<{
             personas: inviteData.personas,
             primaryPortal: inviteData.primaryPortal,
         });
+        const historicalProfile = inviteData.existingProfileId
+            ? (await adminDb.collection('users').doc(inviteData.existingProfileId).get()).data()
+            : undefined;
         return {
             valid: true,
             email: inviteData.email,
@@ -331,6 +370,17 @@ export async function getInviteDetailsAction(inviteToken: string): Promise<{
             primaryPortal: accessModel.primaryPortal,
             isMuslim: inviteData.isMuslim,
             accountType: inviteData.accountType || 'Individual',
+            profileClaim: Boolean(inviteData.existingProfileId),
+            ...(historicalProfile ? { profile: {
+                name: historicalProfile.name || '',
+                phoneNumber: historicalProfile.phoneNumber || '',
+                address: historicalProfile.address || '',
+                organizationName: historicalProfile.organizationName || '',
+                organizationRegistrationNumber: historicalProfile.organizationRegistrationNumber || '',
+                organizationAddress: historicalProfile.organizationAddress || '',
+                bankName: historicalProfile.bankName || '',
+                bankAccountName: historicalProfile.bankAccountName || '',
+            } } : {}),
         };
     } catch (error: any) {
         return { valid: false, message: error.message || 'Failed to validate invite link.' };

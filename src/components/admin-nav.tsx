@@ -33,6 +33,7 @@ import {
   MoreHorizontal,
   FileSignature,
   CalendarSync,
+  ArchiveRestore,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +62,7 @@ export const adminMenuItems: MenuItem[] = [
   { href: "/admin/deals", label: "Deals", icon: FileText },
   { href: "/admin/agreements", label: "Agreements", icon: FileSignature },
   { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/historical-imports", label: "Historical Import", icon: ArchiveRestore },
   {
     label: "Approvals",
     icon: CheckCircle,

@@ -15,6 +15,7 @@ import type { WakalahAgreementModel } from '@/lib/agreements/wakalah';
 import type { KafaalahBondModel } from '@/lib/agreements/kafaalah';
 import type { MurabahaAgreementModel } from '@/lib/agreements/murabaha';
 import { listClientAgreementsAction, listClientKafaalahBondsAction, listClientMurabahaAgreementsAction } from './actions';
+import { HistoricalDocumentsCard } from '@/components/historical-documents-card';
 
 export default function ClientAgreementsPage() {
   const auth = useAuth();
@@ -47,6 +48,7 @@ export default function ClientAgreementsPage() {
   return (
     <div>
       <PageHeader title="My Agreements" description="Your sales contracts, guarantee bonds and procurement authorities." icon={ScrollText} />
+      <HistoricalDocumentsCard />
       {loading ? <div className="grid gap-4 md:grid-cols-2"><Skeleton className="h-52" /><Skeleton className="h-52" /></div> : error ? (
         <Alert variant="destructive"><FileWarning className="h-4 w-4" /><AlertTitle>Agreements unavailable</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>
       ) : (

@@ -174,6 +174,16 @@ test('agreement signing records cannot be read or forged from client SDKs', asyn
   }
 });
 
+test('historical import drafts are server-only even for browser administrators', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'historicalImports', 'import-1'), { partyName: 'Sensitive Client', status: 'DRAFT' });
+  });
+  for (const db of [env.authenticatedContext('client').firestore(), env.authenticatedContext('admin').firestore()]) {
+    await assertFails(getDoc(doc(db, 'historicalImports', 'import-1')));
+    await assertFails(setDoc(doc(db, 'historicalImports', 'forged'), { status: 'POSTED' }));
+  }
+});
+
 test('repayment-plan requests are readable by the client and admin but writable only by the server', async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), 'repaymentPlanChangeRequests', 'request'), {

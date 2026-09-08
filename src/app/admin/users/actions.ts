@@ -33,6 +33,7 @@ const inviteSchema = z
     isMuslim: z.boolean().optional(),
     inviterId: z.string().min(1),
     inviterName: z.string().min(1),
+    existingProfileId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.personas.includes('INVESTOR') && typeof data.isMuslim !== 'boolean') {
@@ -64,6 +65,7 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
     accountType,
     inviterId,
     inviterName,
+    existingProfileId,
   } = validated.data;
   const actor = await verifyAdminWrite(authToken);
   if (actor.uid !== inviterId) {
@@ -86,12 +88,34 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
   });
 
   try {
+    let existingProfile: FirebaseFirestore.DocumentData | null = null;
+    if (existingProfileId) {
+      const profileSnapshot = await adminDb.collection('users').doc(existingProfileId).get();
+      if (!profileSnapshot.exists || profileSnapshot.data()?.accountClaimStatus !== 'UNCLAIMED') {
+        return { success: false, message: 'The selected historical profile is no longer available to claim.' };
+      }
+      existingProfile = profileSnapshot.data() || {};
+      const profilePersonas = (existingProfile.personas || []) as Persona[];
+      if (profilePersonas.length !== dedupedPersonas.length || !dedupedPersonas.every((persona) => profilePersonas.includes(persona))) {
+        return { success: false, message: 'The invitation roles must match the historical profile.' };
+      }
+      if ((existingProfile.accessRole || 'USER') !== accessRole || (existingProfile.accountType || 'Individual') !== accountType) {
+        return { success: false, message: 'The invitation authority and account type must match the historical profile.' };
+      }
+      const pendingForProfile = await adminDb.collection('invites').where('existingProfileId', '==', existingProfileId).where('status', '==', 'Pending').limit(1).get();
+      if (!pendingForProfile.empty) {
+        const token = pendingForProfile.docs[0].id;
+        await pendingForProfile.docs[0].ref.update({ email: normalizedEmail, updatedAt: FieldValue.serverTimestamp(), createdBy: inviterId, createdByName: inviterName });
+        await adminDb.collection('users').doc(existingProfileId).update({ pendingEmail: normalizedEmail, invitationStatus: 'PENDING', updatedAt: FieldValue.serverTimestamp() });
+        return { success: true, message: 'This historical profile already has a pending invitation.', inviteLink: `${getInviteBaseUrl()}/signup?invite=${token}` };
+      }
+    }
     const existingUser = await adminDb
       .collection('users')
       .where('email', '==', normalizedEmail)
       .limit(1)
       .get();
-    if (!existingUser.empty) {
+    if (!existingUser.empty && existingUser.docs[0].id !== existingProfileId) {
       return { success: false, message: 'A user with this email already exists.' };
     }
 
@@ -114,6 +138,7 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
         updatedAt: FieldValue.serverTimestamp(),
         createdBy: inviterId,
         createdByName: inviterName,
+        ...(existingProfileId ? { existingProfileId } : {}),
       });
       const baseUrl = getInviteBaseUrl();
       return {
@@ -136,7 +161,11 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
       createdAt: FieldValue.serverTimestamp(),
       createdBy: inviterId,
       createdByName: inviterName,
+      ...(existingProfileId ? { existingProfileId } : {}),
     });
+    if (existingProfileId) {
+      await adminDb.collection('users').doc(existingProfileId).update({ pendingEmail: normalizedEmail, invitationStatus: 'PENDING', updatedAt: FieldValue.serverTimestamp() });
+    }
 
     const baseUrl = getInviteBaseUrl();
     return {
@@ -150,4 +179,22 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
       message: error?.message || 'Failed to generate invite link.',
     };
   }
+}
+
+export async function getUnclaimedProfilesAction(authToken: string) {
+  await verifyAdminWrite(authToken);
+  const snapshot = await adminDb.collection('users').where('accountClaimStatus', '==', 'UNCLAIMED').get();
+  return snapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      name: data.name || data.organizationName || 'Unnamed historical profile',
+      pendingEmail: data.pendingEmail || '',
+      accountType: data.accountType || 'Individual',
+      accessRole: data.accessRole || 'USER',
+      personas: data.personas || [],
+      primaryPortal: data.primaryPortal,
+      isMuslim: data.isMuslim,
+    };
+  });
 }

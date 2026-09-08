@@ -73,6 +73,18 @@ test('only full administrators can upload legal documents', async () => {
   await assertFails(staff.ref('admin/staff/legal/client/document.pdf').putString('legal', 'raw', pdfMetadata));
 });
 
+test('only the full administrator who owns a migration path can upload historical evidence', async () => {
+  const admin = env.authenticatedContext('admin').storage();
+  const staff = env.authenticatedContext('staff').storage();
+  const client = env.authenticatedContext('client').storage();
+  const path = 'historical-imports/import-1/admin/statement.pdf';
+  await assertSucceeds(admin.ref(path).putString('historical statement', 'raw', pdfMetadata));
+  await assertSucceeds(admin.ref(path).getDownloadURL());
+  await assertFails(staff.ref('historical-imports/import-1/staff/statement.pdf').putString('forged', 'raw', pdfMetadata));
+  await assertFails(client.ref(path).getDownloadURL());
+  await assertFails(admin.ref('historical-imports/import-1/other/statement.pdf').putString('wrong owner', 'raw', pdfMetadata));
+});
+
 test('executed agreement archives cannot be accessed directly by clients or admins', async () => {
   const admin = env.authenticatedContext('admin').storage();
   const client = env.authenticatedContext('client').storage();

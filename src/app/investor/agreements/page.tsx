@@ -16,6 +16,7 @@ import {
   formatAgreementDate,
   type MudarabaAgreementModel,
 } from '@/lib/agreements/mudaraba';
+import { HistoricalDocumentsCard } from '@/components/historical-documents-card';
 
 export default function InvestorAgreementsPage() {
   const auth = useAuth();
@@ -45,6 +46,7 @@ export default function InvestorAgreementsPage() {
         description="Review and sign each investment agreement before its deposit can be approved."
         icon={FileSignature}
       />
+      <HistoricalDocumentsCard />
 
       {error && (
         <Alert variant="destructive" className="mb-6">

@@ -85,6 +85,16 @@ service firebase.storage {
       allow write: if signedIn() && request.auth.uid == adminId && isAdmin() && validUpload();
     }
 
+    // Temporary historical migration workspace. Administrators can upload
+    // evidence, while all metadata and ledger posting remain server-only.
+    match /historical-imports/{importId}/{adminId}/{fileName} {
+      allow read: if signedIn() && request.auth.uid == adminId && isAdmin();
+      allow write: if signedIn()
+        && request.auth.uid == adminId
+        && isAdmin()
+        && validUpload();
+    }
+
     match /case-evidence/{taskId}/{uploaderId}/{fileName} {
       allow read: if signedIn() && canAccessCase(taskId);
       allow write: if signedIn()

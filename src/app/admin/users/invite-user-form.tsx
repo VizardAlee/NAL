@@ -3,7 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { Loader2, Copy, Share2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { createInviteLinkAction } from './actions';
+import { createInviteLinkAction, getUnclaimedProfilesAction } from './actions';
 import { getRequiredIdToken } from '@/firebase/auth-token';
 import { useUser } from '@/firebase';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -40,6 +40,7 @@ const formSchema = z
     primaryPortal: z.enum(['owner', 'admin', 'investor', 'client', 'legal', 'recovery', 'marketer']),
     accountType: z.enum(['Individual', 'Organization']),
     isMuslim: z.boolean().optional(),
+    existingProfileId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.personas.includes('INVESTOR') && typeof data.isMuslim !== 'boolean') {
@@ -60,6 +61,8 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
   const { user } = useUser();
   const [isPending, startTransition] = useTransition();
   const [inviteLink, setInviteLink] = useState('');
+  const [accountSource, setAccountSource] = useState<'NEW' | 'EXISTING'>('NEW');
+  const [unclaimedProfiles, setUnclaimedProfiles] = useState<Awaited<ReturnType<typeof getUnclaimedProfilesAction>>>([]);
   const personaChoices: Array<{ value: Persona; label: string }> = [
     { value: 'INVESTOR', label: 'Investor' },
     { value: 'CLIENT', label: 'Client' },
@@ -78,8 +81,26 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
       primaryPortal: 'investor',
       isMuslim: undefined,
       accountType: 'Individual',
+      existingProfileId: undefined,
     },
   });
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    void getRequiredIdToken().then(getUnclaimedProfilesAction).then(setUnclaimedProfiles).catch(() => setUnclaimedProfiles([]));
+  }, [user?.uid]);
+
+  const selectHistoricalProfile = (profileId: string) => {
+    form.setValue('existingProfileId', profileId);
+    const profile = unclaimedProfiles.find((item) => item.id === profileId);
+    if (!profile) return;
+    form.setValue('email', profile.pendingEmail || '');
+    form.setValue('accessRole', profile.accessRole as 'OWNER' | 'ADMIN' | 'STAFF' | 'USER');
+    form.setValue('personas', profile.personas as Persona[]);
+    form.setValue('primaryPortal', (profile.primaryPortal || resolvePrimaryPortalFromPersonas(profile.personas as Persona[])) as any);
+    form.setValue('accountType', profile.accountType as 'Individual' | 'Organization');
+    form.setValue('isMuslim', profile.isMuslim);
+  };
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     if (!user?.uid) {
@@ -88,6 +109,10 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
         title: 'Error',
         description: 'You must be logged in as an admin.',
       });
+      return;
+    }
+    if (accountSource === 'EXISTING' && !values.existingProfileId) {
+      toast({ variant: 'destructive', title: 'Select a historical profile', description: 'Choose the imported client or investor who should receive this invitation.' });
       return;
     }
 
@@ -121,6 +146,7 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
         isMuslim: personas.includes('INVESTOR') ? values.isMuslim : undefined,
         inviterId: user.uid,
         inviterName,
+        existingProfileId: accountSource === 'EXISTING' ? values.existingProfileId : undefined,
       });
 
       if (!result.success || !result.inviteLink) {
@@ -175,6 +201,22 @@ export function InviteUserForm({ onInviteCreated }: InviteUserFormProps) {
     <div className="space-y-4">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <div className="grid gap-2">
+            <Label>Account source</Label>
+            <Select value={accountSource} onValueChange={(value: 'NEW' | 'EXISTING') => { setAccountSource(value); if (value === 'NEW') form.setValue('existingProfileId', undefined); }}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="NEW">Invite a new customer</SelectItem><SelectItem value="EXISTING">Give an imported customer access</SelectItem></SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground">Imported customers keep their existing documents, deals, investments and balances.</p>
+          </div>
+          {accountSource === 'EXISTING' && <div className="grid gap-2">
+            <Label>Historical client or investor</Label>
+            <Select value={form.watch('existingProfileId')} onValueChange={selectHistoricalProfile}>
+              <SelectTrigger><SelectValue placeholder="Select an unclaimed profile" /></SelectTrigger>
+              <SelectContent>{unclaimedProfiles.map((profile) => <SelectItem key={profile.id} value={profile.id}>{profile.name} · {(profile.personas || []).join(', ')}</SelectItem>)}</SelectContent>
+            </Select>
+            {!unclaimedProfiles.length && <p className="text-sm text-amber-700">No unclaimed historical profiles are available.</p>}
+          </div>}
           <FormField
             control={form.control}
             name="email"

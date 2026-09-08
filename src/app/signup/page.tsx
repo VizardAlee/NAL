@@ -82,6 +82,12 @@ type InviteState = {
   primaryPortal?: string;
   isMuslim?: boolean;
   accountType?: 'Individual' | 'Organization';
+  profileClaim?: boolean;
+  profile?: {
+    name?: string; phoneNumber?: string; address?: string; organizationName?: string;
+    organizationRegistrationNumber?: string; organizationAddress?: string;
+    bankName?: string; bankAccountName?: string;
+  };
   message?: string;
 };
 
@@ -134,10 +140,21 @@ function SignupPageContent() {
           primaryPortal: result.primaryPortal,
           isMuslim: result.isMuslim,
           accountType: result.accountType,
+          profileClaim: result.profileClaim,
+          profile: result.profile,
         });
         form.setValue('email', result.email || '');
         form.setValue('inviteToken', inviteToken);
         form.setValue('accountType', result.accountType || 'Individual');
+        if (result.profile) {
+          form.setValue('name', result.profile.name || '');
+          form.setValue('phoneNumber', result.profile.phoneNumber || '');
+          form.setValue('organizationName', result.profile.organizationName || result.profile.name || '');
+          form.setValue('organizationRegistrationNumber', result.profile.organizationRegistrationNumber || '');
+          form.setValue('organizationAddress', result.profile.organizationAddress || result.profile.address || '');
+          form.setValue('bankName', result.profile.bankName || '');
+          form.setValue('bankAccountName', result.profile.bankAccountName || '');
+        }
       } else {
         setInviteState({ loading: false, valid: false, message: result.message || 'Invalid invite.' });
       }
@@ -239,7 +256,7 @@ function SignupPageContent() {
                     className="space-y-4"
                 >
                     <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-                      Contracting party: <strong>{inviteState.accountType || 'Individual'}</strong>
+                      {inviteState.profileClaim ? <><strong>Existing historical account found.</strong><br /><span className="text-muted-foreground">Confirm your details to access the documents, deals and balances already attached to this profile.</span></> : <>Contracting party: <strong>{inviteState.accountType || 'Individual'}</strong></>}
                     </div>
                     {inviteState.accountType === 'Organization' ? <>
                     <FormField control={form.control} name="organizationName" render={({ field }) => <FormItem><FormLabel>Registered Organization Name</FormLabel><FormControl><Input placeholder="Kamal Babbangari General Enterprise" {...field} /></FormControl><FormMessage /></FormItem>} />
