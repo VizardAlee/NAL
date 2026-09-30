@@ -601,7 +601,8 @@ export default function InvestorDashboard() {
                 description="Welcome to your personal investment hub."
                 icon={Landmark}
             >
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" asChild><Link href="/investor/receipts">Upload contribution receipt</Link></Button>
                     {user && <ContactAdminSheet />}
                     <Dialog open={isDepositOpen} onOpenChange={setDepositOpen}>
                         <DialogTrigger asChild>

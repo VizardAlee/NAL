@@ -10,6 +10,7 @@ import { getOutstandingDealAgreements } from '@/lib/server/agreement-eligibility
 import { requiresManagementFee } from '@/lib/workflow-eligibility';
 import { agreementEnvelopeId } from '@/lib/agreements/signing';
 import { requiredDealAgreementTypes } from '@/lib/workflow-eligibility';
+import { prepareReceiptPosting } from '@/lib/server/receipt-posting';
 
 const formSchema = z.object({
   dealName: z.string().min(3, { message: 'Deal name must be at least 3 characters.' }),
@@ -194,7 +195,7 @@ export async function getDealProgressEligibilityAction(authToken: string, dealId
     };
 }
 
-export async function approveManagementFeeAction(authToken: string, dealId: string) {
+export async function approveManagementFeeAction(authToken: string, dealId: string, receiptId?: string) {
     await verifyAdminWrite(authToken);
     if (!dealId) return { success: false, message: 'Deal ID is missing.' };
     
@@ -212,6 +213,8 @@ export async function approveManagementFeeAction(authToken: string, dealId: stri
             if (outstandingAgreements.length) {
               throw new Error(`Management fee is unavailable until these agreements are fully signed: ${outstandingAgreements.join(', ')}.`);
             }
+            const postReceipt = await prepareReceiptPosting(transaction, { receiptId: receiptId || dealData.managementFeeReceiptId, amount: managementFeeAmount, purpose: 'MANAGEMENT_FEE', dealId });
+            postReceipt();
             transaction.update(dealRef, { managementFeePaid: true });
             transaction.set(adminDb.collection('administrativeTransactions').doc(), {
                 type: 'ManagementFee', amount: managementFeeAmount,

@@ -6,6 +6,10 @@
       "ignore": [
         "node_modules",
         ".git",
+        ".env*",
+        ".next",
+        "test-results",
+        "playwright-report",
         "firebase-debug.log",
         "firebase-debug.*.log",
         "functions"

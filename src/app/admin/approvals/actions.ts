@@ -15,6 +15,7 @@ import { planRepaymentAllocations } from '@/lib/repayment-allocation';
 import { loadFundBatchAnniversaryWindow } from '@/lib/server/fund-batch-anniversary';
 import { assertInvestmentAgreementExecuted } from '@/lib/server/agreement-eligibility';
 import { isProfitDistributionLocked } from '@/lib/workflow-eligibility';
+import { prepareReceiptPosting } from '@/lib/server/receipt-posting';
 
 const decisionSchema = z.object({
   authToken: z.string().min(1),
@@ -67,8 +68,15 @@ export async function processDepositRequestAction(input: DecisionInput) {
         allowHistoricalWithoutEnvelope: request.agreementSigningRequired === undefined,
       });
     }
+    const postReceipt = data.decision === 'Approved' ? await prepareReceiptPosting(trx, {
+      receiptId: request.receiptId, amount: Number(request.amount), purpose: 'INVESTOR_CONTRIBUTION', requestId: data.requestId,
+    }) : () => {};
+    postReceipt();
     trx.update(requestRef, { status: data.decision, processedAt: FieldValue.serverTimestamp() });
-    if (data.decision === 'Rejected') return;
+    if (data.decision === 'Rejected') {
+      if (request.receiptId) trx.update(adminDb.collection('paymentReceipts').doc(request.receiptId), { status: 'REJECTED', rejectionReason: 'Contribution request rejected by administrator.' });
+      return;
+    }
     const now = Timestamp.now();
     trx.set(adminDb.collection('fundBatches').doc(data.requestId), {
       sourceId: request.investorId, amount: request.amount, remainingAmount: request.amount,
@@ -202,6 +210,7 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
     if (!repaymentSnapshot.exists || repaymentSnapshot.data()?.status !== 'Pending') throw new Error('This repayment has already been processed.');
     if (data.decision === 'Rejected') {
       trx.update(repaymentRef, { status: 'Rejected', processedAt: FieldValue.serverTimestamp() });
+      if (repaymentSnapshot.data()?.receiptId) trx.update(adminDb.collection('paymentReceipts').doc(repaymentSnapshot.data()!.receiptId), { status: 'REJECTED', rejectionReason: 'Repayment request rejected by administrator.' });
       return;
     }
     const repayment = repaymentSnapshot.data()!;
@@ -217,6 +226,9 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
       const fundBatchId = snapshot.data().fundBatchId;
       return fundBatchId ? trx.get(adminDb.collection('fundBatches').doc(fundBatchId)) : Promise.resolve(null);
     }));
+    const postReceipt = await prepareReceiptPosting(trx, {
+      receiptId: repayment.receiptId, amount: Number(repayment.amount), purpose: 'REPAYMENT', requestId: data.requestId, dealId: repayment.dealId,
+    });
     const deal = { id: dealSnapshot.id, ...dealSnapshot.data() } as any;
     const schedule = generateAmortizationSchedule(deal);
     const installment = schedule.find((item) => item.installment === (repayment.installmentNumber || 1));
@@ -253,6 +265,7 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
       investments.map((investment) => investment.weight)
     );
     const now = Timestamp.now();
+    postReceipt();
     for (const [index, item] of investments.entries()) {
       const investmentSnapshot = item.snapshot;
       const investment = item.data;

@@ -2,6 +2,13 @@ import { expect, test } from '@playwright/test';
 
 const responsiveWidths = [320, 360, 375, 390, 412, 430, 768, 1024, 1440];
 
+test('financial originals and uploads reject unauthenticated requests',async({request})=>{
+  const preview=await request.get('/api/financial-documents?id='+ 'a'.repeat(64)+'&kind=STATEMENT');
+  expect(preview.status()).toBe(403);
+  const upload=await request.post('/api/financial-documents',{multipart:{kind:'RECEIPT',file:{name:'receipt.png',mimeType:'image/png',buffer:Buffer.from('not a real image')}}});
+  expect(upload.status()).toBe(401);
+});
+
 for (const width of responsiveWidths) {
   test(`public application shell stays within a ${width}px viewport`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });

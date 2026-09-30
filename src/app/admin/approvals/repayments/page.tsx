@@ -34,6 +34,7 @@ import {
 import { getRequiredIdToken } from '@/firebase/auth-token';
 import { processRepaymentRequestAction } from '@/app/admin/approvals/actions';
 import { sortRepaymentRecords } from '@/lib/operational-ordering';
+import Link from 'next/link';
 
 
 type Repayment = DocumentData & {
@@ -128,11 +129,12 @@ function RepaymentsTable({
                                      <Button
                                         size="sm"
                                         onClick={() => handleApproveClick(repayment)}
-                                        disabled={approvingId === repayment.id}
+                                        disabled={approvingId === repayment.id || Boolean(repayment.receiptId && repayment.receiptVerification !== 'RECONCILED')}
                                     >
                                         {approvingId === repayment.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
                                         Approve
                                     </Button>
+                                    {repayment.receiptId && <Link className="text-sm underline" href="/admin/reconciliation">Bank verification</Link>}
                                 </div>
                             )}
                         </CardContent>
@@ -170,7 +172,7 @@ function RepaymentsTable({
                                         <Button
                                             size="sm"
                                             onClick={() => handleApproveClick(repayment)}
-                                            disabled={approvingId === repayment.id}
+                                            disabled={approvingId === repayment.id || Boolean(repayment.receiptId && repayment.receiptVerification !== 'RECONCILED')}
                                         >
                                             {approvingId === repayment.id ? (
                                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -179,6 +181,7 @@ function RepaymentsTable({
                                             )}
                                             Approve
                                         </Button>
+                                        {repayment.receiptId && <Link className="ml-2 text-sm underline" href="/admin/reconciliation">Bank verification</Link>}
                                     </TableCell>
                                 ) : (
                                     <TableCell data-label="Status">

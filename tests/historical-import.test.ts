@@ -31,3 +31,11 @@ test('historical reconciliation detects an outstanding mismatch', () => {
   extraction.deals[0].documentedOutstanding = 80_000;
   assert.ok(reconcileHistoricalExtraction(extraction).some((issue) => issue.code === 'OUTSTANDING_MISMATCH'));
 });
+
+test('individual receipt evidence cannot exceed opening payments or contain duplicate references',()=>{
+  const extraction=validExtraction();
+  extraction.deals[0].paymentEvidence=[{amount:20000,date:'2026-01-01',reference:'REF-1',documentName:'Receipt A'},{amount:20000,date:'2026-01-02',reference:'REF-1',documentName:'Receipt A again'}];
+  const issues=reconcileHistoricalExtraction(extraction);
+  assert.ok(issues.some(issue=>issue.code==='EVIDENCE_EXCEEDS_OPENING_PAYMENTS'));
+  assert.ok(issues.some(issue=>issue.code==='DUPLICATE_PAYMENT_EVIDENCE'));
+});

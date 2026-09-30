@@ -1,4 +1,10 @@
 env:
+  # Enable only after confirming the Gemini API project's paid-service privacy settings.
+  - variable: FINANCIAL_DOCUMENT_AI_ENABLED
+    value: "false"
+    availability:
+      - RUNTIME
+
   - variable: FIREBASE_PROJECT_ID
     value: studio-1298078893-e7941
     availability:

@@ -63,6 +63,7 @@ export const adminMenuItems: MenuItem[] = [
   { href: "/admin/agreements", label: "Agreements", icon: FileSignature },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/historical-imports", label: "Historical Import", icon: ArchiveRestore },
+  { href: "/admin/reconciliation", label: "Bank Reconciliation", icon: Landmark },
   {
     label: "Approvals",
     icon: CheckCircle,

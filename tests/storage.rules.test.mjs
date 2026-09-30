@@ -38,6 +38,17 @@ after(async () => env?.cleanup());
 const pdfMetadata = { contentType: 'application/pdf' };
 const jpegMetadata = { contentType: 'image/jpeg' };
 
+test('bank statements and payment receipts have no direct client/admin download access',async()=>{
+  for(const uid of ['admin','client','staff']) {
+    const storage=env.authenticatedContext(uid).storage();
+    for(const folder of ['bankStatements','paymentReceipts']) {
+      const path=`financial-documents/${folder}/document`;
+      await assertFails(storage.ref(path).putString('private bank data','raw',pdfMetadata));
+      await assertFails(storage.ref(path).getDownloadURL());
+    }
+  }
+});
+
 test('users can upload their own proposal but not another user’s', async () => {
   const storage = env.authenticatedContext('client').storage();
   await assertSucceeds(storage.ref('users/client/proposals/proposal.pdf').putString('proposal', 'raw', pdfMetadata));

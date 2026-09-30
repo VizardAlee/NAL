@@ -585,7 +585,8 @@ export default function ClientDashboard() {
                 description="Here is an overview of your current financing position."
                 icon={FileText}
             >
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" asChild><Link href="/client/receipts">Upload payment receipt</Link></Button>
                     {user && <ContactAdminSheet />}
                     <Button asChild>
                         <Link href="/client/deals/request">

@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Checkbox } from '@/components/ui/checkbox';
+import Link from 'next/link';
 
 type DepositRequest = DocumentData & {
   id: string;
@@ -149,11 +150,12 @@ function DepositsTable({
                                     <Button
                                         size="sm"
                                         onClick={() => handleProcessClick(request, 'Approved')}
-                                        disabled={processingId === request.id}
+                                        disabled={processingId === request.id || Boolean(request.receiptId && request.receiptVerification !== 'RECONCILED')}
                                     >
                                         {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
                                         Approve
                                     </Button>
+                                    {request.receiptId && <Link className="text-sm underline" href="/admin/reconciliation">Bank verification</Link>}
                                     </div>
                                 </div>
                             )}
@@ -213,11 +215,12 @@ function DepositsTable({
                                         <Button
                                             size="sm"
                                             onClick={() => handleProcessClick(request, 'Approved')}
-                                            disabled={processingId === request.id}
+                                            disabled={processingId === request.id || Boolean(request.receiptId && request.receiptVerification !== 'RECONCILED')}
                                         >
                                             {processingId === request.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
                                             Approve
                                         </Button>
+                                        {request.receiptId && <Link className="text-sm underline" href="/admin/reconciliation">Bank verification</Link>}
                                     </TableCell>
                                 ) : (
                                     <TableCell data-label="Status">

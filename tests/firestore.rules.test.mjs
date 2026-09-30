@@ -43,6 +43,16 @@ beforeEach(async () => {
 
 after(async () => env?.cleanup());
 
+test('financial evidence and bank reconciliation cannot be read or forged directly, even by admins',async()=>{
+  for(const collectionName of ['paymentReceipts','bankStatements','bankEntries','financialDocumentUsage']) {
+    for(const uid of ['admin','client','owner']) {
+      const db=env.authenticatedContext(uid).firestore();
+      await assertFails(setDoc(doc(db,collectionName,'evidence'),{amount:100,status:'POSTED'}));
+      await assertFails(getDoc(doc(db,collectionName,'evidence')));
+    }
+  }
+});
+
 test('clients cannot create role-bearing user profiles', async () => {
   const db = env.authenticatedContext('attacker').firestore();
   await assertFails(setDoc(doc(db, 'users', 'attacker'), { role: 'Admin', accessRole: 'ADMIN' }));

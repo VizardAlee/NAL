@@ -45,6 +45,8 @@ export type HistoricalDealDraft = {
   durationUnit: 'Days' | 'Weeks' | 'Fortnights' | 'Months' | 'Years';
   repaymentFrequency: 'Daily' | 'Weekly' | 'Fortnightly' | 'Monthly';
   amountPaid: number;
+  // These receipts substantiate amountPaid; they never create additional ledger credits.
+  paymentEvidence?: Array<{ amount: number; date: string; reference: string; documentName: string }>;
   documentedOutstanding: number;
   investors: HistoricalInvestorAllocation[];
 };
@@ -108,6 +110,12 @@ export function reconcileHistoricalExtraction(extraction: HistoricalExtraction):
   const seenDealNames = new Set<string>();
   extraction.deals.forEach((deal) => {
     const dealId = deal.id;
+    const evidence = deal.paymentEvidence || [];
+    if (money(evidence.reduce((sum, payment) => sum + payment.amount, 0)) > money(deal.amountPaid)) {
+      issues.push({ code: 'EVIDENCE_EXCEEDS_OPENING_PAYMENTS', severity: 'ERROR', message: `${deal.dealName} receipt totals exceed its opening paid amount.`, dealId });
+    }
+    const references = evidence.map(payment => payment.reference.trim().toUpperCase()).filter(Boolean);
+    if (new Set(references).size !== references.length) issues.push({ code: 'DUPLICATE_PAYMENT_EVIDENCE', severity: 'ERROR', message: `${deal.dealName} contains duplicate receipt references.`, dealId });
     const normalizedName = deal.dealName.trim().toLowerCase();
     if (!normalizedName) issues.push({ code: 'DEAL_NAME_REQUIRED', severity: 'ERROR', message: 'Every deal needs a name.', dealId });
     if (normalizedName && seenDealNames.has(normalizedName)) issues.push({ code: 'DUPLICATE_DEAL', severity: 'ERROR', message: `Duplicate deal name: ${deal.dealName}.`, dealId });
