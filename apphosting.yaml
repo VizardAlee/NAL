@@ -1,7 +1,7 @@
 env:
-  # Enable only after confirming the Gemini API project's paid-service privacy settings.
+  # Paid Tier 1 confirmed for the NAL API project; key stored in Secret Manager.
   - variable: FINANCIAL_DOCUMENT_AI_ENABLED
-    value: "false"
+    value: "true"
     availability:
       - RUNTIME
 
