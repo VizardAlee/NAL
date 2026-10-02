@@ -16,6 +16,7 @@ import {
 import { generateAmortizationSchedule } from '@/lib/amortization';
 import { planRepaymentAllocations } from '@/lib/repayment-allocation';
 import { assertFinancialAiEnabled } from '@/lib/server/financial-documents';
+import { HistoricalWorkspaceError, historicalWorkspaceResult } from '@/lib/server/historical-workspace-result';
 
 const partySchema = z.object({
   name: z.string().default(''), email: z.string().default(''), phoneNumber: z.string().default(''), address: z.string().default(''),
@@ -110,30 +111,33 @@ export async function getHistoricalImportWorkspaceAction(authToken: string) {
 }
 
 export async function createHistoricalImportAction(input: z.infer<typeof createSchema>) {
-  const values = createSchema.parse(input);
-  const actor = await verifyAdminWrite(values.authToken);
-  await assertImportEnabled();
-  if (values.existingUserId) {
-    const existing = await adminDb.collection('users').doc(values.existingUserId).get();
-    if (!existing.exists) throw new Error('The selected customer no longer exists.');
-  } else {
-    const normalizedPartyName = normalizedIdentity(values.partyName);
-    const users = await adminDb.collection('users').select('name', 'organizationName', 'email', 'phoneNumber').get();
-    const matchingUser = users.docs.find((document) => {
-      const data = document.data();
-      return normalizedIdentity(data.name) === normalizedPartyName || normalizedIdentity(data.organizationName) === normalizedPartyName;
-    });
-    if (matchingUser) {
-      throw new Error(`A matching account already exists for ${values.partyName}. Choose that account instead of creating a duplicate.`);
+  return historicalWorkspaceResult(async () => {
+    const values = createSchema.parse(input);
+    const actor = await verifyAdminWrite(values.authToken);
+    const setting = await adminDb.collection('platformSettings').doc(HISTORICAL_IMPORT_SETTING_ID).get();
+    if (setting.data()?.enabled === false) throw new HistoricalWorkspaceError('IMPORTS_CLOSED', 'Historical importing is closed. Use “Re-enable imports” on the migration page before starting a new workspace.');
+    if (values.partyMode === 'EXISTING') {
+      const existing = await adminDb.collection('users').doc(values.existingUserId!).get();
+      if (!existing.exists) throw new HistoricalWorkspaceError('CUSTOMER_NOT_FOUND', 'The selected customer no longer exists. Refresh the migration page and select another account.');
+    } else {
+      const normalizedPartyName = normalizedIdentity(values.partyName);
+      const users = await adminDb.collection('users').select('name', 'organizationName', 'email', 'phoneNumber').get();
+      const matchingUser = users.docs.find((document) => {
+        const data = document.data();
+        return normalizedIdentity(data.name) === normalizedPartyName || normalizedIdentity(data.organizationName) === normalizedPartyName;
+      });
+      if (matchingUser) {
+        throw new HistoricalWorkspaceError('DUPLICATE_CUSTOMER', `An account named “${values.partyName}” already exists. Change Customer source to “Use existing client or investor” and select that account. If this is a different customer, enter their actual full name or organisation name.`, matchingUser.id);
+      }
     }
-  }
-  const ref = adminDb.collection('historicalImports').doc();
-  await ref.set({
-    partyMode: values.partyMode, existingUserId: values.existingUserId || null, partyKind: values.partyKind, partyName: values.partyName,
-    accountType: values.accountType, asOfDate: Timestamp.fromDate(new Date(`${values.asOfDate}T12:00:00Z`)), status: 'DRAFT', documents: [],
-    extraction: null, reconciliationIssues: [], createdBy: actor.uid, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    const ref = adminDb.collection('historicalImports').doc();
+    await ref.set({
+      partyMode: values.partyMode, existingUserId: values.partyMode === 'EXISTING' ? values.existingUserId : null, partyKind: values.partyKind, partyName: values.partyName,
+      accountType: values.accountType, asOfDate: Timestamp.fromDate(new Date(`${values.asOfDate}T12:00:00Z`)), status: 'DRAFT', documents: [],
+      extraction: null, reconciliationIssues: [], createdBy: actor.uid, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { importId: ref.id };
   });
-  return { success: true as const, importId: ref.id };
 }
 
 export async function getHistoricalImportAction(authToken: string, importId: string) {

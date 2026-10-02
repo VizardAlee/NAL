@@ -29,6 +29,8 @@ export default function HistoricalImportsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [open, setOpen] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [matchingUserId, setMatchingUserId] = useState('');
   const [pending, startTransition] = useTransition();
   const [search, setSearch] = useState('');
   const [partyMode, setPartyMode] = useState<'EXISTING' | 'NEW'>('EXISTING');
@@ -64,10 +66,19 @@ export default function HistoricalImportsPage() {
   };
 
   const createCase = () => startTransition(async () => {
+    setCreateError('');
+    setMatchingUserId('');
     try {
       const result = await createHistoricalImportAction({ authToken: await getRequiredIdToken(), partyMode, existingUserId: partyMode === 'EXISTING' ? existingUserId : undefined, partyKind, partyName, accountType, asOfDate });
-      setOpen(false); router.push(`/admin/historical-imports/${result.importId}`);
-    } catch (error) { toast({ variant: 'destructive', title: 'Import case not created', description: error instanceof Error ? error.message : 'Check the supplied information.' }); }
+      if (!result.success) {
+        setCreateError(result.message);
+        setMatchingUserId('matchingUserId' in result ? result.matchingUserId || '' : '');
+        return;
+      }
+      setOpen(false); router.push(`/admin/historical-imports/${result.data.importId}`);
+    } catch {
+      setCreateError('The request could not be completed. Check your connection and sign-in session, then retry. Your entered details have been kept.');
+    }
   });
 
   const changeAvailability = (enabled: boolean) => startTransition(async () => {
@@ -86,15 +97,16 @@ export default function HistoricalImportsPage() {
   const attention = workspace?.cases.filter((item) => item.status === 'NEEDS_ATTENTION').length || 0;
   return <div className="space-y-6">
     <PageHeader title="Historical Records Migration" description="Temporarily reconstruct pre-app accounts and deals from administrator-supplied evidence." icon={ArchiveRestore}>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(value) => { setOpen(value); setCreateError(''); setMatchingUserId(''); }}>
         <DialogTrigger asChild><Button disabled={loading || Boolean(loadError) || workspace?.setting.enabled === false}><Plus className="mr-2 h-4 w-4" />Start Import</Button></DialogTrigger>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[90dvh] max-w-2xl overflow-y-auto">
           <DialogHeader><DialogTitle>Start a historical import</DialogTitle><DialogDescription>Use an existing account whenever possible. A new profile remains unclaimed until the customer accepts an invitation.</DialogDescription></DialogHeader>
           <div className="grid gap-5 py-2">
             <div className="grid gap-2"><Label>Customer source</Label><Select value={partyMode} onValueChange={(value: 'EXISTING' | 'NEW') => setPartyMode(value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="EXISTING">Use existing client or investor</SelectItem><SelectItem value="NEW">Create an unclaimed profile</SelectItem></SelectContent></Select></div>
             {partyMode === 'EXISTING' ? <div className="grid gap-2"><Label>Find account</Label><div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name or email" /></div><Select value={existingUserId} onValueChange={selectExisting}><SelectTrigger><SelectValue placeholder="Select the matching account" /></SelectTrigger><SelectContent>{matchingUsers.map((user) => <SelectItem key={user.id} value={user.id}>{user.name}{user.email ? ` · ${user.email}` : ''}{user.accountClaimStatus === 'UNCLAIMED' ? ' · Unclaimed' : ''}</SelectItem>)}</SelectContent></Select></div> : <><div className="grid gap-2"><Label>Customer or organisation name</Label><Input value={partyName} onChange={(event) => setPartyName(event.target.value)} /></div><div className="grid gap-2"><Label>Account type</Label><Select value={accountType} onValueChange={(value: 'Individual' | 'Organization') => setAccountType(value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Individual">Individual</SelectItem><SelectItem value="Organization">Organisation / Business</SelectItem></SelectContent></Select></div></>}
             <div className="grid gap-2"><Label>Business relationship</Label><Select value={partyKind} onValueChange={(value: 'CLIENT' | 'INVESTOR' | 'BOTH') => setPartyKind(value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="CLIENT">Client</SelectItem><SelectItem value="INVESTOR">Investor</SelectItem><SelectItem value="BOTH">Client and investor</SelectItem></SelectContent></Select></div>
             <div className="grid gap-2"><Label>Financial snapshot date (records accurate through)</Label><Input type="date" value={asOfDate} max={new Date().toISOString().slice(0, 10)} onChange={(event) => setAsOfDate(event.target.value)} /><p className="text-xs text-muted-foreground">This is the date through which balances and payments are being reconstructed. It is not the deal start date; each deal keeps its own original start date.</p></div>
+            {createError && <Alert variant="destructive" role="alert"><FileWarning className="h-4 w-4" /><AlertTitle>Import workspace not created</AlertTitle><AlertDescription className="space-y-3"><p>{createError}</p>{matchingUserId && <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => { setPartyMode('EXISTING'); selectExisting(matchingUserId); setCreateError(''); setMatchingUserId(''); }}>Use the existing account</Button>}</AlertDescription></Alert>}
             <Button onClick={createCase} disabled={pending || !partyName || (partyMode === 'EXISTING' && !existingUserId)}>{pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Create Import Workspace</Button>
           </div>
         </DialogContent>
