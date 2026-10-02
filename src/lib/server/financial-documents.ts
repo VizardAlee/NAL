@@ -9,6 +9,8 @@ import { bankRowSchema, parseBankCsv, receiptFieldsSchema, receiptPurposes, isOp
 import { generateAmortizationSchedule } from '@/lib/amortization';
 import { planRepaymentAllocations } from '@/lib/repayment-allocation';
 import type { Deal } from '@/lib/types';
+import { assertFinancialAiEnabled } from './financial-ai-policy';
+export { assertFinancialAiEnabled } from './financial-ai-policy';
 
 export const hashDocument = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 export async function documentActor(token: string) {
@@ -18,10 +20,6 @@ export async function documentActor(token: string) {
   const profile = user.data()!;
   if (!canWriteAdmin(profile) && !hasPersona(profile, 'CLIENT') && !hasPersona(profile, 'INVESTOR')) throw new Error('This account cannot upload financial documents.');
   return { uid: decoded.uid, admin: canWriteAdmin(profile), profile };
-}
-
-export function assertFinancialAiEnabled() {
-  if (process.env.FINANCIAL_DOCUMENT_AI_ENABLED !== 'true') throw new Error('Financial-document AI is disabled until an administrator confirms paid-service data protection. Enter the details manually or upload a structured bank CSV.');
 }
 
 export async function saveFinancialUpload(token: string, file: File, input: { kind: string; accountNumber?: string; periodStart?: string; periodEnd?: string }) {

@@ -13,6 +13,11 @@ endpoint rather than browser-to-Storage writes. Files are validated by their con
 registration, duplicate detection and the twelve-document cap are transaction-checked.
 These uploads do not invoke Gemini or change financial balances.
 
+Historical workspaces show the server's AI privacy gate before extraction. While
+AI is disabled, admins can use **Review and enter details manually**, save and
+reconcile the values, then use the same approval/posting checks. Extraction errors
+return plain, actionable results instead of redacted Server Action exceptions.
+
 `NAL_AI_MODEL` optionally overrides the existing `googleai/gemini-2.5-flash` default.
 Use a supported Genkit model identifier and benchmark it before changing production.
 Do not use a browser-exposed API key. The existing server-side secret is retained.

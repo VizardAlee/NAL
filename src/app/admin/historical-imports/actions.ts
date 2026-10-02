@@ -15,7 +15,7 @@ import {
 } from '@/lib/historical-import';
 import { generateAmortizationSchedule } from '@/lib/amortization';
 import { planRepaymentAllocations } from '@/lib/repayment-allocation';
-import { assertFinancialAiEnabled } from '@/lib/server/financial-documents';
+import { assertFinancialAiEnabled, financialAiEnabled } from '@/lib/server/financial-ai-policy';
 import { HistoricalWorkspaceError, historicalWorkspaceResult } from '@/lib/server/historical-workspace-result';
 
 const partySchema = z.object({
@@ -89,7 +89,7 @@ function serializeCase(snapshot: FirebaseFirestore.DocumentSnapshot): Record<str
 
 async function assertImportEnabled() {
   const setting = await adminDb.collection('platformSettings').doc(HISTORICAL_IMPORT_SETTING_ID).get();
-  if (setting.exists && setting.data()?.enabled === false) throw new Error('Historical importing has been disabled because records have caught up to the present date.');
+  if (setting.exists && setting.data()?.enabled === false) throw new HistoricalWorkspaceError('IMPORTS_CLOSED', 'Historical importing is closed. Re-enable imports on the migration page before continuing.');
 }
 
 export async function getHistoricalImportWorkspaceAction(authToken: string) {
@@ -102,6 +102,7 @@ export async function getHistoricalImportWorkspaceAction(authToken: string) {
   return {
     success: true as const,
     cases: cases.docs.map(serializeCase),
+    financialAiEnabled: financialAiEnabled(),
     users: users.docs.map((doc) => {
       const data = doc.data();
       return { id: doc.id, name: data.name || data.organizationName || 'Unnamed account', email: data.email || '', role: data.role || '', personas: data.personas || [], accountClaimStatus: data.accountClaimStatus || 'ACTIVE', accountType: data.accountType || 'Individual' };
@@ -210,15 +211,17 @@ export async function setHistoricalDocumentVisibilityAction(input: { authToken: 
 }
 
 export async function analyzeHistoricalImportAction(authToken: string, importId: string) {
+  return historicalWorkspaceResult(async () => {
   await verifyAdminWrite(authToken);
   assertFinancialAiEnabled();
   await assertImportEnabled();
   const ref = adminDb.collection('historicalImports').doc(importId);
   const snapshot = await ref.get();
-  if (!snapshot.exists) throw new Error('Import case not found.');
+  if (!snapshot.exists) throw new HistoricalWorkspaceError('IMPORT_NOT_FOUND', 'This import case no longer exists. Reopen it from migration cases.');
   const data = snapshot.data() || {};
+  if (['POSTED', 'POSTING'].includes(data.status)) throw new HistoricalWorkspaceError('IMPORT_READ_ONLY', 'This import is being posted or has already been posted. Its extraction cannot be changed.');
   const documents = (data.documents || []).slice(0, 12) as Array<{ storagePath: string; contentType: string; originalName: string }>;
-  if (!documents.length) throw new Error('Upload at least one document before extraction.');
+  if (!documents.length) throw new HistoricalWorkspaceError('DOCUMENTS_REQUIRED', 'Upload at least one document before extraction.');
   await ref.update({ processingState: 'ANALYZING', updatedAt: FieldValue.serverTimestamp() });
   try {
     const mediaParts = await Promise.all(documents.map(async (document) => {
@@ -244,9 +247,10 @@ export async function analyzeHistoricalImportAction(authToken: string, importId:
     await ref.update({ extraction, reconciliationIssues: issues, status: hasBlockingHistoricalIssues(issues) ? 'NEEDS_ATTENTION' : 'READY_FOR_REVIEW', processingState: 'COMPLETE', extractedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
     return { success: true as const, extraction, issues };
   } catch (error) {
-    await ref.update({ processingState: 'FAILED', processingError: error instanceof Error ? error.message : 'Extraction failed.', updatedAt: FieldValue.serverTimestamp() });
+    await ref.update({ processingState: 'FAILED', processingError: 'Extraction did not complete. Retry or use manual review.', updatedAt: FieldValue.serverTimestamp() });
     throw error;
   }
+  });
 }
 
 export async function saveHistoricalExtractionAction(input: { authToken: string; importId: string; extraction: HistoricalExtraction }) {

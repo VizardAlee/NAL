@@ -24,7 +24,7 @@ import { analyzeHistoricalImportAction, getHistoricalDocumentPreviewAction, getH
 type ImportCase = Record<string, any> & { id: string; partyName: string; partyKind: string; status: string; asOfDate: string; documents: Array<Record<string, any>> };
 type Workspace = Awaited<ReturnType<typeof getHistoricalImportWorkspaceAction>>;
 const acceptedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-const emptyExtraction = (name = ''): HistoricalExtraction => ({ party: { name, accountType: 'Individual' }, deals: [], fundPositions: [], expenses: [], notes: [], confidence: 1 });
+const emptyExtraction = (name = '', accountType: 'Individual' | 'Organization' = 'Individual'): HistoricalExtraction => ({ party: { name, accountType }, deals: [], fundPositions: [], expenses: [], notes: ['Manually entered from source documents; not AI-extracted.'], confidence: 0 });
 const numberValue = (value: string) => Number.isFinite(Number(value)) ? Number(value) : 0;
 
 function Step({ number, label, active, done }: { number: number; label: string; active: boolean; done: boolean }) {
@@ -49,6 +49,8 @@ export default function HistoricalImportCasePage() {
   const [uploading, setUploading] = useState(false);
   const [pending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [manualReview, setManualReview] = useState(false);
+  const [extractionError, setExtractionError] = useState('');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -58,7 +60,7 @@ export default function HistoricalImportCasePage() {
       if (!caseResult.success) throw new Error(caseResult.message);
       setRecord(caseResult.importCase as ImportCase); setWorkspace(workspaceResult);
       const saved = (caseResult.importCase as any).extraction as HistoricalExtraction | null;
-      setExtraction(saved || emptyExtraction((caseResult.importCase as any).partyName));
+      setExtraction(saved || emptyExtraction((caseResult.importCase as any).partyName, (caseResult.importCase as any).accountType));
       setIssues(((caseResult.importCase as any).reconciliationIssues || []) as ReconciliationIssue[]);
     } catch (error) { toast({ variant: 'destructive', title: 'Import case unavailable', description: error instanceof Error ? error.message : 'Try again.' }); }
     finally { setLoading(false); }
@@ -92,8 +94,9 @@ export default function HistoricalImportCasePage() {
   };
 
   const analyze = () => startTransition(async () => {
-    try { const result = await analyzeHistoricalImportAction(await getRequiredIdToken(), importId); setExtraction(result.extraction); setIssues(result.issues); toast({ title: 'Extraction ready', description: 'Review highlighted reconciliation issues before posting.' }); await refresh(); }
-    catch (error) { toast({ variant: 'destructive', title: 'Extraction failed', description: error instanceof Error ? error.message : 'Gemini could not process this evidence set.' }); }
+    setExtractionError('');
+    try { const result = await analyzeHistoricalImportAction(await getRequiredIdToken(), importId); if (!result.success) throw new Error(result.message); setExtraction(result.data.extraction); setIssues(result.data.issues); toast({ title: 'Extraction ready', description: 'Review highlighted reconciliation issues before posting.' }); await refresh(); }
+    catch (error) { const message = error instanceof Error ? error.message : 'Gemini could not process this evidence set. Retry or use manual review.'; setExtractionError(message); toast({ variant: 'destructive', title: 'Extraction unavailable', description: message }); }
   });
 
   const previewDocument = async (documentId: string) => {
@@ -135,10 +138,12 @@ export default function HistoricalImportCasePage() {
       <CardContent className="space-y-4"><input ref={fileRef} className="hidden" type="file" multiple accept={acceptedTypes.join(',')} onChange={(event) => void uploadFiles(event.target.files)} /><Button variant="outline" onClick={() => fileRef.current?.click()} disabled={posted || uploading}>{uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}Add documents</Button>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{record.documents?.map((document: any) => <div key={document.id} className="rounded-lg border p-3"><div className="flex items-center gap-3">{document.contentType === 'application/pdf' ? <FileText className="h-8 w-8 text-red-600" /> : <FileImage className="h-8 w-8 text-blue-600" />}<div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{document.originalName}</p><p className="text-xs text-muted-foreground">{(document.size / 1024 / 1024).toFixed(2)} MB</p></div><Button size="sm" variant="ghost" onClick={() => void previewDocument(document.id)}>Preview</Button></div><label className="mt-3 flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground"><Checkbox disabled={posted} checked={document.customerVisible === true} onCheckedChange={(checked) => void changeDocumentVisibility(document.id, checked === true)} />Share this document with the customer after posting</label></div>)}</div>
         {!record.documents?.length && <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">No documents uploaded yet.</div>}
-        <Button onClick={analyze} disabled={posted || pending || !record.documents?.length}>{pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bot className="mr-2 h-4 w-4" />}{(record as any).extraction ? 'Re-run extraction' : 'Extract records with Gemini'}</Button>
+        {!workspace.financialAiEnabled && !posted && <Alert><AlertCircle className="h-4 w-4" /><AlertTitle>Automatic extraction is not enabled</AlertTitle><AlertDescription>Gemini’s paid-service data protection must be confirmed before financial documents can be sent for AI extraction. Your evidence remains saved privately. Use manual review to enter and reconcile the documented values.</AlertDescription></Alert>}
+        {extractionError && <Alert variant="destructive"><AlertTitle>Extraction unavailable</AlertTitle><AlertDescription>{extractionError}</AlertDescription></Alert>}
+        <div className="flex flex-wrap gap-3"><Button onClick={analyze} disabled={posted || pending || !record.documents?.length || !workspace.financialAiEnabled}>{pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bot className="mr-2 h-4 w-4" />}{(record as any).extraction ? 'Re-run extraction' : 'Extract records with Gemini'}</Button><Button variant="outline" disabled={posted || pending || !record.documents?.length} onClick={() => setManualReview(true)}>Review and enter details manually</Button></div>
       </CardContent>
     </Card>
-    {(record as any).extraction && <>
+    {((record as any).extraction || manualReview) && <>
       <Card><CardHeader><CardTitle>Historical payment evidence</CardTitle><CardDescription>These receipts substantiate the opening amount paid. They do not create extra credits. Later payments belong in Bank Reconciliation.</CardDescription></CardHeader><CardContent className="space-y-4">
         {extraction.deals.map((deal,index)=><div key={deal.id || index} className="space-y-2 rounded-lg border p-3"><p className="font-medium">{deal.dealName || `Deal ${index+1}`} · Opening paid: ₦{deal.amountPaid.toLocaleString('en-NG')}</p>
           {(deal.paymentEvidence || []).map((payment,paymentIndex)=><div key={paymentIndex} className="grid gap-2 md:grid-cols-5">
