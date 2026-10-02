@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { prepareReceiptPosting } from '../src/lib/server/receipt-posting';
+import { storeHistoricalDocument } from '../src/lib/server/historical-document-upload';
 
 if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('These tests require the Firestore emulator; never run against production.');
 const app = initializeApp({ projectId:'demo-nal' });
@@ -46,4 +47,45 @@ test('partial allocations across separate receipts stop at the statement total',
   await db.collection('paymentReceipts').doc('receipt-b').update({'fields.amount':60});
   await post('receipt-a',40);await post('receipt-b',60);
   assert.equal((await db.collection('bankEntries').doc('bank').get()).data()?.allocatedAmount,100);
+});
+
+test('historical uploads register private evidence atomically and retry without duplicates', async () => {
+  const objects = new Map<string, Buffer>();
+  const bucket = { file: (path: string) => ({ save: async (bytes: Buffer) => { objects.set(path, bytes); }, delete: async () => { objects.delete(path); } }) };
+  const importId = 'server-upload';
+  await db.collection('historicalImports').doc(importId).set({ status: 'DRAFT', documents: [] });
+  await db.collection('platformSettings').doc('historicalImports').set({ enabled: true });
+  const input = { importId, adminId: 'admin', originalName: 'agreement.pdf', bytes: Buffer.from('%PDF-historical-server-upload') };
+  const first = await storeHistoricalDocument(db, bucket, input);
+  const retry = await storeHistoricalDocument(db, bucket, input);
+  assert.equal(first.duplicate, false);
+  assert.equal(retry.duplicate, true);
+  assert.equal(retry.documentId, first.documentId);
+  assert.equal((await db.collection('historicalImports').doc(importId).get()).data()?.documents.length, 1);
+  assert.equal(objects.size, 1);
+});
+
+test('concurrent historical uploads enforce the twelve-document cap and clean up rejected objects', async () => {
+  const objects = new Map<string, Buffer>();
+  const bucket = { file: (path: string) => ({ save: async (bytes: Buffer) => { objects.set(path, bytes); }, delete: async () => { objects.delete(path); } }) };
+  const importId = 'upload-cap';
+  await db.collection('historicalImports').doc(importId).set({ status: 'DRAFT', documents: Array.from({length:11}, (_,i) => ({id:`existing-${i}`})) });
+  const outcomes = await Promise.allSettled([1,2].map(i => storeHistoricalDocument(db, bucket, {importId,adminId:'admin',originalName:'receipt.pdf',bytes:Buffer.from(`%PDF-cap-test-${i}`)})));
+  assert.equal(outcomes.filter(result => result.status === 'fulfilled').length, 1);
+  assert.equal((await db.collection('historicalImports').doc(importId).get()).data()?.documents.length, 12);
+  assert.equal(objects.size, 1);
+});
+
+test('closed, posted and posting imports cannot accept new evidence', async () => {
+  let writes = 0;
+  const bucket = { file: () => ({save:async () => {writes++;},delete:async () => {}}) };
+  for (const status of ['POSTED','POSTING']) {
+    await db.collection('historicalImports').doc('locked-upload').set({status,documents:[]});
+    await assert.rejects(() => storeHistoricalDocument(db,bucket,{importId:'locked-upload',adminId:'admin',originalName:'document.pdf',bytes:Buffer.from('%PDF-locked')}), /cannot be changed/);
+  }
+  await db.collection('historicalImports').doc('locked-upload').set({status:'DRAFT',documents:[]});
+  await db.collection('platformSettings').doc('historicalImports').set({enabled:false});
+  await assert.rejects(() => storeHistoricalDocument(db,bucket,{importId:'locked-upload',adminId:'admin',originalName:'document.pdf',bytes:Buffer.from('%PDF-locked')}), /imports are closed/);
+  assert.equal(writes,0);
+  await db.collection('platformSettings').doc('historicalImports').set({enabled:true});
 });

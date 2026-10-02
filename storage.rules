@@ -91,10 +91,9 @@ service firebase.storage {
     // evidence, while all metadata and ledger posting remain server-only.
     match /historical-imports/{importId}/{adminId}/{fileName} {
       allow read: if signedIn() && request.auth.uid == adminId && isAdmin();
-      allow write: if signedIn()
-        && request.auth.uid == adminId
-        && isAdmin()
-        && validUpload();
+      // Authenticated server endpoint validates import state, file bytes,
+      // duplicate hashes and the document limit before registering evidence.
+      allow write: if false;
     }
 
     match /case-evidence/{taskId}/{uploaderId}/{fileName} {

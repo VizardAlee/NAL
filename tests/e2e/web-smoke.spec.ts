@@ -7,6 +7,9 @@ test('financial originals and uploads reject unauthenticated requests',async({re
   expect(preview.status()).toBe(403);
   const upload=await request.post('/api/financial-documents',{multipart:{kind:'RECEIPT',file:{name:'receipt.png',mimeType:'image/png',buffer:Buffer.from('not a real image')}}});
   expect(upload.status()).toBe(401);
+  const historicalUpload=await request.post('/api/historical-documents',{multipart:{importId:'test-import',file:{name:'agreement.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-test')}}});
+  expect(historicalUpload.status()).toBe(401);
+  expect((await historicalUpload.json()).message).toMatch(/Sign in again/);
 });
 
 for (const width of responsiveWidths) {

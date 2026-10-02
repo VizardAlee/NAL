@@ -17,11 +17,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { getRequiredIdToken } from '@/firebase/auth-token';
-import { useFirebaseApp, useUser } from '@/firebase';
-import { uploadAuthenticatedFile } from '@/firebase/storage-upload';
 import { useToast } from '@/hooks/use-toast';
 import type { HistoricalDealDraft, HistoricalExtraction, HistoricalFundPosition, ReconciliationIssue } from '@/lib/historical-import';
-import { analyzeHistoricalImportAction, getHistoricalDocumentPreviewAction, getHistoricalImportAction, getHistoricalImportWorkspaceAction, postHistoricalImportAction, registerHistoricalDocumentAction, saveHistoricalExtractionAction, setHistoricalDocumentVisibilityAction } from '../actions';
+import { analyzeHistoricalImportAction, getHistoricalDocumentPreviewAction, getHistoricalImportAction, getHistoricalImportWorkspaceAction, postHistoricalImportAction, saveHistoricalExtractionAction, setHistoricalDocumentVisibilityAction } from '../actions';
 
 type ImportCase = Record<string, any> & { id: string; partyName: string; partyKind: string; status: string; asOfDate: string; documents: Array<Record<string, any>> };
 type Workspace = Awaited<ReturnType<typeof getHistoricalImportWorkspaceAction>>;
@@ -41,8 +39,6 @@ function AccountSelect({ value, onChange, users, persona, placeholder, allowSelf
 export default function HistoricalImportCasePage() {
   const { importId } = useParams<{ importId: string }>();
   const router = useRouter();
-  const app = useFirebaseApp();
-  const { user } = useUser();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [record, setRecord] = useState<ImportCase | null>(null);
@@ -75,17 +71,23 @@ export default function HistoricalImportCasePage() {
   const errors = issues.filter((issue) => issue.severity === 'ERROR');
 
   const uploadFiles = async (files: FileList | null) => {
-    if (!files?.length || !record || !user?.uid) return;
+    if (!files?.length || !record) return;
     setUploading(true);
     try {
       const token = await getRequiredIdToken();
+      let added = 0;
+      let alreadyAttached = 0;
       for (const file of Array.from(files)) {
-        const uploaded = await uploadAuthenticatedFile(app, file, ['historical-imports', importId, user.uid], acceptedTypes, false);
-        await registerHistoricalDocumentAction({ authToken: token, importId, storagePath: uploaded.fullPath, originalName: file.name, contentType: file.type, size: file.size });
+        if (!file.size || file.size > 5 * 1024 * 1024) throw new Error('Each document must be between 1 byte and 5 MB.');
+        const body = new FormData(); body.set('file', file); body.set('importId', importId);
+        const response = await fetch('/api/historical-documents', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body, signal: AbortSignal.timeout(120000) });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.message || 'The upload could not be completed. Retry or contact your administrator.');
+        if (result.data.duplicate) alreadyAttached++; else added++;
       }
-      toast({ title: 'Documents uploaded', description: `${files.length} file(s) added to the evidence set.` });
+      toast({ title: 'Evidence saved', description: `${added} file(s) added.${alreadyAttached ? ` ${alreadyAttached} file(s) were already attached and were not duplicated.` : ''}` });
       await refresh();
-    } catch (error) { toast({ variant: 'destructive', title: 'Upload failed', description: error instanceof Error ? error.message : 'Check the files and try again.' }); }
+    } catch (error) { toast({ variant: 'destructive', title: 'Upload failed', description: error instanceof Error && ['AbortError', 'TimeoutError', 'TypeError'].includes(error.name) ? 'The upload could not reach the server or timed out. Check your connection, then retry. Files already uploaded will not be duplicated.' : error instanceof Error ? error.message : 'Check the files and try again.' }); await refresh(); }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
   };
 

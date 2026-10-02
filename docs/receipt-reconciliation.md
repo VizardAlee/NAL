@@ -8,6 +8,11 @@ the API project is using appropriate paid-service data-use terms and customer no
 No billing or privacy verification is inferred from possession of an API key.
 Manual receipt entry and structured bank CSV imports work without this flag.
 
+Historical evidence uploads use the administrator-only `/api/historical-documents`
+endpoint rather than browser-to-Storage writes. Files are validated by their contents;
+registration, duplicate detection and the twelve-document cap are transaction-checked.
+These uploads do not invoke Gemini or change financial balances.
+
 `NAL_AI_MODEL` optionally overrides the existing `googleai/gemini-2.5-flash` default.
 Use a supported Genkit model identifier and benchmark it before changing production.
 Do not use a browser-exposed API key. The existing server-side secret is retained.
