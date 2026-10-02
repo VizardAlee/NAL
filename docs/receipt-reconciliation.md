@@ -18,6 +18,12 @@ AI is disabled, admins can use **Review and enter details manually**, save and
 reconcile the values, then use the same approval/posting checks. Extraction errors
 return plain, actionable results instead of redacted Server Action exceptions.
 
+Historical extraction uses Gemini JSON mode with the full schema supplied as
+instructions, not as a native constrained grammar. The nested receipt limits and
+numeric/date constraints exceed Gemini's grammar complexity limit. Genkit and
+server-side Zod validation still check the output before it can be saved; financial
+reconciliation and administrator approval remain required.
+
 `NAL_AI_MODEL` optionally overrides the existing `googleai/gemini-2.5-flash` default.
 Use a supported Genkit model identifier and benchmark it before changing production.
 Do not use a browser-exposed API key. The existing server-side secret is retained.
