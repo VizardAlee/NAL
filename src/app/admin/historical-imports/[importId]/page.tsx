@@ -18,7 +18,7 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { getRequiredIdToken } from '@/firebase/auth-token';
 import { useToast } from '@/hooks/use-toast';
-import type { HistoricalDealDraft, HistoricalExtraction, HistoricalFundPosition, ReconciliationIssue } from '@/lib/historical-import';
+import type { HistoricalDealDraft, HistoricalExtraction, HistoricalFundPosition, HistoricalInvestmentTerms, ReconciliationIssue } from '@/lib/historical-import';
 import { analyzeHistoricalImportAction, getHistoricalDocumentPreviewAction, getHistoricalImportAction, getHistoricalImportWorkspaceAction, postHistoricalImportAction, saveHistoricalExtractionAction, setHistoricalDocumentVisibilityAction } from '../actions';
 
 type ImportCase = Record<string, any> & { id: string; partyName: string; partyKind: string; status: string; asOfDate: string; documents: Array<Record<string, any>> };
@@ -34,6 +34,35 @@ function Step({ number, label, active, done }: { number: number; label: string; 
 function AccountSelect({ value, onChange, users, persona, placeholder, allowSelf = true }: { value?: string; onChange: (value: string) => void; users: Workspace['users']; persona: 'CLIENT' | 'INVESTOR'; placeholder: string; allowSelf?: boolean }) {
   const options = users.filter((user) => user.role.toUpperCase() === persona || user.personas.includes(persona));
   return <Select value={value || 'unlinked'} onValueChange={(next) => onChange(next === 'unlinked' ? '' : next)}><SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger><SelectContent><SelectItem value="unlinked">Not linked yet</SelectItem>{allowSelf && <SelectItem value="SELF">This imported account</SelectItem>}{persona === 'INVESTOR' && <SelectItem value="platform">NAL platform capital</SelectItem>}{options.map((user) => <SelectItem key={user.id} value={user.id}>{user.name}{user.email ? ` · ${user.email}` : ''}</SelectItem>)}</SelectContent></Select>;
+}
+
+const emptyInvestmentTerms: HistoricalInvestmentTerms = {
+  capitalCommitted: 0, agreementDate: '', paymentDate: '', maturityDate: '', tenureValue: 0, tenureUnit: 'Months',
+  investorProfitShare: 40, companyProfitShare: 60, paymentReference: '', capitalLockedUntilMaturity: true,
+  annualProfitWithdrawalPercent: 20, annualWithdrawalWindowDays: 5,
+};
+
+function InvestmentTermsReview({ position, index, disabled, onChange }: { position: HistoricalFundPosition; index: number; disabled: boolean; onChange: (patch: Partial<HistoricalFundPosition>) => void }) {
+  const terms = position.investmentTerms || emptyInvestmentTerms;
+  const update = (patch: Partial<HistoricalInvestmentTerms>) => onChange({ investmentTerms: { ...terms, ...patch }, balancesVerified: false });
+  return <section className="space-y-4 rounded-xl border bg-muted/20 p-4">
+    <div><h3 className="font-semibold">Investment {index + 1} · {position.investorName}</h3><p className="text-sm text-muted-foreground">Contract terms describe the investment, not a client debt. Zero opening figures are unverified placeholders until reconciled below.</p></div>
+    <div className="grid gap-4 md:grid-cols-3">
+      <Field label="Committed capital"><Input disabled={disabled} type="number" min="0" step="0.01" value={terms.capitalCommitted} onChange={e => update({ capitalCommitted: numberValue(e.target.value) })} /></Field>
+      <Field label="Agreement date"><Input disabled={disabled} type="date" value={terms.agreementDate} onChange={e => update({ agreementDate: e.target.value })} /></Field>
+      <Field label="Original contribution date"><Input disabled={disabled} type="date" value={terms.paymentDate} onChange={e => update({ paymentDate: e.target.value })} /></Field>
+      <Field label="Contract maturity (inclusive)"><Input disabled={disabled} type="date" value={terms.maturityDate} onChange={e => update({ maturityDate: e.target.value })} /></Field>
+      <Field label="Original term"><div className="flex gap-2"><Input disabled={disabled} type="number" min="1" value={terms.tenureValue} onChange={e => update({ tenureValue: numberValue(e.target.value) })} /><Select disabled={disabled} value={terms.tenureUnit} onValueChange={value => update({ tenureUnit: value as HistoricalInvestmentTerms['tenureUnit'] })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Days', 'Months', 'Years'].map(unit => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent></Select></div></Field>
+      <Field label="Contribution reference"><Input disabled={disabled} value={terms.paymentReference} onChange={e => update({ paymentReference: e.target.value })} /></Field>
+      <Field label="Investor realised-profit share (%)"><Input disabled={disabled} type="number" min="0" max="100" value={terms.investorProfitShare} onChange={e => update({ investorProfitShare: numberValue(e.target.value) })} /></Field>
+      <Field label="Company realised-profit share (%)"><Input disabled={disabled} type="number" min="0" max="100" value={terms.companyProfitShare} onChange={e => update({ companyProfitShare: numberValue(e.target.value) })} /></Field>
+      <Field label="Annual profit withdrawal limit (%)"><Input disabled={disabled} type="number" min="0" max="100" value={terms.annualProfitWithdrawalPercent} onChange={e => update({ annualProfitWithdrawalPercent: numberValue(e.target.value) })} /></Field>
+      <Field label="Anniversary withdrawal window (days)"><Input disabled={disabled} type="number" min="0" value={terms.annualWithdrawalWindowDays} onChange={e => update({ annualWithdrawalWindowDays: numberValue(e.target.value) })} /></Field>
+    </div>
+    <label className="flex items-center gap-2 text-sm"><Checkbox disabled={disabled} checked={terms.capitalLockedUntilMaturity} onCheckedChange={checked => update({ capitalLockedUntilMaturity: checked === true })} />Capital is locked until contract maturity</label>
+    <Field label="Balance reconciliation evidence"><Textarea disabled={disabled} placeholder="Identify receipts/statements and dates supporting the opening deposits, allocations, withdrawals and available capital. Explain confirmed zero balances." value={position.balanceEvidence || ''} onChange={e => onChange({ balanceEvidence: e.target.value, balancesVerified: false })} /></Field>
+    <label className="flex items-start gap-2 rounded-lg border p-3 text-sm"><Checkbox disabled={disabled || !position.balanceEvidence?.trim()} checked={position.balancesVerified === true} onCheckedChange={checked => onChange({ balancesVerified: checked === true })} />I have checked the opening fund balances below against the evidence. They are not assumptions based on the investment agreement.</label>
+  </section>;
 }
 
 export default function HistoricalImportCasePage() {
@@ -118,12 +147,19 @@ export default function HistoricalImportCasePage() {
   });
 
   const post = () => startTransition(async () => {
-    try { const result = await postHistoricalImportAction(await getRequiredIdToken(), importId); setConfirmOpen(false); toast({ title: 'Historical records posted', description: result.message }); await refresh(); }
+    try {
+      if (!extraction) return;
+      const token = await getRequiredIdToken();
+      const review = await saveHistoricalExtractionAction({ authToken: token, importId, extraction });
+      setIssues(review.issues);
+      if (review.issues.some(issue => issue.severity === 'ERROR')) throw new Error('Resolve the highlighted reconciliation issues before posting.');
+      const result = await postHistoricalImportAction(token, importId); setConfirmOpen(false); toast({ title: 'Historical records posted', description: result.message }); await refresh();
+    }
     catch (error) { toast({ variant: 'destructive', title: 'Posting blocked', description: error instanceof Error ? error.message : 'Review the case and try again.' }); }
   });
 
   const updateDeal = (index: number, patch: Partial<HistoricalDealDraft>) => setExtraction((current) => current ? ({ ...current, deals: current.deals.map((deal, dealIndex) => dealIndex === index ? { ...deal, ...patch } : deal) }) : current);
-  const updateFund = (index: number, patch: Partial<HistoricalFundPosition>) => setExtraction((current) => current ? ({ ...current, fundPositions: current.fundPositions.map((position, positionIndex) => positionIndex === index ? { ...position, ...patch } : position) }) : current);
+  const updateFund = (index: number, patch: Partial<HistoricalFundPosition>) => setExtraction((current) => current ? ({ ...current, fundPositions: current.fundPositions.map((position, positionIndex) => positionIndex === index ? { ...position, balancesVerified: false, ...patch } : position) }) : current);
 
   if (loading || !record || !extraction || !workspace) return <div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   return <div className="space-y-6 pb-16">
@@ -144,6 +180,10 @@ export default function HistoricalImportCasePage() {
       </CardContent>
     </Card>
     {((record as any).extraction || manualReview) && <>
+      {extraction.fundPositions.length > 0 && <Card><CardHeader><CardTitle>Investment agreement review</CardTitle><CardDescription>Preserve the original term, maturity and realised-profit policy. Confirm current balances separately using the fund-position fields below.</CardDescription></CardHeader><CardContent className="space-y-4">
+        {extraction.fundPositions.map((position, index) => <InvestmentTermsReview key={index} position={position} index={index} disabled={posted} onChange={patch => updateFund(index, patch)} />)}
+        {extraction.deals.length > 0 && <div className="space-y-2"><p className="text-sm text-muted-foreground">If an investment agreement was incorrectly extracted as a client deal, remove that draft and re-run extraction. Source documents are retained.</p>{extraction.deals.map((deal, index) => <Button key={deal.id || index} disabled={posted} variant="outline" size="sm" onClick={() => setExtraction({ ...extraction, deals: extraction.deals.filter((_, i) => i !== index) })}>Remove client deal draft: {deal.dealName}</Button>)}</div>}
+      </CardContent></Card>}
       <Card><CardHeader><CardTitle>Historical payment evidence</CardTitle><CardDescription>These receipts substantiate the opening amount paid. They do not create extra credits. Later payments belong in Bank Reconciliation.</CardDescription></CardHeader><CardContent className="space-y-4">
         {extraction.deals.map((deal,index)=><div key={deal.id || index} className="space-y-2 rounded-lg border p-3"><p className="font-medium">{deal.dealName || `Deal ${index+1}`} · Opening paid: ₦{deal.amountPaid.toLocaleString('en-NG')}</p>
           {(deal.paymentEvidence || []).map((payment,paymentIndex)=><div key={paymentIndex} className="grid gap-2 md:grid-cols-5">

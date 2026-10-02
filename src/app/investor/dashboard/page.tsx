@@ -33,7 +33,7 @@ import Image from "next/image";
 import { generateAmortizationSchedule } from "@/lib/amortization";
 import { getRequiredIdToken } from '@/firebase/auth-token';
 import { durationToDays } from '@/lib/deal-duration';
-import { isProfitDistributionLocked } from '@/lib/workflow-eligibility';
+import { isProfitDistributionLocked, lockedUntilForBatch } from '@/lib/workflow-eligibility';
 
 
 type Transaction = DocumentData & {
@@ -308,6 +308,8 @@ function UninvestedCapitalCard({ batches, user }: { batches: FundBatch[] | null,
     const eligibleBatches = useMemo(() => {
         if (!batches) return [];
         return batches.filter(batch => {
+            const contractLock = batch.principalLockedUntil ? lockedUntilForBatch(batch) : null;
+            if (contractLock && new Date() < contractLock) return false;
             const isShortTerm = durationToDays(batch.tenureValue, batch.tenureUnit) <= TWELVE_MONTHS_IN_DAYS;
             const isUninvested = batch.amount === batch.remainingAmount;
             const isOverOneMonthOld = differenceInDays(new Date(), batch.createdAt.toDate()) >= 30;

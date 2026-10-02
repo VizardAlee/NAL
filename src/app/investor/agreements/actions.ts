@@ -95,8 +95,8 @@ async function createAgreementModel(
     amountInWords: nairaAmountInWords(amount),
     tenureValue,
     tenureUnit,
-    termLabel: formatAgreementTerm(tenureValue, tenureUnit),
-    maturityDate: calculateMaturityDate(agreementDate, tenureValue, tenureUnit).toISOString(),
+    termLabel: batch.contractMaturityDate && tenureUnit === 'Months' ? `${tenureValue} calendar months` : formatAgreementTerm(tenureValue, tenureUnit),
+    maturityDate: batch.contractMaturityDate ? new Date(`${batch.contractMaturityDate}T12:00:00Z`).toISOString() : calculateMaturityDate(agreementDate, tenureValue, tenureUnit).toISOString(),
     investor: {
       id: userId,
       ...investor,

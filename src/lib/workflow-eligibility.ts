@@ -23,6 +23,9 @@ export function requiredDealAgreementTypes(deal: Record<string, unknown>): Array
 }
 
 export function lockedUntilForBatch(batch: Record<string, unknown>): Date | null {
+  const explicit = batch.principalLockedUntil;
+  if (explicit instanceof Date && Number.isFinite(explicit.getTime())) return explicit;
+  if (explicit && typeof explicit === 'object' && 'toDate' in explicit) return (explicit as { toDate(): Date }).toDate();
   const unit = batch.tenureUnit as DurationUnit | undefined;
   const value = Number(batch.tenureValue || 0);
   const rawStart = batch.paymentDate || batch.agreementDate || batch.createdAt;
@@ -66,7 +69,7 @@ export function profitUnlockDate(
   const start = asDate(batch.paymentDate || batch.agreementDate || batch.createdAt);
   if (!start) return null;
   const maturity = addDealDuration(start, value, unit);
-  if (durationDays > 90) return maturity;
+  if (durationDays > 90) return lockedUntilForBatch(batch) || maturity;
   if (durationDays !== 90) return null;
 
   const earnedAt = asDate(entry.profitEarnedAt || entry.createdAt);

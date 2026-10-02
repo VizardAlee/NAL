@@ -21,6 +21,15 @@ export const historicalExtractionSchema = z.object({
   party: partySchema,
   deals: z.array(dealSchema).default([]),
   fundPositions: z.array(z.object({
+    investmentTerms: z.object({
+      capitalCommitted: z.number().finite().nonnegative(),
+      agreementDate: z.string().date(), paymentDate: z.string().date(), maturityDate: z.string().date(),
+      tenureValue: z.number().int().positive(), tenureUnit: z.enum(['Days', 'Months', 'Years']),
+      investorProfitShare: z.number().min(0).max(100), companyProfitShare: z.number().min(0).max(100),
+      paymentReference: z.string().default(''), capitalLockedUntilMaturity: z.boolean(),
+      annualProfitWithdrawalPercent: z.number().min(0).max(100), annualWithdrawalWindowDays: z.number().int().min(0).max(366),
+    }).optional(),
+    balancesVerified: z.boolean().default(false), balanceEvidence: z.string().default(''),
     investorId: z.string().optional(), investorName: z.string().default(''), totalDeposited: z.number().default(0), totalAllocated: z.number().default(0),
     totalWithdrawn: z.number().default(0), principalReturned: z.number().default(0), realisedProfit: z.number().default(0), availableCapital: z.number().default(0),
   })).default([]),

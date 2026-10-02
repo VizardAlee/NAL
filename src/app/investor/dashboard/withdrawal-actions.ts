@@ -11,7 +11,7 @@ import { calculateAvailableProfit } from '@/lib/financial-integrity';
 import { loadFundBatchAnniversaryWindow } from '@/lib/server/fund-batch-anniversary';
 import { ownerWithdrawalRequestId } from '@/lib/server/owner-withdrawal';
 import { durationToDays } from '@/lib/deal-duration';
-import { isProfitDistributionLocked } from '@/lib/workflow-eligibility';
+import { isProfitDistributionLocked, lockedUntilForBatch } from '@/lib/workflow-eligibility';
 
 // --- Withdrawal Action ---
 const withdrawalSchema = z.object({
@@ -349,6 +349,8 @@ export async function requestCapitalWithdrawalAction(input: z.infer<typeof capit
         }
 
         // Server-side validation
+        const contractLock = batchData.principalLockedUntil ? lockedUntilForBatch(batchData) : null;
+        if (contractLock && new Date() < contractLock) return { success: false, message: 'This investment capital is locked until its documented contract maturity.' };
         const isShortTerm = durationToDays(batchData.tenureValue, batchData.tenureUnit) <= 360;
         const isUninvested = batchData.amount === batchData.remainingAmount;
         const isOverOneMonthOld = differenceInDays(new Date(), batchData.createdAt.toDate()) >= 30;

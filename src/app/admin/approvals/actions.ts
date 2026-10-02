@@ -14,7 +14,7 @@ import {
 import { planRepaymentAllocations } from '@/lib/repayment-allocation';
 import { loadFundBatchAnniversaryWindow } from '@/lib/server/fund-batch-anniversary';
 import { assertInvestmentAgreementExecuted } from '@/lib/server/agreement-eligibility';
-import { isProfitDistributionLocked } from '@/lib/workflow-eligibility';
+import { isProfitDistributionLocked, lockedUntilForBatch } from '@/lib/workflow-eligibility';
 import { prepareReceiptPosting } from '@/lib/server/receipt-posting';
 
 const decisionSchema = z.object({
@@ -163,6 +163,14 @@ export async function processWithdrawalRequestAction(input: DecisionInput) {
       return;
     }
     const batchesSnapshot = await trx.get(eligibleBatchesQuery.orderBy('createdAt', 'asc'));
+    if (request.source === 'Capital') {
+      const eligibleCapital = batchesSnapshot.docs.filter(doc => {
+        const batch = doc.data();
+        const until = batch.principalLockedUntil ? lockedUntilForBatch(batch) : null;
+        return !until || new Date() >= until;
+      }).reduce((sum, doc) => sum + Math.max(0, Number(doc.data().remainingAmount || 0)), 0);
+      if (Number(request.amount) > eligibleCapital + 0.01) throw new Error('Investment capital remains locked until its documented contract maturity.');
+    }
     if (!isOwnerWithdrawal && request.source !== 'Capital') {
       const [transactionsSnapshot, allBatchesSnapshot, pendingSnapshot] = await Promise.all([
         trx.get(adminDb.collection('transactions').where('userId', '==', userId)),
@@ -187,6 +195,10 @@ export async function processWithdrawalRequestAction(input: DecisionInput) {
     let remaining = Math.abs(Number(request.amount));
     for (const batch of batchesSnapshot.docs) {
       if (remaining <= 0) break;
+      if (request.source === 'Capital' && batch.data().principalLockedUntil) {
+        const until = lockedUntilForBatch(batch.data());
+        if (until && new Date() < until) continue;
+      }
       const deduction = Math.min(Number(batch.data().remainingAmount), remaining);
       trx.update(batch.ref, { remainingAmount: FieldValue.increment(-deduction) });
       remaining -= deduction;
@@ -277,7 +289,9 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
         investmentId: investmentSnapshot.id,
         ...(investment.fundBatchId ? { fundBatchId: investment.fundBatchId } : {}),
       });
-      if (principalReturned > 0) trx.set(adminDb.collection('fundBatches').doc(), {
+      const originalContractBatch = sourceBatchSnapshots[index];
+      if (principalReturned > 0 && originalContractBatch?.data()?.principalLockedUntil) trx.update(originalContractBatch.ref, { remainingAmount: FieldValue.increment(principalReturned) });
+      else if (principalReturned > 0) trx.set(adminDb.collection('fundBatches').doc(), {
         sourceId: investment.investorId, amount: principalReturned, remainingAmount: principalReturned,
         createdAt: now, tenureValue: 0, tenureUnit: 'Days', specialInvestment: Boolean(investment.specialInvestment), sourceRequestId: data.requestId,
         ...(investment.sourceType === 'OwnerProfitAutoAllocation' ? { sourceType: investment.sourceType } : {}),
@@ -374,7 +388,9 @@ export async function processTerminationRequestAction(input: Omit<DecisionInput,
         ...(investment.fundBatchId ? { fundBatchId: investment.fundBatchId } : {}),
       });
       const principal = principalShares[index];
-      if (principal > 0) trx.set(adminDb.collection('fundBatches').doc(), {
+      const originalContractBatch = sourceBatchSnapshots[index];
+      if (principal > 0 && originalContractBatch?.data()?.principalLockedUntil) trx.update(originalContractBatch.ref, { remainingAmount: FieldValue.increment(principal) });
+      else if (principal > 0) trx.set(adminDb.collection('fundBatches').doc(), {
         sourceId: investment.investorId, amount: principal, remainingAmount: principal, createdAt: now,
         tenureValue: 10, tenureUnit: 'Years', specialInvestment: Boolean(investment.specialInvestment), sourceRequestId: data.requestId,
         ...(investment.sourceType === 'OwnerProfitAutoAllocation' ? { sourceType: investment.sourceType } : {}),

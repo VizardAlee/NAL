@@ -1,3 +1,5 @@
+import { durationToDays } from '@/lib/deal-duration';
+
 export const HISTORICAL_IMPORT_SETTING_ID = 'historicalImports';
 
 export type HistoricalImportStatus =
@@ -52,6 +54,10 @@ export type HistoricalDealDraft = {
 };
 
 export type HistoricalFundPosition = {
+  // A contract describes committed capital, not the current reconciled balance.
+  investmentTerms?: HistoricalInvestmentTerms;
+  balancesVerified?: boolean;
+  balanceEvidence?: string;
   investorId?: string;
   investorName: string;
   totalDeposited: number;
@@ -60,6 +66,21 @@ export type HistoricalFundPosition = {
   principalReturned: number;
   realisedProfit: number;
   availableCapital: number;
+};
+
+export type HistoricalInvestmentTerms = {
+  capitalCommitted: number;
+  agreementDate: string;
+  paymentDate: string;
+  maturityDate: string;
+  tenureValue: number;
+  tenureUnit: 'Days' | 'Months' | 'Years';
+  investorProfitShare: number;
+  companyProfitShare: number;
+  paymentReference: string;
+  capitalLockedUntilMaturity: boolean;
+  annualProfitWithdrawalPercent: number;
+  annualWithdrawalWindowDays: number;
 };
 
 export type HistoricalExpenseDraft = {
@@ -143,6 +164,9 @@ export function reconcileHistoricalExtraction(extraction: HistoricalExtraction):
     if (!deal.investors.length) issues.push({ code: 'DEAL_FUNDING_REQUIRED', severity: 'ERROR', message: `${deal.dealName || 'Deal'} needs its investor or platform funding allocations.`, dealId });
     deal.investors.forEach((investor) => {
       if (!investor.investorId) issues.push({ code: 'INVESTOR_LINK_REQUIRED', severity: 'ERROR', message: `Link ${investor.investorName || 'the investor'} to an account or platform capital.`, dealId });
+      const contracts = extraction.fundPositions.filter(position => position.investorId && position.investorId === investor.investorId);
+      if (contracts.length > 1) issues.push({ code: 'AMBIGUOUS_INVESTMENT_CONTRACT', severity: 'ERROR', message: 'Split this import by original investment contract so each client funding allocation has one unambiguous source.', dealId });
+      if (investor.realisedProfit > 0 && investor.investorId !== 'platform' && contracts.length !== 1) issues.push({ code: 'PROFIT_CONTRACT_REQUIRED', severity: 'ERROR', message: 'Include the investor fund position and original contract so historical profit retains its withdrawal restrictions.', dealId });
     });
     const invested = money(deal.investors.reduce((sum, item) => sum + Number(item.amountInvested || 0), 0));
     if (deal.investors.length && Math.abs(invested - money(deal.principal)) > 1) {
@@ -151,8 +175,26 @@ export function reconcileHistoricalExtraction(extraction: HistoricalExtraction):
   });
 
   extraction.fundPositions.forEach((position) => {
+    if (!position.balancesVerified || !position.balanceEvidence?.trim()) issues.push({ code: 'INVESTOR_BALANCES_UNVERIFIED', severity: 'ERROR', message: 'Verify the investor opening balances against receipts/statements and identify the evidence. An investment agreement alone does not establish allocations or available cash.' });
+    const terms = position.investmentTerms;
+    if (!terms) issues.push({ code: 'INVESTMENT_TERMS_REQUIRED', severity: 'ERROR', message: 'Confirm the original investment term and payment date before posting. Historical capital must not become an unrestricted zero-day investment.' });
+    else {
+      if (!(terms.capitalCommitted > 0) || !(terms.tenureValue > 0) || !terms.agreementDate || !terms.paymentDate || !terms.maturityDate || terms.maturityDate < terms.paymentDate) issues.push({ code: 'INVALID_INVESTMENT_TERMS', severity: 'ERROR', message: 'Confirm positive committed capital, the original investment dates, term and maturity.' });
+      const span = (Date.parse(terms.maturityDate) - Date.parse(terms.paymentDate)) / 86400000 + 1;
+      if (!Number.isFinite(span) || span < durationToDays(terms.tenureValue, terms.tenureUnit) || span > 3660) issues.push({ code: 'INVESTMENT_MATURITY_MISMATCH', severity: 'ERROR', message: 'The maturity date must cover the original investment term (maximum ten years). Check calendar-month/year dates against the contract.' });
+      if (Math.abs(terms.investorProfitShare + terms.companyProfitShare - 100) > 0.01) issues.push({ code: 'INVALID_PROFIT_SHARES', severity: 'ERROR', message: 'Investor and company realised-profit shares must total 100%; they are not a fixed return rate.' });
+      // Current withdrawal engines implement the platform standard. Never silently
+      // import a different contract and then apply less restrictive default rules.
+      if (!terms.capitalLockedUntilMaturity || terms.investorProfitShare !== 40 || terms.companyProfitShare !== 60 || terms.annualProfitWithdrawalPercent !== 20 || terms.annualWithdrawalWindowDays !== 5) issues.push({ code: 'UNSUPPORTED_INVESTMENT_RESTRICTIONS', severity: 'ERROR', message: 'These investment restrictions differ from the supported 40/60, capital-at-maturity and annual 20%/five-day policy. Do not post until the contract policy is supported.' });
+    }
+    if (position.availableCapital > (terms?.capitalCommitted || 0)) issues.push({ code: 'AVAILABLE_EXCEEDS_CONTRACT_CAPITAL', severity: 'ERROR', message: 'Unallocated capital exceeds the documented investment capital. Separate additional contributions/profit from this investment before posting.' });
+    for (const field of ['totalDeposited', 'totalAllocated', 'totalWithdrawn', 'principalReturned', 'realisedProfit', 'availableCapital'] as const) {
+      if (!Number.isFinite(position[field]) || position[field] < 0) issues.push({ code: 'INVALID_FUND_AMOUNT', severity: 'ERROR', message: `${field} must be a non-negative finite amount.` });
+    }
     if (!position.investorId) issues.push({ code: 'FUND_OWNER_LINK_REQUIRED', severity: 'ERROR', message: `Link the fund position for ${position.investorName || 'the investor'} to an account.` });
     const expectedAvailable = money(position.totalDeposited + position.principalReturned + position.realisedProfit - position.totalAllocated - position.totalWithdrawn);
+    const attributedProfit = extraction.deals.flatMap(deal => deal.investors).filter(investor => investor.investorId === position.investorId).reduce((sum, investor) => sum + investor.realisedProfit, 0);
+    if (Math.abs(position.realisedProfit - attributedProfit) > 1) issues.push({ code: 'UNATTRIBUTED_INVESTOR_PROFIT', severity: 'ERROR', message: 'The fund-position profit must match its documented deal profit allocations. Do not post aggregate profit without the underlying attribution.' });
     if (Math.abs(expectedAvailable - money(position.availableCapital)) > 1) {
       issues.push({
         code: 'INVESTOR_BALANCE_MISMATCH',
