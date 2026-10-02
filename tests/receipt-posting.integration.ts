@@ -5,6 +5,8 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { prepareReceiptPosting } from '../src/lib/server/receipt-posting';
 import { storeHistoricalDocument } from '../src/lib/server/historical-document-upload';
 import { beginHistoricalExtraction, finishHistoricalExtraction, failHistoricalExtraction } from '../src/lib/server/historical-extraction-lock';
+import { saveAdminUserRecord, storeAdminUserUpload } from '../src/lib/server/admin-user-records';
+import { claimWhatsAppReminder, prepareWhatsAppReminders, previewWhatsAppReminder, recordWhatsAppSendResult, setWhatsAppConsent } from '../src/lib/server/whatsapp-reminder-outbox';
 
 if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('These tests require the Firestore emulator; never run against production.');
 const app = initializeApp({ projectId:'demo-nal' });
@@ -15,6 +17,136 @@ beforeEach(async()=>{
   for(const id of ['receipt-a','receipt-b']) await db.collection('paymentReceipts').doc(id).set({purpose:'REPAYMENT',status:'RECONCILED',requestId:id,dealId:'deal',bankEntryId:'bank',fields:{amount:100,paymentDate:'2026-09-30',reference:'REF-1',sender:'Client',beneficiary:'NAL',accountNumber:'0513848871',transferStatus:'SUCCESSFUL'}});
 });
 after(async()=>{await deleteApp(app);});
+
+const userEdit = { userId: 'editable-client', name: 'Test Client', reason: 'Correct bank details from evidence', governmentIdType: 'NIN', governmentIdNumber: '12345678901', bvn: '12345678901', bankName: 'Test Bank', bankAccountName: 'Test Client', bankAccountNumber: '0123456789', status: 'VERIFIED' };
+test('sensitive admin corrections reset verified KYC, audit originals and reject stale saves', async () => {
+  const user = db.collection('users').doc(userEdit.userId);
+  const kyc = db.collection('userKycProfiles').doc(userEdit.userId);
+  await user.set({ role: 'Client', name: userEdit.name, kycStatus: 'VERIFIED', balance: 500 });
+  await kyc.set({ ...userEdit, bankName: 'Old Bank', revision: 0 });
+  const result = await saveAdminUserRecord(db, 'admin', userEdit);
+  assert.equal(result.verificationReset, true);
+  assert.equal(result.status, 'SUBMITTED');
+  const publicData = (await user.get()).data()!;
+  assert.equal(publicData.bvnLast4, '8901');
+  assert.equal(publicData.bvn, undefined);
+  assert.equal(publicData.governmentIdNumber, undefined);
+  assert.equal(publicData.balance, 500);
+  const history = await kyc.collection('history').get();
+  assert.equal(history.docs.at(-1)?.data().actorId, 'admin');
+  assert.equal(history.docs.at(-1)?.data().previousKyc.bankName, 'Old Bank');
+  await assert.rejects(() => saveAdminUserRecord(db, 'admin', userEdit), /Another update/);
+  assert.equal((await saveAdminUserRecord(db, 'admin', { ...userEdit, revision: 1 })).status, 'VERIFIED');
+});
+test('investor verification requires TIN and cannot alter role or financial balances', async () => {
+  await db.collection('users').doc('editable-investor').set({ role: 'Investor', name: 'Test Client' });
+  await assert.rejects(() => saveAdminUserRecord(db, 'admin', { ...userEdit, userId: 'editable-investor' }), /TIN/);
+  await assert.rejects(() => saveAdminUserRecord(db, 'admin', { ...userEdit, role: 'Admin' }), /Unrecognized/);
+});
+test('admin KYC replacements retain old files privately and clean up failed new uploads', async () => {
+  const objects = new Map<string, { bytes: Buffer; options: any }>();
+  const bucket = { name: 'demo-nal', file: (path: string) => ({ save: async (bytes: Buffer, options: any) => { objects.set(path, { bytes, options }); }, delete: async () => { objects.delete(path); } }) };
+  const userId = 'upload-client';
+  await db.collection('users').doc(userId).set({ name: 'Upload Client', kycStatus: 'VERIFIED' });
+  const input = { userId, kind: 'GOVERNMENT_ID', reason: 'Updated identity evidence' };
+  const first = await storeAdminUserUpload(db, bucket, 'admin', input, Buffer.from('%PDF-1.7\ntest'), 'id.pdf');
+  await storeAdminUserUpload(db, bucket, 'admin', { ...input, replaceDocumentId: first.documentId }, Buffer.from('%PDF-1.7\nreplacement'), 'new-id.pdf');
+  const record = (await db.collection('userKycProfiles').doc(userId).get()).data()!;
+  assert.equal(record.documents.length, 1);
+  assert.equal(record.status, 'SUBMITTED');
+  assert.equal(objects.size, 2);
+  for (const [path, object] of objects) {
+    assert.ok(path.startsWith(`user-records/${userId}/`));
+    assert.equal(object.options.metadata.metadata, undefined);
+  }
+  await assert.rejects(() => storeAdminUserUpload(db, bucket, 'admin', { ...input, replaceDocumentId: first.documentId }, Buffer.from('%PDF-1.7\nstale'), 'stale.pdf'), /cannot be replaced/);
+  assert.equal(objects.size, 2);
+  await assert.rejects(() => storeAdminUserUpload(db, bucket, 'admin', { ...input, kind: 'PROFILE_PHOTO' }, Buffer.from('%PDF-1.7\nphoto'), 'photo.pdf'), /JPG or PNG/);
+});
+
+test('organization corrections update entity and representative details without touching signed documents', async () => {
+  const userId = 'editable-organization';
+  await db.collection('users').doc(userId).set({ role: 'Client', accountType: 'Organization', name: 'Old Company', email: 'representative@example.com', agreements: ['signed-agreement'] });
+  await saveAdminUserRecord(db, 'admin', { ...userEdit, userId, name: 'Correct Company', address: 'Registered office', organizationRegistrationNumber: 'RC123456', representativeName: 'Authorized Person', representativeTitle: 'Director', status: 'SUBMITTED' });
+  const record = (await db.collection('users').doc(userId).get()).data()!;
+  assert.equal(record.organizationName, 'Correct Company');
+  assert.equal(record.organizationAddress, 'Registered office');
+  assert.equal(record.representativeName, 'Authorized Person');
+  assert.deepEqual(record.agreements, ['signed-agreement']);
+  assert.equal(record.email, 'representative@example.com');
+});
+
+async function reminderFixture(clientId: string) {
+  await db.doc('platformSettings/bankDetails').set({ accountName: 'NAL', accountNumber: '0513848871', bankName: 'Sterling Bank' });
+  await db.doc('reminderSettings/whatsapp').set({ enabled: true });
+  await db.collection('users').doc(clientId).set({ role: 'Client', name: 'Test Client', phoneNumber: '08032065880' });
+  await db.collection('deals').doc(`${clientId}-deal`).set({ clientId, dealName: 'Test Facility', status: 'Active', financingMode: 'Murabaha', principal: 300, profitRate: 0, durationValue: 3, durationUnit: 'Days', repaymentType: 'Equal Installments', repaymentFrequency: 'Daily', startDate: Timestamp.fromDate(new Date('2026-09-30T00:00:00Z')) });
+  await setWhatsAppConsent(db, 'admin', { clientId, optedIn: true, evidence: 'Client signed WhatsApp consent form', phone: '08032065880' });
+}
+const reminderNow = new Date('2026-10-02T15:00:00Z');
+test('concurrent reminder preparation creates one daily outbox entry and never sends or changes balances', async () => {
+  const clientId = 'whatsapp-concurrency';
+  await reminderFixture(clientId);
+  await db.collection('repayments').doc('legacy-only-deal-id').set({ dealId: `${clientId}-deal`, status: 'Approved', amount: 100, installmentNumber: 1 });
+  const report = await previewWhatsAppReminder(db, clientId, reminderNow);
+  assert.equal(report.amountPaid, 100); assert.equal(report.shortfall, 100);
+  await Promise.all([prepareWhatsAppReminders(db, reminderNow), prepareWhatsAppReminders(db, reminderNow)]);
+  const queue = await db.collection('whatsappReminderOutbox').where('clientId', '==', clientId).get();
+  assert.equal(queue.size, 1); assert.equal(queue.docs[0].data().status, 'PREPARED');
+  assert.equal(await claimWhatsAppReminder(db, queue.docs[0].id, false, reminderNow), null);
+  assert.equal((await db.collection('deals').doc(`${clientId}-deal`).get()).data()?.principal, 300);
+});
+test('consent withdrawal and changed phone number prevent queued delivery', async () => {
+  const clientId = 'whatsapp-revoked'; await reminderFixture(clientId);
+  await prepareWhatsAppReminders(db, reminderNow);
+  const queue = await db.collection('whatsappReminderOutbox').where('clientId', '==', clientId).get();
+  await setWhatsAppConsent(db, 'admin', { clientId, optedIn: false, evidence: 'Client withdrew consent by phone' });
+  assert.equal(await claimWhatsAppReminder(db, queue.docs[0].id, true, reminderNow), null);
+  assert.equal((await queue.docs[0].ref.get()).data()?.status, 'CANCELLED');
+  const second = 'whatsapp-phone-changed'; await reminderFixture(second); await prepareWhatsAppReminders(db, reminderNow);
+  const secondQueue = await db.collection('whatsappReminderOutbox').where('clientId', '==', second).get();
+  await db.collection('users').doc(second).update({ phoneNumber: '08011111111' });
+  assert.equal(await claimWhatsAppReminder(db, secondQueue.docs[0].id, true, reminderNow), null);
+});
+test('provider claims refresh financial figures and uncertain sends cannot be claimed twice', async () => {
+  const clientId = 'whatsapp-refresh'; await reminderFixture(clientId); await prepareWhatsAppReminders(db, reminderNow);
+  const queue = await db.collection('whatsappReminderOutbox').where('clientId', '==', clientId).get();
+  await db.collection('repayments').doc('freshly-approved').set({ clientId, dealId: `${clientId}-deal`, status: 'Approved', amount: 100, installmentNumber: 1 });
+  const claims = await Promise.all([claimWhatsAppReminder(db, queue.docs[0].id, true, reminderNow), claimWhatsAppReminder(db, queue.docs[0].id, true, reminderNow)]);
+  const sent = claims.find(Boolean)!;
+  assert.equal(claims.filter(Boolean).length, 1);
+  assert.equal(sent.amountPaid, 100);
+  await assert.rejects(() => recordWhatsAppSendResult(db, sent.outboxId, sent.attemptId, { status: 'SENT' }), /acknowledgement/);
+  await recordWhatsAppSendResult(db, sent.outboxId, sent.attemptId, { status: 'UNKNOWN' });
+  assert.equal(await claimWhatsAppReminder(db, sent.outboxId, true, reminderNow), null);
+  assert.equal((await db.collection('whatsappDeliveryState').doc(clientId).get()).exists, false);
+});
+test('disabled configuration and completed facilities do not create reminders', async () => {
+  const clientId = 'whatsapp-completed'; await reminderFixture(clientId);
+  await db.collection('deals').doc(`${clientId}-deal`).update({ status: 'Completed' });
+  await prepareWhatsAppReminders(db, reminderNow);
+  assert.equal((await db.collection('whatsappReminderOutbox').where('clientId', '==', clientId).get()).size, 0);
+  await db.doc('reminderSettings/whatsapp').set({ enabled: false });
+  assert.deepEqual(await prepareWhatsAppReminders(db, reminderNow), { enabled: false, prepared: 0, skipped: 0, errors: 0 });
+});
+
+test('old queues expire and successful acknowledgements alone establish the next notice baseline', async () => {
+  const clientId = 'whatsapp-baseline'; await reminderFixture(clientId); await prepareWhatsAppReminders(db, reminderNow);
+  const queue = await db.collection('whatsappReminderOutbox').where('clientId', '==', clientId).get();
+  const claim = (await claimWhatsAppReminder(db, queue.docs[0].id, true, reminderNow))!;
+  await recordWhatsAppSendResult(db, claim.outboxId, claim.attemptId, { status: 'SENT', providerMessageId: 'test-meta-acknowledgement' });
+  assert.equal((await db.collection('whatsappDeliveryState').doc(clientId).get()).data()?.amountPaid, 0);
+  await assert.rejects(() => recordWhatsAppSendResult(db, claim.outboxId, claim.attemptId, { status: 'SENT', providerMessageId: 'test-meta-acknowledgement' }), /already completed/);
+  const expires = 'whatsapp-expiry'; await reminderFixture(expires); await prepareWhatsAppReminders(db, reminderNow);
+  const expired = await db.collection('whatsappReminderOutbox').where('clientId', '==', expires).get();
+  assert.equal(await claimWhatsAppReminder(db, expired.docs[0].id, true, new Date('2026-10-03T15:00:00Z')), null);
+  assert.equal((await expired.docs[0].ref.get()).data()?.status, 'CANCELLED');
+  const closed = 'whatsapp-closed-after-preparation'; await reminderFixture(closed); await prepareWhatsAppReminders(db, reminderNow);
+  const closedQueue = await db.collection('whatsappReminderOutbox').where('clientId', '==', closed).get();
+  await db.collection('deals').doc(`${closed}-deal`).update({ status: 'Completed' });
+  assert.equal(await claimWhatsAppReminder(db, closedQueue.docs[0].id, true, reminderNow), null);
+  assert.equal((await closedQueue.docs[0].ref.get()).data()?.status, 'CANCELLED');
+});
 
 test('concurrent extraction attempts cannot both acquire a historical review', async () => {
   const ref = db.collection('historicalImports').doc('extraction-lock');

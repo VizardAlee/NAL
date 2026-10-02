@@ -4,6 +4,8 @@ service firebase.storage {
   match /b/{bucket}/o {
     // No public download tokens or direct client access to bank evidence.
     match /financial-documents/{allPaths=**} { allow read, write: if false; }
+    // KYC evidence is accessed only through verified administrator server APIs.
+    match /user-records/{allPaths=**} { allow read, write: if false; }
     function signedIn() {
       return request.auth != null;
     }

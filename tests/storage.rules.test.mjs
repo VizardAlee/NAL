@@ -38,6 +38,14 @@ after(async () => env?.cleanup());
 const pdfMetadata = { contentType: 'application/pdf' };
 const jpegMetadata = { contentType: 'image/jpeg' };
 
+test('private KYC files cannot be read or written directly even by administrators', async () => {
+  for (const uid of ['admin', 'staff', 'client']) {
+    const storage = env.authenticatedContext(uid).storage();
+    await assertFails(storage.ref('user-records/client/id.pdf').putString('private ID', 'raw', pdfMetadata));
+    await assertFails(storage.ref('user-records/client/id.pdf').getDownloadURL());
+  }
+});
+
 test('bank statements and payment receipts have no direct client/admin download access',async()=>{
   for(const uid of ['admin','client','staff']) {
     const storage=env.authenticatedContext(uid).storage();

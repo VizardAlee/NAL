@@ -417,6 +417,13 @@ service cloud.firestore {
     // Financial source documents and reconciliation are server-only. Customers
     // receive only their own receipts through authenticated actions/API routes.
     match /paymentReceipts/{id} { allow read, write: if false; }
+    // Financial WhatsApp notices and opt-in evidence are server-only.
+    match /whatsappConsents/{id} { allow read, write: if false; }
+    match /whatsappConsentAudit/{id} { allow read, write: if false; }
+    match /whatsappReminderOutbox/{id} { allow read, write: if false; }
+    match /whatsappReminderErrors/{id} { allow read, write: if false; }
+    match /whatsappDeliveryState/{id} { allow read, write: if false; }
+    match /reminderSettings/{id} { allow read, write: if false; }
     match /bankStatements/{id} { allow read, write: if false; }
     match /bankEntries/{id} { allow read, write: if false; }
     match /financialDocumentUsage/{id} { allow read, write: if false; }

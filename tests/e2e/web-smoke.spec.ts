@@ -10,6 +10,11 @@ test('financial originals and uploads reject unauthenticated requests',async({re
   const historicalUpload=await request.post('/api/historical-documents',{multipart:{importId:'test-import',file:{name:'agreement.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-test')}}});
   expect(historicalUpload.status()).toBe(401);
   expect((await historicalUpload.json()).message).toMatch(/Sign in again/);
+  const userUpload = await request.post('/api/admin-user-records', { multipart: { userId: 'client', kind: 'GOVERNMENT_ID', reason: 'Replace identity document', file: { name: 'id.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-test') } } });
+  expect(userUpload.status()).toBe(401);
+  expect((await userUpload.json()).message).toMatch(/Administrator write access/);
+  expect((await request.post('/api/whatsapp-reminders', { data: { operation: 'prepare' } })).status()).toBe(401);
+  expect((await request.get('/api/whatsapp-reminders')).status()).toBe(401);
 });
 
 for (const width of responsiveWidths) {

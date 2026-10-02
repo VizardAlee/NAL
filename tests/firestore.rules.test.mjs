@@ -222,6 +222,18 @@ test('full KYC identifiers cannot be read or written by browser clients, includi
   await assertFails(getDoc(doc(adminDb, 'userKycProfiles', 'client')));
   await assertFails(setDoc(doc(clientDb, 'userKycProfiles', 'forged'), { bvn: '12345678901' }));
   await assertFails(setDoc(doc(adminDb, 'userKycProfiles', 'forged'), { bvn: '12345678901' }));
+  await assertFails(getDoc(doc(adminDb, 'userKycProfiles', 'client', 'history', 'audit')));
+  await assertFails(setDoc(doc(clientDb, 'userKycProfiles', 'client', 'history', 'audit'), { actorId: 'admin' }));
+});
+
+test('WhatsApp financial notices, opt-ins and configuration cannot be forged or read directly', async () => {
+  for (const uid of ['client', 'admin']) {
+    const db = env.authenticatedContext(uid).firestore();
+    for (const path of ['whatsappConsents', 'whatsappConsentAudit', 'whatsappReminderOutbox', 'whatsappReminderErrors', 'whatsappDeliveryState', 'reminderSettings']) {
+      await assertFails(getDoc(doc(db, path, 'private')));
+      await assertFails(setDoc(doc(db, path, 'private'), { optedIn: true, status: 'SENT' }));
+    }
+  }
 });
 
 test('transactional pending check permits only one concurrent approval', async () => {

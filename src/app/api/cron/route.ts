@@ -11,6 +11,7 @@ import { calculateInvestorPortfolioValue, roundCurrency } from '@/lib/financial-
 import { calculateZakatAmount, isZakatDue } from '@/lib/zakat';
 import { calculateInstallmentOutstanding, deriveAutomatedRecoveryStatus, isClosedRecoveryStatus, recoveryStatusLabel, recoveryTaskId } from '@/lib/recovery';
 import { isRepaymentReminderDue, repaymentReminderText } from '@/lib/repayment-reminders';
+import { prepareWhatsAppReminders } from '@/lib/server/whatsapp-reminder-outbox';
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -459,12 +460,14 @@ async function handleCron(request: NextRequest) {
             processMarketerRatings()
         ]);
         const ownerProfitResult = await processOwnerProfitAllocations({ includeHistorical: false, limit: 500 });
+        const whatsappReminders = await prepareWhatsAppReminders(adminDb);
 
         const completedAt = Timestamp.now();
         const withoutDetails = <T extends Record<string, unknown>>(value: T) => Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'details'));
         const summary = {
             zakat: withoutDetails(zakatResult), recovery: withoutDetails(recoveryResult),
             marketerRating: withoutDetails(marketerResult), ownerProfit: withoutDetails(ownerProfitResult as unknown as Record<string, unknown>),
+            whatsappReminders,
         };
         await Promise.all([
             runRef.set({ status: 'SUCCEEDED', completedAt, summary }, { merge: true }),
@@ -478,6 +481,7 @@ async function handleCron(request: NextRequest) {
             recovery: recoveryResult,
             marketerRating: marketerResult,
             ownerProfit: ownerProfitResult,
+            whatsappReminders,
         });
     } catch (error) {
         console.error('CRON JOB FAILED:', error);

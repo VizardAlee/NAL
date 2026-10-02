@@ -42,6 +42,7 @@ import { canWriteAdmin, hasPersona, isReadOnlyOwner, normalizeAccessModel } from
 import { isZakatApplicable } from '@/lib/zakat-eligibility';
 import { calculateZakatAmount, getNextZakatAssessmentDate } from '@/lib/zakat';
 import { UserFinancialReport } from '@/components/admin/user-financial-report';
+import { UserRecordEditor } from '@/components/admin/user-record-editor';
 import { durationToDays } from '@/lib/deal-duration';
 
 type UserProfile = DocumentData & {
@@ -466,6 +467,7 @@ export default function UserDetailPage() {
                                 )}
                             </div>
                         </CardHeader>
+                        {canEditOwners && <CardContent><UserRecordEditor userId={userId} accountType={userProfile.accountType || 'Individual'} isInvestor={hasInvestorPersona} /></CardContent>}
                     </Card>
 
                     {userProfile.accountType === 'Organization' && (
