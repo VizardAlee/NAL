@@ -8,6 +8,9 @@ For actual client deals use ONGOING unless completion is proven; include complet
 }
 
 export function prepareHistoricalAiExtraction(extraction: HistoricalExtraction, partyKind: string, selfId: string, profileName?: string) {
+  // Religion requires an explicit profile declaration, not a model inference
+  // from a name or the presence of conditional Zakat clauses.
+  delete extraction.party.isMuslim;
   const names = new Set([extraction.party.name, profileName].filter(Boolean).map(name => name!.trim().toLowerCase().replace(/\s+/g, ' ')));
   const isSelf = (name: string) => names.has(name.trim().toLowerCase().replace(/\s+/g, ' '));
   extraction.deals = extraction.deals.map(deal => ({ ...deal,

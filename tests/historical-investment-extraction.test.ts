@@ -27,9 +27,11 @@ test('AI cannot confirm balances or invent linked accounts; source name still li
   extraction.fundPositions[0].balancesVerified = true;
   extraction.fundPositions[0].balanceEvidence = 'AI claim';
   extraction.fundPositions[0].investorId = 'invented-account';
+  extraction.party.isMuslim = true;
   prepareHistoricalAiExtraction(extraction, 'INVESTOR', 'real-profile-id', 'Existing Profile Name');
   assert.equal(extraction.fundPositions[0].investorId, 'real-profile-id');
   assert.equal(extraction.party.name, 'Existing Profile Name');
+  assert.equal(extraction.party.isMuslim, undefined);
   assert.equal(extraction.fundPositions[0].balancesVerified, false);
   assert.equal(extraction.fundPositions[0].balanceEvidence, '');
   assert.ok(reconcileHistoricalExtraction(extraction).some(issue => issue.code === 'INVESTOR_BALANCES_UNVERIFIED'));

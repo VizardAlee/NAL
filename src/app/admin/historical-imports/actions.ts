@@ -19,6 +19,7 @@ import { assertFinancialAiEnabled, financialAiEnabled } from '@/lib/server/finan
 import { HistoricalWorkspaceError, historicalWorkspaceResult } from '@/lib/server/historical-workspace-result';
 import { historicalExtractionSchema as extractionSchema, historicalExtractionOutput, historicalExtractionForStorage } from '@/lib/server/historical-extraction-schema';
 import { historicalExtractionPrompt, prepareHistoricalAiExtraction, historicalInvestmentBatch } from '@/lib/server/historical-investment-extraction';
+import { beginHistoricalExtraction, finishHistoricalExtraction, failHistoricalExtraction, historicalAnalysisIsRunning } from '@/lib/server/historical-extraction-lock';
 
 const createSchema = z.object({
   authToken: z.string().min(1),
@@ -190,13 +191,10 @@ export async function analyzeHistoricalImportAction(authToken: string, importId:
   assertFinancialAiEnabled();
   await assertImportEnabled();
   const ref = adminDb.collection('historicalImports').doc(importId);
-  const snapshot = await ref.get();
-  if (!snapshot.exists) throw new HistoricalWorkspaceError('IMPORT_NOT_FOUND', 'This import case no longer exists. Reopen it from migration cases.');
-  const data = snapshot.data() || {};
-  if (['POSTED', 'POSTING'].includes(data.status)) throw new HistoricalWorkspaceError('IMPORT_READ_ONLY', 'This import is being posted or has already been posted. Its extraction cannot be changed.');
+  const attemptId = randomUUID();
+  const data = await beginHistoricalExtraction(adminDb, ref, attemptId);
   const documents = (data.documents || []).slice(0, 12) as Array<{ storagePath: string; contentType: string; originalName: string }>;
   if (!documents.length) throw new HistoricalWorkspaceError('DOCUMENTS_REQUIRED', 'Upload at least one document before extraction.');
-  await ref.update({ processingState: 'ANALYZING', updatedAt: FieldValue.serverTimestamp() });
   try {
     const mediaParts = await Promise.all(documents.map(async (document) => {
       const [buffer] = await adminStorageBucket.file(document.storagePath).download();
@@ -213,10 +211,10 @@ export async function analyzeHistoricalImportAction(authToken: string, importId:
     const selfId = data.existingUserId || 'SELF';
     prepareHistoricalAiExtraction(extraction, data.partyKind, selfId, profileName);
     const issues = reconcileHistoricalExtraction(extraction);
-    await ref.update({ extraction: historicalExtractionForStorage(extraction), reconciliationIssues: issues, status: hasBlockingHistoricalIssues(issues) ? 'NEEDS_ATTENTION' : 'READY_FOR_REVIEW', processingState: 'COMPLETE', extractedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    await finishHistoricalExtraction(adminDb, ref, attemptId, { extraction: historicalExtractionForStorage(extraction), reconciliationIssues: issues, status: hasBlockingHistoricalIssues(issues) ? 'NEEDS_ATTENTION' : 'READY_FOR_REVIEW' });
     return { success: true as const, extraction, issues };
   } catch (error) {
-    await ref.update({ processingState: 'FAILED', processingError: 'Extraction did not complete. Retry or use manual review.', updatedAt: FieldValue.serverTimestamp() });
+    await failHistoricalExtraction(adminDb, ref, attemptId).catch(() => undefined);
     throw error;
   }
   });
@@ -228,9 +226,12 @@ export async function saveHistoricalExtractionAction(input: { authToken: string;
   const extraction = historicalExtractionForStorage(input.extraction) as HistoricalExtraction;
   const issues = reconcileHistoricalExtraction(extraction);
   const ref = adminDb.collection('historicalImports').doc(input.importId);
-  const snapshot = await ref.get();
-  if (!snapshot.exists || ['POSTED', 'POSTING'].includes(snapshot.data()?.status)) throw new Error('This import cannot be edited.');
-  await ref.update({ extraction, reconciliationIssues: issues, status: hasBlockingHistoricalIssues(issues) ? 'NEEDS_ATTENTION' : 'READY_FOR_REVIEW', reviewedBy: reviewer.uid, reviewedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  await adminDb.runTransaction(async transaction => {
+    const snapshot = await transaction.get(ref);
+    const data = snapshot.data() || {};
+    if (!snapshot.exists || ['POSTED', 'POSTING'].includes(data.status) || historicalAnalysisIsRunning(data)) throw new Error('This import cannot be edited while extraction or posting is running.');
+    transaction.update(ref, { extraction, reconciliationIssues: issues, status: hasBlockingHistoricalIssues(issues) ? 'NEEDS_ATTENTION' : 'READY_FOR_REVIEW', processingState: 'REVIEWED', processingAttemptId: '', reviewedBy: reviewer.uid, reviewedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  });
   return { success: true as const, issues };
 }
 
@@ -276,6 +277,8 @@ export async function postHistoricalImportAction(authToken: string, importId: st
     const current = await transaction.get(importRef);
     const currentData = current.data() || {};
     if (currentData.status === 'POSTED') return false;
+    if (historicalAnalysisIsRunning(currentData)) throw new Error('Wait for extraction to finish before posting.');
+    if (JSON.stringify(currentData.extraction) !== JSON.stringify(importData.extraction)) throw new Error('The review changed while posting was being prepared. Reload and approve the current review.');
     if (currentData.status === 'POSTING') {
       const startedAt = currentData.postingStartedAt instanceof Timestamp ? currentData.postingStartedAt.toMillis() : Date.now();
       if (Date.now() - startedAt < 15 * 60 * 1000) throw new Error('This import is already being posted. Wait for it to finish before retrying.');

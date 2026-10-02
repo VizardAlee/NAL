@@ -1,9 +1,10 @@
 import { after, before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { prepareReceiptPosting } from '../src/lib/server/receipt-posting';
 import { storeHistoricalDocument } from '../src/lib/server/historical-document-upload';
+import { beginHistoricalExtraction, finishHistoricalExtraction, failHistoricalExtraction } from '../src/lib/server/historical-extraction-lock';
 
 if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('These tests require the Firestore emulator; never run against production.');
 const app = initializeApp({ projectId:'demo-nal' });
@@ -14,6 +15,34 @@ beforeEach(async()=>{
   for(const id of ['receipt-a','receipt-b']) await db.collection('paymentReceipts').doc(id).set({purpose:'REPAYMENT',status:'RECONCILED',requestId:id,dealId:'deal',bankEntryId:'bank',fields:{amount:100,paymentDate:'2026-09-30',reference:'REF-1',sender:'Client',beneficiary:'NAL',accountNumber:'0513848871',transferStatus:'SUCCESSFUL'}});
 });
 after(async()=>{await deleteApp(app);});
+
+test('concurrent extraction attempts cannot both acquire a historical review', async () => {
+  const ref = db.collection('historicalImports').doc('extraction-lock');
+  await ref.set({ status: 'DRAFT', documents: [{ id: 'evidence' }] });
+  const results = await Promise.allSettled([beginHistoricalExtraction(db, ref, 'attempt-a'), beginHistoricalExtraction(db, ref, 'attempt-b')]);
+  assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+});
+
+test('late extraction completion and failure cannot overwrite posted records', async () => {
+  const ref = db.collection('historicalImports').doc('extraction-posted');
+  await ref.set({ status: 'POSTED', processingState: 'ANALYZING', processingAttemptId: 'old', extraction: { original: true } });
+  await assert.rejects(() => finishHistoricalExtraction(db, ref, 'old', { extraction: { original: false } }), /superseded/);
+  await failHistoricalExtraction(db, ref, 'old');
+  const data = (await ref.get()).data()!;
+  assert.equal(data.status, 'POSTED');
+  assert.deepEqual(data.extraction, { original: true });
+});
+
+test('expired extraction can be restarted without stale results overwriting the retry', async () => {
+  const ref = db.collection('historicalImports').doc('extraction-retry');
+  await ref.set({ status: 'DRAFT', documents: [{ id: 'evidence' }], processingState: 'ANALYZING', processingAttemptId: 'old', processingStartedAt: Timestamp.fromMillis(Date.now() - 11 * 60 * 1000) });
+  await beginHistoricalExtraction(db, ref, 'retry');
+  await assert.rejects(() => finishHistoricalExtraction(db, ref, 'old', { extraction: { old: true } }), /superseded/);
+  await failHistoricalExtraction(db, ref, 'old');
+  assert.equal((await ref.get()).data()?.processingAttemptId, 'retry');
+  await finishHistoricalExtraction(db, ref, 'retry', { status: 'NEEDS_ATTENTION', extraction: { reviewed: false } });
+  assert.equal((await ref.get()).data()?.processingState, 'COMPLETE');
+});
 const post = (receiptId: string, amount=100) => db.runTransaction(async trx=>{
   const write=await prepareReceiptPosting(trx,{receiptId,amount,purpose:'REPAYMENT',requestId:receiptId,dealId:'deal'});
   write();
