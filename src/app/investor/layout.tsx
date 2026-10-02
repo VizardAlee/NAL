@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Wallet, Banknote, FlaskConical, HelpCircle, BookOpen, History, Settings, FileSignature } from "lucide-react";
+import { LogOut, Wallet, FlaskConical, HelpCircle, BookOpen, History, Settings, FileSignature } from "lucide-react";
 import { Logo } from "@/components/icons";
 import Link from "next/link";
 import { useUser } from "@/firebase";
@@ -23,7 +23,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { NonInterestInstitutionMark } from "@/components/non-interest-institution-mark";
 import { MessagesLink } from "@/components/messages-link";
-import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
+import { useOnboardingTour } from "@/components/onboarding-tour";
 import { DigitalClock } from "@/components/digital-clock";
 import { canAccessPortal, getDefaultRouteForUser } from "@/lib/access-control";
 import { RoleSwitcher } from "@/components/role-switcher";
@@ -54,18 +54,6 @@ function InvestorSkeleton() {
     );
 }
 
-const investorOnboardingSteps = [
-  {
-    icon: Wallet,
-    title: 'Welcome, Investor!',
-    description: "This is your personal hub to track your portfolio value, view your investable balance, and see your overall return on investment.",
-  },
-  {
-    icon: Banknote,
-    title: 'Deposit and Withdraw',
-    description: "Use the 'Request Deposit' button to add funds. When your profits are available, you can request a withdrawal or choose to reinvest them.",
-  },
-];
 
 const investorNavItems = [
   { href: "/investor/dashboard", label: "home" as TranslationKey, icon: Wallet },
@@ -186,7 +174,7 @@ export default function InvestorLayout({
   }
 
   return (
-    <OnboardingTourProvider steps={investorOnboardingSteps} storageKey="hasSeenInvestorTour">
+    <>
         <div className="app-shell flex w-full flex-col">
             <header className="app-topbar sticky top-0 z-10 flex h-16 items-center gap-2 px-3 lg:gap-4 lg:px-6">
                 <Link href="/investor/dashboard" className="flex min-w-0 items-center gap-2 font-bold font-headline text-primary">
@@ -253,6 +241,6 @@ export default function InvestorLayout({
             <main className="app-content flex-1 p-4 pb-24 lg:p-6">{children}</main>
             <InvestorMobileNav />
         </div>
-    </OnboardingTourProvider>
+    </>
   );
 }

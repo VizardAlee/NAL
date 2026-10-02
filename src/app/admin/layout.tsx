@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, LayoutDashboard, FileText, Users, CheckCircle, HelpCircle, Shield } from "lucide-react";
+import { LogOut, HelpCircle, Shield } from "lucide-react";
 import {
   SidebarProvider,
   Sidebar,
@@ -32,7 +32,7 @@ import React, { useEffect } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { NonInterestInstitutionMark } from "@/components/non-interest-institution-mark";
-import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
+import { useOnboardingTour } from "@/components/onboarding-tour";
 import { DigitalClock } from "@/components/digital-clock";
 import { MessagesLink } from "@/components/messages-link";
 import { canAccessPortal, getDefaultRouteForUser, isReadOnlyOwner } from "@/lib/access-control";
@@ -66,28 +66,6 @@ function AdminSkeleton() {
     );
 }
 
-const adminOnboardingSteps = [
-  {
-    icon: LayoutDashboard,
-    title: 'Welcome to Your Dashboard',
-    description: "This is your command center. Get a high-level overview of platform metrics, from total value locked to recent user activity.",
-  },
-  {
-    icon: CheckCircle,
-    title: 'Manage Approvals',
-    description: "All user requests, from new deals and deposits to withdrawals and terminations, appear in the 'Approvals' section for your review.",
-  },
-  {
-    icon: Users,
-    title: 'Oversee Users',
-    description: "The 'Users' section allows you to view profiles and financial histories for every investor and client on the platform.",
-  },
-  {
-    icon: FileText,
-    title: 'Handle Deals',
-    description: "Create, view, and manage all financing deals. Once a deal is ready, you can activate it by funding it from available capital.",
-  },
-];
 
 function AccountMenu() {
     const { user } = useUser();
@@ -163,7 +141,7 @@ export default function AdminLayout({
   }
 
   return (
-    <OnboardingTourProvider steps={adminOnboardingSteps} storageKey="hasSeenAdminTour">
+    <>
         <SidebarProvider>
         <Sidebar>
             <SidebarHeader>
@@ -222,6 +200,6 @@ export default function AdminLayout({
             <AdminMobileNav />
         </SidebarInset>
         </SidebarProvider>
-    </OnboardingTourProvider>
+    </>
   );
 }

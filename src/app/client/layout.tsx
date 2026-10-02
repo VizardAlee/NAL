@@ -23,7 +23,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { NonInterestInstitutionMark } from "@/components/non-interest-institution-mark";
 import { MessagesLink } from "@/components/messages-link";
-import { OnboardingTourProvider, useOnboardingTour } from "@/components/onboarding-tour";
+import { useOnboardingTour } from "@/components/onboarding-tour";
 import { DigitalClock } from "@/components/digital-clock";
 import { canAccessPortal, getDefaultRouteForUser } from "@/lib/access-control";
 import { RoleSwitcher } from "@/components/role-switcher";
@@ -52,18 +52,6 @@ function ClientSkeleton() {
     );
 }
 
-const clientOnboardingSteps = [
-  {
-    icon: FileText,
-    title: 'Welcome, Client!',
-    description: "This is your dashboard where you can manage your financing deals, track repayment schedules, and communicate with administrators.",
-  },
-  {
-    icon: PlusCircle,
-    title: 'Request a New Deal',
-    description: "Need new financing? Use the 'Request a Deal' button to submit a new proposal for review by our administrative team.",
-  },
-];
 
 const clientNavItems = [
   { href: "/client/dashboard", label: "home" as TranslationKey, icon: FileText },
@@ -175,7 +163,7 @@ export default function ClientLayout({
   }
 
   return (
-    <OnboardingTourProvider steps={clientOnboardingSteps} storageKey="hasSeenClientTour">
+    <>
         <div className="app-shell flex w-full flex-col">
             <header className="app-topbar sticky top-0 z-10 flex h-16 items-center gap-2 px-3 lg:gap-4 lg:px-6">
                 <Link href="/client/dashboard" className="flex min-w-0 items-center gap-2 font-bold font-headline text-primary">
@@ -242,6 +230,6 @@ export default function ClientLayout({
             <main className="app-content flex-1 p-4 pb-24 lg:p-6">{children}</main>
             <ClientMobileNav />
         </div>
-    </OnboardingTourProvider>
+    </>
   );
 }

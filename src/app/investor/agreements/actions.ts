@@ -12,6 +12,7 @@ import {
   type MudarabaAgreementModel,
 } from '@/lib/agreements/mudaraba';
 import { legalPartyFromProfile, legalPartyMissingFields } from '@/lib/legal-party';
+import { defaultPlatformBankAccount } from '@/lib/platform-bank-accounts';
 
 const requestSchema = z.object({ authToken: z.string().min(1) });
 const agreementRequestSchema = requestSchema.extend({ batchId: z.string().min(1) });
@@ -51,7 +52,7 @@ async function createAgreementModel(
   if (!userSnapshot.exists) throw new Error('Investor profile not found.');
 
   const profile = userSnapshot.data() || {};
-  const companyBank = bankSnapshot.data() || {};
+  const companyBank = defaultPlatformBankAccount(bankSnapshot.data());
   const request = requestSnapshot?.data() || {};
   const agreementDate = toDate(batch.agreementDate || batch.paymentDate || request.paymentDate || batch.createdAt);
   const paymentDate = toDate(batch.paymentDate || request.paymentDate || batch.createdAt, agreementDate);
@@ -67,9 +68,9 @@ async function createAgreementModel(
     bankName: String(profile.bankName || ''),
   };
   const receivingAccount = {
-    accountName: String(companyBank.accountName || ''),
-    accountNumber: String(companyBank.accountNumber || ''),
-    bankName: String(companyBank.bankName || ''),
+    accountName: String(companyBank?.accountName || ''),
+    accountNumber: String(companyBank?.accountNumber || ''),
+    bankName: String(companyBank?.bankName || ''),
   };
 
   const investor = legalPartyFromProfile(profile);

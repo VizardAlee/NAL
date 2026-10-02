@@ -10,6 +10,7 @@ import { CompanyLogoProvider } from '@/components/company-logo-provider';
 import { NotificationProvider } from '@/components/notification-provider';
 import { PwaRegistration } from '@/components/pwa-registration';
 import { LanguageProvider } from '@/components/language-provider';
+import { OnboardingTourProvider } from '@/components/onboarding-tour';
 
 
 export default function RootLayout({
@@ -51,7 +52,7 @@ export default function RootLayout({
             <LanguageProvider>
               <CompanyLogoProvider>
                 <NotificationProvider>
-                  {children}
+                  <OnboardingTourProvider>{children}</OnboardingTourProvider>
                 </NotificationProvider>
               </CompanyLogoProvider>
             </LanguageProvider>

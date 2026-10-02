@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { platformBankAccounts, platformBankAccountsSchema, defaultPlatformBankAccount } from '../src/lib/platform-bank-accounts';
+const first = {id:'a',bankName:'Bank A',accountName:'NAL Limited',accountNumber:'0123456789',active:true};
+const second = {...first,id:'b',bankName:'Bank B',accountNumber:'9876543210'};
+test('legacy single bank settings remain usable',()=>{assert.deepEqual(platformBankAccounts(first),[{...first,id:'legacy'}]);});
+test('multiple accounts preserve default and exclude inactive choices',()=>{const settings={accounts:[{...first,active:false},second],defaultAccountId:'b'};assert.deepEqual(platformBankAccounts(settings),[second]);assert.equal(platformBankAccounts(settings,true).length,2);assert.equal(defaultPlatformBankAccount(settings)?.id,'b');});
+test('invalid default, duplicate numbers and identifiers are rejected',()=>{for(const input of [{accounts:[first],defaultAccountId:'missing'},{accounts:[first,{...first,id:'b'}],defaultAccountId:'a'},{accounts:[first,{...second,id:'a'}],defaultAccountId:'a'},{accounts:[{...first,active:false}],defaultAccountId:'a'}])assert.equal(platformBankAccountsSchema.safeParse(input).success,false);});
+test('account numbers retain leading zeros and must be ten digits',()=>{assert.equal(platformBankAccountsSchema.parse({accounts:[first,second],defaultAccountId:'a'}).accounts[0].accountNumber,'0123456789');assert.equal(platformBankAccountsSchema.safeParse({accounts:[{...first,accountNumber:'12345678900'}],defaultAccountId:'a'}).success,false);});
+test('an explicitly empty new list never resurrects an old account',()=>{assert.deepEqual(platformBankAccounts({...first,accounts:[]}),[]);});

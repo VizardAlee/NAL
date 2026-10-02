@@ -390,8 +390,10 @@ service cloud.firestore {
         // Branding remains public, but owner withdrawal calendars are private financial settings.
         allow read: if settingId != 'ownerWithdrawalWindow' || canAdminRead();
         // Only admins can change settings.
-        allow write: if isAdmin();
+        allow write: if isAdmin() && settingId != 'bankDetails';
     }
+    // Bank-account changes must pass server validation and create an audit entry.
+    match /platformBankAccountAudit/{id} { allow read, write: if false; }
 
     // Agreement envelopes, signatures, invitation secrets and audit events are
     // accessible only through verified server actions using the Admin SDK.

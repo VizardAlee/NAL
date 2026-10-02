@@ -24,6 +24,12 @@ test('reference-bearing bank rows deduplicate across changed narration and posti
 test('an exact reference, amount, account and successful transfer suggest a strong match',()=>{
   assert.deepEqual(suggestReceiptMatches(receipt,'REPAYMENT',[bank]),[{id:'bank-1',strong:true}]);
 });
+test('receipts for multiple NAL accounts stay matched to their own statement',()=>{
+  const alternate = {...bank,id:'second-bank',accountNumber:'0123456789'};
+  assert.deepEqual(suggestReceiptMatches({...receipt,accountNumber:alternate.accountNumber},'REPAYMENT',[bank,alternate]),[{id:'second-bank',strong:true}]);
+  assert.throws(()=>assertBankAllocation({...receipt,accountNumber:alternate.accountNumber},'REPAYMENT',bank),/Bank account/);
+  assert.doesNotThrow(()=>assertBankAllocation({...receipt,accountNumber:alternate.accountNumber},'REPAYMENT',alternate));
+});
 test('no reference is never a strong candidate; duplicate candidates remain explicit',()=>{
   assert.deepEqual(suggestReceiptMatches({...receipt,reference:''},'REPAYMENT',[bank]),[{id:'bank-1',strong:false}]);
   assert.equal(suggestReceiptMatches(receipt,'REPAYMENT',[bank,{...bank,id:'bank-2'}]).length,2);

@@ -13,10 +13,13 @@ exports.runDailyAutomation = (0, scheduler_1.onSchedule)({
     maxRetrySeconds: 900,
     timeoutSeconds: 540,
 }, async () => {
+    const secret = cronSecret.value().trim();
+    if (!secret || /\s/.test(secret))
+        throw new Error('Daily automation secret is missing or malformed. Check Secret Manager and redeploy.');
     const response = await fetch("https://nalgm.com/api/cron", {
         method: "POST",
         headers: {
-            Authorization: `Bearer ${cronSecret.value()}`,
+            Authorization: `Bearer ${secret}`,
             "User-Agent": "NAL-Daily-Automation/1.0",
         },
     });

@@ -1,6 +1,7 @@
 
 
 import { PageHeader } from "@/components/page-header";
+import { UserGuideSettingsCard } from '@/components/onboarding-tour';
 import { Settings } from "lucide-react";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
@@ -18,6 +19,7 @@ export default function SettingsPage() {
         />
         <div className="space-y-6">
             <LanguageSettingsCard />
+            <UserGuideSettingsCard />
             <UpdateProfileForm />
             <NotificationSettingsCard />
             <Card>

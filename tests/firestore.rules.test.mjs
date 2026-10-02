@@ -117,6 +117,15 @@ test('owner withdrawal windows are private while ordinary platform settings rema
   await assertSucceeds(getDoc(doc(ownerDb, 'platformSettings', 'ownerWithdrawalWindow')));
 });
 
+test('NAL bank accounts cannot bypass server validation or audit even as admin', async () => {
+  const adminDb = env.authenticatedContext('admin').firestore();
+  const clientDb = env.authenticatedContext('client').firestore();
+  await assertFails(setDoc(doc(adminDb, 'platformSettings', 'bankDetails'), { accountNumber: 'bad' }));
+  await assertFails(setDoc(doc(clientDb, 'platformSettings', 'bankDetails'), { accountNumber: '0123456789' }));
+  await assertFails(setDoc(doc(adminDb, 'platformBankAccountAudit', 'forged'), { actorId:'admin' }));
+  await assertFails(getDoc(doc(adminDb, 'platformBankAccountAudit', 'private')));
+});
+
 test('users may save only their own Firebase Storage profile photograph', async () => {
   const db = env.authenticatedContext('client').firestore();
   const validUrl = 'https://firebasestorage.googleapis.com/v0/b/studio-1298078893-e7941.firebasestorage.app/o/users%2Fclient%2Fprofile%2Fphoto.jpg?alt=media';

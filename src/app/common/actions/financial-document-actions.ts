@@ -10,6 +10,7 @@ import { prepareReceiptPosting } from '@/lib/server/receipt-posting';
 import { processDepositRequestAction, processRepaymentRequestAction } from '@/app/admin/approvals/actions';
 import { approveManagementFeeAction } from '@/app/admin/deals/actions';
 import { notifyAdmins, notifyUser } from '@/lib/server/notification-service';
+import { platformBankAccounts } from '@/lib/platform-bank-accounts';
 
 async function safely<T>(work: () => Promise<T>) {
   try { return { success: true as const, data: await work() }; }
@@ -28,12 +29,13 @@ export async function listFinancialDocumentsAction(token: string, bankDate?: str
     const bankEnd = bankDate ? new Date(Date.parse(bankDate)+3*86400000).toISOString().slice(0,10) : '';
     const bankQuery = bankDate ? adminDb.collection('bankEntries').where('date','>=',bankStart).where('date','<=',bankEnd).orderBy('date','desc').limit(400) : adminDb.collection('bankEntries').orderBy('date','desc').limit(400);
     const receiptQueries = actor.admin ? [adminDb.collection('paymentReceipts').orderBy('uploadedAt', 'desc').limit(100)] : [adminDb.collection('paymentReceipts').where('uploadedBy','==',actor.uid).limit(100), adminDb.collection('paymentReceipts').where('customerId','==',actor.uid).limit(100)];
-    const [receiptResults, deals, users, statements, entries] = await Promise.all([
+    const [receiptResults, deals, users, statements, entries, receivingAccounts] = await Promise.all([
       Promise.all(receiptQueries.map(query => query.get())),
       (actor.admin ? adminDb.collection('deals') : adminDb.collection('deals').where('clientId','==',actor.uid)).get(),
       actor.admin ? adminDb.collection('users').select('name','role','personas').get() : adminDb.collection('users').where('__name__','==',actor.uid).get(),
       actor.admin ? adminDb.collection('bankStatements').orderBy('uploadedAt','desc').limit(20).get() : null,
       actor.admin ? bankQuery.get() : null,
+      adminDb.doc('platformSettings/bankDetails').get(),
     ]);
     const bankRows = entries?.docs.map(doc => ({ id: doc.id, ...doc.data() } as BankRow)) || [];
     const receipts = [...new Map(receiptResults.flatMap(result => result.docs).map(doc => [doc.id, doc])).values()]
@@ -45,7 +47,7 @@ export async function listFinancialDocumentsAction(token: string, bankDate?: str
         const covered = statements?.docs.some(statement => statement.data().status === 'REVIEWED' && fields.success && fields.data.paymentDate >= statement.data().periodStart && fields.data.paymentDate <= statement.data().periodEnd && (!fields.data.accountNumber || fields.data.accountNumber === statement.data().accountNumber));
         return { ...plain(doc), matches, reconciliationState: matches.length ? 'MATCH_CANDIDATES' : covered ? 'UNMATCHED' : 'AWAITING_STATEMENT', reversalWarning: bankRows.some(row => row.id === data.bankEntryId && row.reversed) };
       });
-    return { admin: actor.admin, uid: actor.uid, receipts, statements: statements?.docs.map(plain) || [], bankRows,
+    return { admin: actor.admin, uid: actor.uid, receipts, statements: statements?.docs.map(plain) || [], bankRows, receivingAccounts: platformBankAccounts(receivingAccounts.data()),
       deals: deals.docs.map(doc => ({ id: doc.id, name: doc.data().dealName, clientId: doc.data().clientId, status: doc.data().status })),
       users: users.docs.map(doc => ({ id: doc.id, name: doc.data().name || doc.id })), aiEnabled: process.env.FINANCIAL_DOCUMENT_AI_ENABLED === 'true' };
   });

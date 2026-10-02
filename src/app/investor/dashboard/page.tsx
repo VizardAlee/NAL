@@ -1,11 +1,12 @@
 
 'use client';
+import { PlatformBankDetailsCard } from '@/components/platform-bank-details-card';
 
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle, MessageSquare, Copy, Gavel, FileSignature } from "lucide-react";
+import { TrendingUp, Landmark, History, FileText, Download, Wallet, RefreshCcw, Loader2, Banknote, ArrowRight, PlusCircle, MessageSquare, Gavel, FileSignature } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useCollection, useDoc } from '@/firebase';
 import { collection, query, where, DocumentData, Timestamp, orderBy, limit, doc } from 'firebase/firestore';
@@ -137,69 +138,7 @@ function ReinvestButton({ balance, user }: { balance: number, user: User }) {
     );
 }
 
-function BankDetailsCard() {
-    const firestore = useFirestore();
-    const { toast } = useToast();
-
-    const bankDetailsRef = useMemo(() => firestore ? doc(firestore, 'platformSettings', 'bankDetails') : null, [firestore]);
-    const { data: bankDetails, loading } = useDoc(bankDetailsRef);
-
-    const handleCopy = (text: string, field: string) => {
-        navigator.clipboard.writeText(text);
-        toast({ title: 'Copied!', description: `${field} copied to clipboard.` });
-    };
-
-    if (loading) {
-        return (
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Landmark /> Bank Details</CardTitle>
-                    <CardDescription>For making deposits and manual repayments.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                    <Skeleton className="h-6 w-3/4" />
-                    <Skeleton className="h-6 w-1/2" />
-                    <Skeleton className="h-6 w-2/3" />
-                </CardContent>
-            </Card>
-        );
-    }
-
-    if (!bankDetails) return null;
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Landmark /> Bank Details</CardTitle>
-                <CardDescription>For making deposits and manual repayments.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-                <div className="flex justify-between items-center">
-                    <div>
-                        <p className="text-muted-foreground">Bank Name</p>
-                        <p className="font-medium">{bankDetails.bankName}</p>
-                    </div>
-                </div>
-                <div className="flex justify-between items-center">
-                    <div>
-                        <p className="text-muted-foreground">Account Name</p>
-                        <p className="font-medium">{bankDetails.accountName}</p>
-                    </div>
-                </div>
-                <div className="flex justify-between items-center">
-                    <div>
-                        <p className="text-muted-foreground">Account Number</p>
-                        <p className="font-medium">{bankDetails.accountNumber}</p>
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={() => handleCopy(bankDetails.accountNumber, 'Account Number')}>
-                        <Copy className="h-4 w-4" />
-                    </Button>
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
-
+const BankDetailsCard = PlatformBankDetailsCard;
 function ContactAdminSheet() {
     const auth = useAuth();
     const router = useRouter();

@@ -5,6 +5,7 @@ import { generateAmortizationSchedule } from '@/lib/amortization';
 import type { Deal } from '@/lib/types';
 import { buildRepaymentProgressNotice, lagosDateKey, normalizeWhatsAppPhone, repaymentProgress } from '@/lib/repayment-progress-notice';
 import { hasPersona } from '@/lib/access-control';
+import { defaultPlatformBankAccount } from '@/lib/platform-bank-accounts';
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
 export const whatsappConsentSchema = z.object({ clientId: id, optedIn: z.boolean(), phone: z.string().max(30).optional(), evidence: z.string().trim().min(10).max(1000) }).strict();
@@ -30,7 +31,7 @@ export async function previewWhatsAppReminder(db: Firestore, clientId: string, n
     db.doc('platformSettings/bankDetails').get(), db.collection('whatsappDeliveryState').doc(clientId).get(),
   ]);
   if (!user.exists || !hasPersona(user.data(), 'CLIENT')) throw new Error('Client not found.');
-  const account = bank.data();
+  const account = defaultPlatformBankAccount(bank.data());
   if (!account?.accountName || !account?.bankName || !/^\d{10}$/.test(account?.accountNumber || '')) throw new Error('Set and verify NAL receiving-bank details in admin settings before preparing notices.');
   const active = deals.docs.filter(doc => doc.data().status === 'Active').sort((a, b) => a.id.localeCompare(b.id));
   const progress = [];

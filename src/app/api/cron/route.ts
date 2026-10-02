@@ -12,8 +12,7 @@ import { calculateZakatAmount, isZakatDue } from '@/lib/zakat';
 import { calculateInstallmentOutstanding, deriveAutomatedRecoveryStatus, isClosedRecoveryStatus, recoveryStatusLabel, recoveryTaskId } from '@/lib/recovery';
 import { isRepaymentReminderDue, repaymentReminderText } from '@/lib/repayment-reminders';
 import { prepareWhatsAppReminders } from '@/lib/server/whatsapp-reminder-outbox';
-
-const CRON_SECRET = process.env.CRON_SECRET;
+import { isAutomationAuthorized, normalizeAutomationSecret } from '@/lib/server/automation-auth';
 
 // Helper function to get the Nisab value
 async function getNisab(): Promise<number> {
@@ -442,8 +441,11 @@ async function processMarketerRatings() {
 // --- Main Cron Job Handler ---
 async function handleCron(request: NextRequest) {
     const authHeader = request.headers.get('authorization');
-    if (!CRON_SECRET || authHeader !== `Bearer ${CRON_SECRET}`) {
-        return new Response('Unauthorized', { status: 401 });
+    let secret: string;
+    try { secret = normalizeAutomationSecret(process.env.CRON_SECRET); }
+    catch { return NextResponse.json({ success: false, message: 'Daily automation credentials are not configured correctly. Contact an administrator to check the automation secret and redeploy.' }, { status: 503 }); }
+    if (!isAutomationAuthorized(authHeader, secret)) {
+        return NextResponse.json({ success: false, message: 'Daily automation authentication was rejected. No tasks were started.' }, { status: 401 });
     }
 
     const runRef = adminDb.collection('automationRuns').doc();

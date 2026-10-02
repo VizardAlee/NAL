@@ -1,8 +1,10 @@
 
 'use client';
+import { PlatformBankAccountsForm } from '@/components/admin/platform-bank-accounts-form';
 
 import { PageHeader } from "@/components/page-header";
-import { Settings, Image as ImageIcon, Loader2, HandCoins, Landmark, Bell } from "lucide-react";
+import { UserGuideSettingsCard } from '@/components/onboarding-tour';
+import { Settings, Image as ImageIcon, Loader2, HandCoins, Bell } from "lucide-react";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,7 +20,6 @@ import { setNisabAction } from "./actions";
 import { setLogoAction } from "./logo-actions";
 import { useCompanyLogo } from "@/components/company-logo-provider";
 import { UpdateProfileForm } from "@/components/update-profile-form";
-import { setBankDetailsAction } from './bank-details-actions';
 import { useNotification } from "@/components/notification-provider";
 import { setOwnerWithdrawalWindowAction } from './actions';
 import { PlusCircle, Trash2, CalendarRange } from 'lucide-react';
@@ -83,61 +84,7 @@ function NisabForm({ currentNisab, isLoading }: { currentNisab: number, isLoadin
     );
 }
 
-function BankDetailsForm({ currentDetails, isLoading }: { currentDetails: any, isLoading: boolean }) {
-    const authToken = useIdToken();
-    const { toast } = useToast();
-    const [state, formAction, isPending] = useActionState(setBankDetailsAction, { success: false, message: '' });
-
-    useEffect(() => {
-        if (state.message) {
-            toast({
-                title: state.success ? "Success" : "Error",
-                description: state.message,
-                variant: state.success ? "default" : "destructive",
-            });
-        }
-    }, [state, toast]);
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Platform Bank Details</CardTitle>
-                <CardDescription>Set the bank details for user deposits. This will be visible on user dashboards.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                {isLoading ? (
-                    <div className="space-y-4 max-w-md">
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-10 w-24" />
-                    </div>
-                ) : (
-                    <form action={formAction} className="space-y-4 max-w-md">
-                        <input type="hidden" name="authToken" value={authToken} />
-                        <div>
-                            <label htmlFor="bankName" className="block text-sm font-medium text-muted-foreground mb-1">Bank Name</label>
-                            <Input id="bankName" name="bankName" defaultValue={currentDetails?.bankName} placeholder="e.g., Guaranty Trust Bank" />
-                        </div>
-                        <div>
-                            <label htmlFor="accountName" className="block text-sm font-medium text-muted-foreground mb-1">Account Name</label>
-                            <Input id="accountName" name="accountName" defaultValue={currentDetails?.accountName} placeholder="e.g., NAL General Marchant" />
-                        </div>
-                        <div>
-                            <label htmlFor="accountNumber" className="block text-sm font-medium text-muted-foreground mb-1">Account Number</label>
-                            <Input id="accountNumber" name="accountNumber" defaultValue={currentDetails?.accountNumber} placeholder="0123456789" />
-                        </div>
-                        <Button type="submit" disabled={isPending}>
-                            {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Landmark className="mr-2 h-4 w-4" />}
-                            Save Bank Details
-                        </Button>
-                    </form>
-                )}
-            </CardContent>
-        </Card>
-    );
-}
-
-
+const BankDetailsForm = PlatformBankAccountsForm;
 function CompanyLogoForm() {
     const authToken = useIdToken();
     const { logoUrl, loading } = useCompanyLogo();
@@ -390,7 +337,8 @@ export default function SettingsPage() {
                 icon={Settings}
             />
             <div className="space-y-6">
-                <LanguageSettingsCard />
+            <LanguageSettingsCard />
+            <UserGuideSettingsCard />
                 <UpdateProfileForm />
                 <NotificationSettingsCard />
                 <CompanyLogoForm />

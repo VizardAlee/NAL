@@ -464,3 +464,14 @@ td,
     box-shadow: 0 20px 70px hsla(var(--accent) / 0.28);
   }
 }
+@keyframes nal-guide-trace {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+.nal-guide-signature {
+  stroke-dasharray: 1;
+  animation: nal-guide-trace 3s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nal-guide-signature { animation: none; stroke-dashoffset: 0; }
+}
