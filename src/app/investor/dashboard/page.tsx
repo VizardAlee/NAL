@@ -35,6 +35,7 @@ import { generateAmortizationSchedule } from "@/lib/amortization";
 import { getRequiredIdToken } from '@/firebase/auth-token';
 import { durationToDays } from '@/lib/deal-duration';
 import { isProfitDistributionLocked, lockedUntilForBatch } from '@/lib/workflow-eligibility';
+import { historicalOutflowAmount } from '@/lib/financial-integrity';
 
 
 type Transaction = DocumentData & {
@@ -424,8 +425,8 @@ export default function InvestorDashboard() {
 
         // --- WITHDRAWABLE BALANCE CALCULATION ---
         const totalWithdrawnShortTerm = (allTransactions || [])
-            .filter(tx => tx.type === 'Withdrawal' && (tx.metadata?.source === 'ShortTermProfit' || tx.amount < 0))
-            .reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0);
+            .filter(tx => tx.type === 'Withdrawal' && (tx.metadata?.source === 'ShortTermProfit' || tx.amount < 0 || tx.historicalCorrection))
+            .reduce((sum, tx) => sum + historicalOutflowAmount(tx), 0);
 
         return {
             lockedProfits: totalLockedProfit,
@@ -450,7 +451,7 @@ export default function InvestorDashboard() {
 
         const totalWithdrawn = allTransactions
             .filter(tx => tx.type === 'Withdrawal' || tx.type === 'Zakat')
-            .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+            .reduce((sum, tx) => sum + historicalOutflowAmount(tx), 0);
 
         const portfolioValue = (totalCapital + totalProfit) - totalWithdrawn;
         const simpleROI = totalCapital > 0 ? (totalProfit / totalCapital) * 100 : 0;
@@ -494,7 +495,7 @@ export default function InvestorDashboard() {
                 .filter((tx) => tx.createdAt.toDate() <= weekEnd)
                 .reduce((value, tx) => {
                     if (tx.type === 'Deposit') return value + tx.amount;
-                    if (tx.type === 'Withdrawal' || tx.type === 'Zakat') return value - Math.abs(tx.amount);
+                    if (tx.type === 'Withdrawal' || tx.type === 'Zakat') return value - historicalOutflowAmount(tx);
                     if (tx.type === 'ProfitDistribution') return value + tx.amount;
                     return value;
                 }, 0);

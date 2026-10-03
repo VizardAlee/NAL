@@ -1,6 +1,7 @@
 
 
 'use client';
+import { historicalOutflowAmount } from '@/lib/financial-integrity';
 
 import { useMemo, useState, useTransition, useEffect } from 'react';
 import { notFound, useParams, useRouter } from 'next/navigation';
@@ -311,8 +312,8 @@ export default function UserDetailPage() {
         if (!transactions) return { portfolioValue: 0, investibleBalance: 0 };
         const totalCapital = transactions.filter(tx => tx.type === 'Deposit').reduce((sum, tx) => sum + tx.amount, 0);
         const totalProfit = transactions.filter(tx => tx.type === 'ProfitDistribution').reduce((sum, tx) => sum + tx.amount, 0);
-        const totalWithdrawn = transactions.filter(tx => tx.type === 'Withdrawal').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-        const totalZakat = transactions.filter(tx => tx.type === 'Zakat').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+        const totalWithdrawn = transactions.filter(tx => tx.type === 'Withdrawal').reduce((sum, tx) => sum + historicalOutflowAmount(tx), 0);
+        const totalZakat = transactions.filter(tx => tx.type === 'Zakat').reduce((sum, tx) => sum + historicalOutflowAmount(tx), 0);
         const portfolioValue = (totalCapital + totalProfit) - (totalWithdrawn + totalZakat);
         const investibleBalance = fundBatches?.reduce((sum, batch) => sum + batch.remainingAmount, 0) || 0;
         return { portfolioValue, investibleBalance, totalCapital };

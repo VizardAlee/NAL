@@ -1,4 +1,6 @@
 export type LedgerEntry = {
+  historicalCorrection?: boolean;
+  reversesPath?: string;
   type?: string;
   amount?: number;
   fundBatchId?: string;
@@ -80,7 +82,7 @@ export function calculateFundBatchAnniversaryWindow(input: {
             entry.fundBatchId === batch.id &&
             Boolean(createdAt && createdAt >= profitPeriodStartsAt && createdAt < opensAt);
         })
-        .reduce((sum, entry) => sum + Math.max(0, Number(entry.amount || 0)), 0);
+        .reduce((sum, entry) => sum + (entry.historicalCorrection && entry.reversesPath ? Number(entry.amount || 0) : Math.max(0, Number(entry.amount || 0))), 0);
 
       return [{
         id: `${batch.id}:year-${year}`,
@@ -190,7 +192,7 @@ export function calculateInvestorPortfolioValue(entries: LedgerEntry[]): number 
   return toCents(entries.reduce((total, entry) => {
     const amount = Number(entry.amount || 0);
     if (entry.type === 'Deposit' || entry.type === 'ProfitDistribution') return total + amount;
-    if (entry.type === 'Withdrawal' || entry.type === 'Zakat') return total - Math.abs(amount);
+    if (entry.type === 'Withdrawal' || entry.type === 'Zakat') return total - historicalOutflowAmount(entry);
     return total;
   }, 0));
 }
@@ -198,7 +200,7 @@ export function calculateInvestorPortfolioValue(entries: LedgerEntry[]): number 
 export function calculateAvailableProfit(entries: LedgerEntry[], reserved = 0): number {
   const earned = entries
     .filter((entry) => entry.type === 'ProfitDistribution')
-    .reduce((sum, entry) => sum + Math.max(0, Number(entry.amount || 0)), 0);
+    .reduce((sum, entry) => sum + (entry.historicalCorrection && entry.reversesPath ? Number(entry.amount || 0) : Math.max(0, Number(entry.amount || 0))), 0);
   const consumed = entries
     .filter((entry) =>
       entry.type === 'Withdrawal' &&
@@ -208,6 +210,11 @@ export function calculateAvailableProfit(entries: LedgerEntry[], reserved = 0): 
         !entry.metadata?.source ||
         entry.details === 'Profit Reinvestment')
     )
-    .reduce((sum, entry) => sum + Math.abs(Number(entry.amount || 0)), 0);
+    .reduce((sum, entry) => sum + historicalOutflowAmount(entry), 0);
   return Math.max(0, toCents(earned - consumed - reserved));
+}
+
+export function historicalOutflowAmount(entry: {amount?: number; historicalCorrection?: boolean; reversesPath?: string}): number {
+  const amount = Math.abs(Number(entry.amount || 0));
+  return entry.historicalCorrection && entry.reversesPath ? -amount : amount;
 }

@@ -27,6 +27,8 @@ type ReportUser = {
 };
 
 type ReportTransaction = {
+  historicalCorrection?: boolean;
+  reversesPath?: string;
   id: string;
   type: string;
   amount: number;
@@ -79,8 +81,10 @@ export function UserFinancialReport({
   investibleBalance: number;
 }) {
   const approvedRepayments = repayments.filter((repayment) => repayment.status === 'Approved');
-  const totalInflows = transactions.filter((entry) => entry.amount > 0).reduce((sum, entry) => sum + entry.amount, 0);
-  const totalOutflows = transactions.filter((entry) => entry.amount < 0).reduce((sum, entry) => sum + Math.abs(entry.amount), 0);
+  const reversedIds = new Set(transactions.filter(entry => entry.historicalCorrection && entry.reversesPath).map(entry => entry.reversesPath!.split('/').at(-1)));
+  const effectiveTransactions = transactions.filter(entry => !reversedIds.has(entry.id) && !(entry.historicalCorrection && entry.reversesPath));
+  const totalInflows = effectiveTransactions.filter((entry) => entry.amount > 0).reduce((sum, entry) => sum + entry.amount, 0);
+  const totalOutflows = effectiveTransactions.filter((entry) => entry.amount < 0).reduce((sum, entry) => sum + Math.abs(entry.amount), 0);
   const totalPrincipal = deals.reduce((sum, deal) => sum + deal.principal, 0);
   const totalRepaid = approvedRepayments.reduce((sum, repayment) => sum + repayment.amount, 0);
   const dealRows = deals.map((deal) => {

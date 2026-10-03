@@ -1,6 +1,7 @@
 
 
 'use client';
+import { historicalOutflowAmount } from '@/lib/financial-integrity';
 
 import { PageHeader } from "@/components/page-header";
 import { Library, AlertTriangle, Loader2, CalendarIcon } from "lucide-react";
@@ -247,7 +248,7 @@ export default function ReportsPage() {
         // Corrected Retained Earnings: only includes income/expenses from the administrative account.
         // PlatformEarning from deals is already reflected in the platform's fund batches.
         const retainedEarnings = adminTransactionsUpToDate.filter(t => t.type === 'ManagementFee' || t.type === 'AssetSale').reduce((sum, tx) => sum + tx.amount, 0)
-            - adminTransactionsUpToDate.filter(t => t.type === 'Expense' || t.type === 'AssetAcquisition').reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+            - adminTransactionsUpToDate.filter(t => t.type === 'Expense' || t.type === 'AssetAcquisition').reduce((sum, tx) => sum + historicalOutflowAmount(tx), 0);
 
 
         const totalLiabilitiesAndEquity = investorUninvestedCapital + principalPayableToInvestors + markupPayableToInvestors
@@ -267,14 +268,14 @@ export default function ReportsPage() {
         const soldAssetsInPeriod = allAssets.filter(a => a.status === 'Sold' && filterByDateRange(a));
         const gainOnAssetSale = soldAssetsInPeriod.reduce((acc, asset) => acc + ((asset.salePrice || 0) - asset.acquisitionCost), 0);
         const totalRevenue = financingRevenue + managementFeeRevenue + gainOnAssetSale;
-        const totalExpenses = adminTransactionsInPeriod.filter(t => t.type === 'Expense').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+        const totalExpenses = adminTransactionsInPeriod.filter(t => t.type === 'Expense').reduce((acc, tx) => acc + historicalOutflowAmount(tx), 0);
         const netIncome = totalRevenue - totalExpenses;
 
         // --- CASH FLOW (FLOW) ---
         const netCashFromOperations = netIncome;
         const cashFromInvesting = adminTransactionsInPeriod.filter(tx => tx.type === 'AssetSale').reduce((acc, tx) => acc + tx.amount, 0)
-            - adminTransactionsInPeriod.filter(tx => tx.type === 'AssetAcquisition').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
-            - transactionsInPeriod.filter(tx => tx.type === 'Investment').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+            - adminTransactionsInPeriod.filter(tx => tx.type === 'AssetAcquisition').reduce((acc, tx) => acc + historicalOutflowAmount(tx), 0)
+            - transactionsInPeriod.filter(tx => tx.type === 'Investment').reduce((acc, tx) => acc + historicalOutflowAmount(tx), 0);
         const externalDeposits = transactionsInPeriod
             .filter((tx) => {
                 if (tx.type !== 'Deposit') return false;
@@ -286,10 +287,10 @@ export default function ReportsPage() {
             .reduce((acc, tx) => acc + tx.amount, 0);
 
         const cashFromFinancing = externalDeposits
-            + transactionsInPeriod.filter(t => t.type === 'Repayment' && t.status === 'Approved').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
-            - transactionsInPeriod.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
+            + transactionsInPeriod.filter(t => t.type === 'Repayment' && t.status === 'Approved').reduce((acc, tx) => acc + historicalOutflowAmount(tx), 0)
+            - transactionsInPeriod.filter(t => t.type === 'Withdrawal').reduce((acc, tx) => acc + historicalOutflowAmount(tx), 0)
             + adminTransactionsInPeriod.filter(tx => tx.type === 'AdminDeposit' || tx.type === 'TransferFromInvestible').reduce((acc, tx) => acc + tx.amount, 0)
-            - adminTransactionsInPeriod.filter(tx => tx.type === 'TransferToInvestible').reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+            - adminTransactionsInPeriod.filter(tx => tx.type === 'TransferToInvestible').reduce((acc, tx) => acc + historicalOutflowAmount(tx), 0);
         const netCashFlow = netCashFromOperations + cashFromInvesting + cashFromFinancing;
 
         return {

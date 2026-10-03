@@ -416,6 +416,7 @@ service cloud.firestore {
     match /historicalImportDocumentHashes/{hashId} {
       allow read, write: if false;
     }
+    match /historicalTransactionReferences/{referenceId} { allow read, write: if false; }
     // Financial source documents and reconciliation are server-only. Customers
     // receive only their own receipts through authenticated actions/API routes.
     match /paymentReceipts/{id} { allow read, write: if false; }

@@ -15,6 +15,8 @@ import {
 } from '@/lib/historical-import';
 import { generateAmortizationSchedule } from '@/lib/amortization';
 import { planRepaymentAllocations } from '@/lib/repayment-allocation';
+import { historicalTimeline, historicalFundTimeline } from '@/lib/historical-timeline';
+import { commitHistoricalWrites, assertHistoricalCorrectionApproval, type HistoricalWrite } from '@/lib/server/historical-corrections';
 import { assertFinancialAiEnabled, financialAiEnabled } from '@/lib/server/financial-ai-policy';
 import { HistoricalWorkspaceError, historicalWorkspaceResult } from '@/lib/server/historical-workspace-result';
 import { historicalExtractionSchema as extractionSchema, historicalExtractionOutput, historicalExtractionForStorage } from '@/lib/server/historical-extraction-schema';
@@ -38,10 +40,6 @@ const MAX_BATCH_WRITES = 450;
 
 function normalizedIdentity(value: unknown) {
   return String(value || '').trim().toLocaleLowerCase('en-NG').replace(/\s+/g, ' ');
-}
-
-function historicalDocumentId(...parts: Array<string | number>) {
-  return `hist_${createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 32)}`;
 }
 
 function plainTimestamp(value: unknown) {
@@ -121,6 +119,23 @@ export async function getHistoricalImportAction(authToken: string, importId: str
   const snapshot = await adminDb.collection('historicalImports').doc(importId).get();
   if (!snapshot.exists) return { success: false as const, message: 'Import case not found.' };
   return { success: true as const, importCase: serializeCase(snapshot) };
+}
+
+export async function requestHistoricalCorrectionAction(input: {authToken:string; importId:string; reason:string; evidence:string}) {
+  return historicalWorkspaceResult(async () => {
+  const actor = await verifyAdminWrite(input.authToken);
+  await assertImportEnabled();
+  if (input.reason.trim().length < 10 || input.evidence.trim().length < 10) throw new HistoricalWorkspaceError('CORRECTION_EVIDENCE_REQUIRED','Explain the correction and identify the supporting documents (at least 10 characters each).');
+  const sourceRef = adminDb.collection('historicalImports').doc(input.importId);
+  const ref = adminDb.collection('historicalImports').doc();
+  await adminDb.runTransaction(async transaction => {
+    const source = await transaction.get(sourceRef);
+    const data = source.data() || {};
+    if (data.status !== 'POSTED' || data.supersededBy) throw new HistoricalWorkspaceError('CORRECTION_SOURCE_CHANGED','Open the latest posted revision to request a correction.');
+    transaction.create(ref, { ...data, status:'DRAFT', partyMode:'EXISTING', existingUserId:data.postedPartyId, correctionSourceId:input.importId, correctionRootId:data.correctionRootId || input.importId, correctionRequestedBy:actor.uid, correctionReason:input.reason.trim(), correctionEvidence:input.evidence.trim(), postedAt:null, postedBy:null, supersededBy:null, postingStartedBy:null, postedPartyId:null, reconciliationIssues:[], createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp() });
+  });
+  return {success:true as const,importId:ref.id};
+  });
 }
 
 export async function registerHistoricalDocumentAction(input: { authToken: string; importId: string; storagePath: string; originalName: string; contentType: string; size: number }) {
@@ -210,7 +225,7 @@ export async function analyzeHistoricalImportAction(authToken: string, importId:
     }
     const selfId = data.existingUserId || 'SELF';
     prepareHistoricalAiExtraction(extraction, data.partyKind, selfId, profileName);
-    const issues = reconcileHistoricalExtraction(extraction);
+    const issues = reconcileHistoricalExtraction(extraction, plainTimestamp(data.asOfDate)?.slice(0, 10));
     await finishHistoricalExtraction(adminDb, ref, attemptId, { extraction: historicalExtractionForStorage(extraction), reconciliationIssues: issues, status: hasBlockingHistoricalIssues(issues) ? 'NEEDS_ATTENTION' : 'READY_FOR_REVIEW' });
     return { success: true as const, extraction, issues };
   } catch (error) {
@@ -224,12 +239,13 @@ export async function saveHistoricalExtractionAction(input: { authToken: string;
   const reviewer = await verifyAdminWrite(input.authToken);
   await assertImportEnabled();
   const extraction = historicalExtractionForStorage(input.extraction) as HistoricalExtraction;
-  const issues = reconcileHistoricalExtraction(extraction);
+  let issues: ReturnType<typeof reconcileHistoricalExtraction> = [];
   const ref = adminDb.collection('historicalImports').doc(input.importId);
   await adminDb.runTransaction(async transaction => {
     const snapshot = await transaction.get(ref);
     const data = snapshot.data() || {};
     if (!snapshot.exists || ['POSTED', 'POSTING'].includes(data.status) || historicalAnalysisIsRunning(data)) throw new Error('This import cannot be edited while extraction or posting is running.');
+    issues = reconcileHistoricalExtraction(extraction, plainTimestamp(data.asOfDate)?.slice(0, 10));
     transaction.update(ref, { extraction, reconciliationIssues: issues, status: hasBlockingHistoricalIssues(issues) ? 'NEEDS_ATTENTION' : 'READY_FOR_REVIEW', processingState: 'REVIEWED', processingAttemptId: '', reviewedBy: reviewer.uid, reviewedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
   });
   return { success: true as const, issues };
@@ -242,23 +258,31 @@ function rolesFor(kind: string) {
 }
 
 export async function postHistoricalImportAction(authToken: string, importId: string) {
+  return historicalWorkspaceResult(async () => {
   const actor = await verifyAdminWrite(authToken);
   await assertImportEnabled();
   const importRef = adminDb.collection('historicalImports').doc(importId);
   const importSnapshot = await importRef.get();
   if (!importSnapshot.exists) throw new Error('Import case not found.');
   const importData = importSnapshot.data() || {};
+  if (importData.correctionSourceId) assertHistoricalCorrectionApproval(importData.correctionRequestedBy,actor.uid,importData.correctionReason || '',importData.correctionEvidence || '');
+  // Operational IDs remain stable; revised ledger entries get fresh revision IDs.
+  function historicalDocumentId(caseId: string, ...parts: Array<string | number>) {
+    const operational = ['deal','investment','fund-batch'].includes(String(parts[0]));
+    const root = operational ? (importData.correctionRootId || caseId) : caseId;
+    return `hist_${createHash('sha256').update([root,...parts].join('|')).digest('hex').slice(0,32)}`;
+  }
   if (importData.status === 'POSTED') return { success: true as const, message: 'This import was already posted.', partyId: importData.postedPartyId };
   const extraction = extractionSchema.parse(importData.extraction) as HistoricalExtraction;
   const cutoff = plainTimestamp(importData.asOfDate)?.slice(0,10);
   if (extraction.deals.some(deal => deal.paymentEvidence?.some(payment => !cutoff || payment.date > cutoff))) throw new Error('Opening payment evidence cannot be dated after the financial snapshot date. Submit later receipts through bank reconciliation.');
   if (extraction.fundPositions.some(position => position.investmentTerms && (!cutoff || position.investmentTerms.paymentDate > cutoff))) throw new Error('An opening investment contribution cannot be dated after the snapshot date.');
-  const issues = reconcileHistoricalExtraction(extraction);
+  const issues = reconcileHistoricalExtraction(extraction, cutoff);
   if (hasBlockingHistoricalIssues(issues)) throw new Error('Resolve every red reconciliation issue before posting.');
 
   const estimatedWrites = 1 + (importData.existingUserId ? 0 : 1)
-    + extraction.deals.reduce((count, deal) => count + 1 + deal.investors.length * 3 + (deal.amountPaid > 0 ? 4 : 0), 0)
-    + extraction.fundPositions.reduce((count, position) => count + (position.totalDeposited > 0 ? 1 : 0) + (position.totalWithdrawn > 0 ? 1 : 0) + (position.investmentTerms ? 1 : 0), 0)
+    + extraction.deals.reduce((count, deal) => count + 1 + deal.investors.length * 3 + (deal.amountPaid > 0 ? 2 * ((deal.paymentEvidence?.length || 0) + 1) + 1 : 0), 0)
+    + extraction.fundPositions.reduce((count, position) => count + (position.transactions?.length || 0) + 5, 0)
     + extraction.expenses.filter((expense) => expense.amount > 0).length;
   if (estimatedWrites > MAX_BATCH_WRITES) throw new Error('This case contains too many records for one safe posting. Split it into smaller import cases.');
 
@@ -296,7 +320,11 @@ export async function postHistoricalImportAction(authToken: string, importId: st
       partyId = authRecord.uid;
       createdUnclaimedAuth = true;
     }
-    const batch = adminDb.batch();
+    const writes: HistoricalWrite[] = [];
+    const batch = {
+      set(ref: FirebaseFirestore.DocumentReference, data: FirebaseFirestore.DocumentData) { writes.push({ref,data}); },
+      update(ref: FirebaseFirestore.DocumentReference, data: FirebaseFirestore.DocumentData) { writes.push({ref,data,update:true}); },
+    };
     const now = Timestamp.now();
     const roleModel = rolesFor(importData.partyKind);
     if (createdUnclaimedAuth) {
@@ -328,23 +356,35 @@ export async function postHistoricalImportAction(authToken: string, importId: st
       for (const [investorIndex, investor] of deal.investors.entries()) {
         const investorId = investor.investorId === 'SELF' ? (['INVESTOR', 'BOTH'].includes(importData.partyKind) ? partyId : undefined) : investor.investorId;
         if (!investorId) throw new Error(`Link investor ${investor.investorName} to an existing or imported investor before posting.`);
-        const positionIndexes = extraction.fundPositions.map((position, index) => ({ position, index })).filter(({ position }) => position.investorId === investor.investorId);
-        if (positionIndexes.length > 1) throw new Error('More than one investment contract belongs to this investor. Split the case so funding can be attributed to the correct original contract.');
+        const positionIndexes = extraction.fundPositions.map((position, index) => ({ position, index })).filter(({ position }) => position.investorId === investor.investorId && (!investor.fundPositionId || position.id === investor.fundPositionId));
+        if (positionIndexes.length > 1) throw new Error('Select the original investment contract for this funding allocation.');
         const sourceBatchId = positionIndexes.length === 1 ? historicalDocumentId(importId, 'fund-batch', positionIndexes[0].index) : undefined;
         const investmentRef = adminDb.collection('investments').doc(historicalDocumentId(importId, 'investment', deal.id || dealIndex, investorIndex));
         batch.set(investmentRef, { investorId, dealId: dealRef.id, amount: investor.amountInvested, ...(sourceBatchId ? { fundBatchId: sourceBatchId } : {}), createdAt: startDate, historicalImport: true, historicalImportId: importId });
         batch.set(adminDb.collection('transactions').doc(historicalDocumentId(importId, 'investment-transaction', deal.id || dealIndex, investorIndex)), { userId: investorId, dealId: dealRef.id, investmentId: investmentRef.id, type: 'Investment', amount: -investor.amountInvested, createdAt: startDate, dealName: deal.dealName, historicalImport: true, historicalImportId: importId });
         if (investor.realisedProfit > 0 && investorId !== 'platform') {
           if (!sourceBatchId) throw new Error('Include the investor fund position and original contract so historical profit retains its withdrawal restrictions.');
-          batch.set(adminDb.collection('transactions').doc(historicalDocumentId(importId, 'profit', deal.id || dealIndex, investorIndex)), { userId: investorId, dealId: dealRef.id, fundBatchId: sourceBatchId, type: 'ProfitDistribution', amount: investor.realisedProfit, createdAt: importData.asOfDate, profitEarnedAt: importData.asOfDate, dealName: deal.dealName, historicalImport: true, historicalImportId: importId });
+          const datedProfit = (positionIndexes[0].position.transactions || []).filter(entry => entry.type === 'ProfitDistribution' && entry.dealId === deal.id);
+          for (const [entryIndex, entry] of historicalTimeline(investor.realisedProfit, datedProfit, cutoff!).entries()) {
+            const date = Timestamp.fromDate(new Date(`${entry.date}T12:00:00Z`));
+            batch.set(adminDb.collection('transactions').doc(historicalDocumentId(importId, 'profit', deal.id || dealIndex, investorIndex, entryIndex)), { userId: investorId, dealId: dealRef.id, fundBatchId: sourceBatchId, type: 'ProfitDistribution', amount: entry.amount, createdAt: date, profitEarnedAt: date, dealName: deal.dealName, paymentReference: entry.reference, sourceDocumentName: entry.documentName, historicalOpeningBalance: entry.openingBalance, historicalImport: true, historicalImportId: importId });
+          }
         }
       }
       if (deal.amountPaid > 0) {
         const schedule = generateAmortizationSchedule({ id: dealRef.id, ...dealData } as any);
-        const allocations = planRepaymentAllocations({ amount: deal.amountPaid, startingInstallment: 1, schedule, approvedRepayments: [] });
-        const applied = allocations.reduce((sum, item) => ({ principal: sum.principal + item.principalApplied, profit: sum.profit + item.interestApplied }), { principal: 0, profit: 0 });
-        batch.set(adminDb.collection('repayments').doc(historicalDocumentId(importId, 'repayment', deal.id || dealIndex)), { dealId: dealRef.id, clientId, amount: deal.amountPaid, status: 'Approved', lodgedAt: importData.asOfDate, dueDate: importData.asOfDate, installmentNumber: 1, allocations, principalApplied: applied.principal, interestApplied: applied.profit, approvedAt: now, historicalImport: true, historicalImportId: importId });
-        batch.set(adminDb.collection('transactions').doc(historicalDocumentId(importId, 'repayment-transaction', deal.id || dealIndex)), { userId: clientId, dealId: dealRef.id, type: 'Repayment', amount: -deal.amountPaid, createdAt: importData.asOfDate, dealName: deal.dealName, historicalImport: true, historicalImportId: importId });
+        const approvedRepayments: any[] = [];
+        const applied = { principal: 0, profit: 0 };
+        for (const [entryIndex, entry] of historicalTimeline(deal.amountPaid, deal.paymentEvidence || [], cutoff!).entries()) {
+          const allocations = planRepaymentAllocations({ amount: entry.amount, startingInstallment: 1, schedule, approvedRepayments });
+          const components = allocations.reduce((sum, item) => ({ principal: sum.principal + item.principalApplied, profit: sum.profit + item.interestApplied }), { principal: 0, profit: 0 });
+          applied.principal += components.principal; applied.profit += components.profit;
+          const date = Timestamp.fromDate(new Date(`${entry.date}T12:00:00Z`));
+          const repayment = { dealId: dealRef.id, clientId, amount: entry.amount, status: 'Approved', lodgedAt: date, dueDate: date, installmentNumber: 1, allocations, principalApplied: components.principal, interestApplied: components.profit, approvedAt: now, paymentReference: entry.reference, sourceDocumentName: entry.documentName, historicalOpeningBalance: entry.openingBalance, historicalImport: true, historicalImportId: importId };
+          approvedRepayments.push(repayment);
+          batch.set(adminDb.collection('repayments').doc(historicalDocumentId(importId, 'repayment', deal.id || dealIndex, entryIndex)), repayment);
+          batch.set(adminDb.collection('transactions').doc(historicalDocumentId(importId, 'repayment-transaction', deal.id || dealIndex, entryIndex)), { userId: clientId, dealId: dealRef.id, type: 'Repayment', amount: -entry.amount, createdAt: date, dealName: deal.dealName, paymentReference: entry.reference, sourceDocumentName: entry.documentName, historicalOpeningBalance: entry.openingBalance, historicalImport: true, historicalImportId: importId });
+        }
         const declaredInvestorProfit = deal.investors.reduce((sum, item) => item.investorId === 'platform' ? sum : sum + item.realisedProfit, 0);
         const platformProfit = Math.max(0, Math.round((applied.profit - declaredInvestorProfit) * 100) / 100);
         if (platformProfit > 0) batch.set(adminDb.collection('transactions').doc(historicalDocumentId(importId, 'platform-profit', deal.id || dealIndex)), { userId: 'platform', dealId: dealRef.id, type: 'PlatformEarning', amount: platformProfit, createdAt: importData.asOfDate, dealName: deal.dealName, ownerAllocatable: false, platformEarningKind: 'HistoricalOpening', historicalImport: true, historicalImportId: importId });
@@ -354,8 +394,11 @@ export async function postHistoricalImportAction(authToken: string, importId: st
     for (const [positionIndex, position] of extraction.fundPositions.entries()) {
       const investorId = position.investorId === 'SELF' ? (['INVESTOR', 'BOTH'].includes(importData.partyKind) ? partyId : undefined) : position.investorId;
       if (!investorId) throw new Error(`Link fund position for ${position.investorName} before posting.`);
-      if (position.totalDeposited > 0) batch.set(adminDb.collection('transactions').doc(historicalDocumentId(importId, 'fund-deposit', positionIndex)), { userId: investorId, type: 'Deposit', amount: position.totalDeposited, createdAt: importData.asOfDate, details: 'Historical opening deposit total', historicalImport: true, historicalImportId: importId });
-      if (position.totalWithdrawn > 0) batch.set(adminDb.collection('transactions').doc(historicalDocumentId(importId, 'fund-withdrawal', positionIndex)), { userId: investorId, type: 'Withdrawal', amount: -position.totalWithdrawn, createdAt: importData.asOfDate, details: 'Historical withdrawal total', historicalImport: true, historicalImportId: importId });
+      for (const type of ['Deposit', 'Withdrawal', 'PrincipalReturn'] as const) {
+        for (const [entryIndex, entry] of historicalFundTimeline(position, type, cutoff!).entries()) {
+          batch.set(adminDb.collection('transactions').doc(historicalDocumentId(importId, 'fund-history', positionIndex, type, entryIndex)), { userId: investorId, fundBatchId: historicalDocumentId(importId, 'fund-batch', positionIndex), type, amount: entry.amount * (type === 'Withdrawal' ? -1 : 1), createdAt: Timestamp.fromDate(new Date(`${entry.date}T12:00:00Z`)), paymentReference: entry.reference, sourceDocumentName: entry.documentName, historicalOpeningBalance: entry.openingBalance, historicalImport: true, historicalImportId: importId });
+        }
+      }
       const investmentBatch = historicalInvestmentBatch(position);
       batch.set(adminDb.collection('fundBatches').doc(historicalDocumentId(importId, 'fund-batch', positionIndex)), {
         ...investmentBatch, sourceId: investorId,
@@ -371,12 +414,13 @@ export async function postHistoricalImportAction(authToken: string, importId: st
       batch.set(adminDb.collection('administrativeTransactions').doc(historicalDocumentId(importId, 'expense', expenseIndex)), { type: 'Expense', amount: -Math.abs(expense.amount), description: expense.description || 'Historical expense', reference: expense.reference || null, createdAt: expense.date ? Timestamp.fromDate(new Date(`${expense.date}T12:00:00Z`)) : importData.asOfDate, historicalImport: true, historicalImportId: importId });
     }
     batch.update(importRef, { status: 'POSTED', postedAt: now, postedBy: actor.uid, postedPartyId: partyId, reconciliationIssues: issues, updatedAt: now });
-    await batch.commit();
+    await commitHistoricalWrites(adminDb,writes,{importId,sourceId:importData.correctionSourceId,actor:actor.uid});
     return { success: true as const, message: 'Historical records posted successfully.', partyId };
   } catch (error) {
     await importRef.set({ status: 'NEEDS_ATTENTION', postingError: error instanceof Error ? error.message : 'Posting failed.', updatedAt: FieldValue.serverTimestamp() }, { merge: true }).catch(() => undefined);
     throw error;
   }
+  });
 }
 
 export async function setHistoricalImportAvailabilityAction(input: { authToken: string; enabled: boolean; recordsAccurateThrough?: string }) {

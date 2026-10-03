@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { roundCurrency } from "@/lib/financial-integrity";
+import { roundCurrency, historicalOutflowAmount } from "@/lib/financial-integrity";
 import { calculateWithholdingTaxPosition } from "@/lib/tax-calculations";
 import {
     calculateCompanyTax2026,
@@ -142,7 +142,7 @@ export default function TaxPage() {
         }) || [];
         const platformEarnings = roundCurrency(operatingPlatformEarnings.reduce((sum, tx) => sum + tx.amount, 0));
         const managementFees = roundCurrency(adminTransactions?.filter(tx => tx.type === 'ManagementFee').reduce((sum, tx) => sum + tx.amount, 0) || 0);
-        const expenses = roundCurrency(adminTransactions?.filter(tx => tx.type === 'Expense').reduce((sum, tx) => sum + Math.abs(tx.amount), 0) || 0);
+        const expenses = roundCurrency(adminTransactions?.filter(tx => tx.type === 'Expense').reduce((sum, tx) => sum + historicalOutflowAmount(tx), 0) || 0);
 
         const totalRevenue = roundCurrency(platformEarnings + managementFees);
         const profitBeforeTax = Math.max(0, roundCurrency(totalRevenue - expenses));

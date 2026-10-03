@@ -6,6 +6,7 @@ const partySchema = z.object({
   bankName: z.string().default(''), bankAccountName: z.string().default(''), bankAccountNumberLast4: z.string().default(''), isMuslim: z.boolean().optional(),
 });
 const investorAllocationSchema = z.object({
+  fundPositionId: z.string().optional(),
   investorId: z.string().optional(), investorName: z.string().default(''), amountInvested: z.number().default(0), realisedProfit: z.number().default(0), principalReturned: z.number().default(0),
 });
 const dealSchema = z.object({
@@ -21,6 +22,8 @@ export const historicalExtractionSchema = z.object({
   party: partySchema,
   deals: z.array(dealSchema).default([]),
   fundPositions: z.array(z.object({
+    id: z.string().optional(), historyComplete: z.boolean().default(false),
+    transactions: z.array(z.object({type:z.enum(['Deposit','Withdrawal','ProfitDistribution','PrincipalReturn']),amount:z.number().finite().positive(),date:z.string().date(),reference:z.string().default(''),documentName:z.string().default(''),dealId:z.string().optional()})).max(200).default([]),
     investmentTerms: z.object({
       capitalCommitted: z.number().finite().nonnegative(),
       agreementDate: z.string().date(), paymentDate: z.string().date(), maturityDate: z.string().date(),
@@ -47,5 +50,7 @@ export const historicalExtractionOutput = {
 };
 
 export function historicalExtractionForStorage(value: unknown) {
-  return JSON.parse(JSON.stringify(historicalExtractionSchema.parse(value))) as z.infer<typeof historicalExtractionSchema>;
+  const extraction = JSON.parse(JSON.stringify(historicalExtractionSchema.parse(value))) as z.infer<typeof historicalExtractionSchema>;
+  extraction.fundPositions = extraction.fundPositions.map((position,index) => ({...position,id:position.id || `fund-${index+1}`}));
+  return extraction;
 }

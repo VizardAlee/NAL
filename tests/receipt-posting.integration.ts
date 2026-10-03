@@ -7,6 +7,8 @@ import { storeHistoricalDocument } from '../src/lib/server/historical-document-u
 import { beginHistoricalExtraction, finishHistoricalExtraction, failHistoricalExtraction } from '../src/lib/server/historical-extraction-lock';
 import { saveAdminUserRecord, storeAdminUserUpload } from '../src/lib/server/admin-user-records';
 import { claimWhatsAppReminder, prepareWhatsAppReminders, previewWhatsAppReminder, recordWhatsAppSendResult, setWhatsAppConsent } from '../src/lib/server/whatsapp-reminder-outbox';
+import { commitHistoricalWrites } from '../src/lib/server/historical-corrections';
+import { createHash } from 'node:crypto';
 
 if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('These tests require the Firestore emulator; never run against production.');
 const app = initializeApp({ projectId:'demo-nal' });
@@ -19,6 +21,59 @@ beforeEach(async()=>{
 after(async()=>{await deleteApp(app);});
 
 const userEdit = { userId: 'editable-client', name: 'Test Client', reason: 'Correct bank details from evidence', governmentIdType: 'NIN', governmentIdNumber: '12345678901', bvn: '12345678901', bankName: 'Test Bank', bankAccountName: 'Test Client', bankAccountNumber: '0123456789', status: 'VERIFIED' };
+test('live receipts cannot re-credit references or payments covered by historical cutoff', async () => {
+  const claim=db.collection('historicalTransactionReferences').doc(createHash('sha256').update('REF-1').digest('hex'));
+  await claim.set({rootImportId:'existing-import'});
+  try { await assert.rejects(()=>db.runTransaction(trx=>prepareReceiptPosting(trx,{receiptId:'receipt-a',amount:100,purpose:'REPAYMENT'})),/already included in historical/); }
+  finally { await claim.delete(); }
+  await db.collection('deals').doc('cutoff-deal').set({importedAsOfDate:Timestamp.fromDate(new Date('2026-09-30T12:00:00Z'))});
+  await db.collection('paymentReceipts').doc('receipt-a').update({dealId:'cutoff-deal'});
+  await assert.rejects(()=>db.runTransaction(trx=>prepareReceiptPosting(trx,{receiptId:'receipt-a',amount:100,purpose:'REPAYMENT',dealId:'cutoff-deal'})),/predates the imported/);
+  assert.equal((await db.collection('bankEntries').doc('bank').get()).data()?.allocatedAmount,0);
+});
+test('historical reference claims prevent duplicate posting atomically', async () => {
+  for (const id of ['claim-a','claim-b']) await db.collection('historicalImports').doc(id).set({status:'POSTING',postingStartedBy:'admin'});
+  const write = (id:string) => [{ref:db.collection('transactions').doc(id),data:{userId:'claim-investor',amount:100,type:'Deposit',paymentReference:'HISTORY-UNIQUE-REF',historicalImportId:id,createdAt:Timestamp.now()}},{ref:db.collection('historicalImports').doc(id),data:{status:'POSTED'},update:true}];
+  await commitHistoricalWrites(db,write('claim-a'),{importId:'claim-a',actor:'admin'});
+  await assert.rejects(()=>commitHistoricalWrites(db,write('claim-b'),{importId:'claim-b',actor:'admin'}),/already been posted/);
+  assert.equal((await db.collection('transactions').doc('claim-b').get()).exists,false);
+  await db.collection('paymentReceipts').doc('live-duplicate-history').set({status:'POSTED',fields:{reference:'LIVE-HISTORY-REF'}});
+  await db.collection('historicalImports').doc('live-history-case').set({status:'POSTING',postingStartedBy:'admin'});
+  await assert.rejects(()=>commitHistoricalWrites(db,[{ref:db.collection('transactions').doc('live-duplicate-import'),data:{userId:'claim-investor',amount:100,paymentReference:'LIVE-HISTORY-REF'}}],{importId:'live-history-case',actor:'admin'}),/already credited through receipt/);
+  assert.equal((await db.collection('transactions').doc('live-duplicate-import').get()).exists,false);
+});
+
+test('independently approved historical correction preserves originals and appends offset entries', async () => {
+  const source='correct-original'; const revision='correct-revision';
+  await db.collection('historicalImports').doc(source).set({status:'POSTED',postedAt:Timestamp.now(),extraction:{fundPositions:[]}});
+  await db.collection('historicalImports').doc(revision).set({status:'POSTING',postingStartedBy:'admin-b',correctionRootId:source,correctionRequestedBy:'admin-a',correctionReason:'Wrong recorded amount',correctionEvidence:'Bank statement confirmed amount'});
+  const original=db.collection('transactions').doc('correct-original-deposit');
+  await original.set({userId:'correction-investor',type:'Deposit',amount:100,createdAt:Timestamp.fromDate(new Date('2025-01-01')),historicalImportId:source});
+  const repayment=db.collection('repayments').doc('correct-original-payment');
+  await repayment.set({amount:50,status:'Approved',historicalImportId:source});
+  await commitHistoricalWrites(db,[{ref:db.collection('transactions').doc('correct-new-deposit'),data:{userId:'correction-investor',type:'Deposit',amount:120,createdAt:Timestamp.fromDate(new Date('2025-01-01')),historicalImportId:revision}},{ref:db.collection('historicalImports').doc(revision),data:{status:'POSTED'},update:true}],{importId:revision,sourceId:source,actor:'admin-b'});
+  assert.equal((await original.get()).data()?.amount,100);
+  const entries=await db.collection('transactions').where('userId','==','correction-investor').get();
+  assert.equal(entries.docs.reduce((sum,doc)=>sum+doc.data().amount,0),120);
+  assert.equal((await repayment.get()).data()?.status,'Reversed');
+  assert.equal((await db.collection('historicalImports').doc(source).get()).data()?.supersededBy,revision);
+  const second='correct-second-revision';
+  await db.collection('historicalImports').doc(revision).update({postedAt:Timestamp.now()});
+  await db.collection('historicalImports').doc(second).set({status:'POSTING',postingStartedBy:'admin-b',correctionRootId:source,correctionRequestedBy:'admin-a',correctionReason:'Second evidenced correction',correctionEvidence:'Reconciled statement B'});
+  await commitHistoricalWrites(db,[{ref:db.collection('transactions').doc('correct-second-deposit'),data:{userId:'correction-investor',type:'Deposit',amount:130,createdAt:Timestamp.fromDate(new Date('2025-01-01')),historicalImportId:second}},{ref:db.collection('historicalImports').doc(second),data:{status:'POSTED'},update:true}],{importId:second,sourceId:revision,actor:'admin-b'});
+  const revisedEntries=await db.collection('transactions').where('userId','==','correction-investor').get();
+  assert.equal(revisedEntries.docs.reduce((sum,doc)=>sum+doc.data().amount,0),130);
+});
+
+test('newer live activity blocks historical correction without partial writes', async () => {
+  const source='busy-original'; const revision='busy-revision';
+  await db.collection('historicalImports').doc(source).set({status:'POSTED',postedAt:Timestamp.fromDate(new Date('2026-01-01')),extraction:{fundPositions:[]}});
+  await db.collection('historicalImports').doc(revision).set({status:'POSTING',postingStartedBy:'admin-b',correctionRequestedBy:'admin-a',correctionReason:'Correct opening figure',correctionEvidence:'Bank statement A'});
+  await db.collection('transactions').doc('busy-live-payment').set({userId:'busy-investor',amount:10,createdAt:Timestamp.fromDate(new Date('2026-02-01'))});
+  await assert.rejects(()=>commitHistoricalWrites(db,[{ref:db.collection('transactions').doc('busy-replacement'),data:{userId:'busy-investor',amount:100}}],{importId:revision,sourceId:source,actor:'admin-b'}),/Newer financial activity/);
+  assert.equal((await db.collection('transactions').doc('busy-replacement').get()).exists,false);
+  assert.equal((await db.collection('historicalImports').doc(source).get()).data()?.supersededBy,undefined);
+});
 test('sensitive admin corrections reset verified KYC, audit originals and reject stale saves', async () => {
   const user = db.collection('users').doc(userEdit.userId);
   const kyc = db.collection('userKycProfiles').doc(userEdit.userId);

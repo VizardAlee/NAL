@@ -1,5 +1,4 @@
 import { addDealDuration, durationToDays, type DurationUnit } from '@/lib/deal-duration';
-import { addDays, differenceInCalendarDays } from 'date-fns';
 
 export type AgreementStatusRecord = { status?: string } | null | undefined;
 
@@ -74,9 +73,12 @@ export function profitUnlockDate(
 
   const earnedAt = asDate(entry.profitEarnedAt || entry.createdAt);
   if (!earnedAt) return maturity;
-  const elapsedDays = Math.max(0, differenceInCalendarDays(earnedAt, start));
-  const completedPeriod = Math.min(3, Math.max(1, Math.ceil(Math.max(1, elapsedDays) / 30)));
-  return addDays(start, completedPeriod * 30);
+  // Use Nigerian calendar days even when the server runs in UTC. Day 31
+  // belongs to tranche two, not to the already released first tranche.
+  const lagosDay = (date:Date) => Math.floor((date.getTime() + 3600000) / 86400000);
+  const elapsedDays = Math.max(0, lagosDay(earnedAt) - lagosDay(start));
+  const completedPeriod = Math.min(3, Math.floor(elapsedDays / 30) + 1);
+  return new Date(start.getTime() + completedPeriod * 30 * 86400000);
 }
 
 export function isProfitDistributionLocked(
