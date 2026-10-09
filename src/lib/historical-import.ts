@@ -104,6 +104,8 @@ export type HistoricalExpenseDraft = {
 };
 
 export type HistoricalExtraction = {
+  relatedParties?: HistoricalRelatedParty[];
+  agreementLinks?: HistoricalAgreementLink[];
   party: {
     name: string;
     email?: string;
@@ -111,6 +113,8 @@ export type HistoricalExtraction = {
     address?: string;
     accountType: 'Individual' | 'Organization';
     organizationRegistrationNumber?: string;
+    representativeName?: string;
+    representativeTitle?: string;
     bankName?: string;
     bankAccountName?: string;
     bankAccountNumberLast4?: string;
@@ -128,6 +132,17 @@ export type ReconciliationIssue = {
   severity: 'ERROR' | 'WARNING';
   message: string;
   dealId?: string;
+};
+
+export type HistoricalRelatedParty = HistoricalExtraction['party'] & {
+  id: string; kind: HistoricalPartyKind; representativeName?: string; representativeTitle?: string;
+  existingUserId?: string; createNew: boolean; confirmed: boolean;
+};
+export type HistoricalAgreementLink = {
+  id: string; documentId: string; type: 'MUDARABA' | 'MURABAHA' | 'WAKALAH' | 'KAFAALAH' | 'OTHER';
+  dealId: string; fundPositionId: string; reference: string; date: string; partyName: string;
+  guarantorName: string; guarantorAddress: string; guarantorPhoneNumber: string; guarantorOccupation: string;
+  assetDescription: string; supplierName: string; evidence: string; confirmed: boolean;
 };
 
 const money = (value: number) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;

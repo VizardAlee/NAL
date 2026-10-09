@@ -56,6 +56,16 @@ Include `recoveryTasks` and its `logs`, `evidence`, `notices`, and `expenses` su
 
 ## Residual-risk register
 
+### Mixed historical agreement bundles
+
+Upload an investor Mudaraba and its documented client Murabaha, Wakalah and Kafaalah evidence in the same historical case (maximum 12 files). Extraction proposes related customers and document relationships; it never approves them. In **People and accounts**, select an existing client/investor or explicitly choose a new unclaimed profile, verify organisation representatives, and confirm each identity. Use those reviewed import accounts in each deal/fund allocation. Matching names are suggestions, not proof that two people are the same. Guarantors and witnesses are not automatically registered as financial customers.
+
+In **Document relationships**, classify every uploaded file, link investor agreements to their fund contract and sales/agency/guarantee evidence to the correct deal, then verify the source reference, parties, assets and dates. Multiple agreement entries may refer to one PDF. Ongoing deals require verified Kafaalah evidence; Wakalah is optional and grants procurement authority only on its selected Murabaha deal. Imported documents remain original historical evidence and never acquire invented electronic signatures or extra payment credits. Existing customer records and KYC are not overwritten. New accounts are disabled/unclaimed until the existing invitation process is completed; missing KYC still needs collection.
+
+Save and reconcile, resolve all red issues, then approve and post. Profiles and financial documents are committed atomically in Firestore; normalized-name duplicate checks run inside that transaction. Disabled deterministic Auth shells may survive a failed posting (no access or financial balances); retry the same review after resolving its error rather than creating another customer. Customer-visible originals are restricted to the linked customer; combined files with different customers and OTHER supporting evidence remain admin-only. Split mixed-customer PDFs before sharing. Corrections hide superseded source reviews from customer document lists; already issued signed URLs can remain valid for their short expiry period.
+
+Acceptance coverage uses synthetic loopback emulators only: a mixed Mudaraba/Murabaha/Wakalah/Kafaalah bundle creates one disabled unclaimed organisation client, preserves its representative, assigns agency and guarantor evidence, and does not invent repayments. It does not certify Gemini extraction accuracy on real scans. Administrators must review every actual extraction and reconcile financial totals against bank evidence.
+
 - External counsel owns final approval of demand wording, limitation periods, service methods, court filings, settlement authority, evidence retention, and privacy notices.
 - An administrator must review the automation health card every business day; Cloud alert delivery must be tested quarterly with two recipients.
 - Daily Firestore backups, PITR and deletion protection are configured, but completed-backup verification, restoration rehearsal, Auth/Storage recovery and alert delivery remain separate launch controls.

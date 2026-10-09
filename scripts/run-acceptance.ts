@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { historicalBundle } from '../tests/fixtures/historical-bundle';
 
 const projectId = 'demo-nal-acceptance';
 if (process.env.GCLOUD_PROJECT !== projectId || ['FIRESTORE_EMULATOR_HOST','FIREBASE_AUTH_EMULATOR_HOST','FIREBASE_STORAGE_EMULATOR_HOST'].some(key => !/^127\.0\.0\.1:\d+$/.test(process.env[key] || ''))) {
@@ -20,6 +21,14 @@ for (const [id,accessRole,personas,role] of roles) {
   await auth.setCustomUserClaims(id,{accessRole,role,personas});
   await db.collection('users').doc(id).set({name:`Acceptance ${id}`,email:`${id}@nal.test`,role,accessRole,personas,primaryPortal:accessRole==='STAFF'?'admin':id,phoneNumber:'',address:'',bankName:'',bankAccountName:'',bankAccountNumber:'',isMuslim:false});
 }
+const bundle=historicalBundle();
+bundle.relatedParties![0].createNew=false;bundle.relatedParties![0].confirmed=false;
+bundle.agreementLinks!.forEach(link=>{link.confirmed=false;});
+await db.collection('historicalImports').doc('mixed-agreement-bundle').set({
+  partyMode:'EXISTING',existingUserId:'investor',partyKind:'INVESTOR',partyName:'Acceptance investor',accountType:'Individual',
+  asOfDate:Timestamp.fromDate(new Date('2026-09-30T12:00:00Z')),updatedAt:Timestamp.now(),status:'NEEDS_ATTENTION',extraction:bundle,
+  documents:['doc-investor','doc-sale','doc-agency','doc-guarantee'].map(id=>({id,originalName:`${id}.pdf`,contentType:'application/pdf',size:100,storagePath:`historical-imports/mixed-agreement-bundle/admin/${id}.pdf`,customerVisible:true})),
+});
 await deleteApp(app);
 const env = { ...process.env, NAL_LOCAL_ACCEPTANCE:'true', NEXT_PUBLIC_USE_FIREBASE_EMULATORS:'true', NEXT_PUBLIC_FIREBASE_PROJECT_ID:projectId,
   FIREBASE_PROJECT_ID:projectId, NEXT_PUBLIC_FIREBASE_API_KEY:'demo-acceptance-key', NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:`${projectId}.firebaseapp.com`,

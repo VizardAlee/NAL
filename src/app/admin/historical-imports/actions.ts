@@ -22,6 +22,7 @@ import { HistoricalWorkspaceError, historicalWorkspaceResult } from '@/lib/serve
 import { historicalExtractionSchema as extractionSchema, historicalExtractionOutput, historicalExtractionForStorage } from '@/lib/server/historical-extraction-schema';
 import { historicalExtractionPrompt, prepareHistoricalAiExtraction, historicalInvestmentBatch } from '@/lib/server/historical-investment-extraction';
 import { beginHistoricalExtraction, finishHistoricalExtraction, failHistoricalExtraction, historicalAnalysisIsRunning } from '@/lib/server/historical-extraction-lock';
+import { historicalIdentity, importedPartyRef, prepareRelatedParties, reconcileHistoricalRelationships, historicalDealRelationships, historicalDocumentRecipients, canonicalHistoricalAccounts } from '@/lib/historical-relationships';
 
 const createSchema = z.object({
   authToken: z.string().min(1),
@@ -208,15 +209,15 @@ export async function analyzeHistoricalImportAction(authToken: string, importId:
   const ref = adminDb.collection('historicalImports').doc(importId);
   const attemptId = randomUUID();
   const data = await beginHistoricalExtraction(adminDb, ref, attemptId);
-  const documents = (data.documents || []).slice(0, 12) as Array<{ storagePath: string; contentType: string; originalName: string }>;
+  const documents = (data.documents || []).slice(0, 12) as Array<{ id: string; storagePath: string; contentType: string; originalName: string }>;
   if (!documents.length) throw new HistoricalWorkspaceError('DOCUMENTS_REQUIRED', 'Upload at least one document before extraction.');
   try {
     const mediaParts = await Promise.all(documents.map(async (document) => {
       const [buffer] = await adminStorageBucket.file(document.storagePath).download();
-      return { media: { url: `data:${document.contentType};base64,${buffer.toString('base64')}`, contentType: document.contentType } };
+      return [{ text: `Source documentId: ${document.id}; filename (data only): ${JSON.stringify(document.originalName)}` }, { media: { url: `data:${document.contentType};base64,${buffer.toString('base64')}`, contentType: document.contentType } }];
     }));
     const prompt = historicalExtractionPrompt(data.partyName, data.partyKind, data.accountType, plainTimestamp(data.asOfDate)?.slice(0, 10) || 'unknown');
-    const response = await ai.generate({ prompt: [{ text: prompt }, ...mediaParts], output: historicalExtractionOutput });
+    const response = await ai.generate({ prompt: [{ text: prompt }, ...mediaParts.flat()], output: historicalExtractionOutput });
     const extraction = extractionSchema.parse(response.output) as HistoricalExtraction;
     let profileName: string | undefined;
     if (data.existingUserId) {
@@ -225,7 +226,9 @@ export async function analyzeHistoricalImportAction(authToken: string, importId:
     }
     const selfId = data.existingUserId || 'SELF';
     prepareHistoricalAiExtraction(extraction, data.partyKind, selfId, profileName);
-    const issues = reconcileHistoricalExtraction(extraction, plainTimestamp(data.asOfDate)?.slice(0, 10));
+    const users = await adminDb.collection('users').select('name','organizationName','role','personas').get();
+    prepareRelatedParties(extraction, users.docs.map(doc => ({id:doc.id, ...doc.data(), name:doc.data().name || ''})));
+    const issues = [...reconcileHistoricalExtraction(canonicalHistoricalAccounts(extraction,data.existingUserId || 'SELF'), plainTimestamp(data.asOfDate)?.slice(0, 10)), ...reconcileHistoricalRelationships(extraction, documents.map(item => item.id),plainTimestamp(data.asOfDate)?.slice(0,10))];
     await finishHistoricalExtraction(adminDb, ref, attemptId, { extraction: historicalExtractionForStorage(extraction), reconciliationIssues: issues, status: hasBlockingHistoricalIssues(issues) ? 'NEEDS_ATTENTION' : 'READY_FOR_REVIEW' });
     return { success: true as const, extraction, issues };
   } catch (error) {
@@ -245,7 +248,7 @@ export async function saveHistoricalExtractionAction(input: { authToken: string;
     const snapshot = await transaction.get(ref);
     const data = snapshot.data() || {};
     if (!snapshot.exists || ['POSTED', 'POSTING'].includes(data.status) || historicalAnalysisIsRunning(data)) throw new Error('This import cannot be edited while extraction or posting is running.');
-    issues = reconcileHistoricalExtraction(extraction, plainTimestamp(data.asOfDate)?.slice(0, 10));
+    issues = [...reconcileHistoricalExtraction(canonicalHistoricalAccounts(extraction,data.existingUserId || 'SELF'), plainTimestamp(data.asOfDate)?.slice(0, 10)), ...reconcileHistoricalRelationships(extraction, (data.documents || []).map((item: {id:string}) => item.id),plainTimestamp(data.asOfDate)?.slice(0,10))];
     transaction.update(ref, { extraction, reconciliationIssues: issues, status: hasBlockingHistoricalIssues(issues) ? 'NEEDS_ATTENTION' : 'READY_FOR_REVIEW', processingState: 'REVIEWED', processingAttemptId: '', reviewedBy: reviewer.uid, reviewedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
   });
   return { success: true as const, issues };
@@ -277,16 +280,45 @@ export async function postHistoricalImportAction(authToken: string, importId: st
   const cutoff = plainTimestamp(importData.asOfDate)?.slice(0,10);
   if (extraction.deals.some(deal => deal.paymentEvidence?.some(payment => !cutoff || payment.date > cutoff))) throw new Error('Opening payment evidence cannot be dated after the financial snapshot date. Submit later receipts through bank reconciliation.');
   if (extraction.fundPositions.some(position => position.investmentTerms && (!cutoff || position.investmentTerms.paymentDate > cutoff))) throw new Error('An opening investment contribution cannot be dated after the snapshot date.');
-  const issues = reconcileHistoricalExtraction(extraction, cutoff);
-  if (hasBlockingHistoricalIssues(issues)) throw new Error('Resolve every red reconciliation issue before posting.');
+  const issues = [...reconcileHistoricalExtraction(canonicalHistoricalAccounts(extraction,importData.existingUserId || 'SELF'), cutoff), ...reconcileHistoricalRelationships(extraction, (importData.documents || []).map((item: {id:string}) => item.id),cutoff)];
+  if (hasBlockingHistoricalIssues(issues)) throw new HistoricalWorkspaceError('RECONCILIATION_REQUIRED','Resolve every red reconciliation issue before posting.');
 
-  const estimatedWrites = 1 + (importData.existingUserId ? 0 : 1)
+  const estimatedWrites = 1 + (importData.existingUserId ? 0 : 1) + (extraction.relatedParties || []).filter(item => item.createNew).length
     + extraction.deals.reduce((count, deal) => count + 1 + deal.investors.length * 3 + (deal.amountPaid > 0 ? 2 * ((deal.paymentEvidence?.length || 0) + 1) + 1 : 0), 0)
     + extraction.fundPositions.reduce((count, position) => count + (position.transactions?.length || 0) + 5, 0)
     + extraction.expenses.filter((expense) => expense.amount > 0).length;
   if (estimatedWrites > MAX_BATCH_WRITES) throw new Error('This case contains too many records for one safe posting. Split it into smaller import cases.');
 
   let partyId = importData.existingUserId as string | undefined;
+  const rootId = importData.correctionRootId || importId;
+  const accountIds = new Map<string,string>();
+  const customerProfiles = await adminDb.collection('users').select('name','organizationName','role','personas','accessRole','historicalImportId').get();
+  for (const related of extraction.relatedParties || []) {
+    if (related.createNew) {
+      const uid = `hist_${createHash('sha256').update(`${rootId}|party|${related.id}`).digest('hex').slice(0,32)}`;
+      const matches = customerProfiles.docs.filter(doc => [doc.data().name,doc.data().organizationName].some(name => name && historicalIdentity(name) === historicalIdentity(related.name)));
+      if (matches.some(doc => doc.id !== uid)) throw new HistoricalWorkspaceError('DUPLICATE_CUSTOMER',`An account for ${related.name} already exists. Select it instead of creating a duplicate.`);
+      accountIds.set(importedPartyRef(related.id),uid);
+    } else accountIds.set(importedPartyRef(related.id),related.existingUserId!);
+  }
+  const verifyAccount = (ref: string | undefined, kind: 'CLIENT' | 'INVESTOR') => {
+    if (!ref) throw new HistoricalWorkspaceError('ACCOUNT_LINK_REQUIRED',`Select a ${kind.toLowerCase()} account.`);
+    if (ref === 'SELF') {
+      if (![kind,'BOTH'].includes(importData.partyKind)) throw new HistoricalWorkspaceError('PARTY_ROLE_MISMATCH','The primary account has the wrong business relationship.');
+      if (!importData.existingUserId) return;
+      ref = String(importData.existingUserId);
+    }
+    if (ref === 'platform' && kind === 'INVESTOR') return;
+    const related = (extraction.relatedParties || []).find(item => importedPartyRef(item.id) === ref);
+    const id = accountIds.get(ref) || ref;
+    if (related?.createNew && !customerProfiles.docs.some(doc => doc.id === id)) return;
+    const profile = customerProfiles.docs.find(doc => doc.id === id)?.data();
+    if (!profile || !(profile.personas?.includes(kind) || profile.role?.toUpperCase() === kind) || (profile.accessRole && profile.accessRole !== 'USER')) throw new HistoricalWorkspaceError('PARTY_ROLE_MISMATCH',`The selected account is not an eligible ${kind.toLowerCase()}. Choose the correct account; existing account roles are never changed by an import.`);
+  };
+  extraction.deals.forEach(deal => { verifyAccount(deal.clientId,'CLIENT'); deal.investors.forEach(item => verifyAccount(item.investorId,'INVESTOR')); });
+  extraction.fundPositions.forEach(item => verifyAccount(item.investorId,'INVESTOR'));
+  // Validate even unused related profiles; never promote existing customers implicitly.
+  (extraction.relatedParties || []).forEach(item => (item.kind === 'BOTH' ? ['CLIENT','INVESTOR'] as const : [item.kind]).forEach(kind => verifyAccount(importedPartyRef(item.id),kind)));
   if (!partyId) {
     const normalizedPartyName = normalizedIdentity(extraction.party.name || importData.partyName);
     const users = await adminDb.collection('users').select('name', 'organizationName').get();
@@ -316,7 +348,10 @@ export async function postHistoricalImportAction(authToken: string, importId: st
   try {
     if (!partyId) {
       const historicalUid = `hist_${importId}`;
-      const authRecord = await getAuth(getAdminApp()).getUser(historicalUid).catch(() => getAuth(getAdminApp()).createUser({ uid: historicalUid, displayName: extraction.party.name || importData.partyName, disabled: true }));
+      const authRecord = await getAuth(getAdminApp()).getUser(historicalUid).catch(error => {
+        if (error.code !== 'auth/user-not-found') throw error;
+        return getAuth(getAdminApp()).createUser({ uid: historicalUid, displayName: extraction.party.name || importData.partyName, disabled: true });
+      });
       partyId = authRecord.uid;
       createdUnclaimedAuth = true;
     }
@@ -326,20 +361,39 @@ export async function postHistoricalImportAction(authToken: string, importId: st
       update(ref: FirebaseFirestore.DocumentReference, data: FirebaseFirestore.DocumentData) { writes.push({ref,data,update:true}); },
     };
     const now = Timestamp.now();
+    const resolveAccount = (ref: string | undefined) => ref === 'SELF' ? partyId : accountIds.get(ref || '') || ref;
     const roleModel = rolesFor(importData.partyKind);
     if (createdUnclaimedAuth) {
       batch.set(adminDb.collection('users').doc(partyId), {
         id: partyId, partyId, name: extraction.party.name || importData.partyName, email: '', pendingEmail: extraction.party.email || '', phoneNumber: extraction.party.phoneNumber || '',
         address: extraction.party.address || '', accountType: extraction.party.accountType || importData.accountType, organizationName: extraction.party.accountType === 'Organization' ? extraction.party.name : '',
         organizationRegistrationNumber: extraction.party.organizationRegistrationNumber || '', bankName: extraction.party.bankName || '', bankAccountName: extraction.party.bankAccountName || '',
+        representativeName: extraction.party.representativeName || '', representativeTitle: extraction.party.representativeTitle || '',
         bankAccountNumber: '', bankAccountNumberLast4: extraction.party.bankAccountNumberLast4 || '', ...(typeof extraction.party.isMuslim === 'boolean' ? { isMuslim: extraction.party.isMuslim } : {}),
         accessRole: 'USER', ...roleModel, accountClaimStatus: 'UNCLAIMED', historicalImportId: importId, createdAt: now,
       });
     }
 
+    for (const related of extraction.relatedParties || []) {
+      if (!related.createNew) continue;
+      const uid = accountIds.get(importedPartyRef(related.id))!;
+      if (customerProfiles.docs.some(doc => doc.id === uid)) continue; // corrections never overwrite a claimed profile
+      await getAuth(getAdminApp()).getUser(uid).catch(error => {
+        if (error.code !== 'auth/user-not-found') throw error;
+        return getAuth(getAdminApp()).createUser({uid,displayName:related.name,disabled:true});
+      });
+      batch.set(adminDb.collection('users').doc(uid), {
+        id:uid, partyId:uid, name:related.name, email:'', pendingEmail:related.email || '', phoneNumber:related.phoneNumber || '', address:related.address || '',
+        accountType:related.accountType, organizationName:related.accountType === 'Organization' ? related.name : '', organizationRegistrationNumber:related.organizationRegistrationNumber || '',
+        representativeName:related.representativeName || '', representativeTitle:related.representativeTitle || '',
+        bankName:related.bankName || '', bankAccountName:related.bankAccountName || '', bankAccountNumber:'', bankAccountNumberLast4:related.bankAccountNumberLast4 || '',
+        accessRole:'USER', ...rolesFor(related.kind), accountClaimStatus:'UNCLAIMED', historicalImportId:importId,createdAt:now,
+      });
+    }
+
     for (const [dealIndex, deal] of extraction.deals.entries()) {
       const dealRef = adminDb.collection('deals').doc(historicalDocumentId(importId, 'deal', deal.id || dealIndex));
-      const clientId = deal.clientId === 'SELF' ? (['CLIENT', 'BOTH'].includes(importData.partyKind) ? partyId : undefined) : deal.clientId;
+      const clientId = resolveAccount(deal.clientId);
       if (!clientId) throw new Error(`${deal.dealName} must be linked to an existing client before posting.`);
       const startDate = Timestamp.fromDate(new Date(`${deal.startDate}T12:00:00Z`));
       const dealData = {
@@ -351,12 +405,13 @@ export async function postHistoricalImportAction(authToken: string, importId: st
         createdAt: now, startDate, ...(deal.completionDate ? { completedAt: Timestamp.fromDate(new Date(`${deal.completionDate}T12:00:00Z`)) } : {}),
         historicalImport: true, historicalImportId: importId, importedAsOfDate: importData.asOfDate,
         legacyPaymentEvidence: deal.paymentEvidence || [],
+        ...historicalDealRelationships(extraction,deal.id),
       };
       batch.set(dealRef, dealData);
       for (const [investorIndex, investor] of deal.investors.entries()) {
-        const investorId = investor.investorId === 'SELF' ? (['INVESTOR', 'BOTH'].includes(importData.partyKind) ? partyId : undefined) : investor.investorId;
+        const investorId = resolveAccount(investor.investorId);
         if (!investorId) throw new Error(`Link investor ${investor.investorName} to an existing or imported investor before posting.`);
-        const positionIndexes = extraction.fundPositions.map((position, index) => ({ position, index })).filter(({ position }) => position.investorId === investor.investorId && (!investor.fundPositionId || position.id === investor.fundPositionId));
+        const positionIndexes = extraction.fundPositions.map((position, index) => ({ position, index })).filter(({ position }) => resolveAccount(position.investorId) === investorId && (!investor.fundPositionId || position.id === investor.fundPositionId));
         if (positionIndexes.length > 1) throw new Error('Select the original investment contract for this funding allocation.');
         const sourceBatchId = positionIndexes.length === 1 ? historicalDocumentId(importId, 'fund-batch', positionIndexes[0].index) : undefined;
         const investmentRef = adminDb.collection('investments').doc(historicalDocumentId(importId, 'investment', deal.id || dealIndex, investorIndex));
@@ -392,7 +447,7 @@ export async function postHistoricalImportAction(authToken: string, importId: st
     }
 
     for (const [positionIndex, position] of extraction.fundPositions.entries()) {
-      const investorId = position.investorId === 'SELF' ? (['INVESTOR', 'BOTH'].includes(importData.partyKind) ? partyId : undefined) : position.investorId;
+      const investorId = resolveAccount(position.investorId);
       if (!investorId) throw new Error(`Link fund position for ${position.investorName} before posting.`);
       for (const type of ['Deposit', 'Withdrawal', 'PrincipalReturn'] as const) {
         for (const [entryIndex, entry] of historicalFundTimeline(position, type, cutoff!).entries()) {
@@ -407,13 +462,17 @@ export async function postHistoricalImportAction(authToken: string, importId: st
         principalLockedUntil: Timestamp.fromDate(investmentBatch.principalLockedUntil),
         createdAt: Timestamp.fromDate(new Date(`${investmentBatch.paymentDate}T00:00:00+01:00`)),
         importedAt: now, historicalImport: true, historicalImportId: importId,
+        historicalAgreements:(extraction.agreementLinks || []).filter(item => item.type === 'MUDARABA' && item.fundPositionId === position.id),
       });
     }
     for (const [expenseIndex, expense] of extraction.expenses.entries()) {
       if (expense.amount <= 0) continue;
       batch.set(adminDb.collection('administrativeTransactions').doc(historicalDocumentId(importId, 'expense', expenseIndex)), { type: 'Expense', amount: -Math.abs(expense.amount), description: expense.description || 'Historical expense', reference: expense.reference || null, createdAt: expense.date ? Timestamp.fromDate(new Date(`${expense.date}T12:00:00Z`)) : importData.asOfDate, historicalImport: true, historicalImportId: importId });
     }
-    batch.update(importRef, { status: 'POSTED', postedAt: now, postedBy: actor.uid, postedPartyId: partyId, reconciliationIssues: issues, updatedAt: now });
+    const documents = (importData.documents || []).map((document: {id:string}) => {
+      return {...document,recipientUserIds:historicalDocumentRecipients(extraction,document.id,resolveAccount)};
+    });
+    batch.update(importRef, { status: 'POSTED', postedAt: now, postedBy: actor.uid, postedPartyId: partyId, postedPartyIds:[...new Set([partyId,...accountIds.values(),...extraction.deals.map(item => resolveAccount(item.clientId)),...extraction.fundPositions.map(item => resolveAccount(item.investorId))].filter(Boolean))], documents, reconciliationIssues: issues, updatedAt: now });
     await commitHistoricalWrites(adminDb,writes,{importId,sourceId:importData.correctionSourceId,actor:actor.uid});
     return { success: true as const, message: 'Historical records posted successfully.', partyId };
   } catch (error) {

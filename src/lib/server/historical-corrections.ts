@@ -1,6 +1,7 @@
 import { Timestamp, type Firestore, type DocumentReference } from 'firebase-admin/firestore';
 import { createHash } from 'node:crypto';
 import { HistoricalWorkspaceError } from './historical-workspace-result';
+import { historicalIdentity } from '../historical-relationships';
 
 class CorrectionError extends HistoricalWorkspaceError {
   constructor(message:string) { super('CORRECTION_BLOCKED',message); }
@@ -27,6 +28,19 @@ export async function commitHistoricalWrites(db: Firestore, writes: HistoricalWr
     const reversals: HistoricalWrite[] = [];
     const rootId = current.data()?.correctionRootId || input.importId;
     const claims: HistoricalWrite[] = [];
+    const newProfiles = writes.filter(write => write.ref.parent.id === 'users' && !write.update);
+    if (newProfiles.length) {
+      // Query in the atomic posting transaction prevents concurrent imports from
+      // creating two normalized-name accounts after their preflight scans pass.
+      const customers = await transaction.get(db.collection('users').select('name','organizationName'));
+      const plannedNames = new Set<string>();
+      for (const profile of newProfiles) {
+        const name = historicalIdentity(String(profile.data.organizationName || profile.data.name));
+        if (plannedNames.has(name) || customers.docs.some(doc => doc.id !== profile.ref.id && [doc.data().name,doc.data().organizationName].some(value => value && historicalIdentity(value) === name))) throw new CorrectionError('A matching customer already exists. Link that account and review before posting.');
+        if (customers.docs.some(doc => doc.id === profile.ref.id)) throw new CorrectionError('This imported profile already exists. Reload and link it instead of overwriting it.');
+        plannedNames.add(name);
+      }
+    }
     for (const write of writes.filter(write => ['transactions','fundBatches'].includes(write.ref.parent.id) && write.data.paymentReference)) {
       const reference = String(write.data.paymentReference).trim().toUpperCase();
       if (!reference) continue;

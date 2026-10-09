@@ -21,6 +21,20 @@ beforeEach(async()=>{
 after(async()=>{await deleteApp(app);});
 
 const userEdit = { userId: 'editable-client', name: 'Test Client', reason: 'Correct bank details from evidence', governmentIdType: 'NIN', governmentIdNumber: '12345678901', bvn: '12345678901', bankName: 'Test Bank', bankAccountName: 'Test Client', bankAccountNumber: '0123456789', status: 'VERIFIED' };
+test('concurrent historical imports cannot create duplicate normalized customer profiles', async()=>{
+  for (const id of ['party-race-a','party-race-b']) await db.collection('historicalImports').doc(id).set({status:'POSTING',postingStartedBy:'admin'});
+  const post=(id:string,name:string)=>commitHistoricalWrites(db,[
+    {ref:db.collection('users').doc(id),data:{name,accessRole:'USER',personas:['CLIENT'],accountClaimStatus:'UNCLAIMED'}},
+    {ref:db.collection('deals').doc(id),data:{clientId:id,principal:1000}},
+    {ref:db.collection('historicalImports').doc(id),data:{status:'POSTED'},update:true},
+  ],{importId:id,actor:'admin'});
+  const results=await Promise.allSettled([post('party-race-a','Unique Legacy Customer'),post('party-race-b',' unique  legacy customer ')]);
+  assert.equal(results.filter(item=>item.status==='fulfilled').length,1);
+  const profiles=await Promise.all(['party-race-a','party-race-b'].map(id=>db.collection('users').doc(id).get()));
+  const deals=await Promise.all(['party-race-a','party-race-b'].map(id=>db.collection('deals').doc(id).get()));
+  assert.equal(profiles.filter(doc=>doc.exists).length,1);
+  assert.equal(deals.filter(doc=>doc.exists).length,1);
+});
 test('live receipts cannot re-credit references or payments covered by historical cutoff', async () => {
   const claim=db.collection('historicalTransactionReferences').doc(createHash('sha256').update('REF-1').digest('hex'));
   await claim.set({rootImportId:'existing-import'});

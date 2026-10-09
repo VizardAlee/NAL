@@ -3,6 +3,7 @@ import { z } from 'zod';
 const partySchema = z.object({
   name: z.string().default(''), email: z.string().default(''), phoneNumber: z.string().default(''), address: z.string().default(''),
   accountType: z.enum(['Individual', 'Organization']).default('Individual'), organizationRegistrationNumber: z.string().default(''),
+  representativeName: z.string().default(''), representativeTitle: z.string().default(''),
   bankName: z.string().default(''), bankAccountName: z.string().default(''), bankAccountNumberLast4: z.string().default(''), isMuslim: z.boolean().optional(),
 });
 const investorAllocationSchema = z.object({
@@ -19,6 +20,18 @@ const dealSchema = z.object({
   investors: z.array(investorAllocationSchema).default([]),
 });
 export const historicalExtractionSchema = z.object({
+  relatedParties: z.array(partySchema.extend({
+    id: z.string().regex(/^[\w-]{1,80}$/), kind: z.enum(['CLIENT', 'INVESTOR', 'BOTH']),
+    representativeName: z.string().default(''), representativeTitle: z.string().default(''),
+    existingUserId: z.string().default(''), createNew: z.boolean().default(false), confirmed: z.boolean().default(false),
+  })).max(40).default([]),
+  agreementLinks: z.array(z.object({
+    id: z.string(), documentId: z.string(), type: z.enum(['MUDARABA','MURABAHA','WAKALAH','KAFAALAH','OTHER']),
+    dealId: z.string().default(''), fundPositionId: z.string().default(''), reference: z.string().default(''), date: z.string().default(''),
+    partyName: z.string().default(''), guarantorName: z.string().default(''), guarantorAddress: z.string().default(''),
+    guarantorPhoneNumber: z.string().default(''), guarantorOccupation: z.string().default(''),
+    assetDescription: z.string().default(''), supplierName: z.string().default(''), evidence: z.string().default(''), confirmed: z.boolean().default(false),
+  })).max(100).default([]),
   party: partySchema,
   deals: z.array(dealSchema).default([]),
   fundPositions: z.array(z.object({
