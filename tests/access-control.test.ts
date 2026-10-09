@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canWriteAdmin, getAccessiblePortals } from '../src/lib/access-control';
+import { canWriteAdmin, getAccessiblePortals, isReadOnlyOwner } from '../src/lib/access-control';
+
+test('owner authority requires an explicit current OWNER role', () => {
+  assert.equal(isReadOnlyOwner({ role: 'Admin' }), false);
+  assert.equal(isReadOnlyOwner({ role: 'Owner' as any }), false);
+  assert.equal(isReadOnlyOwner({ accessRole: 'OWNER' }), true);
+  for (const accessRole of ['USER', 'STAFF', 'ADMIN', null, 'INVALID']) {
+    assert.equal(isReadOnlyOwner({ role: 'Admin', accessRole: accessRole as any }), false);
+  }
+});
 
 test('explicit restricted or invalid roles never fall back to legacy Admin', () => {
   for (const accessRole of ['STAFF', 'OWNER', 'USER', null, 'INVALID', '']) {
