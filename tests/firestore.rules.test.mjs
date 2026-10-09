@@ -22,6 +22,10 @@ beforeEach(async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await setDoc(doc(db, 'users', 'admin'), { role: 'Admin', accessRole: 'ADMIN', name: 'Admin' });
+    await setDoc(doc(db, 'users', 'staff'), { role: 'Admin', roles: ['Admin'], accessRole: 'STAFF' });
+    await setDoc(doc(db, 'users', 'modern-owner'), { role: 'Admin', accessRole: 'OWNER' });
+    await setDoc(doc(db, 'users', 'demoted'), { role: 'Admin', accessRole: 'USER' });
+    await setDoc(doc(db, 'users', 'legacy-admin'), { role: 'Admin' });
     await setDoc(doc(db, 'users', 'owner'), { role: 'Owner', accessRole: 'OWNER', name: 'Owner' });
     await setDoc(doc(db, 'users', 'client'), { role: 'Client', accessRole: 'USER', personas: ['CLIENT'], name: 'Client' });
     await setDoc(doc(db, 'users', 'organization'), {
@@ -54,8 +58,19 @@ test('financial evidence and bank reconciliation cannot be read or forged direct
 });
 
 test('clients cannot create role-bearing user profiles', async () => {
-  const db = env.authenticatedContext('attacker').firestore();
+const db = env.authenticatedContext('attacker').firestore();
   await assertFails(setDoc(doc(db, 'users', 'attacker'), { role: 'Admin', accessRole: 'ADMIN' }));
+});
+
+test('modern roles override legacy Admin and stale admin claims for writes', async () => {
+  for (const uid of ['staff', 'modern-owner', 'demoted']) {
+    const db = env.authenticatedContext(uid, { role: 'Admin', accessRole: 'ADMIN' }).firestore();
+    await assertFails(updateDoc(doc(db, 'users', 'client'), { accessRole: 'ADMIN' }));
+    await assertFails(updateDoc(doc(db, 'users', uid), { accessRole: 'ADMIN' }));
+    await assertFails(setDoc(doc(db, 'platformSettings', 'zakat'), { nisab: 1 }));
+  }
+  await assertSucceeds(updateDoc(doc(env.authenticatedContext('legacy-admin').firestore(), 'users', 'client'), { name: 'Legacy admin edit' }));
+  await assertSucceeds(updateDoc(doc(env.authenticatedContext('admin').firestore(), 'users', 'client'), { name: 'Full admin edit' }));
 });
 
 test('users may edit safe profile fields but not access fields', async () => {

@@ -68,18 +68,7 @@ export async function verifyAuthTokenForUser(authToken: string, expectedUid: str
 }
 
 export async function verifyAdminOrOwner(authToken: string): Promise<DecodedIdToken> {
-  const decoded = await verifyAuthToken(authToken);
-  const { firestore } = initializeFirebase();
-  const userSnapshot = await firestore.collection('users').doc(decoded.uid).get();
-  const userProfile = userSnapshot.exists ? userSnapshot.data() : null;
-  const accessSource = {
-    role: (userProfile?.role ?? decoded.role) as LegacyRole | null | undefined,
-    roles: userProfile?.roles as LegacyRole[] | null | undefined,
-    accessRole: (userProfile?.accessRole ?? decoded.accessRole) as AccessRole | null | undefined,
-    personas: userProfile?.personas as Persona[] | null | undefined,
-    primaryPortal: userProfile?.primaryPortal as PrimaryPortal | null | undefined,
-  };
-
+  const { decoded, accessSource } = await getVerifiedAccess(authToken);
   if (!canViewAdmin(accessSource)) {
     throw createAuthError('Forbidden: insufficient permissions.', 403);
   }
@@ -107,9 +96,9 @@ async function getVerifiedAccess(authToken: string) {
   return {
     decoded,
     accessSource: {
-      role: (userProfile.role ?? decoded.role) as LegacyRole | null | undefined,
+      role: userProfile.role as LegacyRole | null | undefined,
       roles: userProfile.roles as LegacyRole[] | null | undefined,
-      accessRole: (userProfile.accessRole ?? decoded.accessRole) as AccessRole | null | undefined,
+      accessRole: userProfile.accessRole as AccessRole | null | undefined,
       personas: userProfile.personas as Persona[] | null | undefined,
       primaryPortal: userProfile.primaryPortal as PrimaryPortal | null | undefined,
     },

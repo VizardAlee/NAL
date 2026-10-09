@@ -6,6 +6,8 @@ Use this checklist before releases, after large feature changes, and whenever Fi
 
 Run `npm run verify` before starting manual staging checks. The command must pass typechecking, linting, finance unit tests, Firestore emulator security/concurrency tests, and the production build. CI runs the same gate on every pull request and push to `main`. Do not deploy by bypassing a failed gate.
 
+Also run `npm run test:acceptance` (included in CI). It creates synthetic accounts only in guarded `demo-nal-acceptance` loopback emulators and checks all eight portal logins plus real-token admin API denial. It must never target production. These checks supplement, not replace, the full financial journeys and restore rehearsal below.
+
 - [ ] Record the successful CI run and Git commit for this release.
 - [ ] Confirm the Firestore rules tests include privilege escalation, ledger writes, messaging spoofing, and concurrent approval coverage.
 - [ ] Confirm the production build performs type and lint validation rather than skipping them.

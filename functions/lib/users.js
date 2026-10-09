@@ -4,6 +4,7 @@ exports.createUser = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const zod_1 = require("zod");
+const admin_access_1 = require("./admin-access");
 const createUserSchema = zod_1.z.object({
     name: zod_1.z.string().min(2),
     email: zod_1.z.string().email(),
@@ -37,11 +38,6 @@ function deriveAccessModel(role) {
             return { accessRole: 'USER', personas: ['MARKETER'], primaryPortal: 'marketer' };
     }
 }
-function isAdminCaller(token) {
-    if (!token)
-        return false;
-    return token.accessRole === 'ADMIN' || (token.role === 'Admin' && !token.accessRole);
-}
 // Helper function to generate a unique referral code
 function generateReferralCode(name) {
     const namePart = name.split(' ')[0].toUpperCase().substring(0, 4).padEnd(4, 'X');
@@ -49,9 +45,7 @@ function generateReferralCode(name) {
     return `MARK-${namePart}-${randomPart}`;
 }
 exports.createUser = (0, https_1.onCall)(async (request) => {
-    if (!isAdminCaller(request.auth?.token)) {
-        throw new https_1.HttpsError('unauthenticated', 'The function must be called by an authenticated admin.');
-    }
+    await (0, admin_access_1.requireFullAdmin)(request.auth?.uid);
     const validated = createUserSchema.safeParse(request.data);
     if (!validated.success) {
         throw new https_1.HttpsError('invalid-argument', 'Invalid data provided.');

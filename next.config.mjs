@@ -24,6 +24,7 @@ const applicationPageSources = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir: process.env.NAL_LOCAL_ACCEPTANCE === 'true' ? '.next-acceptance' : '.next',
   reactStrictMode: false,
   poweredByHeader: false,
   outputFileTracingRoot: __dirname,
@@ -39,7 +40,7 @@ const nextConfig = {
       "font-src 'self' data: https:",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com",
-      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://*.cloudfunctions.net wss://*.firebaseio.com wss://*.googleapis.com",
+      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://*.cloudfunctions.net wss://*.firebaseio.com wss://*.googleapis.com" + (process.env.NAL_LOCAL_ACCEPTANCE === 'true' && process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.startsWith('demo-') ? ' http://127.0.0.1:* ws://127.0.0.1:*' : ''),
       "worker-src 'self' blob:",
       "upgrade-insecure-requests",
     ].join('; ');

@@ -2,6 +2,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { z } from "zod";
+import { requireFullAdmin } from './admin-access';
 
 const createUserSchema = z.object({
     name: z.string().min(2),
@@ -38,11 +39,6 @@ function deriveAccessModel(role: z.infer<typeof createUserSchema>['role']) {
     }
 }
 
-function isAdminCaller(token: admin.auth.DecodedIdToken | undefined): boolean {
-    if (!token) return false;
-    return token.accessRole === 'ADMIN' || (token.role === 'Admin' && !token.accessRole);
-}
-
 // Helper function to generate a unique referral code
 function generateReferralCode(name: string): string {
     const namePart = name.split(' ')[0].toUpperCase().substring(0, 4).padEnd(4, 'X');
@@ -51,9 +47,7 @@ function generateReferralCode(name: string): string {
 }
 
 export const createUser = onCall(async (request) => {
-    if (!isAdminCaller(request.auth?.token)) {
-        throw new HttpsError('unauthenticated', 'The function must be called by an authenticated admin.');
-    }
+    await requireFullAdmin(request.auth?.uid);
     
     const validated = createUserSchema.safeParse(request.data);
     if (!validated.success) {

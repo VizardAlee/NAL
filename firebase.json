@@ -8,6 +8,7 @@
         ".git",
         ".env*",
         ".next",
+        ".next-acceptance",
         "test-results",
         "playwright-report",
         "firebase-debug.log",

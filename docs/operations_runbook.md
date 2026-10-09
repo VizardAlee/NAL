@@ -6,7 +6,7 @@ Run `npm run verify`. Deploy only when typecheck, lint, unit tests, Firestore ru
 
 ## Deployment and rollback
 
-The `main` branch is the production branch. GitHub Actions runs the complete verification suite before deploying Cloud Functions, Firestore rules and indexes, and Storage rules. Firebase App Hosting independently rolls out the verified repository commit when automatic rollouts are enabled for `main`.
+The `main` branch is the production branch. GitHub Actions runs the verification suite before deploying Cloud Functions, Firestore rules and indexes, Storage rules, and then App Hosting. Independent automatic App Hosting rollouts must not bypass this gate.
 
 The backend deployment uses keyless Google Workload Identity Federation. Configure these GitHub repository variables before setting `FIREBASE_CI_ENABLED` to `true`:
 
@@ -14,11 +14,11 @@ The backend deployment uses keyless Google Workload Identity Federation. Configu
 - `GCP_DEPLOY_SERVICE_ACCOUNT`: deployment service-account email.
 - `FIREBASE_CI_ENABLED`: set to `true` only after the identity and required IAM roles have been verified.
 
-In Firebase App Hosting, connect `VizardAlee/NAL`, set the app root to `/`, set the live branch to `main`, enable automatic rollouts, and leave Required Paths blank so every commit triggers a rollout.
+In Firebase App Hosting, connect `VizardAlee/NAL`, set the app root to `/`, and use the verified deployment workflow for production rollouts.
 
 Deploy Firebase rules before application code when a release depends on stricter authorization. Record the App Hosting release ID and Git commit. Roll back through Firebase App Hosting to the prior healthy release; restore the matching prior Firestore rules when required.
 
-Before the first production deployment, create one shared secret with `firebase functions:secrets:set CRON_SECRET`, grant the App Hosting backend access to it, and deploy Functions, Firestore rules, indexes, and Storage rules. The `runDailyAutomation` scheduled function runs at 00:05 Africa/Lagos time and retries failed invocations three times.
+Before the first production deployment, create one shared secret with `firebase functions:secrets:set CRON_SECRET`, grant the App Hosting backend access to it, and deploy Functions, Firestore rules, indexes, and Storage rules. The `runDailyAutomation` scheduled function runs at 16:00 Africa/Lagos time and retries failed invocations three times.
 
 ## Monitoring
 
@@ -44,7 +44,13 @@ Settlement or administrative closure must include a written reason. “Fully pai
 
 ## Backup and restore
 
-Enable scheduled Firestore exports to a versioned, access-restricted Cloud Storage bucket. Perform and document a restore rehearsal before launch and at least quarterly. Never test restores against production.
+On 9 October 2026, production database `(default)` in `studio-1298078893-e7941` was verified with daily native backups retained for 14 days, point-in-time recovery enabled, and database deletion protection enabled. Schedule: `3cf4b520-b7c8-4e04-ad38-5b33bbcdb79e`. These safeguards incur Cloud charges. The seven-day PITR history accumulates over time; enabling it does not immediately provide seven days of history. Check the database's `earliestVersionTime` before choosing a recovery point. A configured schedule is not proof that its first backup has completed.
+
+Before launch, verify that a backup has completed and perform a documented restore rehearsal in an isolated non-production destination using Google's supported restore/export workflow. Never overwrite production to test a restore. Compare document counts and financial invariants, test access controls, and record recovery time and recovery point. Repeat at least quarterly. No restore rehearsal has yet been certified.
+
+Firestore backups do not cover Firebase Auth accounts or Storage document/image objects. Define and test separate recovery and retention procedures for both before declaring whole-application recovery complete.
+
+Two enabled log-based failure alert policies were created on 9 October 2026: application/automation failures (`7913937012548037177`) and Firestore backup/restore failures (`7328744595726045751`). Email channel: `3782488741670412064`. Delivery must be confirmed by the recipient; configuration alone does not prove delivery. Add a second operational recipient, and separately configure missing-backup, availability, latency and budget alerts.
 
 Include `recoveryTasks` and its `logs`, `evidence`, `notices`, and `expenses` subcollections, plus `automationRuns` and `automationHealth`, in retention and legal-hold procedures. Record export job success and restore rehearsal evidence outside the production project.
 
@@ -52,11 +58,12 @@ Include `recoveryTasks` and its `logs`, `evidence`, `notices`, and `expenses` su
 
 - External counsel owns final approval of demand wording, limitation periods, service methods, court filings, settlement authority, evidence retention, and privacy notices.
 - An administrator must review the automation health card every business day; Cloud alert delivery must be tested quarterly with two recipients.
-- Firestore export and restoration remain cloud-configuration controls and are not completed by application deployment alone. Test restoration before launch and quarterly.
+- Daily Firestore backups, PITR and deletion protection are configured, but completed-backup verification, restoration rehearsal, Auth/Storage recovery and alert delivery remain separate launch controls.
 - Imported legacy repayments and deals must be reconciled before automation is enabled; only approved repayments are credited.
 - Access to Recovery and Legal personas must be reviewed monthly and immediately after staff role changes.
 - Client and guarantor contact details remain operational data; officers must verify them before notice service or enforcement.
-- The August 2026 dependency audit has no critical finding. Non-breaking fixes for `brace-expansion` and `fast-uri` are applied; remaining Next.js/Sharp and Genkit/OpenTelemetry advisories require breaking framework migrations. Track them as a dedicated upgrade, retest proposal analysis and image/PDF paths, and do not use `npm audit fix --force` on production branches.
+- The 9 October 2026 non-breaking dependency refresh removed the critical advisories. The production dependency audits still report 16 high and 53 moderate web advisories and seven moderate Functions advisories. Re-run audits for each release, assess exploitability and upgrade paths, and do not use `npm audit fix --force` on production branches.
+- Guarantor-photo path reads are restricted to their owner and full administrators. Previously issued bearer download URLs are not revoked by a Storage rule change; assess token rotation or authenticated delivery without breaking archived agreement evidence.
 
 ## Financial incident response
 

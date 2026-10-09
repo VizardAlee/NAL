@@ -167,6 +167,7 @@ function WithdrawDialog({
 
 export default function OwnerDashboardPage() {
   const { user } = useUser();
+  const auth = useAuth();
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
   const [withdrawalPage, setWithdrawalPage] = useState(1);
   const [snapshot, setSnapshot] = useState<OwnerDashboardSnapshot | null>(null);
@@ -180,7 +181,11 @@ export default function OwnerDashboardPage() {
     if (!user) return;
     setIsLoading(true);
     setLoadError(null);
-    user.getIdToken().then((authToken) => loadOwnerDashboardAction({ authToken })).then((result) => {
+    Promise.resolve().then(async () => {
+      const currentUser = auth?.currentUser;
+      if (!currentUser || currentUser.uid !== user.uid) throw new Error('Authentication is required.');
+      return loadOwnerDashboardAction({ authToken: await currentUser.getIdToken() });
+    }).then((result) => {
       if (cancelled) return;
       if (!result.success) {
         setSnapshot(null);
@@ -197,7 +202,7 @@ export default function OwnerDashboardPage() {
       if (!cancelled) setIsLoading(false);
     });
     return () => { cancelled = true; };
-  }, [user, refreshKey]);
+  }, [auth, user, refreshKey]);
 
   const metrics = snapshot?.metrics;
   const ownerPolicy = snapshot?.policy;

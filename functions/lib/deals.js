@@ -5,6 +5,7 @@ const https_1 = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const firebase_functions_1 = require("firebase-functions");
 const zod_1 = require("zod");
+const admin_access_1 = require("./admin-access");
 const createDealSchema = zod_1.z.object({
     dealName: zod_1.z.string().min(3),
     clientId: zod_1.z.string().min(1),
@@ -22,11 +23,6 @@ const createDealSchema = zod_1.z.object({
     repaymentFrequency: zod_1.z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
     startDate: zod_1.z.string().optional(), // Expecting ISO string from client
 });
-function isAdminCaller(token) {
-    if (!token)
-        return false;
-    return token.role === 'Admin' || ['OWNER', 'ADMIN', 'STAFF'].includes(token.accessRole);
-}
 function getErrorDetails(error) {
     if (error instanceof Error) {
         const firebaseError = error;
@@ -50,14 +46,7 @@ exports.createDeal = (0, https_1.onCall)({
         /^http:\/\/localhost(:\d+)?$/,
     ],
 }, async (request) => {
-    // Ensure the caller is an admin
-    if (!isAdminCaller(request.auth?.token)) {
-        throw new https_1.HttpsError('unauthenticated', 'The function must be called by an authenticated admin.');
-    }
-    const callerUid = request.auth?.uid;
-    if (!callerUid) {
-        throw new https_1.HttpsError('unauthenticated', 'The function must be called by an authenticated admin.');
-    }
+    const callerUid = await (0, admin_access_1.requireFullAdmin)(request.auth?.uid);
     const validated = createDealSchema.safeParse(request.data);
     if (!validated.success) {
         firebase_functions_1.logger.warn('createDeal validation failed', {

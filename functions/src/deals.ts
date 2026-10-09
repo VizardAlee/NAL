@@ -3,6 +3,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { logger } from "firebase-functions";
 import { z } from "zod";
+import { requireFullAdmin } from './admin-access';
 
 const createDealSchema = z.object({
   dealName: z.string().min(3),
@@ -21,11 +22,6 @@ const createDealSchema = z.object({
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
   startDate: z.string().optional(), // Expecting ISO string from client
 });
-
-function isAdminCaller(token: admin.auth.DecodedIdToken | undefined): boolean {
-    if (!token) return false;
-    return token.role === 'Admin' || ['OWNER', 'ADMIN', 'STAFF'].includes(token.accessRole as string);
-}
 
 function getErrorDetails(error: unknown) {
     if (error instanceof Error) {
@@ -54,14 +50,7 @@ export const createDeal = onCall(
     ],
   },
   async (request) => {
-    // Ensure the caller is an admin
-    if (!isAdminCaller(request.auth?.token)) {
-        throw new HttpsError('unauthenticated', 'The function must be called by an authenticated admin.');
-    }
-    const callerUid = request.auth?.uid;
-    if (!callerUid) {
-        throw new HttpsError('unauthenticated', 'The function must be called by an authenticated admin.');
-    }
+    const callerUid = await requireFullAdmin(request.auth?.uid);
     
     const validated = createDealSchema.safeParse(request.data);
     if (!validated.success) {

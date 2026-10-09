@@ -91,6 +91,15 @@ export function getAdminApp() {
         return admin.apps[0]!;
     }
 
+    if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 'true') {
+        const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '';
+        const hosts = ['FIRESTORE_EMULATOR_HOST', 'FIREBASE_AUTH_EMULATOR_HOST', 'FIREBASE_STORAGE_EMULATOR_HOST'];
+        if (!projectId.startsWith('demo-') || hosts.some(key => !/^127\.0\.0\.1:\d+$/.test(process.env[key] || '')) || isManagedRuntime()) {
+            throw new Error('Local acceptance mode requires a demo project and loopback emulators.');
+        }
+        return admin.initializeApp({ projectId, storageBucket: `${projectId}.appspot.com` });
+    }
+
     if (isManagedRuntime()) {
         return initializeWithApplicationDefaultCredentials();
     }

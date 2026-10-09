@@ -39,7 +39,10 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return hasRole('Admin') || hasAccessRole('ADMIN');
+      // An explicit modern access role always overrides legacy roles. A staff
+      // or owner profile may retain role=Admin for navigation compatibility.
+      return hasAccessRole('ADMIN') || (hasRole('Admin')
+        && !('accessRole' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data));
     }
 
     function isOwnerRole() {
@@ -51,7 +54,7 @@ service cloud.firestore {
     }
 
     function canAdminRead() {
-      return isAdmin() || isOwnerRole();
+      return isAdmin() || isOwnerRole() || isStaffRole();
     }
 
     function isClient() {

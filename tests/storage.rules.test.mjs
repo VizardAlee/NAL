@@ -74,6 +74,13 @@ test('guarantor photographs require an authenticated owner and an image file', a
   const client = env.authenticatedContext('client').storage();
   const other = env.authenticatedContext('other').storage();
   await assertSucceeds(client.ref('users/client/guarantors/photo.jpg').putString('photo', 'raw', jpegMetadata));
+  await assertSucceeds(client.ref('users/client/guarantors/photo.jpg').getMetadata());
+  await assertSucceeds(env.authenticatedContext('admin').storage().ref('users/client/guarantors/photo.jpg').getMetadata());
+  for (const uid of ['other', 'staff', 'recovery', 'legal']) {
+    await assertFails(env.authenticatedContext(uid).storage().ref('users/client/guarantors/photo.jpg').getMetadata());
+    await assertFails(env.authenticatedContext(uid).storage().ref('users/client/guarantors/photo.jpg').getDownloadURL());
+  }
+  await assertFails(env.unauthenticatedContext().storage().ref('users/client/guarantors/photo.jpg').getMetadata());
   await assertFails(other.ref('users/client/guarantors/photo.jpg').putString('photo', 'raw', jpegMetadata));
   await assertFails(client.ref('users/client/guarantors/document.pdf').putString('photo', 'raw', pdfMetadata));
 });

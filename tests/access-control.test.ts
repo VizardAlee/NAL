@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getAccessiblePortals } from '../src/lib/access-control';
+import { canWriteAdmin, getAccessiblePortals } from '../src/lib/access-control';
+
+test('explicit restricted or invalid roles never fall back to legacy Admin', () => {
+  for (const accessRole of ['STAFF', 'OWNER', 'USER', null, 'INVALID', '']) {
+    assert.equal(canWriteAdmin({ role: 'Admin', roles: ['Admin'], accessRole: accessRole as any }), false);
+  }
+  assert.equal(canWriteAdmin({ role: 'Admin' }), true);
+  assert.equal(canWriteAdmin({ role: 'Client', accessRole: 'ADMIN' }), true);
+});
 
 test('legacy and current administrators can switch to every portal they may access', () => {
   const expected = ['admin', 'investor', 'client', 'legal', 'recovery', 'marketer'];

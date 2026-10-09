@@ -21,6 +21,7 @@
 
 # production
 /build
+/.next-acceptance
 
 # misc
 .DS_Store

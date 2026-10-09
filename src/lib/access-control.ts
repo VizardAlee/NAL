@@ -96,7 +96,11 @@ export function deriveAccessModelFromLegacyRole(role?: LegacyRole | null): Acces
 export function normalizeAccessModel(user: UserLike | null | undefined): AccessModel {
   if (!user) return { accessRole: 'USER', personas: [], primaryPortal: 'client' };
 
-  if (user.accessRole) {
+  if (user.accessRole !== undefined) {
+    // A malformed explicit role is not a reason to fall back to legacy Admin.
+    if (!user.accessRole || !['OWNER', 'ADMIN', 'STAFF', 'USER'].includes(user.accessRole)) {
+      return { accessRole: 'USER', personas: [], primaryPortal: 'client' };
+    }
     const personas = Array.isArray(user.personas) ? uniquePersonas(user.personas) : [];
     const primaryPortal =
       user.primaryPortal ||

@@ -67,7 +67,7 @@ service firebase.storage {
     }
 
     match /users/{userId}/guarantors/{fileName} {
-      allow read: if signedIn();
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
       allow write: if signedIn()
         && request.auth.uid == userId
         && request.resource.size > 0
