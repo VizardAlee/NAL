@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 
 const roles = ['admin','owner','staff','client','investor','legal','recovery','marketer'];
@@ -16,6 +16,70 @@ for (const role of roles) test(`${role} signs in to its permitted dashboard`, as
   if (!['admin','owner','staff'].includes(role)) {
     await page.goto('/admin/users');
     await expect(page).not.toHaveURL(/\/admin\/users/,{timeout:60_000});
+  }
+});
+
+test('chart drawing, tabs and dialog cancellation preserve the emulator workspace', async ({ page }) => {
+  if (process.env.GCLOUD_PROJECT !== 'demo-nal-acceptance' || !process.env.FIRESTORE_EMULATOR_HOST?.startsWith('127.0.0.1:')) throw new Error('Emulators only.');
+  const app = initializeApp({ projectId: 'demo-nal-acceptance' }, 'motion-fixture');
+  const db = getFirestore(app);
+  const fixtureIds = [0, 1, 2].map(i => `motion-batch-${i}`);
+  try {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.goto('/login');
+    await expect(page.getByRole('button', { name: 'Login', exact: true })).toBeEnabled({ timeout: 60_000 });
+    await page.getByLabel('Email', { exact: true }).fill('admin@nal.test');
+    await page.getByLabel('Password', { exact: true }).fill('Emulator-only-123!');
+    await page.getByRole('button', { name: 'Login', exact: true }).click();
+    await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 60_000 });
+    await expect(page.getByRole('button', { name: 'Continue later', exact: true })).toBeVisible({ timeout: 20_000 });
+    await page.getByRole('button', { name: 'Continue later', exact: true }).click();
+    await expect(page.getByText('No fund batches yet', { exact: true })).toBeVisible({ timeout: 60_000 });
+    const emptyHeight = await page.getByText('No fund batches yet', { exact: true }).locator('..').evaluate(el => el.getBoundingClientRect().height);
+    expect(emptyHeight).toBe(320);
+    await page.getByText('No fund batches yet', { exact: true }).locator('..').scrollIntoViewIfNeeded();
+    for (let i = 0; i < 3; i++) {
+      const date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - i);
+      await db.collection('fundBatches').doc(fixtureIds[i]).set({ sourceId: 'investor', amount: (i + 1) * 10000, remainingAmount: (i + 1) * 10000, createdAt: Timestamp.fromDate(date) });
+    }
+    const series = page.locator('.recharts-area');
+    await expect(series).toBeVisible({ timeout: 60_000 });
+    await expect.poll(() => series.evaluate(el => el.getAnimations().length)).toBeGreaterThan(0);
+    await page.screenshot({ path: '/tmp/nal-motion-chart-entry.png' });
+    await page.waitForTimeout(300); // Sample the visual drawing, not a data interpolation.
+    await page.screenshot({ path: '/tmp/nal-motion-chart-mid.png' });
+    await expect.poll(() => series.evaluate(el => el.getAnimations().length)).toBe(0);
+    await page.screenshot({ path: '/tmp/nal-motion-chart-complete.png' });
+    // Data updates use their actual final geometry and do not replay the entrance.
+    await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+    await db.collection('fundBatches').doc(fixtureIds[0]).update({ amount: 12000 });
+    await expect.poll(() => series.evaluate(el => el.getAnimations().length)).toBe(0);
+    await expect(page.locator('.recharts-area-curve')).toHaveAttribute('d', /.+/);
+    await page.locator('.recharts-area-dot').last().hover();
+    await expect(page.getByText('₦12,000.00', { exact: true }).last()).toBeVisible();
+    await page.goto('/admin/reports');
+    await expect(page.getByRole('heading', { name: 'Financial Reports', exact: true })).toBeVisible({ timeout: 60_000 });
+    for (const name of ['Income Statement', 'Cash Flow', 'Balance Sheet', 'Income Statement']) {
+      await page.getByRole('tab', { name, exact: true }).click();
+      await expect(page.getByRole('tab', { name, exact: true })).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByRole('tabpanel')).toBeVisible();
+    }
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.getByRole('tab', { name: 'Cash Flow', exact: true }).click();
+    await expect(page.locator('[data-chart]').first()).toBeVisible();
+    await expect(page.locator('.recharts-bar').first()).toBeAttached();
+    expect(await page.locator('.recharts-bar').evaluateAll(els => els.every(el => el.getAnimations().length === 0))).toBe(true);
+    await page.goto('/admin/users');
+    await expect(page.getByRole('heading', { name: 'User Management', exact: true })).toBeVisible({ timeout: 60_000 });
+    const invite = page.getByRole('button', { name: /Invite User/ });
+    await invite.click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).not.toBeVisible();
+    await expect(invite).toBeFocused();
+  } finally {
+    await Promise.all(fixtureIds.map(id => db.collection('fundBatches').doc(id).delete()));
+    await deleteApp(app);
   }
 });
 

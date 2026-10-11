@@ -21,7 +21,7 @@ import { runDailyAutomationNowAction } from "./actions";
 
 const chartConfig = {
     tvl: {
-        label: "TVL",
+        label: "Capital activity",
         color: "hsl(var(--primary))",
     },
 };
@@ -240,7 +240,7 @@ export default function AdminDashboardPage() {
     const automationHealthRef = useMemo(() => firestore ? doc(firestore, 'automationHealth', 'daily') : null, [firestore]);
 
 
-    const { data: fundBatches, loading: fundBatchesLoading } = useCollection<FundBatch>(fundBatchesQuery);
+    const { data: fundBatches, loading: fundBatchesLoading, error: fundBatchesError } = useCollection<FundBatch>(fundBatchesQuery);
     const { data: users, loading: usersLoading } = useCollection<User>(usersQuery);
     const { data: recentTransactions, loading: transactionsLoading } = useCollection<Transaction>(transactionsQuery);
     const { data: dealRequests, loading: dealRequestsLoading } = useCollection<DealRequest>(dealRequestsQuery);
@@ -489,11 +489,13 @@ export default function AdminDashboardPage() {
               <div className="h-80 w-full px-6 pt-6">
                 <Skeleton className="h-full w-full rounded-t-xl" />
               </div>
+            ) : fundBatchesError ? (
+              <div className="flex h-80 items-center justify-center px-6 text-center text-sm text-muted-foreground" role="status">Capital activity could not be loaded. Please try again later.</div>
             ) : !fundBatches?.length ? (
-              <div className="flex min-h-56 flex-col items-center justify-center gap-3 px-6 py-10 text-center"><PiggyBank className="h-7 w-7 text-muted-foreground" aria-hidden="true" /><p className="text-sm font-medium">No fund batches yet</p><p className="max-w-sm text-sm text-muted-foreground">Recorded fund batches will appear in this chart.</p></div>
+              <div className="flex h-80 flex-col items-center justify-center gap-3 px-6 py-10 text-center"><PiggyBank className="h-7 w-7 text-muted-foreground" aria-hidden="true" /><p className="text-sm font-medium">No fund batches yet</p><p className="max-w-sm text-sm text-muted-foreground">Recorded fund batches will appear in this chart.</p></div>
             ) : (
               <div className="h-80 w-full">
-                <ChartContainer config={chartConfig}>
+                <ChartContainer config={chartConfig} className="h-full w-full aspect-auto">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart
                       data={chartData}
@@ -540,6 +542,7 @@ export default function AdminDashboardPage() {
                       />
           
                       <Area
+                        isAnimationActive={false}
                         type="monotone"
                         dataKey="tvl"
                         stroke="var(--color-tvl)"

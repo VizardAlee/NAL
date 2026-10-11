@@ -125,13 +125,13 @@ export default function Home() {
             <div className="flex flex-col gap-3 pt-1 sm:flex-row"><Button size="lg" asChild><Link href="#solutions">Explore our solutions <ArrowRight className="h-4 w-4" /></Link></Button><Button size="lg" variant="outline" asChild><a href="mailto:info@nalgm.com">Discuss a transaction <Mail className="h-4 w-4" /></a></Button></div>
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border/70 pt-5 text-xs text-muted-foreground"><span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" />Non-interest commercial structures</span><span className="flex items-center gap-2"><FileCheck2 className="h-4 w-4 text-primary" />Documented execution</span></div>
           </div>
-          <div className="nal-auth-story relative overflow-hidden rounded-[1.5rem] p-6 sm:p-8">
+          <Animated as="div" className="nal-auth-story relative overflow-hidden rounded-[1.5rem] p-6 sm:p-8">
             <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full border border-white/10" aria-hidden="true" />
             <div className="relative flex items-start justify-between gap-6"><p className="text-[11px] font-semibold uppercase tracking-[.18em] text-emerald-100/70">The NAL approach</p><PackageCheck className="h-8 w-8 text-[#d0bc8d]" /></div>
             <h2 className="mt-7 max-w-sm font-headline text-3xl font-medium leading-tight tracking-tight">A real transaction.<br />A clear path forward.</h2>
             <ol className="mt-8 divide-y divide-white/15">{[['01','Identify the commercial need','Goods, equipment, assets or a defined project.'],['02','Select the right structure','Trade, leasing, agency or partnership.'],['03','Document and execute','Agree responsibilities and settlement terms.']].map(([number,title,copy])=><li key={number} className="flex gap-4 py-5"><span className="pt-0.5 font-mono text-xs text-[#d0bc8d]">{number}</span><div><h3 className="text-sm font-semibold">{title}</h3><p className="mt-1 text-sm leading-relaxed text-white/65">{copy}</p></div></li>)}</ol>
             <p className="mt-4 border-t border-white/15 pt-5 text-xs leading-relaxed text-white/70">NAL does not accept deposits from the public or grant interest-bearing loans.</p>
-          </div>
+          </Animated>
         </div>
         <div className="container border-t border-border/60 py-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><p className="nal-eyebrow">Recognised commercial structures</p><NonInterestInstitutionMark className="h-10 w-20" /></div><div className="mt-4 flex flex-wrap gap-2" aria-label="Islamic commercial structures available through NAL">{heroIslamicStructures.map(([name,meaning])=><span key={name} className="rounded-md border border-border/80 bg-card/70 px-3 py-2 text-xs text-muted-foreground"><strong className="font-semibold text-foreground">{name}</strong> · {meaning}</span>)}</div></div>
       </section>
@@ -171,7 +171,7 @@ export default function Home() {
             <p className="mt-4 text-lg text-muted-foreground">From a single asset purchase to a structured trading venture, NAL selects a model that fits the underlying transaction.</p>
           </Animated>
           <div className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {solutions.map((solution, index) => <Animated key={solution.title} as="article" delay={80 + index * 70} className="group rounded-2xl border bg-card/90 p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5">
+            {solutions.map((solution, index) => <Animated key={solution.title} as="article" delay={(index % 3) * 70} className="group rounded-2xl border bg-card/90 p-6 shadow-sm nal-motion-card hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground"><solution.icon className="h-5 w-5" /></div>
               <h3 className="mt-5 font-headline text-xl font-bold">{solution.title}</h3>
               <p className="mt-3 leading-relaxed text-muted-foreground">{solution.description}</p>
@@ -188,7 +188,7 @@ export default function Home() {
             <p className="mt-5 text-lg leading-relaxed text-muted-foreground">NAL’s corporate objects provide for recognised trade, lease, partnership and benevolent structures. Availability depends on transaction suitability, approval and complete documentation.</p>
           </Animated>
           <div className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
-            {commercialModels.map(([name, label, description], index) => <Animated key={name} as="article" delay={index * 60} className="grid gap-3 p-5 sm:grid-cols-[3rem_10rem_1fr] sm:items-start sm:p-6">
+            {commercialModels.map(([name, label, description], index) => <Animated key={name} as="article" delay={(index % 3) * 60} className="grid gap-3 p-5 sm:grid-cols-[3rem_10rem_1fr] sm:items-start sm:p-6">
               <span className="font-mono text-sm text-muted-foreground">{String(index + 1).padStart(2, '0')}</span>
               <div><h3 className="font-headline text-lg font-bold text-primary">{name}</h3><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p></div>
               <p className="leading-relaxed text-muted-foreground">{description}</p>
@@ -215,12 +215,12 @@ export default function Home() {
       </section>
 
       <section id="contact" className="container pb-16 sm:pb-24">
-        <div className="overflow-hidden rounded-3xl bg-primary text-primary-foreground shadow-2xl shadow-primary/15">
+        <Animated as="div" className="overflow-hidden rounded-3xl bg-primary text-primary-foreground shadow-2xl shadow-primary/15">
           <div className="grid lg:grid-cols-[1.1fr_0.9fr]">
             <div className="p-7 sm:p-10 lg:p-12"><p className="text-sm font-bold uppercase tracking-[0.18em] text-primary-foreground/70">Start a conversation</p><h2 className="mt-3 max-w-xl font-headline text-3xl font-bold sm:text-5xl">Bring us the commercial need. We’ll help assess the right structure.</h2><p className="mt-5 max-w-xl text-lg leading-relaxed text-primary-foreground/75">Every transaction is subject to assessment, approval, documentation and applicable legal requirements.</p><div className="mt-7 flex flex-col gap-3 sm:flex-row"><Button size="lg" variant="secondary" asChild><a href="mailto:info@nalgm.com">Email NAL <Mail className="ml-2 h-4 w-4" /></a></Button><Button size="lg" variant="outline" className="border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" asChild><a href="tel:+2348032869067">Call us <Phone className="ml-2 h-4 w-4" /></a></Button></div></div>
             <div className="border-t border-primary-foreground/15 bg-black/10 p-7 sm:p-10 lg:border-l lg:border-t-0 lg:p-12"><h3 className="font-headline text-xl font-bold">NAL General Merchant Limited</h3><div className="mt-6 space-y-5 text-sm text-primary-foreground/80"><a href="mailto:info@nalgm.com" className="flex gap-3 hover:text-primary-foreground"><Mail className="mt-0.5 h-4 w-4 shrink-0" /><span>info@nalgm.com</span></a><a href="tel:+2348032869067" className="flex gap-3 hover:text-primary-foreground"><Phone className="mt-0.5 h-4 w-4 shrink-0" /><span>+234 (0) 803 286 9067<br />+234 (0) 803 206 5880</span></a><div className="flex gap-3"><MapPin className="mt-0.5 h-4 w-4 shrink-0" /><span>Block 03, Shop No. 02A/03A, Civic Center Ultra Modern Market, Civic Centre Road, Kano State, Nigeria.</span></div></div></div>
           </div>
-        </div>
+        </Animated>
       </section>
     </main>
 

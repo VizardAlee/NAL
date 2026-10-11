@@ -1,52 +1,24 @@
-
 'use client';
 
-import React from 'react';
-import { useInView } from 'react-intersection-observer';
+import React, { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { Slot } from '@radix-ui/react-slot';
+import { viewportEntrance } from '@/lib/presentation-motion';
 
 type AnimatedProps = React.HTMLAttributes<HTMLDivElement> & {
-  asChild?: boolean;
-  as?: React.ElementType;
-  delay?: number;
-  threshold?: number;
-  triggerOnce?: boolean;
+  asChild?: boolean; as?: React.ElementType; delay?: number; threshold?: number;
 };
 
-export function Animated({
-  asChild,
-  as: Tag = 'div',
-  className,
-  children,
-  delay = 0,
-  threshold = 0.3,
-  triggerOnce = true,
-  ...props
-}: AnimatedProps) {
-  const { ref, inView } = useInView({
-    threshold,
-    triggerOnce,
-  });
-
+export function Animated({ asChild, as: Tag = 'div', className, children,
+  delay = 0, threshold = 0.08, ...props }: AnimatedProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    return viewportEntrance(ref.current, { delay, threshold, duration: 700,
+      keyframes: [{ opacity: 0.15, transform: 'translateY(18px)' }, { opacity: 1, transform: 'translateY(0)' }],
+    });
+  }, [delay, threshold]);
   const Comp = asChild ? Slot : Tag;
-
-  return (
-    <Comp
-      ref={ref}
-      className={cn(
-        'nal-reveal transition-[opacity,transform] duration-500 motion-reduce:opacity-100 motion-reduce:transform-none',
-        inView
-          ? 'opacity-100 translate-y-0'
-          : 'opacity-0 translate-y-4',
-        className
-      )}
-      style={{
-        transitionDelay: `${delay}ms`,
-      }}
-      {...props}
-    >
-      {children}
-    </Comp>
-  );
+  // Visible in SSR and without JS; only animate once the section enters the viewport.
+  return <Comp ref={ref} className={cn('nal-reveal', className)} {...props}>{children}</Comp>;
 }

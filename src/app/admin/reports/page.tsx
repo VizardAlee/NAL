@@ -578,8 +578,8 @@ export default function ReportsPage() {
                                             <YAxis stroke="hsl(var(--foreground))" tickFormatter={formatCurrencyShort} />
                                             <Tooltip content={<ChartTooltipContent formatter={(value) => formatCurrency(value as number)} />} />
                                             <Legend />
-                                            <Bar dataKey="revenue" fill="hsl(var(--chart-1))" name="Revenue" radius={[4, 4, 0, 0]} />
-                                            <Bar dataKey="expenses" fill="hsl(var(--destructive))" name="Expenses" radius={[4, 4, 0, 0]} />
+                                            <Bar isAnimationActive={false} dataKey="revenue" fill="hsl(var(--chart-1))" name="Revenue" radius={[4, 4, 0, 0]} />
+                                            <Bar isAnimationActive={false} dataKey="expenses" fill="hsl(var(--destructive))" name="Expenses" radius={[4, 4, 0, 0]} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </ChartContainer>
@@ -637,7 +637,7 @@ export default function ReportsPage() {
                                             <XAxis dataKey="name" stroke="hsl(var(--foreground))" />
                                             <YAxis stroke="hsl(var(--foreground))" tickFormatter={formatCurrencyShort} />
                                             <Tooltip content={<ChartTooltipContent formatter={(value) => formatCurrency(value as number)} />} />
-                                            <Bar dataKey="value" name="Cash Flow" radius={[4, 4, 0, 0]}>
+                                            <Bar isAnimationActive={false} dataKey="value" name="Cash Flow" radius={[4, 4, 0, 0]}>
                                                 {chartData?.cashFlow.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.value >= 0 ? "hsl(var(--chart-1))" : "hsl(var(--destructive))"} />
                                                 ))}

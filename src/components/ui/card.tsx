@@ -35,6 +35,7 @@ const CardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
+    data-motion-title
     className={cn(
       "text-lg font-semibold leading-snug tracking-tight",
       className

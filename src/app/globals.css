@@ -504,3 +504,42 @@ td,
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .nal-reveal { opacity: 1 !important; transform: none !important; }
 }
+
+/* Shared motion: short exits, gentle deceleration, no delays on actions or values. */
+:root {
+  --nal-motion-ease: cubic-bezier(.22, 1, .36, 1);
+}
+.nal-motion-overlay[data-state][data-state=open], .nal-motion-dialog[data-state][data-state=open], .nal-motion-menu[data-state][data-state=open] {
+  animation-duration: 220ms;
+  animation-timing-function: var(--nal-motion-ease);
+}
+.nal-motion-overlay[data-state][data-state=closed], .nal-motion-dialog[data-state][data-state=closed], .nal-motion-menu[data-state][data-state=closed] {
+  animation-duration: 140ms;
+  animation-timing-function: cubic-bezier(.4, 0, 1, 1);
+}
+.nal-motion-sheet[data-state][data-state=open] { animation-duration: 320ms; animation-timing-function: var(--nal-motion-ease); }
+.nal-motion-sheet[data-state][data-state=closed] { animation-duration: 200ms; animation-timing-function: cubic-bezier(.4, 0, 1, 1); }
+.nal-motion-menu { transform-origin: var(--radix-dropdown-menu-content-transform-origin, var(--radix-popover-content-transform-origin, center)); }
+.nal-motion-control, [role=tab], [data-sidebar=menu-button], [data-sidebar=menu-sub-button], nav a {
+  transition-property: background-color, color, border-color, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: var(--nal-motion-ease);
+}
+.nal-motion-card {
+  transition: transform 300ms var(--nal-motion-ease), border-color 200ms ease, box-shadow 300ms var(--nal-motion-ease);
+}
+.nal-motion-tab-panel[data-state=active] [data-motion-title] {
+  animation: nal-title-enter 260ms var(--nal-motion-ease);
+}
+@keyframes nal-title-enter {
+  from { opacity: .65; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce), print {
+  .nal-reveal, .nal-motion-tab-panel [data-motion-title] { animation: none !important; opacity: 1 !important; transform: none !important; }
+}
+
+@media print {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  [data-chart] .recharts-area, [data-chart] .recharts-bar { clip-path: none !important; }
+}

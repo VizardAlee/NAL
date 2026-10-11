@@ -8,6 +8,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import React from 'react';
 import { CompanyLogoProvider } from '@/components/company-logo-provider';
 import { NotificationProvider } from '@/components/notification-provider';
+import { NavigationMotion } from '@/components/navigation-motion';
 import { PwaRegistration } from '@/components/pwa-registration';
 import { LanguageProvider } from '@/components/language-provider';
 import { OnboardingTourProvider } from '@/components/onboarding-tour';
@@ -43,6 +44,7 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <a href="#main-content" className="fixed left-4 top-4 z-[100] -translate-y-24 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-lg focus:translate-y-0">Skip to content</a>
         <PwaRegistration />
+        <NavigationMotion />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
