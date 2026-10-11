@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -25,6 +24,7 @@ import {
 import { Animated } from '@/components/animated';
 import { Logo } from '@/components/icons';
 import { NonInterestInstitutionMark } from '@/components/non-interest-institution-mark';
+import { PublicMobileNav } from '@/components/public-mobile-nav';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { useCompanyLogo } from '@/components/company-logo-provider';
@@ -94,10 +94,10 @@ export default function Home() {
 
   return <div className="home-gradient-bg min-h-screen bg-background text-foreground">
     <header className="sticky top-0 z-50 border-b border-border/70 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75">
-      <div className="container flex h-16 items-center gap-5">
+      <div className="container flex h-[72px] items-center gap-3 sm:gap-5">
         <Link href="/" className="flex min-w-0 items-center gap-2.5" aria-label="NAL General Merchant home">
           <Logo imageUrl={logoUrl} className="h-8 w-8 shrink-0 text-primary" />
-          <span className="truncate font-headline text-sm font-bold sm:text-base">NAL General Merchant</span>
+          <span className="truncate font-headline text-sm font-bold sm:text-base"><span className="sm:hidden">NAL</span><span className="hidden sm:inline">NAL General Merchant</span></span>
         </Link>
         <nav className="ml-auto hidden items-center gap-6 text-sm font-medium text-muted-foreground lg:flex" aria-label="Main navigation">
           <Link href="#about" className="transition-colors hover:text-primary">About</Link>
@@ -106,81 +106,34 @@ export default function Home() {
           <Link href="#contact" className="transition-colors hover:text-primary">Contact</Link>
         </nav>
         <div className="ml-auto flex items-center gap-2 lg:ml-2">
-          <ThemeToggle />
+          <div className="hidden sm:block"><ThemeToggle /></div>
           <Button asChild size="sm">
             <Link href="/login"><KeyRound className="mr-2 h-4 w-4" /> Client login</Link>
           </Button>
+          <PublicMobileNav />
         </div>
       </div>
     </header>
 
-    <main>
-      <section className="relative overflow-hidden border-b border-border/60">
-        <div className="pointer-events-none absolute -left-32 top-24 h-96 w-96 rounded-full bg-primary/10 blur-3xl" />
-        <div className="pointer-events-none absolute -right-32 -top-16 h-[30rem] w-[30rem] rounded-full bg-accent/10 blur-3xl" />
-        <div className="container relative grid gap-12 py-14 sm:py-20 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:py-28">
-          <Animated as="div" className="space-y-7">
-            <div className="flex flex-wrap items-center gap-4">
-              <Image src="/business_hub.png" alt="NAL Business Hub" width={360} height={141} priority className="h-auto w-[220px] sm:w-[285px]" />
-              <NonInterestInstitutionMark className="h-14 w-24 border-l border-border/70 pl-4 sm:h-16 sm:w-28" priority />
-            </div>
-            <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                <ShieldCheck className="h-3.5 w-3.5" /> Trade-based · Asset-backed · Partnership-oriented
-              </div>
-              <div className="flex max-w-3xl flex-wrap gap-2" aria-label="Islamic commercial structures available through NAL">
-                {heroIslamicStructures.map(([name, meaning]) => (
-                  <span key={name} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-700/20 bg-emerald-950/[0.04] px-3 py-1.5 text-sm font-semibold text-emerald-900 shadow-sm dark:border-emerald-300/20 dark:bg-emerald-300/[0.07] dark:text-emerald-200">
-                    <span>{name} <span className="font-medium text-emerald-800/70 dark:text-emerald-200/70">({meaning})</span></span>
-                  </span>
-                ))}
-              </div>
-              <p className="max-w-2xl text-sm font-medium leading-relaxed text-muted-foreground">
-                Recognised non-interest structures for transparent trade, leasing, agency, guarantees and partnership ventures.
-              </p>
-            </div>
-            <div className="space-y-5">
-              <h1 className="max-w-3xl font-headline text-4xl font-bold tracking-[-0.035em] sm:text-5xl lg:text-6xl lg:leading-[1.04]">
-                Commerce structured around <span className="text-primary">real assets</span> and shared value.
-              </h1>
-              <p className="max-w-2xl text-lg leading-relaxed text-muted-foreground sm:text-xl">
-                NAL General Merchant Limited provides ethical commercial and investment solutions for MSMEs, individuals, cooperatives and organisations through transparent trade, leasing and partnership arrangements.
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button size="lg" asChild><Link href="#solutions">Explore our solutions <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
-              <Button size="lg" variant="outline" asChild><a href="mailto:info@nalgm.com">Discuss a transaction <Mail className="ml-2 h-4 w-4" /></a></Button>
-            </div>
-            <div className="flex flex-wrap gap-x-6 gap-y-2 pt-1 text-sm text-muted-foreground">
-              <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-primary" /> Clear commercial terms</span>
-              <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-primary" /> Identifiable assets and projects</span>
-              <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-primary" /> Documented execution</span>
-            </div>
-          </Animated>
-
-          <Animated as="div" delay={180} className="relative">
-            <div className="home-dashboard-preview p-5 sm:p-7">
-              <div className="relative flex items-start justify-between gap-4 border-b border-border/70 pb-5">
-                <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">NAL operating principle</p><h2 className="mt-2 max-w-md font-headline text-2xl font-bold sm:text-3xl">A real transaction at the centre of every structure.</h2></div>
-                <PackageCheck className="h-10 w-10 shrink-0 text-accent" />
-              </div>
-              <div className="relative mt-6 space-y-3">
-                {[
-                  ['01', 'Identify the commercial need', 'Goods, equipment, commodities, productive assets or a defined project.'],
-                  ['02', 'Select the right structure', 'Purchase and resale, lease, agency, partnership or another suitable commercial model.'],
-                  ['03', 'Document and execute', 'Agree the price, responsibilities, delivery, profit-sharing and settlement terms before execution.'],
-                ].map(([number, title, copy]) => <div key={number} className="group flex gap-4 rounded-xl border bg-background/75 p-4 transition-colors hover:border-primary/30 hover:bg-background">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary font-mono text-xs font-bold text-primary-foreground">{number}</span>
-                  <div><h3 className="font-semibold">{title}</h3><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{copy}</p></div>
-                </div>)}
-              </div>
-              <div className="relative mt-5 flex items-start gap-3 rounded-xl bg-slate-950 p-4 text-slate-100 dark:bg-slate-900">
-                <Scale className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" />
-                <p className="text-sm leading-relaxed"><strong>Commercial—not conventional lending.</strong> NAL does not accept deposits from the public or grant interest-bearing loans.</p>
-              </div>
-            </div>
-          </Animated>
+    <main id="main-content" tabIndex={-1}>
+      <section className="relative border-b border-border/60">
+        <div className="container grid gap-10 py-10 sm:py-16 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:gap-16 lg:py-20">
+          <div className="space-y-6">
+            <p className="nal-eyebrow flex items-center gap-2"><span className="h-px w-6 bg-primary" />Trade · Assets · Partnerships</p>
+            <h1 className="max-w-3xl font-headline text-[2.6rem] font-semibold leading-[1.08] tracking-[-0.045em] sm:text-6xl lg:text-[4.25rem]">Commerce structured around <span className="text-primary">real assets</span> and shared value.</h1>
+            <p className="max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">Ethical commercial and investment solutions for MSMEs, individuals and organisations. Clear terms. Real activity. Documented partnerships.</p>
+            <div className="flex flex-col gap-3 pt-1 sm:flex-row"><Button size="lg" asChild><Link href="#solutions">Explore our solutions <ArrowRight className="h-4 w-4" /></Link></Button><Button size="lg" variant="outline" asChild><a href="mailto:info@nalgm.com">Discuss a transaction <Mail className="h-4 w-4" /></a></Button></div>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border/70 pt-5 text-xs text-muted-foreground"><span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" />Non-interest commercial structures</span><span className="flex items-center gap-2"><FileCheck2 className="h-4 w-4 text-primary" />Documented execution</span></div>
+          </div>
+          <div className="nal-auth-story relative overflow-hidden rounded-[1.5rem] p-6 sm:p-8">
+            <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full border border-white/10" aria-hidden="true" />
+            <div className="relative flex items-start justify-between gap-6"><p className="text-[11px] font-semibold uppercase tracking-[.18em] text-emerald-100/70">The NAL approach</p><PackageCheck className="h-8 w-8 text-[#d0bc8d]" /></div>
+            <h2 className="mt-7 max-w-sm font-headline text-3xl font-medium leading-tight tracking-tight">A real transaction.<br />A clear path forward.</h2>
+            <ol className="mt-8 divide-y divide-white/15">{[['01','Identify the commercial need','Goods, equipment, assets or a defined project.'],['02','Select the right structure','Trade, leasing, agency or partnership.'],['03','Document and execute','Agree responsibilities and settlement terms.']].map(([number,title,copy])=><li key={number} className="flex gap-4 py-5"><span className="pt-0.5 font-mono text-xs text-[#d0bc8d]">{number}</span><div><h3 className="text-sm font-semibold">{title}</h3><p className="mt-1 text-sm leading-relaxed text-white/65">{copy}</p></div></li>)}</ol>
+            <p className="mt-4 border-t border-white/15 pt-5 text-xs leading-relaxed text-white/70">NAL does not accept deposits from the public or grant interest-bearing loans.</p>
+          </div>
         </div>
+        <div className="container border-t border-border/60 py-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><p className="nal-eyebrow">Recognised commercial structures</p><NonInterestInstitutionMark className="h-10 w-20" /></div><div className="mt-4 flex flex-wrap gap-2" aria-label="Islamic commercial structures available through NAL">{heroIslamicStructures.map(([name,meaning])=><span key={name} className="rounded-md border border-border/80 bg-card/70 px-3 py-2 text-xs text-muted-foreground"><strong className="font-semibold text-foreground">{name}</strong> · {meaning}</span>)}</div></div>
       </section>
 
       <section className="border-b bg-primary text-primary-foreground">

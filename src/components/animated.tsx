@@ -35,7 +35,7 @@ export function Animated({
     <Comp
       ref={ref}
       className={cn(
-        'transition-all duration-700',
+        'nal-reveal transition-[opacity,transform] duration-500 motion-reduce:opacity-100 motion-reduce:transform-none',
         inView
           ? 'opacity-100 translate-y-0'
           : 'opacity-0 translate-y-4',

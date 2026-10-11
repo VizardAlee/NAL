@@ -36,7 +36,7 @@ function LegalSkeleton() {
             <Skeleton className="h-8 w-24" />
             <Skeleton className="h-8 w-8 rounded-full" />
         </header>
-        <main className="flex-1 p-6">
+        <main id="main-content" tabIndex={-1} className="flex-1 p-6">
             <Skeleton className="h-8 w-48 mb-6" />
             <Skeleton className="h-64 w-full rounded-lg" />
         </main>
@@ -140,7 +140,7 @@ export default function LegalLayout({
             <NotificationBell historyHref="/legal/notifications" />
             <AccountMenu />
         </header>
-        <main className="app-content flex-1 p-4 lg:p-6">{children}</main>
+        <main id="main-content" tabIndex={-1} className="app-content flex-1 p-4 lg:p-6">{children}</main>
     </div>
   );
 }

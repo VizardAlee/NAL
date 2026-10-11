@@ -195,7 +195,7 @@ export function AdminNav() {
           <SidebarMenuItem key={item.href}>
             <SidebarMenuButton
               asChild
-              isActive={pathname === item.href}
+              isActive={isItemActive(pathname, item)}
               tooltip={item.label}
               variant="default"
               className="w-full justify-between"

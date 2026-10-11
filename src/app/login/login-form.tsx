@@ -14,9 +14,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
@@ -36,6 +35,7 @@ export function LoginForm() {
   const { toast } = useToast();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [loginError, setLoginError] = useState("");
   const auth = useAuth();
@@ -142,12 +142,12 @@ export function LoginForm() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="font-headline text-2xl">Login</CardTitle>
-        <CardDescription>Enter your credentials to access your workspace.</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <div>
+      <div className="mb-8">
+        <h1 className="font-headline text-3xl font-semibold tracking-tight sm:text-4xl">Login</h1>
+        <p className="mt-3 text-sm text-muted-foreground">Enter your credentials to access your workspace.</p>
+      </div>
+      <div>
         <Form {...form}>
           <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
@@ -157,7 +157,7 @@ export function LoginForm() {
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="name@example.com" autoCapitalize="none" autoCorrect="off" {...field} />
+                    <Input type="email" autoComplete="username" placeholder="name@example.com" autoCapitalize="none" autoCorrect="off" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -169,9 +169,10 @@ export function LoginForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="••••••••" {...field} />
-                  </FormControl>
+                  <div className="relative">
+                    <FormControl><Input autoComplete="current-password" type={showPassword ? 'text' : 'password'} className="pr-12" placeholder="••••••••" {...field} /></FormControl>
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 text-muted-foreground" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</Button>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
@@ -201,7 +202,7 @@ export function LoginForm() {
                 </Link>
             </p>
          </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

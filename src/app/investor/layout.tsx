@@ -41,7 +41,7 @@ function InvestorSkeleton() {
             <Skeleton className="h-8 w-24" />
             <Skeleton className="h-8 w-8 rounded-full" />
         </header>
-        <main className="flex-1 p-6">
+        <main id="main-content" tabIndex={-1} className="flex-1 p-6">
             <Skeleton className="h-8 w-48 mb-6" />
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 <Skeleton className="h-32 w-full rounded-lg" />
@@ -238,7 +238,7 @@ export default function InvestorLayout({
                 <NotificationBell historyHref="/investor/notifications" />
                 <AccountMenu />
             </header>
-            <main className="app-content flex-1 p-4 pb-24 lg:p-6">{children}</main>
+            <main id="main-content" tabIndex={-1} className="app-content flex-1 p-4 pb-24 lg:p-6">{children}</main>
             <InvestorMobileNav />
         </div>
     </>

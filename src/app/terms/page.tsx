@@ -27,7 +27,7 @@ export default function TermsOfUsePage() {
         </div>
       </header>
 
-      <main className="app-content px-4 py-10 md:py-16">
+      <main id="main-content" tabIndex={-1} className="app-content px-4 py-10 md:py-16">
         <div className="surface-panel mx-auto max-w-4xl space-y-6 rounded-lg p-6 sm:p-8 lg:p-10">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">

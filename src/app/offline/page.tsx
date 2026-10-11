@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 
 export default function OfflinePage() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-center">
+    <div id="main-content" tabIndex={-1} className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-center">
       <div className="max-w-md">
         <WifiOff className="mx-auto h-16 w-16 text-destructive" />
         <h1 className="mt-6 text-3xl font-bold font-headline text-foreground">

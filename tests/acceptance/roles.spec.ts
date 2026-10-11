@@ -63,6 +63,34 @@ test('admin reviews a mixed historical bundle and posts one unclaimed client wit
   } finally {await deleteApp(app);}
 });
 
+test('premium admin workspace remains usable across mobile and desktop', async ({ page }) => {
+  await page.goto('/login');
+  await expect(page.getByRole('button', { name: 'Login', exact: true })).toBeEnabled({ timeout: 60_000 });
+  await page.getByLabel('Email', { exact: true }).fill('admin@nal.test');
+  await page.getByLabel('Password', { exact: true }).fill('Emulator-only-123!');
+  await page.getByRole('button', { name: 'Login', exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 60_000 });
+  await expect(page.getByRole('button', { name: 'Continue later', exact: true })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: 'Continue later', exact: true }).click();
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const [path, title] of [['dashboard', 'Admin Dashboard'], ['users', 'User Management'], ['reports', 'Financial Reports']]) {
+      await page.goto(`/admin/${path}`);
+      await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible({ timeout: 60_000 });
+      await expect(page.locator('#main-content')).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByText('Application error:', { exact: false })).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+      await page.screenshot({ path: `/tmp/nal-premium-${path}-${width}.png`, fullPage: true });
+    }
+    if (width === 390) {
+      await page.getByRole('button', { name: 'More', exact: true }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('dialog')).not.toBeVisible();
+    }
+  }
+});
+
 test('real emulator tokens enforce admin-only API writes', async ({ request }) => {
   let adminToken = '';
   for (const role of roles) {

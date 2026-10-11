@@ -54,7 +54,7 @@ export default function ForgotPasswordPage() {
   });
 
   return (
-    <div className="auth-shell">
+    <div id="main-content" tabIndex={-1} className="auth-shell">
       <div className="w-full max-w-md">
         <div className="auth-lockup">
           <Link href="/" className="auth-brand">

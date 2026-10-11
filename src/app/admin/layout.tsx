@@ -57,7 +57,7 @@ function AdminSkeleton() {
             <header className="flex items-center h-16 border-b px-6 justify-end">
                 <Skeleton className="h-8 w-8 rounded-full" />
             </header>
-            <main className="p-6">
+            <main id="main-content" tabIndex={-1} className="p-6">
                 <Skeleton className="h-32 w-full" />
                 <Skeleton className="mt-4 h-64 w-full" />
             </main>
@@ -148,11 +148,11 @@ export default function AdminLayout({
             <div className="flex items-center gap-2 p-2">
                 <Link href="/admin/dashboard" className="flex items-center gap-2">
                 <Logo imageUrl={logoUrl} className="h-7 w-7 text-primary" />
-                <span className="text-lg font-bold font-headline text-primary group-data-[collapsible=icon]:hidden">
+                <span className="text-base font-semibold font-headline text-primary group-data-[collapsible=icon]:hidden">
                     NAL General Merchant
                 </span>
                 </Link>
-                <NonInterestInstitutionMark className="h-12 w-20 self-start group-data-[collapsible=icon]:hidden" />
+                <NonInterestInstitutionMark className="hidden" />
             </div>
             </SidebarHeader>
             <SidebarContent>
@@ -196,7 +196,7 @@ export default function AdminLayout({
                 </div>
               </div>
             )}
-            <main className={`app-content flex-1 p-4 pb-24 lg:p-6 ${ownerReadOnly ? 'owner-readonly' : ''}`}>{children}</main>
+            <main id="main-content" tabIndex={-1} className={`app-content flex-1 p-4 pb-24 lg:p-6 ${ownerReadOnly ? 'owner-readonly' : ''}`}>{children}</main>
             <AdminMobileNav />
         </SidebarInset>
         </SidebarProvider>

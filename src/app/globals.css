@@ -143,7 +143,7 @@ html {
 }
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 img,
@@ -226,36 +226,36 @@ td,
 
 @layer base {
   :root {
-    --background: 210 33% 98%;
-    --foreground: 222 47% 11%;
+    --background: 45 24% 97%;
+    --foreground: 160 16% 13%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 160 16% 13%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 151 58% 22%;
+    --popover-foreground: 160 16% 13%;
+    --primary: 158 59% 20%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 150 28% 94%;
+    --secondary: 150 20% 93%;
     --secondary-foreground: 222 47% 11%;
-    --muted: 210 28% 95%;
-    --muted-foreground: 216 18% 43%;
-    --accent: 88 50% 52%;
+    --muted: 45 16% 94%;
+    --muted-foreground: 155 7% 40%;
+    --accent: 42 40% 76%;
     --accent-foreground: 148 55% 11%;
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 72% 43%;
     --destructive-foreground: 0 0% 98%;
-    --border: 214 30% 88%;
-    --input: 214 30% 88%;
+    --border: 150 12% 87%;
+    --input: 150 12% 79%;
     --ring: 148 55% 21%;
-    --chart-1: hsl(var(--primary));
-    --chart-2: hsl(var(--accent));
+    --chart-1: 158 59% 30%;
+    --chart-2: 42 40% 54%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-    --sidebar-background: 150 24% 97%;
+    --radius: 0.75rem;
+    --sidebar-background: 150 20% 98%;
     --sidebar-foreground: 222 47% 11%;
     --sidebar-primary: 148 55% 21%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 150 25% 91%;
+    --sidebar-accent: 153 25% 90%;
     --sidebar-accent-foreground: 222 47% 11%;
     --sidebar-border: 150 18% 86%;
     --sidebar-ring: 148 55% 21%;
@@ -267,21 +267,21 @@ td,
     --card-foreground: 150 28% 94%;
     --popover: 154 24% 9%;
     --popover-foreground: 210 40% 98%;
-    --primary: 151 56% 38%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 151 43% 65%;
+    --primary-foreground: 158 50% 10%;
     --secondary: 154 18% 15%;
     --secondary-foreground: 150 28% 94%;
     --muted: 154 18% 15%;
     --muted-foreground: 150 12% 65%;
     --accent: 88 48% 58%;
     --accent-foreground: 154 40% 8%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 82% 72%;
+    --destructive-foreground: 154 40% 8%;
     --border: 154 16% 22%;
     --input: 154 16% 22%;
     --ring: 151 56% 42%;
-    --chart-1: hsl(var(--primary));
-    --chart-2: hsl(var(--accent));
+    --chart-1: 158 59% 30%;
+    --chart-2: 42 40% 54%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
@@ -323,7 +323,7 @@ td,
   }
 
   .app-topbar {
-    @apply border-b bg-background/80 shadow-sm shadow-primary/5 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75;
+    @apply border-b bg-card/95 backdrop-blur-xl;
   }
 
   .app-content {
@@ -331,7 +331,7 @@ td,
   }
 
   .surface-panel {
-    @apply border bg-card/95 shadow-sm shadow-primary/5 backdrop-blur;
+    @apply border bg-card shadow-[0_2px_8px_-4px_rgba(16,44,32,0.12)];
   }
 
   .auth-shell {
@@ -348,8 +348,8 @@ td,
 
   .home-gradient-bg {
     background:
-      radial-gradient(55rem 55rem at 15% -10%, hsla(var(--primary) / 0.2), transparent 60%),
-      radial-gradient(45rem 45rem at 95% 10%, hsla(var(--accent) / 0.2), transparent 60%),
+      radial-gradient(55rem 55rem at 15% -10%, hsla(var(--primary) / 0.07), transparent 60%),
+      radial-gradient(45rem 45rem at 95% 10%, hsla(var(--accent) / 0.10), transparent 60%),
       linear-gradient(to bottom, hsla(var(--background) / 0.95), hsl(var(--background)));
   }
 
@@ -474,4 +474,33 @@ td,
 }
 @media (prefers-reduced-motion: reduce) {
   .nal-guide-signature { animation: none; stroke-dashoffset: 0; }
+}
+
+/* NAL visual system: quiet surfaces, readable finance, explicit keyboard focus. */
+@layer base {
+  body { line-height: 1.55; }
+  h1, h2, h3 { text-wrap: balance; }
+  a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+  a:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 4px; }
+  input, select, textarea { font-variant-numeric: tabular-nums; }
+  td, th, [data-chart], .app-content .text-2xl { font-variant-numeric: tabular-nums lining-nums; }
+  section[id] { scroll-margin-top: 6rem; }
+}
+@layer utilities {
+  .app-content { @apply px-4 sm:px-6 lg:px-8; padding-top: 1.5rem; }
+  .app-topbar { box-shadow: 0 1px 0 hsla(var(--primary) / .03); }
+  [data-sidebar=header] { @apply border-b px-3 py-5; }
+  [data-sidebar=content] { @apply px-2 py-4; }
+  [data-sidebar=menu] { @apply gap-1; }
+  [data-sidebar=menu-button] { @apply min-h-10 rounded-lg text-sidebar-foreground/75; }
+  [data-sidebar=menu-button][data-active=true] { @apply bg-sidebar-accent text-primary shadow-none; }
+  [data-sidebar=menu-sub-button][data-active=true] { @apply text-primary; }
+  [data-chart] { font-family: Inter, system-ui, sans-serif; }
+  .nal-eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-primary; }
+  .nal-auth-story { background: linear-gradient(145deg, #103d30, #0b2822); color: #f4f5ed; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .nal-reveal { opacity: 1 !important; transform: none !important; }
 }

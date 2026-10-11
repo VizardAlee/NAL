@@ -2,7 +2,7 @@
 'use client';
 
 import { PageHeader } from "@/components/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LayoutDashboard, Users, AlertTriangle, Activity, Briefcase, DollarSign, Zap, TrendingUp, HandCoins, ShieldOff, PiggyBank, FilePlus, Wallet, Gavel, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
@@ -421,19 +421,76 @@ export default function AdminDashboardPage() {
     <div>
       <PageHeader
         title="Admin Dashboard"
-        description="A high-level overview of platform-wide metrics."
+        description="Capital, activity and operational priorities across NAL."
         icon={LayoutDashboard}
       />
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2 lg:col-span-3 lg:grid-cols-4">
+            <Link href="/admin/funds" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Investments Received</CardTitle>
+                <PiggyBank className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                {investorDepositsLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{formatCurrency(totalInvestmentsReceived)}</div>}
+                <div className="text-xs text-muted-foreground">Total approved investor capital</div>
+            </CardContent>
+            </Card>
+            </Link>
+            <Link href="/admin/reports" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Platform Earnings</CardTitle>
+                <span className="text-muted-foreground font-bold text-lg">₦</span>
+            </CardHeader>
+            <CardContent>
+                {earningsLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{formatCurrency(platformEarnings)}</div>}
+                <div className="text-xs text-muted-foreground">Total accumulated earnings</div>
+            </CardContent>
+            </Card>
+            </Link>
+            <Link href="/admin/users" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                {usersLoading ? (
+                    <Skeleton className="h-8 w-1/2" />
+                ) : (
+                    <div className="text-2xl font-bold">{users?.length ?? 0}</div>
+                )}
+                <div className="text-xs text-muted-foreground">Total users on the platform</div>
+            </CardContent>
+            </Card>
+            </Link>
+            <Link href="/admin/approvals/repayments" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+                {overdueRepaymentsLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{overdueRepayments?.length ?? 0}</div>}
+                <div className="text-xs text-muted-foreground">Pending repayments past due date</div>
+            </CardContent>
+            </Card>
+            </Link>
+        </div>
         <Card className="lg:col-span-3 overflow-hidden">
           <CardHeader>
-            <CardTitle>Total Value Locked (TVL)</CardTitle>
+            <CardTitle>Capital activity</CardTitle>
+            <CardDescription>Fund batches created over the last three months.</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
               <div className="h-80 w-full px-6 pt-6">
                 <Skeleton className="h-full w-full rounded-t-xl" />
               </div>
+            ) : !fundBatches?.length ? (
+              <div className="flex min-h-56 flex-col items-center justify-center gap-3 px-6 py-10 text-center"><PiggyBank className="h-7 w-7 text-muted-foreground" aria-hidden="true" /><p className="text-sm font-medium">No fund batches yet</p><p className="max-w-sm text-sm text-muted-foreground">Recorded fund batches will appear in this chart.</p></div>
             ) : (
               <div className="h-80 w-full">
                 <ChartContainer config={chartConfig}>
@@ -498,60 +555,7 @@ export default function AdminDashboardPage() {
             )}
           </CardContent>
         </Card>
-        <div className="grid gap-6 sm:grid-cols-2 lg:col-span-3 lg:grid-cols-4">
-            <Link href="/admin/funds" className="block">
-            <Card className="h-full transition-colors hover:bg-muted/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Investments Received</CardTitle>
-                <PiggyBank className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                {investorDepositsLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{formatCurrency(totalInvestmentsReceived)}</div>}
-                <div className="text-xs text-muted-foreground">Total approved investor capital</div>
-            </CardContent>
-            </Card>
-            </Link>
-            <Link href="/admin/reports" className="block">
-            <Card className="h-full transition-colors hover:bg-muted/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Platform Earnings</CardTitle>
-                <span className="text-muted-foreground font-bold text-lg">₦</span>
-            </CardHeader>
-            <CardContent>
-                {earningsLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{formatCurrency(platformEarnings)}</div>}
-                <div className="text-xs text-muted-foreground">Total accumulated earnings</div>
-            </CardContent>
-            </Card>
-            </Link>
-            <Link href="/admin/users" className="block">
-            <Card className="h-full transition-colors hover:bg-muted/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Users</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                {usersLoading ? (
-                    <Skeleton className="h-8 w-1/2" />
-                ) : (
-                    <div className="text-2xl font-bold">{users?.length ?? 0}</div>
-                )}
-                <div className="text-xs text-muted-foreground">Total users on the platform</div>
-            </CardContent>
-            </Card>
-            </Link>
-            <Link href="/admin/approvals/repayments" className="block">
-            <Card className="h-full transition-colors hover:bg-muted/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Overdue Payments</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-            </CardHeader>
-            <CardContent>
-                {overdueRepaymentsLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{overdueRepayments?.length ?? 0}</div>}
-                <div className="text-xs text-muted-foreground">Pending repayments past due date</div>
-            </CardContent>
-            </Card>
-            </Link>
-        </div>
+
       </div>
 
       <div className="mt-8 grid gap-4 lg:grid-cols-3">

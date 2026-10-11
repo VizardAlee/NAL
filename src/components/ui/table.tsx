@@ -27,8 +27,8 @@ const Table = React.forwardRef<
     return () => observer.disconnect()
   }, [])
   return (
-    <div className="relative min-w-0 w-full overflow-hidden rounded-md">
-      <table ref={tableRef} className={cn("responsive-table w-full caption-bottom text-sm", className)} {...props} />
+    <div className="relative min-w-0 w-full overflow-x-auto rounded-lg">
+      <table ref={tableRef} className={cn("responsive-table w-full caption-bottom text-sm tabular-nums", className)} {...props} />
     </div>
   )
 })
@@ -105,7 +105,7 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn("min-w-0 p-4 align-middle break-words [&:has([role=checkbox])]:pr-0", className)}
+    className={cn("min-w-0 px-4 py-3.5 align-middle break-words [&:has([role=checkbox])]:pr-0", className)}
     {...props}
   />
 ))

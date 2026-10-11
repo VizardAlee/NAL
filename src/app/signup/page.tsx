@@ -217,7 +217,7 @@ function SignupPageContent() {
 
 
   return (
-    <div className="auth-shell">
+    <div id="main-content" tabIndex={-1} className="auth-shell">
       <div className="w-full max-w-md">
         <div className="auth-lockup">
           <Link href="/" className="auth-brand">
@@ -395,7 +395,7 @@ function SignupPageContent() {
 export default function SignupPage() {
   return (
     <Suspense fallback={
-      <div className="auth-shell">
+      <div id="main-content" tabIndex={-1} className="auth-shell">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     }>
