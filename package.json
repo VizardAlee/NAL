@@ -58,7 +58,6 @@
     "next": "^15.5.26",
     "next-themes": "^0.4.6",
     "papaparse": "^5.4.1",
-    "patch-package": "^8.0.0",
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
@@ -85,5 +84,13 @@
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.29"
+    },
+    "@firebase/firestore": {
+      "@grpc/grpc-js": "1.14.6"
+    }
   }
 }
