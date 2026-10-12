@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { notifyAdmins } from '@/lib/server/notification-service';
 import { adminDb } from '@/firebase/admin-app';
-import { verifyAuthTokenForUser } from '@/lib/server/auth';
+import { verifyPersonaForUser } from '@/lib/server/auth';
 import { calculateRemainingRepaymentBalance, generateAmortizationSchedule } from '@/lib/amortization';
 import { Deal } from '@/lib/types';
 import { roundCurrency } from '@/lib/financial-integrity';
@@ -74,7 +74,7 @@ export async function lodgePaymentAction(
 
   try {
     const firestore = adminDb;
-    await verifyAuthTokenForUser(authToken, userId);
+    await verifyPersonaForUser(authToken, userId, 'CLIENT');
     const lodgedAt = Timestamp.now();
 
     const repaymentData = await firestore.runTransaction(async (trx) => {
@@ -194,7 +194,7 @@ export async function requestTerminationAction(
     const { authToken, dealId, dealName, clientId, clientName } = validatedFields.data;
     
     try {
-        await verifyAuthTokenForUser(authToken, clientId);
+        await verifyPersonaForUser(authToken, clientId, 'CLIENT');
         const requestRef = adminDb.collection('terminationRequests').doc(`${dealId}_${clientId}`);
         const settlement = await adminDb.runTransaction(async (trx) => {
             const dealRef = adminDb.collection('deals').doc(dealId);

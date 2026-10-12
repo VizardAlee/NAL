@@ -104,7 +104,7 @@ export default function MarketerLayout({
   }, [user, loading, router]);
   
 
-  if (loading || !user || logoLoading) {
+  if (loading || !user || logoLoading || !canAccessPortal(user, 'marketer')) {
     return <MarketerSkeleton />;
   }
 

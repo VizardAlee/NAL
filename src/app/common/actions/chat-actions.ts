@@ -6,7 +6,7 @@ import { getFirestore, Timestamp, FieldValue, QueryDocumentSnapshot } from 'fire
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { notifyAdmins, notifyUser } from '@/lib/server/notification-service';
-import { verifyAuthToken, verifyAuthTokenForUser } from '@/lib/server/auth';
+import { verifyAuthToken, verifyAuthTokenForUser, verifyPersonaForUser } from '@/lib/server/auth';
 import { canViewAdmin, normalizeAccessModel } from '@/lib/access-control';
 
 
@@ -73,7 +73,7 @@ export async function requestChatWithAdmin(input: z.infer<typeof requestChatSche
   const adminDb = getFirestore(getAdminApp());
 
   try {
-    await verifyAuthTokenForUser(authToken, userId);
+    await verifyPersonaForUser(authToken, userId, userRole === 'Investor' ? 'INVESTOR' : 'CLIENT');
 
     const requestRef = adminDb.collection('chatRequests').doc(userId);
     await adminDb.runTransaction(async (trx) => {

@@ -13,7 +13,7 @@ import {
 } from '@/lib/financial-integrity';
 import { planRepaymentAllocations } from '@/lib/repayment-allocation';
 import { loadFundBatchAnniversaryWindow } from '@/lib/server/fund-batch-anniversary';
-import { assertInvestmentAgreementExecuted } from '@/lib/server/agreement-eligibility';
+import { assertInvestmentAgreementExecuted, capitalLockForBatch } from '@/lib/server/agreement-eligibility';
 import { isProfitDistributionLocked, lockedUntilForBatch } from '@/lib/workflow-eligibility';
 import { prepareReceiptPosting } from '@/lib/server/receipt-posting';
 
@@ -62,11 +62,17 @@ export async function processDepositRequestAction(input: DecisionInput) {
     const snapshot = await trx.get(requestRef);
     if (!snapshot.exists || snapshot.data()?.status !== 'Pending') throw new Error('This deposit request has already been processed.');
     const request = snapshot.data()!;
+    let principalLockedUntil: Timestamp | undefined;
     if (data.decision === 'Approved') {
-      await assertInvestmentAgreementExecuted(trx, data.requestId, {
+      const agreement = await assertInvestmentAgreementExecuted(trx, data.requestId, {
         // Requests created before the signing-first rollout remain processable.
         allowHistoricalWithoutEnvelope: request.agreementSigningRequired === undefined,
       });
+      if (agreement) {
+        const maturity = new Date(agreement.documentModel?.maturityDate || '');
+        if (!Number.isFinite(maturity.getTime())) throw new Error('The executed investment agreement has no valid maturity date.');
+        principalLockedUntil = Timestamp.fromDate(maturity);
+      }
     }
     const postReceipt = data.decision === 'Approved' ? await prepareReceiptPosting(trx, {
       receiptId: request.receiptId, amount: Number(request.amount), purpose: 'INVESTOR_CONTRIBUTION', requestId: data.requestId,
@@ -87,6 +93,7 @@ export async function processDepositRequestAction(input: DecisionInput) {
       paymentReference: request.paymentReference || `NAL-DEP-${data.requestId.toUpperCase()}`,
       specialInvestment: data.specialInvestment,
       sourceRequestId: data.requestId,
+      ...(principalLockedUntil ? { principalLockedUntil } : {}),
     });
     trx.set(adminDb.collection('transactions').doc(), {
       userId: request.investorId, type: 'Deposit', amount: request.amount, createdAt: now,
@@ -163,12 +170,16 @@ export async function processWithdrawalRequestAction(input: DecisionInput) {
       return;
     }
     const batchesSnapshot = await trx.get(eligibleBatchesQuery.orderBy('createdAt', 'asc'));
+    let deductionBatches = batchesSnapshot.docs;
     if (request.source === 'Capital') {
-      const eligibleCapital = batchesSnapshot.docs.filter(doc => {
-        const batch = doc.data();
-        const until = batch.principalLockedUntil ? lockedUntilForBatch(batch) : null;
-        return !until || new Date() >= until;
-      }).reduce((sum, doc) => sum + Math.max(0, Number(doc.data().remainingAmount || 0)), 0);
+      const requestedBatch = request.fundBatchId || String(request.details || '').match(/\(Batch ID: ([a-zA-Z0-9_-]+)\)/)?.[1];
+      const eligible: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+      for (const doc of batchesSnapshot.docs) {
+        const until = await capitalLockForBatch(trx, doc.id, doc.data());
+        if ((!requestedBatch || doc.id === requestedBatch) && (!until || new Date() >= until)) eligible.push(doc);
+      }
+      deductionBatches = eligible;
+      const eligibleCapital = eligible.reduce((sum, doc) => sum + Math.max(0, Number(doc.data().remainingAmount || 0)), 0);
       if (Number(request.amount) > eligibleCapital + 0.01) throw new Error('Investment capital remains locked until its documented contract maturity.');
     }
     if (!isOwnerWithdrawal && request.source !== 'Capital') {
@@ -193,7 +204,7 @@ export async function processWithdrawalRequestAction(input: DecisionInput) {
     }
     trx.update(requestRef, { status: data.decision, processedAt: FieldValue.serverTimestamp() });
     let remaining = Math.abs(Number(request.amount));
-    for (const batch of batchesSnapshot.docs) {
+    for (const batch of deductionBatches) {
       if (remaining <= 0) break;
       if (request.source === 'Capital' && batch.data().principalLockedUntil) {
         const until = lockedUntilForBatch(batch.data());

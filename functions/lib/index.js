@@ -20,4 +20,5 @@ admin.initializeApp();
 __exportStar(require("./users"), exports);
 __exportStar(require("./deals"), exports);
 __exportStar(require("./automation"), exports);
+__exportStar(require("./legacy-funding"), exports);
 //# sourceMappingURL=index.js.map

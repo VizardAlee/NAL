@@ -46,13 +46,15 @@ interface FundBatch {
 const TWELVE_MONTHS_IN_DAYS = 360;
 
 export async function POST(request: NextRequest) {
-    const { dealId } = await request.json();
+    let dealId: unknown;
+    try { ({ dealId } = await request.json()); }
+    catch { return NextResponse.json({ success: false, message: 'Invalid funding request.' }, { status: 400 }); }
     const authHeader = request.headers.get('authorization');
     const authToken = authHeader?.startsWith('Bearer ')
         ? authHeader.slice('Bearer '.length).trim()
         : '';
 
-    if (!dealId) {
+    if (typeof dealId !== 'string' || !dealId.trim() || dealId.length > 180 || dealId.includes('/')) {
         return NextResponse.json({ success: false, message: 'Deal ID is missing.' }, { status: 400 });
     }
 
@@ -64,6 +66,7 @@ export async function POST(request: NextRequest) {
         await verifyAdminWrite(authToken);
 
         await firestore.runTransaction(async (transaction) => {
+            finalAmountFunded = 0;
             const dealRef = firestore.collection('deals').doc(dealId);
             const dealDoc = await transaction.get(dealRef);
 

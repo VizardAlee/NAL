@@ -103,7 +103,7 @@ export default function LegalLayout({
   }, [user, loading, router]);
   
 
-  if (loading || !user || logoLoading) {
+  if (loading || !user || logoLoading || !canAccessPortal(user, 'legal')) {
     return <LegalSkeleton />;
   }
 

@@ -7,3 +7,4 @@ admin.initializeApp();
 export * from "./users";
 export * from "./deals";
 export * from "./automation";
+export * from "./legacy-funding";

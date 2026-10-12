@@ -1,3 +1,4 @@
+import { assertAutomationJobsSucceeded } from '@/lib/automation-result';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/firebase/admin-app';
@@ -386,6 +387,7 @@ async function processMarketerRatings() {
     let totalDeals = 0;
 
     try {
+      if (typeof marketer.referralCode !== 'string' || !marketer.referralCode.trim()) throw new Error('Marketer referral code is missing. An administrator must review this account configuration.');
       const referredClientsSnapshot = await adminDb.collection('users').where('referredByCode', '==', marketer.referralCode).get();
       const referredClientIds = referredClientsSnapshot.docs
         .filter((doc) => hasPersona(doc.data(), 'CLIENT'))
@@ -395,10 +397,15 @@ async function processMarketerRatings() {
       referredClientIds.forEach(id => dealsToScore.add(id));
 
       if (dealsToScore.size > 0) {
-        const dealsSnapshot = await adminDb.collection('deals').where('clientId', 'in', Array.from(dealsToScore)).get();
-        totalDeals = dealsSnapshot.size;
+        const clientIds = Array.from(dealsToScore);
+        const dealDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+        for (let offset = 0; offset < clientIds.length; offset += 30) {
+          const snapshot = await adminDb.collection('deals').where('clientId', 'in', clientIds.slice(offset, offset + 30)).get();
+          dealDocs.push(...snapshot.docs);
+        }
+        totalDeals = dealDocs.length;
 
-        for (const dealDoc of dealsSnapshot.docs) {
+        for (const dealDoc of dealDocs) {
           const repaymentsSnapshot = await adminDb.collection('repayments').where('dealId', '==', dealDoc.id).where('status', '==', 'Approved').get();
           
           repaymentsSnapshot.forEach(repaymentDoc => {
@@ -455,18 +462,25 @@ async function handleCron(request: NextRequest) {
         runRef.set({ status: 'RUNNING', startedAt, source: 'runDailyAutomation' }),
         healthRef.set({ status: 'RUNNING', lastStartedAt: startedAt, lastRunId: runRef.id }, { merge: true }),
     ]);
+    let summary: Record<string, unknown> = {};
+    const withoutDetails = <T extends Record<string, unknown>>(value: T) => Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'details'));
     try {
         const [zakatResult, recoveryResult, marketerResult] = await Promise.all([
             processZakat(),
             processRecoveryTasks(),
             processMarketerRatings()
         ]);
+        summary = { zakat: withoutDetails(zakatResult), recovery: withoutDetails(recoveryResult), marketerRating: withoutDetails(marketerResult) };
+        assertAutomationJobsSucceeded({ zakat: zakatResult, recovery: recoveryResult, marketerRating: marketerResult });
         const ownerProfitResult = await processOwnerProfitAllocations({ includeHistorical: false, limit: 500 });
+        summary.ownerProfit = withoutDetails(ownerProfitResult as unknown as Record<string, unknown>);
+        assertAutomationJobsSucceeded({ ownerProfit: ownerProfitResult });
         const whatsappReminders = await prepareWhatsAppReminders(adminDb);
+        summary.whatsappReminders = whatsappReminders;
+        assertAutomationJobsSucceeded({ whatsappReminders });
 
         const completedAt = Timestamp.now();
-        const withoutDetails = <T extends Record<string, unknown>>(value: T) => Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'details'));
-        const summary = {
+        summary = {
             zakat: withoutDetails(zakatResult), recovery: withoutDetails(recoveryResult),
             marketerRating: withoutDetails(marketerResult), ownerProfit: withoutDetails(ownerProfitResult as unknown as Record<string, unknown>),
             whatsappReminders,
@@ -490,8 +504,8 @@ async function handleCron(request: NextRequest) {
         const failedAt = Timestamp.now();
         const message = error instanceof Error ? error.message : 'Unknown error';
         await Promise.allSettled([
-            runRef.set({ status: 'FAILED', failedAt, error: message }, { merge: true }),
-            healthRef.set({ status: 'FAILED', lastFailedAt: failedAt, lastCompletedAt: failedAt, lastRunId: runRef.id, lastError: message }, { merge: true }),
+            runRef.set({ status: 'FAILED', failedAt, error: message, summary }, { merge: true }),
+            healthRef.set({ status: 'FAILED', lastFailedAt: failedAt, lastCompletedAt: failedAt, lastRunId: runRef.id, lastError: message, summary }, { merge: true }),
             notifyAdmins('Daily automation failed', message, '/admin/dashboard', 'system'),
         ]);
         return NextResponse.json({ success: false, message: 'Cron job failed.', error: message }, { status: 500 });

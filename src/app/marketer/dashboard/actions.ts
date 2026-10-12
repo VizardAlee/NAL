@@ -36,9 +36,7 @@ export async function getMarketerStats(input: z.infer<typeof marketerStatsSchema
     }
     const referralCode = typeof marketer?.referralCode === 'string' ? marketer.referralCode : '';
 
-  if (!referralCode) {
-    return { success: true, data: { referredClientCount: 0, referredInvestorCount: 0, totalInvestorCapital: 0, totalDealValue: 0, referredClients: [], referredInvestors: [], deals: [] } };
-  }
+    if (!referralCode) return { success: false, message: 'Your marketer referral code is not configured. Contact a NAL administrator.' };
 
     // 1. Get all users referred by this marketer's code
     const referredUsersQuery = adminDb.collection('users').where('referredByCode', '==', referralCode);

@@ -158,7 +158,7 @@ export default function ClientLayout({
   }, [user, loading, router]);
   
 
-  if (loading || !user || logoLoading) {
+  if (loading || !user || logoLoading || !canAccessPortal(user, 'client')) {
     return <ClientSkeleton />;
   }
 

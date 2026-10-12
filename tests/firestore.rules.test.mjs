@@ -9,6 +9,20 @@ import {
 import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
 
 let env;
+test('removing modern personas revokes stale legacy role reads but leaves true legacy profiles usable', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    const db=context.firestore();
+    for(const role of ['Investor','Recovery','Legal']) await setDoc(doc(db,'users',`removed-${role}`),{role,accessRole:'USER',personas:[]});
+    await setDoc(doc(db,'users','legacy-investor-fixture'),{roles:['Investor']});
+    await setDoc(doc(db,'deals','persona-deal'),{clientId:'other-client'});
+    await setDoc(doc(db,'recoveryTasks','persona-recovery'),{status:'OVERDUE',assigneeId:null});
+    await setDoc(doc(db,'recoveryTasks','persona-legal'),{status:'ESCALATED_LEGAL',assigneeId:null});
+  });
+  await assertFails(getDoc(doc(env.authenticatedContext('removed-Investor').firestore(),'deals','persona-deal')));
+  await assertFails(getDoc(doc(env.authenticatedContext('removed-Recovery').firestore(),'recoveryTasks','persona-recovery')));
+  await assertFails(getDoc(doc(env.authenticatedContext('removed-Legal').firestore(),'recoveryTasks','persona-legal')));
+  await assertSucceeds(getDoc(doc(env.authenticatedContext('legacy-investor-fixture').firestore(),'deals','persona-deal')));
+});
 
 before(async () => {
   env = await initializeTestEnvironment({
@@ -60,6 +74,14 @@ test('financial evidence and bank reconciliation cannot be read or forged direct
 test('clients cannot create role-bearing user profiles', async () => {
 const db = env.authenticatedContext('attacker').firestore();
   await assertFails(setDoc(doc(db, 'users', 'attacker'), { role: 'Admin', accessRole: 'ADMIN' }));
+});
+
+test('customer submissions and deduplication reservations are server-only', async () => {
+  for(const uid of ['client','admin','staff','owner']) {
+    const db=env.authenticatedContext(uid).firestore();
+    await assertFails(setDoc(doc(db,'dealRequests','browser-forgery'),{clientId:uid,status:'Pending',principal:100}));
+    await assertFails(setDoc(doc(db,'customerRequestSubmissions','browser-marker'),{requestId:'browser-forgery',userId:uid}));
+  }
 });
 
 test('modern roles override legacy Admin and stale admin claims for writes', async () => {

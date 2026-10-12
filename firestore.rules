@@ -12,7 +12,8 @@ service cloud.firestore {
       return request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && (
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role
+          ('role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role)
           || (
             'roles' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data
             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles.hasAny([role])
@@ -57,24 +58,31 @@ service cloud.firestore {
       return isAdmin() || isOwnerRole() || isStaffRole();
     }
 
+    function usesModernPersonas() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && ('accessRole' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+          || 'personas' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data);
+    }
+
     function isClient() {
-      return hasRole('Client') || hasPersona('CLIENT');
+      return hasPersona('CLIENT') || (!usesModernPersonas() && hasRole('Client'));
     }
     
     function isInvestor() {
-      return hasRole('Investor') || hasPersona('INVESTOR');
+      return hasPersona('INVESTOR') || (!usesModernPersonas() && hasRole('Investor'));
     }
 
     function isLegal() {
-      return hasRole('Legal') || hasPersona('LEGAL');
+      return hasPersona('LEGAL') || (!usesModernPersonas() && hasRole('Legal'));
     }
     
     function isRecovery() {
-       return hasRole('Recovery') || hasPersona('RECOVERY');
+       return hasPersona('RECOVERY') || (!usesModernPersonas() && hasRole('Recovery'));
     }
     
     function isMarketer() {
-       return hasRole('Marketer') || hasPersona('MARKETER');
+       return hasPersona('MARKETER') || (!usesModernPersonas() && hasRole('Marketer'));
     }
 
     function isRecoveryQueueStatus(status) {
@@ -250,7 +258,7 @@ service cloud.firestore {
         allow get, list: if canAdminRead();
         allow update: if false;
         // Clients can create their own requests and read them.
-        allow create: if isClient() && request.resource.data.clientId == request.auth.uid;
+        allow create: if false; // Trusted submission service enforces validation and retry deduplication.
         allow read: if isClient() && resource.data.clientId == request.auth.uid;
     }
 

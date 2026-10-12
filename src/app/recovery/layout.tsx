@@ -103,7 +103,7 @@ export default function RecoveryLayout({
   }, [user, loading, router]);
   
 
-  if (loading || !user || logoLoading) {
+  if (loading || !user || logoLoading || !canAccessPortal(user, 'recovery')) {
     return <RecoverySkeleton />;
   }
 

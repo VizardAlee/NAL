@@ -7,6 +7,7 @@ const __dirname = path.dirname(__filename);
 const applicationPageSources = [
   '/',
   '/admin/:path*',
+  '/access-pending',
   '/client/:path*',
   '/forgot-password',
   '/investor/:path*',

@@ -45,7 +45,7 @@ function generateReferralCode(name) {
     return `MARK-${namePart}-${randomPart}`;
 }
 exports.createUser = (0, https_1.onCall)(async (request) => {
-    await (0, admin_access_1.requireFullAdmin)(request.auth?.uid);
+    await (0, admin_access_1.requireCallableAdmin)(request);
     const validated = createUserSchema.safeParse(request.data);
     if (!validated.success) {
         throw new https_1.HttpsError('invalid-argument', 'Invalid data provided.');

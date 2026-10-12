@@ -21,6 +21,8 @@ for (const [id,accessRole,personas,role] of roles) {
   await auth.setCustomUserClaims(id,{accessRole,role,personas});
   await db.collection('users').doc(id).set({name:`Acceptance ${id}`,email:`${id}@nal.test`,role,accessRole,personas,primaryPortal:accessRole==='STAFF'?'admin':id,phoneNumber:'',address:'',bankName:'',bankAccountName:'',bankAccountNumber:'',isMuslim:false});
 }
+await auth.createUser({uid:'qa-none',email:'qa-none@nal.test',password:'Emulator-only-123!'});
+await db.doc('users/qa-none').set({name:'Synthetic no persona',accessRole:'USER',personas:[]});
 const bundle=historicalBundle();
 bundle.relatedParties![0].createNew=false;bundle.relatedParties![0].confirmed=false;
 bundle.agreementLinks!.forEach(link=>{link.confirmed=false;});
@@ -34,6 +36,8 @@ const env = { ...process.env, NAL_LOCAL_ACCEPTANCE:'true', NEXT_PUBLIC_USE_FIREB
   FIREBASE_PROJECT_ID:projectId, NEXT_PUBLIC_FIREBASE_API_KEY:'demo-acceptance-key', NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:`${projectId}.firebaseapp.com`,
   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET:`${projectId}.appspot.com`, NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:'1234567890', NEXT_PUBLIC_FIREBASE_APP_ID:'demo-acceptance',
   FINANCIAL_DOCUMENT_AI_ENABLED:'false', CRON_SECRET:'', GOOGLE_GENAI_API_KEY:'', GOOGLE_APPLICATION_CREDENTIALS:'', FIREBASE_SERVICE_ACCOUNT_JSON:'', FIREBASE_CLIENT_EMAIL:'', FIREBASE_PRIVATE_KEY:'' };
+const backend = spawnSync('node',['-r','./tests/server-action-context.cjs','--import','tsx','--test','tests/role-workflows.integration.ts'],{env,stdio:'inherit'});
+if (backend.status !== 0) process.exit(backend.status ?? 1);
 const build = spawnSync('npx',['next','build'],{env:{...env,NODE_ENV:'production'},stdio:'inherit'});
 if (build.status !== 0) process.exit(build.status ?? 1);
 const result = spawnSync('npx',['playwright','test','--config','playwright.acceptance.config.ts'],{env:{...env,NODE_ENV:'production'},stdio:'inherit'});

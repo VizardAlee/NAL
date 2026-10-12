@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { getMarketerStats } from './actions';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 
@@ -59,17 +60,19 @@ export default function MarketerDashboardPage() {
                         description: result.message
                     });
                 }
-                setLoading(false);
-            });
+            }).catch(error => {
+                toast({ variant: 'destructive', title: 'Statistics unavailable', description: error instanceof Error ? error.message : 'Please retry.' });
+            }).finally(() => setLoading(false));
         } else if (!userLoading) {
             // This case handles when the user is loaded but has no referral code
             setLoading(false);
         }
     }, [auth, user, userLoading, toast]);
 
-    const handleCopyCode = () => {
+    const handleCopyCode = async () => {
         if (!user?.referralCode) return;
-        navigator.clipboard.writeText(user.referralCode);
+        try { await navigator.clipboard.writeText(user.referralCode); }
+        catch { toast({ variant: 'destructive', title: 'Could not copy', description: 'Select and copy the code manually.' }); return; }
         toast({ title: "Copied!", description: "Your referral code has been copied to the clipboard." });
     };
 
@@ -83,6 +86,7 @@ export default function MarketerDashboardPage() {
                 icon={LayoutDashboard}
             />
 
+            {!isLoading && !user?.referralCode && <Alert><AlertTitle>Marketer setup incomplete</AlertTitle><AlertDescription>Your referral code is not configured. Contact a NAL administrator before referring customers. Statistics are unavailable.</AlertDescription></Alert>}
             <div className="grid gap-6">
                 <Card>
                     <CardHeader>
@@ -101,10 +105,10 @@ export default function MarketerDashboardPage() {
                 </Card>
 
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                    <StatCard title="Referred Clients" value={stats?.referredClientCount?.toString() || '0'} icon={Users} isLoading={isLoading} />
-                    <StatCard title="Referred Investors" value={stats?.referredInvestorCount?.toString() || '0'} icon={UserPlus} isLoading={isLoading} />
-                    <StatCard title="Total Investor Capital" value={new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(stats?.totalInvestorCapital || 0)} icon={Banknote} isLoading={isLoading} />
-                    <StatCard title="Total Deal Value" value={new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(stats?.totalDealValue || 0)} icon={Briefcase} isLoading={isLoading} />
+                    <StatCard title="Referred Clients" value={stats ? stats.referredClientCount.toString() : 'Unavailable'} icon={Users} isLoading={isLoading} />
+                    <StatCard title="Referred Investors" value={stats ? stats.referredInvestorCount.toString() : 'Unavailable'} icon={UserPlus} isLoading={isLoading} />
+                    <StatCard title="Total Investor Capital" value={stats ? new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(stats.totalInvestorCapital) : 'Unavailable'} icon={Banknote} isLoading={isLoading} />
+                    <StatCard title="Total Deal Value" value={stats ? new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(stats.totalDealValue) : 'Unavailable'} icon={Briefcase} isLoading={isLoading} />
                 </div>
                 
                 <div className="grid gap-6 lg:grid-cols-2">
@@ -140,7 +144,7 @@ export default function MarketerDashboardPage() {
                         </CardHeader>
                         <CardContent className="text-center">
                             <Star className="mx-auto h-16 w-16 text-yellow-400 fill-yellow-400" />
-                            <p className="text-4xl font-bold mt-2">{(user?.rating || 0).toFixed(1)} / 5.0</p>
+                            <p className="text-4xl font-bold mt-2">{typeof user?.rating === 'number' && Number.isFinite(user.rating) ? user.rating.toFixed(1) + ' / 5.0' : 'Not available'}</p>
                             <p className="text-sm text-muted-foreground mt-1">Rating updates periodically</p>
                         </CardContent>
                     </Card>

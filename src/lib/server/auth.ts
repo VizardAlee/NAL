@@ -42,7 +42,7 @@ export async function verifyAuthToken(authToken: string): Promise<DecodedIdToken
   }
   const { auth } = initializeFirebase();
   try {
-    return await auth.verifyIdToken(authToken);
+    return await auth.verifyIdToken(authToken, true);
   } catch (error: unknown) {
     // Keep the actionable Firebase reason in server logs without ever logging
     // the credential itself. The client receives the deliberately generic
@@ -63,6 +63,16 @@ export async function verifyAuthTokenForUser(authToken: string, expectedUid: str
   const decoded = await verifyAuthToken(authToken);
   if (!expectedUid || decoded.uid !== expectedUid) {
     throw createAuthError('Forbidden: invalid user context.', 403);
+  }
+  return decoded;
+}
+
+/** Customer operations require the current profile's persona, not just a matching UID. */
+export async function verifyPersonaForUser(authToken: string, expectedUid: string, persona: Persona, allowOwner = false): Promise<DecodedIdToken> {
+  const { decoded, accessSource } = await getVerifiedAccess(authToken);
+  if (!expectedUid || decoded.uid !== expectedUid) throw createAuthError('Forbidden: invalid user context.', 403);
+  if (!hasPersona(accessSource, persona) && !(allowOwner && accessSource.accessRole === 'OWNER')) {
+    throw createAuthError('Forbidden: this account does not have the required customer access.', 403);
   }
   return decoded;
 }

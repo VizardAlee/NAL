@@ -96,34 +96,32 @@ export function deriveAccessModelFromLegacyRole(role?: LegacyRole | null): Acces
 export function normalizeAccessModel(user: UserLike | null | undefined): AccessModel {
   if (!user) return { accessRole: 'USER', personas: [], primaryPortal: 'client' };
 
-  if (user.accessRole !== undefined) {
+  if (user.accessRole !== undefined || user.personas !== undefined) {
+    const explicitRole = user.accessRole === undefined
+      ? (user.role === 'Admin' || user.roles?.includes('Admin') ? 'ADMIN' : 'USER')
+      : user.accessRole;
     // A malformed explicit role is not a reason to fall back to legacy Admin.
-    if (!user.accessRole || !['OWNER', 'ADMIN', 'STAFF', 'USER'].includes(user.accessRole)) {
+    if (!explicitRole || !['OWNER', 'ADMIN', 'STAFF', 'USER'].includes(explicitRole)) {
       return { accessRole: 'USER', personas: [], primaryPortal: 'client' };
     }
-    const personas = Array.isArray(user.personas) ? uniquePersonas(user.personas) : [];
+    const personas = Array.isArray(user.personas) ? uniquePersonas(user.personas.filter(persona => persona === 'STAFF_MEMBER' || Object.hasOwn(PERSONA_TO_PORTAL, persona))) : [];
     const primaryPortal =
-      user.primaryPortal ||
-      (user.accessRole === 'OWNER'
+      (isPrimaryPortal(user.primaryPortal) ? user.primaryPortal : null) ||
+      (explicitRole === 'OWNER'
         ? 'owner'
-        : user.accessRole === 'ADMIN' || user.accessRole === 'STAFF'
+        : explicitRole === 'ADMIN' || explicitRole === 'STAFF'
         ? 'admin'
         : resolvePrimaryPortalFromPersonas(personas));
 
     return {
-      accessRole: user.accessRole,
+      accessRole: explicitRole,
       personas,
       primaryPortal,
     };
   }
 
-  const legacyRoles = (
-    Array.isArray(user.roles) && user.roles.length > 0
-      ? user.roles
-      : user.role
-      ? [user.role]
-      : []
-  ).filter(Boolean) as LegacyRole[];
+  const legacyRoles = [...(Array.isArray(user.roles) ? user.roles : []), ...(user.role ? [user.role] : [])]
+    .filter(Boolean) as LegacyRole[];
 
   if (legacyRoles.length === 0) {
     return { accessRole: 'USER', personas: [], primaryPortal: 'client' };
@@ -138,7 +136,7 @@ export function normalizeAccessModel(user: UserLike | null | undefined): AccessM
 
   const accessRole: AccessRole = hasAdminRole ? 'ADMIN' : 'USER';
   const primaryPortal =
-    user.primaryPortal ||
+    (isPrimaryPortal(user.primaryPortal) ? user.primaryPortal : null) ||
     (hasAdminRole ? 'admin' : resolvePrimaryPortalFromPersonas(personas));
 
   return {
@@ -226,7 +224,7 @@ export function getRouteForPortal(portal: PrimaryPortal): string {
 }
 
 export function isPrimaryPortal(value: unknown): value is PrimaryPortal {
-  return typeof value === 'string' && value in PORTAL_ROUTES;
+  return typeof value === 'string' && Object.hasOwn(PORTAL_ROUTES, value);
 }
 
 export function getAccessiblePortals(user: UserLike | null | undefined): PrimaryPortal[] {
@@ -255,7 +253,7 @@ export function getAccessiblePortals(user: UserLike | null | undefined): Primary
     return [...new Set(explicitPortals)];
   }
 
-  return [model.primaryPortal];
+  return [];
 }
 
 export function getDefaultRouteForUser(user: UserLike | null | undefined, preferredPortal?: PrimaryPortal | null): string {
@@ -280,5 +278,5 @@ export function getDefaultRouteForUser(user: UserLike | null | undefined, prefer
   }
 
   const firstAccessiblePortal = getAccessiblePortals(user)[0];
-  return firstAccessiblePortal ? getRouteForPortal(firstAccessiblePortal) : '/';
+  return firstAccessiblePortal ? getRouteForPortal(firstAccessiblePortal) : '/access-pending';
 }

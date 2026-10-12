@@ -5,8 +5,8 @@ import { headers } from 'next/headers';
 import { z } from 'zod';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { adminDb, adminStorageBucket } from '@/firebase/admin-app';
-import { verifyAdminOrOwner, verifyAuthToken } from '@/lib/server/auth';
-import { normalizeAccessModel } from '@/lib/access-control';
+import { verifyAdminOrOwner, verifyAdminWrite, verifyAuthToken } from '@/lib/server/auth';
+import { normalizeAccessModel, hasPersona } from '@/lib/access-control';
 import { notifyAdmins, notifyUser } from '@/lib/server/notification-service';
 import { loadInvestorAgreementAction } from '@/app/investor/agreements/actions';
 import {
@@ -513,7 +513,7 @@ export async function submitAuthenticatedSignatureAction(input: {
         }
       } else {
         const allowedOwnerRole = envelope.agreementType === 'MUDARABA' ? 'INVESTOR' : 'CLIENT';
-        if (decoded.uid !== envelope.ownerUserId || validated.data.role !== allowedOwnerRole) {
+        if (!hasPersona(profile, allowedOwnerRole) || decoded.uid !== envelope.ownerUserId || validated.data.role !== allowedOwnerRole) {
           throw new Error('You are not the required signer for this signature.');
         }
       }
@@ -597,8 +597,12 @@ export async function createExternalSigningInviteAction(input: {
     if (!envelopeSnapshot.exists) throw new Error('Start the signing process first.');
     let envelope = envelopeSnapshot.data() as StoredEnvelope;
     const decoded = await authorizeEnvelopeRead(validated.data.authToken, envelope);
+    if (decoded.uid !== envelope.ownerUserId) await verifyAdminWrite(validated.data.authToken);
+    else {
+      const profile = (await adminDb.collection('users').doc(decoded.uid).get()).data();
+      if (!hasPersona(profile, envelope.agreementType === 'MUDARABA' ? 'INVESTOR' : 'CLIENT')) throw new Error('This account no longer has the required customer access.');
+    }
     envelope = await upgradePendingMudarabaWitnesses(envelopeId, envelope);
-    if (decoded.uid !== envelope.ownerUserId) await verifyAdminOrOwner(validated.data.authToken);
     if (!envelope.requiredRoles.includes(validated.data.role)) throw new Error('This external signature is not required.');
     if (envelope.signedRoles.includes(validated.data.role)) throw new Error('This signer has already completed the agreement.');
 
@@ -715,10 +719,12 @@ export async function submitExternalSignatureAction(input: {
     const loaded = await loadValidInvite(validated.data.token);
     const suppliedPinHash = sha256(`${loaded.tokenHash}:${validated.data.pin}`);
     if (!safeEqual(suppliedPinHash, loaded.invite.pinHash)) {
-      const failedAttempts = (loaded.invite.failedAttempts || 0) + 1;
-      await loaded.inviteReference.update({
-        failedAttempts,
-        ...(failedAttempts >= 5 ? { lockedAt: Timestamp.now() } : {}),
+      const failedAttempts = await adminDb.runTransaction(async transaction => {
+        const current = await transaction.get(loaded.inviteReference);
+        if (!current.exists || current.data()?.consumedAt || current.data()?.lockedAt) throw new Error('This signing link is no longer active.');
+        const attempts = Number(current.data()?.failedAttempts || 0) + 1;
+        transaction.update(loaded.inviteReference, { failedAttempts: attempts, ...(attempts >= 5 ? { lockedAt: Timestamp.now() } : {}) });
+        return attempts;
       });
       throw new Error(failedAttempts >= 5
         ? 'This signing link has been locked after too many incorrect PIN attempts.'
@@ -742,7 +748,7 @@ export async function submitExternalSignatureAction(input: {
       if (!inviteSnapshot.exists || !envelopeSnapshot.exists) throw new Error('This signing request is no longer available.');
       const invite = inviteSnapshot.data() as StoredInvite;
       const envelope = envelopeSnapshot.data() as StoredEnvelope;
-      if (invite.consumedAt || invite.expiresAt.toMillis() <= Date.now()) throw new Error('This signing link is no longer active.');
+      if (invite.consumedAt || invite.lockedAt || (invite.failedAttempts || 0) >= 5 || invite.expiresAt.toMillis() <= Date.now()) throw new Error('This signing link is no longer active.');
       if (envelope.signedRoles.includes(invite.role)) throw new Error('This signature has already been completed.');
       if (isWitnessSignerRole(invite.role)) {
         const priorRoles = envelope.requiredRoles.filter((role) => !isCompanySignerRole(role) && !isWitnessSignerRole(role));

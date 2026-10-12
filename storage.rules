@@ -12,15 +12,15 @@ service firebase.storage {
 
     function isAdmin() {
       let profile = firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
-      return signedIn() && (profile.accessRole == 'ADMIN' || (!('accessRole' in profile) && profile.role == 'Admin'));
+      return signedIn() && ((('accessRole' in profile) && profile.accessRole == 'ADMIN') || (!('accessRole' in profile) && ((('role' in profile) && profile.role == 'Admin') || (('roles' in profile) && profile.roles.hasAny(['Admin'])))));
     }
 
     function hasPersona(persona) {
       let profile = firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
       return signedIn() && (
         (('personas' in profile) && profile.personas.hasAny([persona]))
-        || (persona == 'RECOVERY' && profile.role == 'Recovery')
-        || (persona == 'LEGAL' && profile.role == 'Legal')
+        || (!('accessRole' in profile) && !('personas' in profile) && persona == 'RECOVERY' && ((('role' in profile) && profile.role == 'Recovery') || (('roles' in profile) && profile.roles.hasAny(['Recovery']))))
+        || (!('accessRole' in profile) && !('personas' in profile) && persona == 'LEGAL' && ((('role' in profile) && profile.role == 'Legal') || (('roles' in profile) && profile.roles.hasAny(['Legal']))))
       );
     }
 
@@ -103,6 +103,7 @@ service firebase.storage {
       allow write: if signedIn()
         && request.auth.uid == uploaderId
         && canAccessCase(taskId)
+        && (isAdmin() || firestore.get(/databases/(default)/documents/recoveryTasks/$(taskId)).data.assigneeId == request.auth.uid)
         && validUpload();
     }
   }

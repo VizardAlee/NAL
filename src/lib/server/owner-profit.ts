@@ -31,8 +31,8 @@ async function getPolicy(): Promise<OwnerProfitPolicy | null> {
   const snap = await adminDb.collection('platformPolicies').doc('ownerProfit').get();
   if (!snap.exists) return null;
   const data = snap.data() as Partial<OwnerProfitPolicy>;
-  const retainedPercent = Number(data.retainedPercent ?? 50);
-  const distributablePercent = Number(data.distributablePercent ?? 50);
+  const retainedPercent = Number(data.retainedPercent);
+  const distributablePercent = Number(data.distributablePercent);
   const totalShares = Number(data.totalShares ?? 0);
 
   if (retainedPercent < 0 || distributablePercent < 0 || retainedPercent + distributablePercent !== 100) {

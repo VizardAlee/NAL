@@ -38,13 +38,25 @@ test('chart drawing, tabs and dialog cancellation preserve the emulator workspac
     const emptyHeight = await page.getByText('No fund batches yet', { exact: true }).locator('..').evaluate(el => el.getBoundingClientRect().height);
     expect(emptyHeight).toBe(320);
     await page.getByText('No fund batches yet', { exact: true }).locator('..').scrollIntoViewIfNeeded();
+    // Observe the actual animation start before the emulator write. Polling only
+    // after three sequential writes can miss an already completed entrance.
+    await page.evaluate(() => {
+      const animate = Element.prototype.animate;
+      Element.prototype.animate = function(...args) {
+        if (this.matches('.recharts-area')) document.documentElement.dataset.qaChartStarts = String(Number(document.documentElement.dataset.qaChartStarts || 0) + 1);
+        return animate.apply(this, args);
+      };
+    });
+    const seed = db.batch();
     for (let i = 0; i < 3; i++) {
       const date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - i);
-      await db.collection('fundBatches').doc(fixtureIds[i]).set({ sourceId: 'investor', amount: (i + 1) * 10000, remainingAmount: (i + 1) * 10000, createdAt: Timestamp.fromDate(date) });
+      seed.set(db.collection('fundBatches').doc(fixtureIds[i]), { sourceId: 'investor', amount: (i + 1) * 10000, remainingAmount: (i + 1) * 10000, createdAt: Timestamp.fromDate(date) });
     }
+    await seed.commit();
     const series = page.locator('.recharts-area');
     await expect(series).toBeVisible({ timeout: 60_000 });
-    await expect.poll(() => series.evaluate(el => el.getAnimations().length)).toBeGreaterThan(0);
+    await expect.poll(() => page.locator('html').getAttribute('data-qa-chart-starts')).not.toBeNull();
+    const entranceCount = await page.locator('html').getAttribute('data-qa-chart-starts');
     await page.screenshot({ path: '/tmp/nal-motion-chart-entry.png' });
     await page.waitForTimeout(300); // Sample the visual drawing, not a data interpolation.
     await page.screenshot({ path: '/tmp/nal-motion-chart-mid.png' });
@@ -55,6 +67,7 @@ test('chart drawing, tabs and dialog cancellation preserve the emulator workspac
     await db.collection('fundBatches').doc(fixtureIds[0]).update({ amount: 12000 });
     await expect.poll(() => series.evaluate(el => el.getAnimations().length)).toBe(0);
     await expect(page.locator('.recharts-area-curve')).toHaveAttribute('d', /.+/);
+    expect(await page.locator('html').getAttribute('data-qa-chart-starts')).toBe(entranceCount);
     await page.locator('.recharts-area-dot').last().hover();
     await expect(page.getByText('₦12,000.00', { exact: true }).last()).toBeVisible();
     await page.goto('/admin/reports');

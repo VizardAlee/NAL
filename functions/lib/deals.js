@@ -11,13 +11,13 @@ const createDealSchema = zod_1.z.object({
     clientId: zod_1.z.string().min(1),
     clientName: zod_1.z.string().min(1),
     marketerId: zod_1.z.string().optional(),
-    principal: zod_1.z.coerce.number().positive(),
-    profitRate: zod_1.z.coerce.number().min(0),
-    managementFeeRate: zod_1.z.coerce.number().min(0),
+    principal: zod_1.z.coerce.number().finite().positive(),
+    profitRate: zod_1.z.coerce.number().finite().min(0),
+    managementFeeRate: zod_1.z.coerce.number().finite().min(0),
     requiresManagementFee: zod_1.z.boolean().default(true),
     agreementSigningRequired: zod_1.z.boolean().default(true),
     financingMode: zod_1.z.enum(['Murabaha', 'Ijara', 'Mudaraba']).default('Murabaha'),
-    durationValue: zod_1.z.coerce.number().positive().int(),
+    durationValue: zod_1.z.coerce.number().finite().positive().int(),
     durationUnit: zod_1.z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
     repaymentType: zod_1.z.enum(['Equal Installments', 'Balloon Payment']),
     repaymentFrequency: zod_1.z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
@@ -46,7 +46,7 @@ exports.createDeal = (0, https_1.onCall)({
         /^http:\/\/localhost(:\d+)?$/,
     ],
 }, async (request) => {
-    const callerUid = await (0, admin_access_1.requireFullAdmin)(request.auth?.uid);
+    const callerUid = await (0, admin_access_1.requireCallableAdmin)(request);
     const validated = createDealSchema.safeParse(request.data);
     if (!validated.success) {
         firebase_functions_1.logger.warn('createDeal validation failed', {

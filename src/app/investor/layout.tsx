@@ -169,7 +169,7 @@ export default function InvestorLayout({
   }, [user, loading, router]);
   
 
-  if (loading || !user || logoLoading) {
+  if (loading || !user || logoLoading || !canAccessPortal(user, 'investor')) {
     return <InvestorSkeleton />;
   }
 

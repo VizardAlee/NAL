@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { adminDb } from '@/firebase/admin-app';
 import { createRestructuredRepaymentPlan, generateAmortizationSchedule } from '@/lib/amortization';
-import { verifyAdminWrite, verifyAuthTokenForUser } from '@/lib/server/auth';
+import { verifyAdminWrite, verifyPersonaForUser } from '@/lib/server/auth';
 import { notifyAdmins, notifyUser } from '@/lib/server/notification-service';
 import type { Deal } from '@/lib/types';
 
@@ -29,7 +29,7 @@ export async function requestRepaymentPlanChangeAction(input: z.infer<typeof req
   if (!parsed.success) return { success: false as const, message: 'Choose a proposed repayment frequency and provide a reason.' };
   const data = parsed.data;
   try {
-    await verifyAuthTokenForUser(data.authToken, data.clientId);
+    await verifyPersonaForUser(data.authToken, data.clientId, 'CLIENT');
     const now = Timestamp.now();
     const requestRef = adminDb.collection('repaymentPlanChangeRequests').doc();
     const dealRef = adminDb.collection('deals').doc(data.dealId);

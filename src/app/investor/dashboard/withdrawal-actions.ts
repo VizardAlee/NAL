@@ -6,17 +6,18 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { differenceInDays } from 'date-fns';
-import { verifyAuthTokenForUser } from '@/lib/server/auth';
+import { verifyPersonaForUser } from '@/lib/server/auth';
 import { calculateAvailableProfit } from '@/lib/financial-integrity';
 import { loadFundBatchAnniversaryWindow } from '@/lib/server/fund-batch-anniversary';
 import { ownerWithdrawalRequestId } from '@/lib/server/owner-withdrawal';
+import { capitalLockForBatch } from '@/lib/server/agreement-eligibility';
 import { durationToDays } from '@/lib/deal-duration';
 import { isProfitDistributionLocked, lockedUntilForBatch } from '@/lib/workflow-eligibility';
 
 // --- Withdrawal Action ---
 const withdrawalSchema = z.object({
     authToken: z.string().min(1, 'Authentication token is required.'),
-    amount: z.coerce.number().positive("Amount must be a positive number."),
+    amount: z.coerce.number().finite().positive("Amount must be a positive number."),
     userId: z.string().min(1, "User ID is required."),
     userName: z.string().min(1, "User name is required."),
     source: z.enum(['ShortTermProfit', 'AnniversaryProfit']).default('ShortTermProfit'),
@@ -97,7 +98,7 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
     const { authToken, userId, userName, amount, source } = validatedFields.data;
 
     try {
-        await verifyAuthTokenForUser(authToken, userId);
+        await verifyPersonaForUser(authToken, userId, 'INVESTOR', true);
         const userSnap = await adminDb.collection('users').doc(userId).get();
         const userData = userSnap.data() as any;
         const isOwnerAccount = userData?.accessRole === 'OWNER';
@@ -244,7 +245,7 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
 
 const reinvestSchema = z.object({
     authToken: z.string().min(1, 'Authentication token is required.'),
-    amount: z.coerce.number().positive("Amount must be a positive number."),
+    amount: z.coerce.number().finite().positive("Amount must be a positive number."),
     userId: z.string().min(1, "User ID is required."),
     userName: z.string().min(1, "User name is required."),
 });
@@ -263,7 +264,7 @@ export async function reinvestAction(input: { authToken: string; amount: number;
     const { authToken, amount, userId, userName } = validatedFields.data;
 
     try {
-        await verifyAuthTokenForUser(authToken, userId);
+        await verifyPersonaForUser(authToken, userId, 'INVESTOR');
         await adminDb.runTransaction(async (trx) => {
             const [anniversaryContext, requests] = await Promise.all([
                 loadFundBatchAnniversaryWindow(trx, userId),
@@ -336,42 +337,27 @@ export async function requestCapitalWithdrawalAction(input: z.infer<typeof capit
 
     const { authToken, batchId, userId, userName } = validated.data;
     try {
-        await verifyAuthTokenForUser(authToken, userId);
-        const batchRef = adminDb.collection('fundBatches').doc(batchId);
-        const batchDoc = await batchRef.get();
-
-        if (!batchDoc.exists) {
-            throw new Error("Fund batch not found.");
-        }
-        const batchData = batchDoc.data()!;
-        if (batchData.sourceId !== userId) {
-            throw new Error("You are not allowed to withdraw this fund batch.");
-        }
-
-        // Server-side validation
-        const contractLock = batchData.principalLockedUntil ? lockedUntilForBatch(batchData) : null;
-        if (contractLock && new Date() < contractLock) return { success: false, message: 'This investment capital is locked until its documented contract maturity.' };
-        const isShortTerm = durationToDays(batchData.tenureValue, batchData.tenureUnit) <= 360;
-        const isUninvested = batchData.amount === batchData.remainingAmount;
-        const isOverOneMonthOld = differenceInDays(new Date(), batchData.createdAt.toDate()) >= 30;
-
-        if (!(isShortTerm && isUninvested && isOverOneMonthOld)) {
-            return { success: false, message: "This fund batch is not eligible for withdrawal." };
-        }
-
-        const amount = batchData.amount;
-        const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
-
-        // This action does not delete the batch. It creates a request for an admin to approve.
-        await adminDb.collection('withdrawalRequests').add({
-            investorId: userId,
-            investorName: userName,
-            amount: amount,
-            status: 'Pending',
-            requestedAt: FieldValue.serverTimestamp(),
-            details: `Withdrawal of uninvested short-term capital (Batch ID: ${batchId}).`,
-            source: 'Capital',
+        await verifyPersonaForUser(authToken, userId, 'INVESTOR');
+        const submission = await adminDb.runTransaction(async transaction => {
+          const batchRef = adminDb.collection('fundBatches').doc(batchId);
+          const batchDoc = await transaction.get(batchRef);
+          if (!batchDoc.exists) throw new Error('Fund batch not found.');
+          const batch = batchDoc.data()!;
+          if (batch.sourceId !== userId) throw new Error('You are not allowed to withdraw this fund batch.');
+          const until = await capitalLockForBatch(transaction, batchId, batch);
+          if (until && new Date() < until) throw new Error('This investment capital is locked until its documented contract maturity.');
+          if (!(durationToDays(batch.tenureValue, batch.tenureUnit) <= 360 && batch.amount === batch.remainingAmount && differenceInDays(new Date(), batch.createdAt.toDate()) >= 30)) throw new Error('This fund batch is not eligible for withdrawal.');
+          const requests = await transaction.get(adminDb.collection('withdrawalRequests').where('investorId', '==', userId));
+          const detail = `Withdrawal of uninvested short-term capital (Batch ID: ${batchId}).`;
+          if (requests.docs.some(doc => doc.data().status === 'Pending' && (doc.data().fundBatchId === batchId || doc.data().details === detail))) return { created: false, amount: Number(batch.amount) };
+          const amount = Number(batch.amount);
+          if (!Number.isFinite(amount) || amount <= 0) throw new Error('The fund batch has no valid withdrawable capital.');
+          const profile = await transaction.get(adminDb.collection('users').doc(userId));
+          transaction.create(adminDb.collection('withdrawalRequests').doc(), { investorId: userId, investorName: String(profile.data()?.name || 'Investor'), amount, fundBatchId: batchId, status: 'Pending', requestedAt: FieldValue.serverTimestamp(), details: detail, source: 'Capital' });
+          return { created: true, amount };
         });
+        if (!submission.created) return { success: true, message: 'A capital withdrawal for this batch is already awaiting review.' };
+        const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(submission.amount);
 
         await notifyWithdrawalSubmitted({
             userId,

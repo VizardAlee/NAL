@@ -108,7 +108,7 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
     }
   }, [user, loading, router]);
 
-  if (loading || !user || logoLoading) {
+  if (loading || !user || logoLoading || normalizeAccessModel(user).accessRole !== 'OWNER') {
     return <OwnerSkeleton />;
   }
 

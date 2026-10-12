@@ -136,7 +136,7 @@ export default function AdminLayout({
   }, [user, loading, router]);
   
 
-  if (loading || !user || logoLoading) {
+  if (loading || !user || logoLoading || !canAccessPortal(user, 'admin')) {
     return <AdminSkeleton />;
   }
 

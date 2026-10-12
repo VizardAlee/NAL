@@ -5,7 +5,7 @@ import { adminDb, getAdminApp } from '@/firebase/admin-app';
 import { getAuth } from 'firebase-admin/auth';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
-import { normalizeAccessModel } from '@/lib/access-control';
+import { normalizeAccessModel, hasPersona } from '@/lib/access-control';
 import { verifyAuthTokenForUser } from '@/lib/server/auth';
 
 const setRoleSchema = z
@@ -50,6 +50,8 @@ export async function setRoleAction(
     const accessModel = normalizeAccessModel({ role });
 
     try {
+        const profile = (await adminDb.collection('users').doc(userId).get()).data();
+        if (!hasPersona(profile, role === 'Investor' ? 'INVESTOR' : 'CLIENT')) return { success: false, message: 'An administrator invitation is required to assign or change customer access.' };
         const kycProfile = await adminDb.collection('userKycProfiles').doc(userId).get();
         if (!kycProfile.exists || !['SUBMITTED', 'VERIFIED'].includes(String(kycProfile.data()?.status || ''))) {
             return {

@@ -9,10 +9,21 @@ import { saveAdminUserRecord, storeAdminUserUpload } from '../src/lib/server/adm
 import { claimWhatsAppReminder, prepareWhatsAppReminders, previewWhatsAppReminder, recordWhatsAppSendResult, setWhatsAppConsent } from '../src/lib/server/whatsapp-reminder-outbox';
 import { commitHistoricalWrites } from '../src/lib/server/historical-corrections';
 import { createHash } from 'node:crypto';
+import { createPendingCustomerRequest } from '../src/lib/server/customer-request';
 
 if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('These tests require the Firestore emulator; never run against production.');
 const app = initializeApp({ projectId:'demo-nal' });
 const db = getFirestore(app);
+test('concurrent identical customer submissions create one pending record and one notification owner', async () => {
+  const payload={investorId:'idempotency-fixture',amount:100,paymentDate:'2026-10-12',tenureValue:90,tenureUnit:'Days'};
+  const results=await Promise.all(Array.from({length:8},()=>createPendingCustomerRequest(db,'depositRequests','idempotency-fixture',payload)));
+  assert.equal(results.filter(r=>r.created).length,1);
+  assert.equal(new Set(results.map(r=>r.id)).size,1);
+  assert.equal((await db.collection('depositRequests').where('investorId','==','idempotency-fixture').get()).size,1);
+  await db.collection('depositRequests').doc(results[0].id).update({status:'Approved'});
+  const next=await createPendingCustomerRequest(db,'depositRequests','idempotency-fixture',payload);
+  assert.equal(next.created,true);assert.notEqual(next.id,results[0].id);
+});
 before(async()=>{ await db.collection('bankEntries').doc('bank').set({date:'2026-09-30',amount:100,direction:'CREDIT',reference:'REF-1',description:'',accountNumber:'0513848871',allocatedAmount:0,reversed:false,confirmed:true}); });
 beforeEach(async()=>{
   await db.collection('bankEntries').doc('bank').update({allocatedAmount:0});

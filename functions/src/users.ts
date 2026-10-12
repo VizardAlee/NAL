@@ -2,7 +2,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { z } from "zod";
-import { requireFullAdmin } from './admin-access';
+import { requireCallableAdmin } from './admin-access';
 
 const createUserSchema = z.object({
     name: z.string().min(2),
@@ -47,7 +47,7 @@ function generateReferralCode(name: string): string {
 }
 
 export const createUser = onCall(async (request) => {
-    await requireFullAdmin(request.auth?.uid);
+    await requireCallableAdmin(request);
     
     const validated = createUserSchema.safeParse(request.data);
     if (!validated.success) {

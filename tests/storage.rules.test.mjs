@@ -38,6 +38,17 @@ after(async () => env?.cleanup());
 const pdfMetadata = { contentType: 'application/pdf' };
 const jpegMetadata = { contentType: 'image/jpeg' };
 
+test('unclaimed cases cannot receive evidence and removed personas cannot read prior evidence', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(),'recoveryTasks','unclaimed'),{status:'OVERDUE',assigneeId:null});
+    await setDoc(doc(context.firestore(),'users','removed-recovery'),{role:'Recovery',accessRole:'USER',personas:[]});
+    await context.storage().ref('case-evidence/recovery-case/recovery/source.pdf').putString('Synthetic evidence','raw',pdfMetadata);
+  });
+  await assertFails(env.authenticatedContext('recovery').storage().ref('case-evidence/unclaimed/recovery/file.pdf').putString('Before claim','raw',pdfMetadata));
+  await assertFails(env.authenticatedContext('removed-recovery').storage().ref('case-evidence/recovery-case/recovery/source.pdf').getMetadata());
+  await assertSucceeds(env.authenticatedContext('admin').storage().ref('case-evidence/unclaimed/admin/file.pdf').putString('Admin evidence','raw',pdfMetadata));
+});
+
 test('private KYC files cannot be read or written directly even by administrators', async () => {
   for (const uid of ['admin', 'staff', 'client']) {
     const storage = env.authenticatedContext(uid).storage();

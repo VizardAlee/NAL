@@ -3,20 +3,20 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { logger } from "firebase-functions";
 import { z } from "zod";
-import { requireFullAdmin } from './admin-access';
+import { requireCallableAdmin } from './admin-access';
 
 const createDealSchema = z.object({
   dealName: z.string().min(3),
   clientId: z.string().min(1),
   clientName: z.string().min(1),
   marketerId: z.string().optional(),
-  principal: z.coerce.number().positive(),
-  profitRate: z.coerce.number().min(0),
-  managementFeeRate: z.coerce.number().min(0),
+  principal: z.coerce.number().finite().positive(),
+  profitRate: z.coerce.number().finite().min(0),
+  managementFeeRate: z.coerce.number().finite().min(0),
   requiresManagementFee: z.boolean().default(true),
   agreementSigningRequired: z.boolean().default(true),
   financingMode: z.enum(['Murabaha', 'Ijara', 'Mudaraba']).default('Murabaha'),
-  durationValue: z.coerce.number().positive().int(),
+  durationValue: z.coerce.number().finite().positive().int(),
   durationUnit: z.enum(['Days', 'Weeks', 'Fortnights', 'Months', 'Years']),
   repaymentType: z.enum(['Equal Installments', 'Balloon Payment']),
   repaymentFrequency: z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']),
@@ -50,7 +50,7 @@ export const createDeal = onCall(
     ],
   },
   async (request) => {
-    const callerUid = await requireFullAdmin(request.auth?.uid);
+    const callerUid = await requireCallableAdmin(request);
     
     const validated = createDealSchema.safeParse(request.data);
     if (!validated.success) {

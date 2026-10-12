@@ -40,22 +40,29 @@ async function getActor(authToken: string): Promise<ActorContext> {
   return { uid: decoded.uid, name: String(profile.name || decoded.name || decoded.email || 'NAL staff'), actorType };
 }
 
-function assertTaskAccess(task: FirebaseFirestore.DocumentData, actor: ActorContext, required?: 'RECOVERY' | 'LEGAL') {
+function assertTaskAccess(task: FirebaseFirestore.DocumentData, actor: ActorContext, required?: 'RECOVERY' | 'LEGAL', requireClaim = true) {
   if (actor.actorType === 'ADMIN') return;
   if (required && actor.actorType !== required) throw new Error(`This action requires the ${required.toLowerCase()} role.`);
   if (task.assigneeId && task.assigneeId !== actor.uid) throw new Error('This case is assigned to another officer.');
+  if (requireClaim && task.assigneeId !== actor.uid) throw new Error('Claim this case before recording work.');
   if (actor.actorType === 'RECOVERY' && !isRecoveryStatus(task.status)) throw new Error('This case is no longer in the Recovery queue.');
   if (actor.actorType === 'LEGAL' && !isLegalStatus(task.status)) throw new Error('This case is not in the Legal queue.');
   if (isClosedRecoveryStatus(task.status)) throw new Error('This case is already closed.');
 }
 
-async function addAuditLog(
-  taskRef: FirebaseFirestore.DocumentReference,
-  actor: ActorContext,
-  input: { kind: string; text: string; [key: string]: unknown }
-) {
-  const logRef = taskRef.collection('logs').doc();
-  await logRef.set({ ...input, authorId: actor.uid, authorName: actor.name, createdAt: FieldValue.serverTimestamp() });
+/** Recheck the claimed case and commit its change, audit and evidence together. */
+async function commitCaseWork(taskRef: FirebaseFirestore.DocumentReference, actor: ActorContext, snapshot: FirebaseFirestore.DocumentSnapshot,
+  required: 'RECOVERY' | 'LEGAL' | undefined,
+  mutation: { update: FirebaseFirestore.DocumentData; log: FirebaseFirestore.DocumentData; writes?: Array<{ ref: FirebaseFirestore.DocumentReference; data: FirebaseFirestore.DocumentData }> }) {
+  await adminDb.runTransaction(async transaction => {
+    const current = await transaction.get(taskRef);
+    if (!current.exists) throw new Error('Case not found.');
+    assertTaskAccess(current.data()!, actor, required);
+    if (!current.updateTime?.isEqual(snapshot.updateTime!)) throw new Error('This case changed while you were working. Reload it and retry.');
+    transaction.set(taskRef, { ...mutation.update, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    transaction.create(taskRef.collection('logs').doc(), { ...mutation.log, authorId: actor.uid, authorName: actor.name, createdAt: FieldValue.serverTimestamp() });
+    for (const write of mutation.writes || []) transaction.set(write.ref, write.data, { merge: true });
+  });
 }
 
 function revalidateOperationalPages() {
@@ -82,10 +89,9 @@ export async function addRecoveryLogAction(input: z.input<typeof addLogSchema>) 
     if (!taskSnapshot.exists) throw new Error('Recovery case not found.');
     const task = taskSnapshot.data()!;
     assertTaskAccess(task, actor);
-    await Promise.all([
-      addAuditLog(taskRef, actor, { kind: 'NOTE', text: validated.data.logText }),
-      taskRef.set({ lastLog: validated.data.logText, updatedAt: FieldValue.serverTimestamp() }, { merge: true }),
-    ]);
+    await commitCaseWork(taskRef, actor, taskSnapshot, undefined, {
+      update: { lastLog: validated.data.logText }, log: { kind: 'NOTE', text: validated.data.logText },
+    });
     revalidateOperationalPages();
     return { success: true, message: 'Case note recorded.' };
   } catch (error) {
@@ -106,8 +112,9 @@ export async function claimRecoveryCaseAction(input: z.input<typeof claimSchema>
       const snapshot = await transaction.get(taskRef);
       if (!snapshot.exists) throw new Error('Recovery case not found.');
       const task = snapshot.data()!;
-      assertTaskAccess(task, actor);
+      assertTaskAccess(task, actor, undefined, false);
       if (task.assigneeId && task.assigneeId !== actor.uid) throw new Error('This case has already been claimed.');
+      if (task.assigneeId === actor.uid) return;
       transaction.set(taskRef, { assigneeId: actor.uid, assigneeName: actor.name, assignedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
       transaction.set(taskRef.collection('logs').doc(), { kind: 'ASSIGNMENT', text: `Case assigned to ${actor.name}.`, authorId: actor.uid, authorName: actor.name, createdAt: FieldValue.serverTimestamp() });
     });
@@ -213,14 +220,13 @@ export async function recordRecoveryContactAction(input: z.input<typeof contactS
       update.promiseAmount = validated.data.promiseAmount;
       update.promiseDueAt = Timestamp.fromDate(new Date(validated.data.promiseDueAt!));
     }
-    await Promise.all([
-      taskRef.set(update, { merge: true }),
-      addAuditLog(taskRef, actor, {
+    await commitCaseWork(taskRef, actor, taskSnapshot, 'RECOVERY', {
+      update, log: {
         kind: 'CONTACT', text: validated.data.notes, channel: validated.data.channel,
         outcome: validated.data.outcome, nextActionAt: validated.data.nextActionAt || null,
         promiseAmount: validated.data.promiseAmount || null, promiseDueAt: validated.data.promiseDueAt || null,
-      }),
-    ]);
+      },
+    });
     revalidateOperationalPages();
     return { success: true, message: 'Contact outcome and follow-up recorded.' };
   } catch (error) {
@@ -241,9 +247,11 @@ export async function escalateRecoveryCaseAction(input: z.input<typeof escalatio
     const task = taskSnapshot.data()!;
     assertTaskAccess(task, actor, 'RECOVERY');
     if (!canTransitionRecoveryStatus(task.status, 'ESCALATED_LEGAL', actor.actorType)) throw new Error('This case cannot be escalated from its current status.');
-    await Promise.all([
-      taskRef.set({ status: 'ESCALATED_LEGAL', recoveryAssigneeId: task.assigneeId || actor.uid, recoveryAssigneeName: task.assigneeName || actor.name, assigneeId: null, assigneeName: null, escalatedAt: FieldValue.serverTimestamp(), escalationReason: validated.data.reason, updatedAt: FieldValue.serverTimestamp() }, { merge: true }),
-      addAuditLog(taskRef, actor, { kind: 'STATUS_CHANGE', text: validated.data.reason, fromStatus: task.status, toStatus: 'ESCALATED_LEGAL' }),
+    await commitCaseWork(taskRef, actor, taskSnapshot, 'RECOVERY', {
+      update: { status: 'ESCALATED_LEGAL', recoveryAssigneeId: task.assigneeId || actor.uid, recoveryAssigneeName: task.assigneeName || actor.name, assigneeId: null, assigneeName: null, escalatedAt: FieldValue.serverTimestamp(), escalationReason: validated.data.reason },
+      log: { kind: 'STATUS_CHANGE', text: validated.data.reason, fromStatus: task.status, toStatus: 'ESCALATED_LEGAL' },
+    });
+    await Promise.allSettled([
       notifyOperationalTeam('LEGAL', 'Recovery case escalated', `${task.clientName} — ${task.dealName}. ${validated.data.reason}`, '/legal/dashboard', 'overdue'),
       notifyAdmins('Recovery case escalated to Legal', `${task.clientName} — ${task.dealName}.`, '/legal/dashboard', 'overdue'),
     ]);
@@ -292,15 +300,15 @@ export async function updateLegalCaseAction(input: z.input<typeof legalUpdateSch
       settlementTerms: validated.data.settlementTerms || task.settlementTerms || null,
       updatedAt: FieldValue.serverTimestamp(),
     };
-    await taskRef.set(update, { merge: true });
-    await addAuditLog(taskRef, actor, { kind: 'LEGAL_ACTION', text: validated.data.notes, fromStatus: task.status, toStatus: validated.data.nextStatus, courtReference: validated.data.courtReference || null, settlementAmount: validated.data.settlementAmount ?? null });
+    if (validated.data.nextStatus === 'DEMAND_ISSUED') throw new Error('Prepare and review a demand notice, then use the issue-notice action.');
+    const writes: Array<{ ref: FirebaseFirestore.DocumentReference; data: FirebaseFirestore.DocumentData }> = [];
     if ((validated.data.legalExpense || 0) > 0) {
-      await taskRef.collection('expenses').add({ amount: validated.data.legalExpense, description: validated.data.notes, recordedBy: actor.uid, recordedByName: actor.name, createdAt: FieldValue.serverTimestamp() });
-      await taskRef.set({ totalLegalExpenses: FieldValue.increment(validated.data.legalExpense!) }, { merge: true });
+      writes.push({ ref: taskRef.collection('expenses').doc(), data: { amount: validated.data.legalExpense, description: validated.data.notes, recordedBy: actor.uid, recordedByName: actor.name, createdAt: FieldValue.serverTimestamp() } });
+      update.totalLegalExpenses = FieldValue.increment(validated.data.legalExpense!);
     }
-    if (validated.data.nextStatus === 'DEMAND_ISSUED') {
-      await notifyUser(task.clientId, 'Formal payment demand issued', `A formal demand has been recorded for ${task.dealName}. Sign in to review your account and contact NAL.`, '/client/dashboard', 'overdue');
-    }
+    await commitCaseWork(taskRef, actor, taskSnapshot, 'LEGAL', {
+      update, writes, log: { kind: 'LEGAL_ACTION', text: validated.data.notes, fromStatus: task.status, toStatus: validated.data.nextStatus, courtReference: validated.data.courtReference || null, settlementAmount: validated.data.settlementAmount ?? null },
+    });
     revalidateOperationalPages();
     return { success: true, message: `Legal case moved to ${recoveryStatusLabel(validated.data.nextStatus)}.` };
   } catch (error) {
@@ -326,11 +334,11 @@ export async function resolveLegalCaseAction(input: z.input<typeof resolveSchema
     const task = taskSnapshot.data()!;
     assertTaskAccess(task, actor, 'LEGAL');
     if (validated.data.resolutionReason === 'PAYMENT_COMPLETED' && Number(task.amountOutstanding || 0) > 0) throw new Error('The recorded outstanding balance must be zero before payment closure.');
-    await Promise.all([
-      taskRef.set({ status: 'RESOLVED', resolutionReason: validated.data.resolutionReason, resolutionNotes: validated.data.notes, resolvedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: true }),
-      addAuditLog(taskRef, actor, { kind: 'RESOLUTION', text: validated.data.notes, fromStatus: task.status, toStatus: 'RESOLVED', resolutionReason: validated.data.resolutionReason }),
-      notifyUser(task.clientId, 'Account recovery case resolved', `The recovery case for ${task.dealName} has been resolved.`, '/client/dashboard', 'system'),
-    ]);
+    await commitCaseWork(taskRef, actor, taskSnapshot, 'LEGAL', {
+      update: { status: 'RESOLVED', resolutionReason: validated.data.resolutionReason, resolutionNotes: validated.data.notes, resolvedAt: FieldValue.serverTimestamp() },
+      log: { kind: 'RESOLUTION', text: validated.data.notes, fromStatus: task.status, toStatus: 'RESOLVED', resolutionReason: validated.data.resolutionReason },
+    });
+    await notifyUser(task.clientId, 'Account recovery case resolved', `The recovery case for ${task.dealName} has been resolved.`, '/client/dashboard', 'system').catch(error => console.warn('Case resolved but notification failed.', error));
     revalidateOperationalPages();
     return { success: true, message: 'The case has been resolved and archived.' };
   } catch (error) {
@@ -361,8 +369,10 @@ export async function registerCaseEvidenceAction(input: z.input<typeof evidenceS
     assertTaskAccess(taskSnapshot.data()!, actor);
     const evidenceRef = taskRef.collection('evidence').doc();
     const evidence = evidenceSchema.omit({ authToken: true }).parse(validated.data);
-    await evidenceRef.set({ ...evidence, uploadedBy: actor.uid, uploadedByName: actor.name, createdAt: FieldValue.serverTimestamp() });
-    await addAuditLog(taskRef, actor, { kind: 'EVIDENCE', text: `Uploaded ${validated.data.category.toLowerCase().replaceAll('_', ' ')}: ${validated.data.fileName}.`, evidenceId: evidenceRef.id });
+    await commitCaseWork(taskRef, actor, taskSnapshot, undefined, {
+      update: {}, log: { kind: 'EVIDENCE', text: `Uploaded ${validated.data.category.toLowerCase().replaceAll('_', ' ')}: ${validated.data.fileName}.`, evidenceId: evidenceRef.id },
+      writes: [{ ref: evidenceRef, data: { ...evidence, uploadedBy: actor.uid, uploadedByName: actor.name, createdAt: FieldValue.serverTimestamp() } }],
+    });
     revalidateOperationalPages();
     return { success: true, message: 'Evidence added to the case file.' };
   } catch (error) {
@@ -395,11 +405,11 @@ export async function createDemandNoticeAction(input: z.input<typeof noticeSchem
       validated.data.additionalTerms || '',
       'This notice is generated from NAL records and must be reviewed and approved by an authorised Legal officer before service.',
     ].filter(Boolean).join('\n\n');
-    await Promise.all([
-      noticeRef.set({ reference, taskId: taskRef.id, clientId: task.clientId, dealId: task.dealId, content, responseDeadline: Timestamp.fromDate(new Date(validated.data.responseDeadline)), status: 'DRAFT', templateVersion: '1.0', preparedBy: actor.uid, preparedByName: actor.name, createdAt: FieldValue.serverTimestamp() }),
-      taskRef.set({ status: 'NOTICE_PREPARATION', updatedAt: FieldValue.serverTimestamp() }, { merge: true }),
-      addAuditLog(taskRef, actor, { kind: 'NOTICE', text: `Prepared demand notice ${reference}; awaiting review before issue.`, noticeId: noticeRef.id, fromStatus: task.status, toStatus: 'NOTICE_PREPARATION' }),
-    ]);
+    await commitCaseWork(taskRef, actor, taskSnapshot, 'LEGAL', {
+      update: { status: 'NOTICE_PREPARATION' },
+      log: { kind: 'NOTICE', text: `Prepared demand notice ${reference}; awaiting review before issue.`, noticeId: noticeRef.id, fromStatus: task.status, toStatus: 'NOTICE_PREPARATION' },
+      writes: [{ ref: noticeRef, data: { reference, taskId: taskRef.id, clientId: task.clientId, dealId: task.dealId, content, responseDeadline: Timestamp.fromDate(new Date(validated.data.responseDeadline)), status: 'DRAFT', templateVersion: '1.0', preparedBy: actor.uid, preparedByName: actor.name, createdAt: FieldValue.serverTimestamp() } }],
+    });
     revalidateOperationalPages();
     return { success: true, message: 'Draft demand notice prepared for review.', notice: { id: noticeRef.id, reference, content } };
   } catch (error) {
@@ -423,10 +433,12 @@ export async function issueDemandNoticeAction(input: z.input<typeof issueNoticeS
     assertTaskAccess(task, actor, 'LEGAL');
     if (notice.status !== 'DRAFT') throw new Error('Only a draft notice can be issued.');
     if (!canTransitionRecoveryStatus(task.status, 'DEMAND_ISSUED', actor.actorType)) throw new Error('The case is not at a stage where a demand may be issued.');
-    await Promise.all([
-      noticeRef.set({ status: 'ISSUED', reviewedBy: actor.uid, reviewedByName: actor.name, reviewedAt: FieldValue.serverTimestamp(), issuedAt: FieldValue.serverTimestamp() }, { merge: true }),
-      taskRef.set({ status: 'DEMAND_ISSUED', lastDemandNoticeId: noticeRef.id, lastDemandReference: notice.reference, updatedAt: FieldValue.serverTimestamp() }, { merge: true }),
-      addAuditLog(taskRef, actor, { kind: 'NOTICE_ISSUED', text: `Reviewed and issued demand notice ${notice.reference}.`, noticeId: noticeRef.id, fromStatus: task.status, toStatus: 'DEMAND_ISSUED' }),
+    await commitCaseWork(taskRef, actor, taskSnapshot, 'LEGAL', {
+      update: { status: 'DEMAND_ISSUED', lastDemandNoticeId: noticeRef.id, lastDemandReference: notice.reference },
+      log: { kind: 'NOTICE_ISSUED', text: `Reviewed and issued demand notice ${notice.reference}.`, noticeId: noticeRef.id, fromStatus: task.status, toStatus: 'DEMAND_ISSUED' },
+      writes: [{ ref: noticeRef, data: { status: 'ISSUED', reviewedBy: actor.uid, reviewedByName: actor.name, reviewedAt: FieldValue.serverTimestamp(), issuedAt: FieldValue.serverTimestamp() } }],
+    });
+    await Promise.allSettled([
       notifyUser(task.clientId, 'Formal payment demand issued', `Demand ${notice.reference} has been issued for ${task.dealName}. Sign in to review your account and contact NAL.`, '/client/dashboard', 'overdue'),
       notifyAdmins('Formal demand issued', `${notice.reference} — ${task.clientName}, ${task.dealName}.`, '/legal/dashboard', 'overdue'),
     ]);
@@ -446,7 +458,7 @@ export async function listCaseAgreementsAction(input: { authToken: string; taskI
     const taskSnapshot = await adminDb.collection('recoveryTasks').doc(validated.data.taskId).get();
     if (!taskSnapshot.exists) throw new Error('Legal case not found.');
     const task = taskSnapshot.data()!;
-    assertTaskAccess(task, actor, 'LEGAL');
+    assertTaskAccess(task, actor, 'LEGAL', false);
     const snapshot = await adminDb.collection('agreementEnvelopes').where('sourceId', '==', task.dealId).get();
     return {
       success: true as const,
@@ -480,7 +492,7 @@ export async function downloadCaseAgreementAction(input: { authToken: string; ta
     ]);
     if (!taskSnapshot.exists || !envelopeSnapshot.exists) throw new Error('The case agreement could not be found.');
     const task = taskSnapshot.data()!;
-    assertTaskAccess(task, actor, 'LEGAL');
+    assertTaskAccess(task, actor, 'LEGAL', false);
     const envelope = envelopeSnapshot.data()!;
     if (envelope.sourceId !== task.dealId) throw new Error('This agreement does not belong to the selected case.');
     if (envelope.status !== 'EXECUTED' || envelope.finalPdfArchive?.status !== 'ARCHIVED' || !envelope.finalPdfArchive.storagePath) throw new Error('The final signed agreement has not been archived yet.');
