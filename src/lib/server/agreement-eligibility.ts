@@ -1,3 +1,4 @@
+import { recordedInvestmentCapitalLock } from '@/lib/investment-maturity';
 import type { Transaction } from 'firebase-admin/firestore';
 import { adminDb } from '@/firebase/admin-app';
 import { agreementEnvelopeId } from '@/lib/agreements/signing';
@@ -23,9 +24,7 @@ export async function capitalLockForBatch(transaction: Transaction, batchId: str
   const sourceId = String(batch.sourceRequestId || batchId);
   const envelope = await transaction.get(adminDb.doc(`agreementEnvelopes/${agreementEnvelopeId('MUDARABA', sourceId)}`));
   if (!envelope.exists || envelope.data()?.status !== 'EXECUTED') return null;
-  const maturity = new Date(envelope.data()?.documentModel?.maturityDate || '');
-  if (!Number.isFinite(maturity.getTime())) throw new Error('The executed investment contract has no valid maturity date. Ask an administrator to review it.');
-  return maturity;
+  return recordedInvestmentCapitalLock(envelope.data()?.documentModel?.maturityDate);
 }
 
 export async function getOutstandingDealAgreements(

@@ -1,3 +1,4 @@
+import { recordedInvestmentCapitalLock } from '@/lib/investment-maturity';
 import type { HistoricalExtraction } from '@/lib/historical-import';
 
 export function historicalExtractionPrompt(partyName: string, partyKind: string, accountType: string, snapshotDate: string) {
@@ -33,7 +34,7 @@ export function historicalInvestmentBatch(position: HistoricalExtraction['fundPo
     agreementDate: terms.agreementDate, paymentDate: terms.paymentDate,
     // Withdrawal becomes eligible AFTER the explicit inclusive maturity day,
     // using Nigeria's local midnight rather than a server timezone.
-    principalLockedUntil: new Date(new Date(`${terms.maturityDate}T00:00:00+01:00`).getTime() + 86400000),
+    principalLockedUntil: recordedInvestmentCapitalLock(terms.maturityDate),
     contractMaturityDate: terms.maturityDate, investmentTerms: terms,
     paymentReference: terms.paymentReference,
   };

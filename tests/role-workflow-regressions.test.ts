@@ -1,3 +1,4 @@
+import { recordedInvestmentCapitalLock } from '../src/lib/investment-maturity';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { canAccessPortal, getAccessiblePortals, getDefaultRouteForUser, hasPersona, isPrimaryPortal } from '../src/lib/access-control';
@@ -30,4 +31,12 @@ test('legacy role arrays remain compatible and invalid portals cannot enter the 
   assert.equal(isPrimaryPortal('constructor'),false);
   assert.equal(isPrimaryPortal('__proto__'),false);
   assert.deepEqual(getAccessiblePortals({role:'Client',personas:null}),[]);
+});
+
+test('recorded capital maturity retains the full inclusive Nigeria day, including leap day', () => {
+  const lock=recordedInvestmentCapitalLock('2026-10-12T12:00:00.000Z');
+  assert.equal(lock.toISOString(),'2026-10-12T23:00:00.000Z');
+  assert.ok(new Date('2026-10-12T20:00:00Z')<lock);
+  assert.equal(recordedInvestmentCapitalLock('2028-02-29').toISOString(),'2028-02-29T23:00:00.000Z');
+  for(const invalid of ['',undefined,'2026-02-30','invalid']) assert.throws(()=>recordedInvestmentCapitalLock(invalid),/valid maturity date/);
 });

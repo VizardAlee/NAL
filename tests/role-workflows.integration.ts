@@ -1,3 +1,4 @@
+import { recordedInvestmentCapitalLock } from '../src/lib/investment-maturity';
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -114,6 +115,7 @@ test('investor contribution requires full signing, bank evidence, and one concur
   await db.doc('paymentReceipts/deposit-receipt').set({purpose:'INVESTOR_CONTRIBUTION',status:'RECONCILED',requestId:id,bankEntryId:'deposit-bank',fields:{amount:100,paymentDate:'2026-10-12',reference:'SYNTHETIC-DEP',accountNumber:'0000000000',transferStatus:'SUCCESSFUL'}});
   await db.doc('depositRequests/'+id).update({receiptId:'deposit-receipt'});
   const results=await Promise.allSettled([processDepositRequestAction({authToken:tokens.admin,requestId:id,decision:'Approved'}),processDepositRequestAction({authToken:tokens.admin,requestId:id,decision:'Approved'})]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+  assert.equal((await db.doc('fundBatches/'+id).get()).data()!.principalLockedUntil.toDate().getTime(),recordedInvestmentCapitalLock((await envelopeRef.get()).data()!.documentModel.maturityDate).getTime());
   assert.equal((await db.doc('fundBatches/'+id).get()).data()!.remainingAmount,100);assert.equal((await db.doc('bankEntries/deposit-bank').get()).data()!.allocatedAmount,100);assert.equal((await db.collection('transactions').where('sourceRequestId','==',id).get()).size,1);
 });
 test('unsigned funding is denied; signed Murabaha/Kafaalah funding and partial repayment preserve balances',async()=>{

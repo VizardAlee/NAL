@@ -1,5 +1,7 @@
 'use server';
 
+import { recordedInvestmentCapitalLock } from '@/lib/investment-maturity';
+
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { adminDb } from '@/firebase/admin-app';
@@ -69,9 +71,7 @@ export async function processDepositRequestAction(input: DecisionInput) {
         allowHistoricalWithoutEnvelope: request.agreementSigningRequired === undefined,
       });
       if (agreement) {
-        const maturity = new Date(agreement.documentModel?.maturityDate || '');
-        if (!Number.isFinite(maturity.getTime())) throw new Error('The executed investment agreement has no valid maturity date.');
-        principalLockedUntil = Timestamp.fromDate(maturity);
+        principalLockedUntil = Timestamp.fromDate(recordedInvestmentCapitalLock(agreement.documentModel?.maturityDate));
       }
     }
     const postReceipt = data.decision === 'Approved' ? await prepareReceiptPosting(trx, {
