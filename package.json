@@ -10,7 +10,7 @@
     "start": "next start",
     "lint": "eslint src --max-warnings=200",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "npm run test:unit && npm run test:rules",
+    "test": "npm run test:unit && npm run test:rules && npm run test:financial",
     "test:unit": "tsx --test tests/*.test.ts",
     "test:rules": "firebase emulators:exec --project demo-nal --only firestore,storage \"node --test tests/firestore.rules.test.mjs && node --test tests/storage.rules.test.mjs && tsx --test tests/receipt-posting.integration.ts\"",
     "test:e2e": "playwright test",
@@ -19,7 +19,8 @@
     "audit:functions": "npm audit --prefix functions --omit=dev --audit-level=critical",
     "verify": "npm run typecheck && npm run lint && npm test && npm run audit:production && npm run audit:functions && npm run build --prefix functions && npm run build && npm run test:e2e",
     "create-admin": "node -r dotenv/config ./scripts/create-admin.js",
-    "backfill-access-model": "node -r dotenv/config ./scripts/backfill-access-model.js"
+    "backfill-access-model": "node -r dotenv/config ./scripts/backfill-access-model.js",
+    "test:financial": "firebase emulators:exec --project demo-nal-acceptance --config firebase.acceptance.json --only auth,firestore,storage \"tsx scripts/run-financial-regressions.ts\""
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.40.1",

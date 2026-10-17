@@ -17,6 +17,7 @@ export type RepaymentRecord = {
   installmentNumber?: number;
   principalApplied?: number;
   interestApplied?: number;
+  allocations?: Array<{ installmentNumber: number; amount: number; principalApplied: number; interestApplied: number }>;
 };
 
 function toKobo(value: number): number {
@@ -66,7 +67,11 @@ export function generateUniformRepaymentSegment(input: {
     allocatedPrincipal += principal;
     return {
       installment: (input.startingInstallment || 1) + index,
-      dueDate: addPeriod(input.startDate, index + 1),
+      // A frequency change keeps the contractual maturity even when the
+      // remaining term is not divisible by the new payment interval.
+      dueDate: input.endDate && index === totalPeriods - 1
+        ? new Date(input.endDate)
+        : addPeriod(input.startDate, index + 1),
       payment: (principal + profit) / 100,
       principal: principal / 100,
       interest: profit / 100,
@@ -215,9 +220,27 @@ export function calculateRemainingRepaymentBalance(
   let paidProfitInKobo = 0;
 
   for (const repayment of approvedRepayments) {
+    if (repayment.allocations?.length) {
+      for (const allocation of repayment.allocations) {
+        const values = [allocation.amount, allocation.principalApplied, allocation.interestApplied];
+        if (values.some(value => !Number.isFinite(value) || value < 0 || !Number.isSafeInteger(toKobo(value)) || Math.abs(value * 100 - toKobo(value)) > 0.000001) || toKobo(allocation.amount) !== toKobo(allocation.principalApplied) + toKobo(allocation.interestApplied)) {
+          throw new Error('Recorded repayment allocations need financial review.');
+        }
+      }
+      const principal = repayment.allocations.reduce((sum, allocation) => sum + toKobo(allocation.principalApplied), 0);
+      const profit = repayment.allocations.reduce((sum, allocation) => sum + toKobo(allocation.interestApplied), 0);
+      if (!Number.isSafeInteger(principal) || !Number.isSafeInteger(profit) || principal < 0 || profit < 0 || principal + profit !== toKobo(Number(repayment.amount))) {
+        throw new Error('Recorded repayment allocations do not match the payment amount.');
+      }
+      if ((repayment.principalApplied !== undefined && toKobo(repayment.principalApplied) !== principal) || (repayment.interestApplied !== undefined && toKobo(repayment.interestApplied) !== profit)) throw new Error('Recorded repayment totals do not match their allocations.');
+      paidPrincipalInKobo += principal;
+      paidProfitInKobo += profit;
+      continue;
+    }
     const recordedPrincipal = Number(repayment.principalApplied);
     const recordedProfit = Number(repayment.interestApplied);
     if (Number.isFinite(recordedPrincipal) && Number.isFinite(recordedProfit)) {
+      if (recordedPrincipal < 0 || recordedProfit < 0 || toKobo(recordedPrincipal) + toKobo(recordedProfit) !== toKobo(Number(repayment.amount))) throw new Error('Recorded repayment components do not match the payment amount.');
       paidPrincipalInKobo += toKobo(recordedPrincipal);
       paidProfitInKobo += toKobo(recordedProfit);
       continue;

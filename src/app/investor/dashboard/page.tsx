@@ -1,5 +1,6 @@
 
 'use client';
+import { calculateProfitAvailability } from '@/lib/profit-availability';
 import { PlatformBankDetailsCard } from '@/components/platform-bank-details-card';
 
 import { PageHeader } from "@/components/page-header";
@@ -311,6 +312,7 @@ export default function InvestorDashboard() {
     const firestore = useFirestore();
     const { user, loading: userLoading } = useUser();
     const [isWithdrawOpen, setWithdrawOpen] = useState(false);
+    const [isAnnualWithdrawOpen, setAnnualWithdrawOpen] = useState(false);
     const [isDepositOpen, setDepositOpen] = useState(false);
     const [chartRange, setChartRange] = useState<'4w' | '12w' | '52w' | 'all'>('12w');
     const isMobile = useIsMobile();
@@ -354,7 +356,7 @@ export default function InvestorDashboard() {
 
     const reinvestmentRequestsQuery = useMemo(() => {
         if (!firestore || !user?.uid) return null;
-        return query(collection(firestore, 'reinvestmentRequests'), where('investorId', '==', user.uid), orderBy('requestedAt', 'desc'), limit(5));
+        return query(collection(firestore, 'reinvestmentRequests'), where('investorId', '==', user.uid), orderBy('requestedAt', 'desc'));
     }, [firestore, user]);
 
 
@@ -389,6 +391,11 @@ export default function InvestorDashboard() {
 
     const isLoading = userLoading || allTransactionsLoading || recentTransactionsLoading || investmentsLoading || allDealInvestmentsLoading || dealsLoading || fundBatchesLoading || isMobile === undefined || userProfileLoading || withdrawalRequestsLoading || depositRequestsLoading || reinvestmentRequestsLoading;
 
+    const profitAvailability = useMemo(() => calculateProfitAvailability({
+        fundBatches: fundBatches || [], entries: allTransactions || [],
+        withdrawalRequests: withdrawalRequests || [], reinvestmentRequests: reinvestmentRequests || [],
+    }), [fundBatches, allTransactions, withdrawalRequests, reinvestmentRequests]);
+
     const { lockedProfits, withdrawableBalance, expectedIncome, totalProfitsEarned } = useMemo(() => {
         if (!allTransactions || !deals || !investments || !allDealInvestments) {
             return { lockedProfits: 0, withdrawableBalance: 0, expectedIncome: 0, totalProfitsEarned: 0 };
@@ -397,15 +404,12 @@ export default function InvestorDashboard() {
         const profitTransactions = allTransactions.filter(tx => tx.type === 'ProfitDistribution');
         const totalProfitsEarned = profitTransactions.reduce((sum, tx) => sum + tx.amount, 0);
         let totalLockedProfit = 0;
-        let totalWithdrawableProfit = 0;
         let totalExpectedIncome = 0;
 
         for (const profitTx of profitTransactions) {
             const batch = fundBatches?.find((item) => item.id === profitTx.fundBatchId);
             if (batch && isProfitDistributionLocked(batch, profitTx)) {
                 totalLockedProfit += profitTx.amount;
-            } else {
-                totalWithdrawableProfit += profitTx.amount;
             }
         }
 
@@ -423,19 +427,19 @@ export default function InvestorDashboard() {
             }
         }
 
-        // --- WITHDRAWABLE BALANCE CALCULATION ---
-        const totalWithdrawnShortTerm = (allTransactions || [])
-            .filter(tx => tx.type === 'Withdrawal' && (tx.metadata?.source === 'ShortTermProfit' || tx.amount < 0 || tx.historicalCorrection))
-            .reduce((sum, tx) => sum + historicalOutflowAmount(tx), 0);
-
         return {
             lockedProfits: totalLockedProfit,
-            withdrawableBalance: Math.max(0, totalWithdrawableProfit - totalWithdrawnShortTerm),
+            withdrawableBalance: profitAvailability.availableProfit,
             expectedIncome: totalExpectedIncome,
             totalProfitsEarned
         };
-    }, [allTransactions, deals, investments, allDealInvestments, fundBatches, user]);
+    }, [allTransactions, deals, investments, allDealInvestments, fundBatches, user, profitAvailability]);
 
+
+    const annualWithdrawal = {
+        ...profitAvailability.window,
+        withdrawableBalance: Math.min(profitAvailability.window.availableToWithdraw, profitAvailability.globallyAvailableProfit),
+    };
 
     const financialMetrics = useMemo(() => {
         if (!allTransactions) {
@@ -526,6 +530,7 @@ export default function InvestorDashboard() {
 
     const handleWithdrawalSuccess = () => {
         setWithdrawOpen(false);
+        setAnnualWithdrawOpen(false);
     };
 
     const formatDate = (timestamp: Timestamp | Date | undefined) => {
@@ -705,7 +710,7 @@ export default function InvestorDashboard() {
                                 <WithdrawForm withdrawableBalance={withdrawableBalance} onWithdrawalRequested={handleWithdrawalSuccess} />
                             </DialogContent>
                         </Dialog>
-                        {user && <ReinvestButton balance={withdrawableBalance} user={user} />}
+                        {user && <ReinvestButton balance={profitAvailability.reinvestibleProfit} user={user} />}
                     </CardContent>
                 </Card>
             </div>
@@ -726,10 +731,31 @@ export default function InvestorDashboard() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                         <div className="text-xl font-bold">{formatCurrency(lockedProfits)}</div>
-                        <p className="text-xs text-muted-foreground">For a 90-day investment, profit unlocks only at the end of each completed 30-day period. Investments longer than 90 days keep all generated profit locked until full maturity.</p>
+                        <p className="text-xs text-muted-foreground">For a 90-day investment, profit unlocks only at the end of each completed 30-day period. Investments longer than 90 days keep generated profit locked until maturity, except for an eligible annual withdrawal allowance.</p>
                     </CardContent>
                 </Card>
             </div>
+
+            {!isLoading && annualWithdrawal.isOpen && (
+                <Card className="mt-6">
+                    <CardHeader>
+                        <CardTitle>Annual Profit Withdrawal</CardTitle>
+                        <CardDescription>Up to 20% of the preceding investment year’s realised profit is eligible during this five-day window. Approval must complete within the eligible window.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-xl font-bold">{formatCurrency(annualWithdrawal.withdrawableBalance)}</p>
+                        <Dialog open={isAnnualWithdrawOpen} onOpenChange={setAnnualWithdrawOpen}>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" className="mt-2" disabled={annualWithdrawal.withdrawableBalance <= 0}>Withdraw Annual Profit</Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader><DialogTitle>Request Annual Profit Withdrawal</DialogTitle></DialogHeader>
+                                <WithdrawForm source="AnniversaryProfit" withdrawableBalance={annualWithdrawal.withdrawableBalance} onWithdrawalRequested={handleWithdrawalSuccess} />
+                            </DialogContent>
+                        </Dialog>
+                    </CardContent>
+                </Card>
+            )}
 
             <Card className="mt-8">
                 <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">

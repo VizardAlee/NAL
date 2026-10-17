@@ -1,5 +1,5 @@
 import type { ScheduleInstallment } from '@/lib/amortization';
-import { roundCurrency } from '@/lib/financial-integrity';
+import { assertPositiveCurrencyAmount, roundCurrency } from '@/lib/financial-integrity';
 
 export type RepaymentAllocation = {
   installmentNumber: number;
@@ -64,13 +64,46 @@ export function repaymentComponentsForInstallment(
   return { principal, interest: roundCurrency(amount - principal) };
 }
 
+/** Keep every row touched by a multi-installment or partial payment stable. */
+export function approvedRepaymentInstallments(repayments: AllocationAwareRepayment[], schedule: ScheduleInstallment[]): number[] {
+  const preserved = new Set<number>();
+  for (const repayment of repayments) {
+    const allocations = repayment.allocations?.length ? repayment.allocations : null;
+    if (allocations) {
+      for (const allocation of allocations) {
+        if (Number(allocation.amount) <= 0) continue;
+        const id = Number(allocation.installmentNumber);
+        if (!Number.isInteger(id) || !schedule.some(row => row.installment === id)) {
+          throw new Error('Recorded repayment allocations need review before changing frequency.');
+        }
+        preserved.add(id);
+      }
+    } else {
+      const id = Number(repayment.installmentNumber);
+      const row = schedule.find(row => row.installment === id);
+      // Do not invent a remapping for ambiguous legacy prepayments.
+      if (!row || toKobo(Number(repayment.amount)) > toKobo(row.payment)) {
+        throw new Error('Legacy repayment allocations need review before changing frequency.');
+      }
+      preserved.add(id);
+    }
+  }
+  return [...preserved].sort((a, b) => a - b);
+}
+
 export function planRepaymentAllocations(input: {
   amount: number;
   startingInstallment: number;
   schedule: ScheduleInstallment[];
   approvedRepayments: AllocationAwareRepayment[];
 }): RepaymentAllocation[] {
-  let remainingKobo = toKobo(input.amount);
+  let remainingKobo = toKobo(assertPositiveCurrencyAmount(input.amount));
+  // Per-row checks alone are insufficient when a legacy plan lost paid row IDs.
+  const scheduledKobo = input.schedule.reduce((sum, row) => sum + toKobo(row.payment), 0);
+  const paidKobo = input.approvedRepayments.reduce((sum, repayment) => sum + toKobo(assertPositiveCurrencyAmount(repayment.amount)), 0);
+  if (remainingKobo > Math.max(0, scheduledKobo - paidKobo)) {
+    throw new Error('Payment exceeds the remaining deal balance.');
+  }
   if (remainingKobo <= 0) throw new Error('Repayment amount must be positive.');
   const allocations: RepaymentAllocation[] = [];
 

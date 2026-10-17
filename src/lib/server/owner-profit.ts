@@ -140,11 +140,11 @@ export async function processOwnerProfitAllocations(options: ProcessOptions = {}
       const distributableKobo = Math.max(0, Math.round(distributable * 100));
 
       const allocationId = `tx_${txDoc.id}`;
-      await adminDb.runTransaction(async (trx) => {
+      const allocated = await adminDb.runTransaction(async (trx) => {
         const freshTxSnap = await trx.get(txDoc.ref);
         const freshTx = freshTxSnap.data() as any;
         if (!freshTxSnap.exists || freshTx?.ownerAllocationId) {
-          return;
+          return false;
         }
 
         const allocationRef = adminDb.collection('ownerProfitAllocations').doc(allocationId);
@@ -156,7 +156,33 @@ export async function processOwnerProfitAllocations(options: ProcessOptions = {}
             retainedAmount: retained,
             distributableAmount: distributable,
           });
-          return;
+          return false;
+        }
+
+        // Platform earnings already have cash batches. Transfer that availability
+        // in the same transaction as the owner credits; a ledger adjustment alone
+        // would leave the same cash available to fund deals twice.
+        const platformCash = distributableKobo > 0
+          ? await trx.get(adminDb.collection('fundBatches').where('sourceId', '==', 'platform'))
+          : null;
+        const availableBatches = (platformCash?.docs || [])
+          .filter((doc) => Number(doc.data().remainingAmount) > 0)
+          .sort((a, b) => (a.data().createdAt?.toMillis?.() || 0) - (b.data().createdAt?.toMillis?.() || 0) || a.id.localeCompare(b.id));
+        let cashToTransfer = distributableKobo;
+        const platformCashDeductions: Array<{ fundBatchId: string; amount: number }> = [];
+        for (const batch of availableBatches) {
+          if (cashToTransfer <= 0) break;
+          const availableKobo = Math.round(Number(batch.data().remainingAmount) * 100);
+          if (!Number.isSafeInteger(availableKobo)) throw new Error('Invalid platform cash balance; allocation stopped.');
+          const deductedKobo = Math.min(availableKobo, cashToTransfer);
+          platformCashDeductions.push({ fundBatchId: batch.id, amount: deductedKobo / 100 });
+          cashToTransfer -= deductedKobo;
+        }
+        if (cashToTransfer > 0) throw new Error('Insufficient available platform cash for owner allocation; allocation remains pending.');
+        for (const deduction of platformCashDeductions) {
+          trx.update(adminDb.collection('fundBatches').doc(deduction.fundBatchId), {
+            remainingAmount: round2(Number(platformCash!.docs.find((doc) => doc.id === deduction.fundBatchId)!.data().remainingAmount) - deduction.amount),
+          });
         }
 
         let remainingKobo = distributableKobo;
@@ -239,6 +265,7 @@ export async function processOwnerProfitAllocations(options: ProcessOptions = {}
 
         trx.set(allocationRef, {
           sourceTransactionId: txDoc.id,
+          platformCashDeductions,
           sourceEarningAmount: amount,
           retainedAmount: retained,
           distributableAmount: distributable,
@@ -260,10 +287,15 @@ export async function processOwnerProfitAllocations(options: ProcessOptions = {}
           retainedAmount: retained,
           distributableAmount: distributable,
         });
+        return true;
       });
 
-      processed += 1;
-      details.push(`Allocated owner profit for transaction ${txDoc.id}.`);
+      if (allocated) {
+        processed += 1;
+        details.push(`Allocated owner profit for transaction ${txDoc.id}.`);
+      } else {
+        skipped += 1;
+      }
     } catch (error: any) {
       errors += 1;
       details.push(`Error for transaction ${txDoc.id}: ${error?.message || 'Unknown error'}`);

@@ -26,7 +26,31 @@ Configure App Hosting error and latency alerts, Cloud Logging alerts for failed 
 
 Alert on any `runDailyAutomation` error, any approval action error, a five-minute HTTP 5xx rate above 1%, and p95 latency above two seconds. Route alerts to at least two administrators.
 
-The Admin dashboard is the operational source of truth for daily automation. It displays the latest start, completion, status, error and job totals from `automationHealth/daily`. If the scheduled run is missing or failed, a full administrator must use **Run now**, confirm a successful result, and investigate the failed `automationRuns` record and Cloud Logging entry. Never interpret an empty recovery queue as proof that automation ran.
+The Admin dashboard is the operational source of truth for daily automation. It displays the latest start, completion, status, error and job totals from `automationHealth/daily`. If the scheduled run is missing or failed, investigate the `automationRuns` record and Cloud Logging entry and identify which components already completed. Reconcile any financial work before an explicitly authorized **Run now** attempt; repeated alerts or a successful recovery component do not establish overall success. Never interpret an empty recovery queue as proof that automation ran.
+
+### Referral-code pause
+
+Referral-code entry, generation and sharing are paused. Marketer roles and manual deal attribution remain available. Existing `referralCode` and `referredByCode` values are retained for historical reporting and ratings; do not delete or backfill them. No-code marketer ratings are reported as skipped, with stored ratings unchanged. Referral metrics display as unavailable rather than zero; directly attributed deals remain reportable. A skipped rating does not bypass failures in other daily components, including missing owner-profit configuration. Do not run production financial processing merely to verify this UI change.
+
+## Owner allocation and annual withdrawals
+
+Owner allocation transfers the distributable amount from available platform fund batches to owner fund batches in one transaction. Percentages, share units and kobo rounding follow the configured policy. The allocation records its `platformCashDeductions`; retries do not debit or credit again. Insufficient available platform cash leaves the allocation pending with no partial posting. Investigate the source earning, committed cash and allocation record before any retry. This release does not repair historical allocations or reconcile already deployed cash; those require a separately reviewed reconciliation and explicit authorization. Do not rerun historical processing to test the fix.
+
+Investments longer than two years retain their five-day annual window and 20% limit on the preceding investment year's realised profit. That annual allowance is an exception to the ordinary maturity lock. Requests and approvals must fit the recorded active window, remaining allowance, unconsumed profit, pending reservations and available cash. An expired or mismatched window cannot be approved; do not alter dates or limits to bypass the check. Principal locks remain unchanged.
+
+Role changes read the actor, target and current owners in one transaction. Concurrent owner demotions cannot remove the last owner; persona assignments are preserved.
+
+Approved repayment-frequency changes preserve paid installments, total principal and profit, and the exact original final due date. The final interval absorbs any remainder when the new frequency does not divide the remaining term evenly. Existing financial records are not rewritten by deployment.
+
+### Financial review safeguards
+
+Investor profit is a separate cash sub-ledger: realised `ProfitDistribution` credits, less profit withdrawals and reinvestment debits. Profit withdrawals never deduct principal fund batches. Reinvestment debits that profit ledger and creates an equal principal deposit and fund batch in the same transaction. Capital withdrawals continue to consume only eligible principal batches; owner withdrawals continue to consume owner allocation batches. Existing incorrect deductions are not repaired by this release and require separately authorised reconciliation.
+
+Profit request submission and approval share current maturity, ownership/persona and reservation checks. Profit with a missing, unlinked or foreign source batch is not treated as matured; its eligibility requires separate evidence review without automatic record repair. Both pending withdrawal and reinvestment requests reserve the same profit pool. Annual withdrawals remain capped by the recorded active allowance. Invalid, non-finite, negative or fractional-kobo amounts are refused; an invalid pending reservation blocks further profit processing until an administrator rejects it. Reinvestment creation and updates, and all message creation, are server-only under the deployed root `firestore.rules`.
+
+A frequency change preserves every installment referenced by approved allocation rows, including partial payments and multi-installment prepayments. Repayment approval also checks the overall outstanding contract principal and profit, independently of installment IDs. Inconsistent allocation records and ambiguous legacy prepayments require review before restructuring; the application does not invent or rewrite historical allocations. A refused approval performs no financial posting.
+
+The legacy `/admin/terminations` URL temporarily redirects (HTTP 307) to `/admin/approvals/terminations`, preserving query parameters and the canonical portal authorization checks.
 
 ## Recovery operations
 

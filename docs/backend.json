@@ -48,11 +48,11 @@
         },
         "referralCode": {
             "type": "string",
-            "description": "The marketer's unique referral code."
+            "description": "Historical marketer attribution key. New code generation and sharing are paused."
         },
         "referredByCode": {
             "type": "string",
-            "description": "The referral code of the marketer who referred this user."
+            "description": "Historical referral attribution, retained unchanged while referral-code signup is paused."
         },
         "rating": {
             "type": "number",

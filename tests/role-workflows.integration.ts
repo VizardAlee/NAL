@@ -1,4 +1,5 @@
 import { recordedInvestmentCapitalLock } from '../src/lib/investment-maturity';
+import { sendMessageAction } from '../src/app/common/actions/chat-actions';
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -174,6 +175,26 @@ test('Recovery claim race, promise, Legal handoff, reviewed demand and closure e
   assert.equal((await resolveLegalCaseAction({authToken:tokens.legal,taskId:'workflow-case',resolutionReason:'SETTLEMENT_COMPLETED',notes:'Synthetic reviewed settlement; no external payment'})).success,true);
   assert.equal((await db.doc('recoveryTasks/workflow-case').get()).data()!.status,'RESOLVED');
 });
-test('cron cannot report HEALTHY after a failed marketer subjob and does not invent a referral code',async()=>{
-  process.env.CRON_SECRET='synthetic-only-qa';const result=await cron(new NextRequest('http://127.0.0.1/api/cron',{method:'POST',headers:{authorization:'Bearer synthetic-only-qa'}}));assert.equal(result.status,500);assert.equal((await db.doc('automationHealth/daily').get()).data()!.status,'FAILED');assert.equal((await db.doc('users/marketer').get()).data()!.referralCode,undefined);
+test('cron skips no-code marketers but still reports missing owner policy as FAILED without inventing a code',async()=>{
+  process.env.CRON_SECRET='synthetic-only-qa';const result=await cron(new NextRequest('http://127.0.0.1/api/cron',{method:'POST',headers:{authorization:'Bearer synthetic-only-qa'}}));assert.equal(result.status,500);const health=(await db.doc('automationHealth/daily').get()).data()!;assert.equal(health.status,'FAILED');assert.match(health.lastError,/Owner profit policy is not configured/);assert.equal(health.summary.marketerRating.errors,0);assert.equal(health.summary.marketerRating.skipped,1);assert.equal((await db.doc('users/marketer').get()).data()!.referralCode,undefined);
+});
+
+
+test('blank chat text is rejected without message or notification writes and valid text is preserved', async () => {
+  const conversationId = 'workflow-blank-chat';
+  const ref = db.collection('conversations').doc(conversationId);
+  await ref.set({ participantIds: ['admin', 'client'], participantNames: ['Synthetic admin', 'Synthetic client'], readBy: [] });
+  const notificationsBefore = (await db.collection('notifications').get()).size;
+  for (const text of ['', '   ', '\n\t', '  \r\n  ']) {
+    const result = await sendMessageAction({ authToken: tokens.client, conversationId, senderId: 'client', text });
+    assert.equal(result.success, false);
+    assert.equal((await ref.collection('messages').get()).size, 0);
+    assert.equal((await db.collection('notifications').get()).size, notificationsBefore);
+  }
+  const text = '  Valid message content stays unchanged  ';
+  assert.equal((await sendMessageAction({ authToken: tokens.client, conversationId, senderId: 'client', text })).success, true);
+  const messages = await ref.collection('messages').get();
+  assert.equal(messages.size, 1);
+  assert.equal(messages.docs[0].data().text, text);
+  assert.equal((await db.collection('notifications').get()).size, notificationsBefore + 1);
 });

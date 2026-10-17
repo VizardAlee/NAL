@@ -55,7 +55,6 @@ const formSchema = z.object({
   password: z.string().min(8, { message: 'Password must be at least 8 characters.' }),
   phoneNumber: z.string().optional(),
   inviteToken: z.string().min(20, { message: 'Invalid invite token.' }),
-  referralCode: z.string().optional(),
 }).superRefine((data, ctx) => {
   const require = (field: keyof typeof data, value: string | undefined, message: string) => {
     if (!value?.trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message });
@@ -108,7 +107,6 @@ function SignupPageContent() {
       password: '',
       phoneNumber: '',
       inviteToken: inviteToken,
-      referralCode: '',
       accountType: 'Individual',
       organizationName: '', organizationRegistrationNumber: '', organizationAddress: '',
       representativeName: '', representativeTitle: '', representativePhoneNumber: '',
@@ -353,22 +351,6 @@ function SignupPageContent() {
                         name="inviteToken"
                         render={({ field }) => (
                           <input type="hidden" {...field} value={inviteToken} />
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="referralCode"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Referral Code (Optional)</FormLabel>
-                            <FormControl>
-                                <Input placeholder="MARK-JDOE-123" {...field} />
-                            </FormControl>
-                             <FormDescription>
-                                If you were referred by a marketer, enter their code here.
-                            </FormDescription>
-                            <FormMessage />
-                            </FormItem>
                         )}
                     />
                     <Button type="submit" className="w-full" disabled={isPending}>

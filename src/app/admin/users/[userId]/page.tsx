@@ -1,6 +1,8 @@
 
 
 'use client';
+
+import { historicalReferralCode, type MarketerStats } from '@/lib/marketer';
 import { historicalOutflowAmount } from '@/lib/financial-integrity';
 
 import { useMemo, useState, useTransition, useEffect } from 'react';
@@ -11,7 +13,7 @@ import { doc, collection, query, where, DocumentData, Timestamp, orderBy, limit 
 import { useAuth, useFirestore, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
-import { User, Landmark, History, PlusCircle, Loader2, FileText, ArrowRight, Phone, MessageSquare, Star, Gavel, Download, UserPlus, Copy } from 'lucide-react';
+import { User, Landmark, History, PlusCircle, Loader2, FileText, ArrowRight, Phone, MessageSquare, Star, Gavel, Download, UserPlus } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -100,12 +102,6 @@ type Transaction = DocumentData & {
     dealName?: string;
 };
 
-type MarketerStats = {
-    referredClientCount: number;
-    referredInvestorCount: number;
-    totalInvestorCapital: number;
-    totalDealValue: number;
-}
 
 const ITEMS_PER_PAGE = 10;
 const TWELVE_MONTHS_IN_DAYS = 360;
@@ -201,20 +197,18 @@ export default function UserDetailPage() {
     const hasMarketerPersona = userProfile ? hasPersona(userProfile, 'MARKETER') : false;
 
     useEffect(() => {
-        if (userProfile && hasMarketerPersona && userProfile.referralCode && auth?.currentUser) {
+        let active = true;
+        setMarketerStats(null);
+        if (userProfile && hasMarketerPersona && auth?.currentUser) {
             setStatsLoading(true);
-            auth.currentUser.getIdToken().then((authToken) => getMarketerStats({
-                authToken,
-                marketerId: userProfile.id,
-            })).then(result => {
-                if (result.success) {
-                    setMarketerStats(result.data as MarketerStats);
-                }
-                setStatsLoading(false);
-            });
-        } else if (userProfile && !hasMarketerPersona) {
+            auth.currentUser.getIdToken().then(authToken => getMarketerStats({ authToken, marketerId: userProfile.id }))
+                .then(result => { if (active && result.success) setMarketerStats(result.data as MarketerStats); })
+                .catch(() => { /* The card shows unavailable rather than invented totals. */ })
+                .finally(() => { if (active) setStatsLoading(false); });
+        } else {
             setStatsLoading(false);
         }
+        return () => { active = false; };
     }, [auth, hasMarketerPersona, userProfile]);
 
     const fundBatchesQuery = useMemo(() => {
@@ -385,11 +379,6 @@ export default function UserDetailPage() {
     const targetAccess = normalizeAccessModel(userProfile as any);
     const ownerReadOnly = isReadOnlyOwner(authUser as any);
     const canEditOwners = canWriteAdmin(authUser as any);
-
-    const handleCopyCode = (code: string) => {
-        navigator.clipboard.writeText(code);
-        toast({ title: "Copied!", description: "Referral code copied to clipboard." });
-    };
 
     const handleAccessRoleUpdate = (newRole: 'OWNER' | 'ADMIN' | 'STAFF' | 'USER') => {
         if (!authUser?.uid || !userProfile?.id) return;
@@ -612,22 +601,12 @@ export default function UserDetailPage() {
                                 <CardTitle className="text-base">Marketer Details</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Referral Code</p>
-                                    <div className="flex items-center gap-2">
-                                        <p className="font-mono font-medium text-lg">{userProfile.referralCode || 'N/A'}</p>
-                                        {userProfile.referralCode && (
-                                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleCopyCode(userProfile.referralCode!)}>
-                                                <Copy className="h-4 w-4" />
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
+                                <p className="text-sm text-muted-foreground">Referral-code signup is paused. Deal attribution remains available. Referral metrics and ratings require historical attribution.</p>
                                 <div>
                                     <p className="text-sm text-muted-foreground">Performance Rating</p>
                                     <div className="flex items-center gap-2">
                                         <Star className="h-5 w-5 text-yellow-400 fill-yellow-400" />
-                                        <p className="font-bold text-lg">{(userProfile.rating || 0).toFixed(1)} / 5.0</p>
+                                        <p className="font-bold text-lg">{historicalReferralCode(userProfile) && typeof userProfile.rating === 'number' && Number.isFinite(userProfile.rating) ? `${userProfile.rating.toFixed(1)} / 5.0` : 'Not available'}</p>
                                     </div>
                                 </div>
                             </CardContent>
@@ -737,15 +716,15 @@ export default function UserDetailPage() {
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="p-4 bg-muted rounded-md text-center">
                                             <p className="text-sm text-muted-foreground">Referred Clients</p>
-                                            <p className="text-2xl font-bold">{marketerStats.referredClientCount}</p>
+                                            <p className="text-2xl font-bold">{marketerStats.referredClientCount ?? 'Unavailable'}</p>
                                         </div>
                                         <div className="p-4 bg-muted rounded-md text-center">
                                             <p className="text-sm text-muted-foreground">Referred Investors</p>
-                                            <p className="text-2xl font-bold">{marketerStats.referredInvestorCount}</p>
+                                            <p className="text-2xl font-bold">{marketerStats.referredInvestorCount ?? 'Unavailable'}</p>
                                         </div>
                                         <div className="p-4 bg-muted rounded-md text-center">
                                             <p className="text-sm text-muted-foreground">Investor Capital</p>
-                                            <p className="text-2xl font-bold">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', notation: 'compact' }).format(marketerStats.totalInvestorCapital)}</p>
+                                            <p className="text-2xl font-bold">{marketerStats.totalInvestorCapital != null ? new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', notation: 'compact' }).format(marketerStats.totalInvestorCapital) : 'Unavailable'}</p>
                                         </div>
                                         <div className="p-4 bg-muted rounded-md text-center">
                                             <p className="text-sm text-muted-foreground">Attributed Deal Value</p>

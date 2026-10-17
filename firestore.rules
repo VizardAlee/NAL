@@ -324,10 +324,10 @@ service cloud.firestore {
     match /reinvestmentRequests/{requestId} {
       // Admins can read and update any request
       allow get, list: if canAdminRead();
-      allow update: if isAdmin();
+      allow update: if false;
 
-      // Investors can create their own requests
-      allow create: if isInvestor() && request.resource.data.investorId == request.auth.uid;
+      // Submission and approval enforce financial invariants in server transactions.
+      allow create: if false;
 
       // Investors can read their own requests
       allow read: if isInvestor() && resource.data.investorId == request.auth.uid;
@@ -481,10 +481,8 @@ service cloud.firestore {
             && exists(/databases/$(database)/documents/conversations/$(conversationId))
             && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
 
-        allow create: if request.auth != null
-            && exists(/databases/$(database)/documents/conversations/$(conversationId))
-            && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
-            && request.resource.data.senderId == request.auth.uid;
+        // All clients, including admins, send through the validated server action.
+        allow create: if false;
     }
   }
 }

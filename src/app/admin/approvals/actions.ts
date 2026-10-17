@@ -10,13 +10,14 @@ import { calculateRemainingRepaymentBalance, generateAmortizationSchedule } from
 import { processOwnerProfitAllocations } from '@/lib/server/owner-profit';
 import {
   allocateCurrencyByWeights,
-  calculateAvailableProfit,
+  assertPositiveCurrencyAmount,
+  calculateFundBatchAnniversaryWindow,
   roundCurrency,
 } from '@/lib/financial-integrity';
 import { planRepaymentAllocations } from '@/lib/repayment-allocation';
-import { loadFundBatchAnniversaryWindow } from '@/lib/server/fund-batch-anniversary';
+import { loadInvestorProfit } from '@/lib/server/investor-profit';
 import { assertInvestmentAgreementExecuted, capitalLockForBatch } from '@/lib/server/agreement-eligibility';
-import { isProfitDistributionLocked, lockedUntilForBatch } from '@/lib/workflow-eligibility';
+import { lockedUntilForBatch } from '@/lib/workflow-eligibility';
 import { prepareReceiptPosting } from '@/lib/server/receipt-posting';
 
 const decisionSchema = z.object({
@@ -112,35 +113,30 @@ export async function processReinvestmentRequestAction(input: DecisionInput) {
     const snapshot = await trx.get(requestRef);
     if (!snapshot.exists || snapshot.data()?.status !== 'Pending') throw new Error('This reinvestment request has already been processed.');
     const request = snapshot.data()!;
-    const [anniversaryContext, requestsSnapshot] = data.decision === 'Approved'
-      ? await Promise.all([
-          loadFundBatchAnniversaryWindow(trx, request.investorId),
-          trx.get(adminDb.collection('reinvestmentRequests').where('investorId', '==', request.investorId)),
-        ])
-      : [null, null];
-    trx.update(requestRef, { status: data.decision, processedAt: FieldValue.serverTimestamp() });
-    if (data.decision === 'Rejected') return;
-    const otherReserved = requestsSnapshot!.docs
-      .filter((doc) => doc.id !== data.requestId && doc.data().status === 'Pending')
-      .reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0);
-    const availableProfit = calculateAvailableProfit(
-      anniversaryContext!.entries,
-      otherReserved + anniversaryContext!.window.reinvestmentReserve
-    );
-    if (Number(request.amount) > availableProfit + 0.01) {
-      throw new Error('Insufficient available profit for this reinvestment.');
+    if (data.decision === 'Rejected') {
+      trx.update(requestRef, { status: data.decision, processedAt: FieldValue.serverTimestamp() });
+      return;
+    }
+    const amount = assertPositiveCurrencyAmount(request.amount);
+    if (typeof request.investorId !== 'string' || !request.investorId) throw new Error('Reinvestment request has no valid investor.');
+    const context = await loadInvestorProfit(trx, request.investorId, { excludeReinvestment: data.requestId });
+    if (Math.round(amount * 100) > Math.round(context.reinvestibleProfit * 100)) {
+      throw new Error('Insufficient available, mature and unreserved profit for this reinvestment.');
     }
     const now = Timestamp.now();
+    trx.update(requestRef, { status: data.decision, processedAt: now });
+    // Move cash from the profit sub-ledger into principal; never mint a second
+    // copy or consume an existing principal batch to fund this rollover.
     for (const tx of [
-      { type: 'Withdrawal', amount: -request.amount, metadata: { source: 'ProfitReinvestment' } },
-      { type: 'Deposit', amount: request.amount },
+      { type: 'Withdrawal', amount: -amount, metadata: { source: 'ProfitReinvestment' } },
+      { type: 'Deposit', amount },
     ]) {
       trx.set(adminDb.collection('transactions').doc(), {
         userId: request.investorId, ...tx, createdAt: now, details: 'Profit Reinvestment', sourceRequestId: data.requestId,
       });
     }
     trx.set(adminDb.collection('fundBatches').doc(), {
-      sourceId: request.investorId, amount: request.amount, remainingAmount: request.amount,
+      sourceId: request.investorId, amount, remainingAmount: amount,
       createdAt: now, tenureValue: 10, tenureUnit: 'Years', specialInvestment: data.specialInvestment,
       sourceRequestId: data.requestId,
     });
@@ -153,73 +149,77 @@ export async function processWithdrawalRequestAction(input: DecisionInput) {
   await verifyAdminWrite(data.authToken);
   await adminDb.runTransaction(async (trx) => {
     const requestRef = adminDb.collection('withdrawalRequests').doc(data.requestId);
-    const requestSnapshot = await trx.get(requestRef);
-    if (!requestSnapshot.exists || requestSnapshot.data()?.status !== 'Pending') throw new Error('This withdrawal request has already been processed.');
-    const request = requestSnapshot.data()!;
-    const userId = request.investorId || request.userId;
-    if (!userId) throw new Error('Withdrawal request has no user.');
-    const isOwnerWithdrawal = request.type === 'OwnerWithdrawal';
-    let eligibleBatchesQuery = adminDb.collection('fundBatches')
-      .where('sourceId', '==', userId)
-      .where('remainingAmount', '>', 0);
-    if (isOwnerWithdrawal) {
-      eligibleBatchesQuery = eligibleBatchesQuery.where('sourceType', '==', 'OwnerProfitAutoAllocation');
-    }
+    const snapshot = await trx.get(requestRef);
+    if (!snapshot.exists || snapshot.data()?.status !== 'Pending') throw new Error('This withdrawal request has already been processed.');
+    const request = snapshot.data()!;
     if (data.decision === 'Rejected') {
       trx.update(requestRef, { status: data.decision, processedAt: FieldValue.serverTimestamp() });
       return;
     }
-    const batchesSnapshot = await trx.get(eligibleBatchesQuery.orderBy('createdAt', 'asc'));
-    let deductionBatches = batchesSnapshot.docs;
-    if (request.source === 'Capital') {
-      const requestedBatch = request.fundBatchId || String(request.details || '').match(/\(Batch ID: ([a-zA-Z0-9_-]+)\)/)?.[1];
-      const eligible: FirebaseFirestore.QueryDocumentSnapshot[] = [];
-      for (const doc of batchesSnapshot.docs) {
-        const until = await capitalLockForBatch(trx, doc.id, doc.data());
-        if ((!requestedBatch || doc.id === requestedBatch) && (!until || new Date() >= until)) eligible.push(doc);
-      }
-      deductionBatches = eligible;
-      const eligibleCapital = eligible.reduce((sum, doc) => sum + Math.max(0, Number(doc.data().remainingAmount || 0)), 0);
-      if (Number(request.amount) > eligibleCapital + 0.01) throw new Error('Investment capital remains locked until its documented contract maturity.');
-    }
-    if (!isOwnerWithdrawal && request.source !== 'Capital') {
-      const [transactionsSnapshot, allBatchesSnapshot, pendingSnapshot] = await Promise.all([
-        trx.get(adminDb.collection('transactions').where('userId', '==', userId)),
-        trx.get(adminDb.collection('fundBatches').where('sourceId', '==', userId)),
-        trx.get(adminDb.collection('withdrawalRequests').where('investorId', '==', userId)),
-      ]);
-      const batches = new Map(allBatchesSnapshot.docs.map((doc) => [doc.id, doc.data()]));
-      const eligibleEntries = transactionsSnapshot.docs.map((doc) => doc.data()).filter((entry) => {
-        if (entry.type !== 'ProfitDistribution' || !entry.fundBatchId) return true;
-        const batch = batches.get(String(entry.fundBatchId));
-        return !batch || !isProfitDistributionLocked(batch, entry);
+    const amount = assertPositiveCurrencyAmount(request.amount);
+    const userId = request.investorId || request.userId;
+    if (typeof userId !== 'string' || !userId) throw new Error('Withdrawal request has no user.');
+    const isOwnerWithdrawal = request.type === 'OwnerWithdrawal';
+    const source = request.source || (isOwnerWithdrawal ? 'OwnerProfit' : 'ShortTermProfit');
+    if ((isOwnerWithdrawal && source !== 'OwnerProfit') || (!isOwnerWithdrawal && !['Capital', 'ShortTermProfit', 'AnniversaryProfit'].includes(source))) throw new Error('Invalid withdrawal source.');
+    const postWithdrawal = () => {
+      trx.update(requestRef, { status: data.decision, processedAt: FieldValue.serverTimestamp() });
+      trx.set(adminDb.collection('transactions').doc(), {
+        userId, type: 'Withdrawal', amount: -amount, createdAt: Timestamp.now(), sourceRequestId: data.requestId,
+        ...(isOwnerWithdrawal ? { sourceType: 'OwnerProfitWithdrawal' } : {}),
+        metadata: { source },
       });
-      const otherReserved = pendingSnapshot.docs
-        .filter((doc) => doc.id !== data.requestId && doc.data().status === 'Pending' && doc.data().source !== 'Capital')
-        .reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0);
-      const withdrawableProfit = calculateAvailableProfit(eligibleEntries, otherReserved);
-      if (Number(request.amount) > withdrawableProfit + 0.01) {
-        throw new Error('This withdrawal includes profit that has not reached its applicable 30-day period boundary or investment maturity date.');
+    };
+    if (!isOwnerWithdrawal && source !== 'Capital') {
+      const context = await loadInvestorProfit(trx, userId, { excludeWithdrawal: data.requestId });
+      let available = context.availableProfit;
+      if (source === 'AnniversaryProfit') {
+        const ids = Array.isArray(request.anniversaryWindowIds) ? request.anniversaryWindowIds : [];
+        if (!context.window.isOpen || ids.length === 0 || ids.some((id: string) => !context.window.windowIds.includes(id))) {
+          throw new Error('The annual five-day profit withdrawal window for this request is no longer open.');
+        }
+        const requestedWindow = calculateFundBatchAnniversaryWindow({
+          fundBatches: context.fundBatches.filter(batch => context.window.activeWindows.some(active => active.fundBatchId === batch.id && ids.includes(active.id))),
+          entries: context.entries,
+          withdrawalRequests: context.withdrawalRequests,
+        });
+        available = Math.min(requestedWindow.availableToWithdraw, context.globallyAvailableProfit);
+        if (Math.round(amount * 100) > Math.round(available * 100)) throw new Error('Amount exceeds the remaining annual allowance or available, unreserved profit.');
       }
+      if (Math.round(amount * 100) > Math.round(available * 100)) throw new Error('Insufficient mature, available and unreserved profit for this withdrawal.');
+      // Realised profit lives in the profit ledger, separately from principal.
+      // The withdrawal consumes it once through metadata.source above.
+      postWithdrawal();
+      return;
     }
-    trx.update(requestRef, { status: data.decision, processedAt: FieldValue.serverTimestamp() });
-    let remaining = Math.abs(Number(request.amount));
-    for (const batch of deductionBatches) {
-      if (remaining <= 0) break;
-      if (request.source === 'Capital' && batch.data().principalLockedUntil) {
+    let query = adminDb.collection('fundBatches').where('sourceId', '==', userId).where('remainingAmount', '>', 0);
+    if (isOwnerWithdrawal) query = query.where('sourceType', '==', 'OwnerProfitAutoAllocation');
+    const batches = await trx.get(query.orderBy('createdAt', 'asc'));
+    let eligible = batches.docs;
+    if (source === 'Capital') {
+      const requestedBatch = request.fundBatchId || String(request.details || '').match(/\(Batch ID: ([a-zA-Z0-9_-]+)\)/)?.[1];
+      eligible = [];
+      for (const batch of batches.docs) {
+        const until = await capitalLockForBatch(trx, batch.id, batch.data());
+        if ((!requestedBatch || batch.id === requestedBatch) && (!until || new Date() >= until)) eligible.push(batch);
+      }
+      const capitalKobo = eligible.reduce((sum, doc) => sum + Math.round(assertPositiveCurrencyAmount(doc.data().remainingAmount) * 100), 0);
+      if (Math.round(amount * 100) > capitalKobo) throw new Error('Investment capital remains locked until its documented contract maturity.');
+    }
+    let remainingKobo = Math.round(amount * 100);
+    for (const batch of eligible) {
+      if (remainingKobo <= 0) break;
+      if (source === 'Capital' && batch.data().principalLockedUntil) {
         const until = lockedUntilForBatch(batch.data());
         if (until && new Date() < until) continue;
       }
-      const deduction = Math.min(Number(batch.data().remainingAmount), remaining);
-      trx.update(batch.ref, { remainingAmount: FieldValue.increment(-deduction) });
-      remaining -= deduction;
+      const availableKobo = Math.round(assertPositiveCurrencyAmount(batch.data().remainingAmount) * 100);
+      const deduction = Math.min(availableKobo, remainingKobo);
+      trx.update(batch.ref, { remainingAmount: (availableKobo - deduction) / 100 });
+      remainingKobo -= deduction;
     }
-    if (remaining > 0.01) throw new Error('Insufficient investible balance for this withdrawal.');
-    trx.set(adminDb.collection('transactions').doc(), {
-      userId, type: 'Withdrawal', amount: -Math.abs(Number(request.amount)), createdAt: Timestamp.now(), sourceRequestId: data.requestId,
-      ...(isOwnerWithdrawal ? { sourceType: 'OwnerProfitWithdrawal' } : {}),
-      ...(request.source ? { metadata: { source: request.source } } : {}),
-    });
+    if (remainingKobo > 0) throw new Error('Insufficient investible balance for this withdrawal.');
+    postWithdrawal();
   });
   return { success: true, message: `Withdrawal request ${data.decision.toLowerCase()}.` };
 }
@@ -253,21 +253,27 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
       receiptId: repayment.receiptId, amount: Number(repayment.amount), purpose: 'REPAYMENT', requestId: data.requestId, dealId: repayment.dealId,
     });
     const deal = { id: dealSnapshot.id, ...dealSnapshot.data() } as any;
+    if (deal.status !== 'Active') throw new Error('Only active deals can receive repayments.');
+    if (repayment.clientId !== deal.clientId) throw new Error('Repayment does not belong to the deal client.');
     const schedule = generateAmortizationSchedule(deal);
     const installment = schedule.find((item) => item.installment === (repayment.installmentNumber || 1));
     if (!installment) throw new Error('Matching repayment installment was not found.');
-    const repaymentAmount = roundCurrency(Number(repayment.amount));
+    const repaymentAmount = assertPositiveCurrencyAmount(repayment.amount);
     if (!Number.isFinite(repaymentAmount) || repaymentAmount <= 0) throw new Error('Repayment amount is invalid.');
+    const approved = approvedRepaymentsSnapshot.docs.map(item => item.data()).filter(item => item.status === 'Approved');
+    const outstanding = calculateRemainingRepaymentBalance(deal, approved);
+    if (Math.round(repaymentAmount * 100) > Math.round(outstanding.totalRemaining * 100)) throw new Error('Payment exceeds the outstanding deal balance.');
     const allocations = planRepaymentAllocations({
       amount: repaymentAmount,
       startingInstallment: repayment.installmentNumber || 1,
       schedule,
-      approvedRepayments: approvedRepaymentsSnapshot.docs.map((item) => item.data()).filter((item) => item.status === 'Approved'),
+      approvedRepayments: approved,
     });
     const allocation = allocations.reduce((total, item) => ({
       principal: roundCurrency(total.principal + item.principalApplied),
       interest: roundCurrency(total.interest + item.interestApplied),
     }), { principal: 0, interest: 0 });
+    if (Math.round(allocation.principal * 100) > Math.round(outstanding.remainingPrincipal * 100) || Math.round(allocation.interest * 100) > Math.round(outstanding.remainingProfit * 100)) throw new Error('Repayment components exceed the outstanding deal balance.');
     const totalInvested = investmentsSnapshot.docs.reduce((sum, item) => sum + Number(item.data().amount), 0);
     if (!Number.isFinite(totalInvested) || totalInvested <= 0) throw new Error('Investment total is invalid.');
     const investments = investmentsSnapshot.docs.map((snapshot, index) => ({

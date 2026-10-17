@@ -120,55 +120,61 @@ export async function updateAccessRoleAction(input: z.infer<typeof updateAccessR
     }
     const actorRef = adminDb.collection('users').doc(actorId);
     const targetRef = adminDb.collection('users').doc(targetUserId);
-    const [actorSnap, targetSnap] = await Promise.all([actorRef.get(), targetRef.get()]);
+    const change = await adminDb.runTransaction(async (transaction) => {
+      const [actorSnap, targetSnap] = await Promise.all([transaction.get(actorRef), transaction.get(targetRef)]);
 
-    if (!actorSnap.exists || !targetSnap.exists) {
-      return { success: false, message: 'Actor or target user was not found.' };
-    }
+      if (!actorSnap.exists || !targetSnap.exists) {
+        throw new Error('Actor or target user was not found.');
+      }
 
-    const actor = actorSnap.data() || {};
-    const target = targetSnap.data() || {};
-    const actorModel = normalizeAccessModel(actor as any);
-    const targetModel = normalizeAccessModel(target as any);
+      const actor = actorSnap.data() || {};
+      const target = targetSnap.data() || {};
+      const actorModel = normalizeAccessModel(actor as any);
+      const targetModel = normalizeAccessModel(target as any);
 
-    if (!(actorModel.accessRole === 'ADMIN' || actorModel.accessRole === 'OWNER')) {
-      return { success: false, message: 'You are not allowed to manage owner assignments.' };
-    }
+      if (!(actorModel.accessRole === 'ADMIN' || actorModel.accessRole === 'OWNER')) {
+        throw new Error('You are not allowed to manage owner assignments.');
+      }
 
-    if (targetModel.accessRole === newAccessRole) {
-      return { success: true, message: 'No role change needed.' };
-    }
+      if (targetModel.accessRole === newAccessRole) {
+        return null;
+      }
 
-    const ownerCountSnapshot = await adminDb
-      .collection('users')
-      .where('accessRole', '==', 'OWNER')
-      .get();
-    const ownerCount = ownerCountSnapshot.size;
+      // Read every current owner inside the transaction. Concurrent demotions
+      // conflict on these reads, so the loser retries against the new count.
+      const ownerCountSnapshot = await transaction.get(
+        adminDb.collection('users').where('accessRole', '==', 'OWNER')
+      );
+      const ownerCount = ownerCountSnapshot.size;
 
-    const demotingOwner = targetModel.accessRole === 'OWNER' && newAccessRole !== 'OWNER';
-    if (demotingOwner && ownerCount <= 1) {
-      return { success: false, message: 'Cannot remove the last owner.' };
-    }
+      const demotingOwner = targetModel.accessRole === 'OWNER' && newAccessRole !== 'OWNER';
+      if (demotingOwner && ownerCount <= 1) {
+        throw new Error('Cannot remove the last owner.');
+      }
 
-    const updatedModel = {
-      accessRole: newAccessRole as AccessRole,
-      personas: targetModel.personas,
-      primaryPortal:
-        newAccessRole === 'OWNER'
-          ? 'owner'
-          : newAccessRole === 'ADMIN' || newAccessRole === 'STAFF'
-          ? 'admin'
-          : resolvePrimaryPortalFromPersonas(targetModel.personas),
-    };
-    const updatedRole = toLegacyRoleFromAccess(updatedModel);
+      const updatedModel = {
+        accessRole: newAccessRole as AccessRole,
+        personas: targetModel.personas,
+        primaryPortal:
+          newAccessRole === 'OWNER'
+            ? 'owner'
+            : newAccessRole === 'ADMIN' || newAccessRole === 'STAFF'
+            ? 'admin'
+            : resolvePrimaryPortalFromPersonas(targetModel.personas),
+      };
+      const updatedRole = toLegacyRoleFromAccess(updatedModel);
 
-    await targetRef.update({
-      role: updatedRole,
-      accessRole: updatedModel.accessRole,
-      personas: updatedModel.personas,
-      primaryPortal: updatedModel.primaryPortal,
-      updatedAt: FieldValue.serverTimestamp(),
+      transaction.update(targetRef, {
+        role: updatedRole,
+        accessRole: updatedModel.accessRole,
+        personas: updatedModel.personas,
+        primaryPortal: updatedModel.primaryPortal,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return { updatedModel, updatedRole, target, targetModel };
     });
+    if (!change) return { success: true, message: 'No role change needed.' };
+    const { updatedModel, updatedRole, target, targetModel } = change;
     await getAuth(getAdminApp()).setCustomUserClaims(targetUserId, {
       role: updatedRole,
       accessRole: updatedModel.accessRole,

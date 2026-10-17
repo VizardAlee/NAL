@@ -1,5 +1,5 @@
 import type { Transaction } from 'firebase-admin/firestore';
-import { calculateFundBatchAnniversaryWindow } from '@/lib/financial-integrity';
+import { calculateFundBatchAnniversaryWindow, type AnniversaryWithdrawalRequest } from '@/lib/financial-integrity';
 import { adminDb } from '@/firebase/admin-app';
 
 export async function loadFundBatchAnniversaryWindow(
@@ -23,7 +23,7 @@ export async function loadFundBatchAnniversaryWindow(
     };
   });
   const entries = transactionsSnapshot.docs.map((snapshot) => snapshot.data());
-  const withdrawalRequests = withdrawalsSnapshot.docs.map((snapshot) => snapshot.data());
+  const withdrawalRequests = withdrawalsSnapshot.docs.map((snapshot) => ({ ...snapshot.data(), id: snapshot.id } as AnniversaryWithdrawalRequest & { id: string; type?: string; windowLabel?: string }));
   const window = calculateFundBatchAnniversaryWindow({
     fundBatches,
     entries,

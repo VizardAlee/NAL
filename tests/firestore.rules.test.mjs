@@ -213,9 +213,9 @@ test('conversation participants cannot rewrite membership', async () => {
   await assertFails(updateDoc(doc(db, 'conversations', 'conversation'), { participantIds: ['client', 'attacker'] }));
 });
 
-test('message sender must match the authenticated participant', async () => {
+test('participants cannot bypass server message validation with direct writes', async () => {
   const db = env.authenticatedContext('client').firestore();
-  await assertSucceeds(setDoc(doc(db, 'conversations/conversation/messages/valid'), { senderId: 'client', text: 'hello' }));
+  await assertFails(setDoc(doc(db, 'conversations/conversation/messages/valid'), { senderId: 'client', text: 'hello' }));
   await assertFails(setDoc(doc(db, 'conversations/conversation/messages/spoofed'), { senderId: 'admin', text: 'forged' }));
 });
 
@@ -354,4 +354,15 @@ test('legal staff cannot enumerate unrelated financial or user records', async (
   await assertFails(getDocs(collection(legalDb, 'users')));
   await assertFails(getDoc(doc(legalDb, 'transactions', 'private')));
   await assertFails(getDoc(doc(legalDb, 'repayments', 'private')));
+});
+
+
+test('reinvestment requests and message creation are server-only at every browser write boundary', async () => {
+  await env.withSecurityRulesDisabled(async context => setDoc(doc(context.firestore(), 'users', 'investor'), { role: 'Investor', accessRole: 'USER', personas: ['INVESTOR'] }));
+  for (const uid of ['client', 'admin', 'owner', 'staff', 'investor']) {
+    const db = env.authenticatedContext(uid).firestore();
+    for (const amount of [-100, 0, 10, 0.001]) await assertFails(setDoc(doc(db, 'reinvestmentRequests', uid + amount), { investorId: uid, amount, status: 'Pending' }));
+  }
+  const db = env.authenticatedContext('client').firestore();
+  for (const [i, text] of ['', ' \n\t', '\u00a0', 'valid text'].entries()) await assertFails(setDoc(doc(db, 'conversations/conversation/messages/' + i), { senderId: 'client', text }));
 });

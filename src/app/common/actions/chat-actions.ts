@@ -157,7 +157,7 @@ export async function sendMessageAction(input: z.infer<typeof messageSchema>) {
 
   const { authToken, conversationId, senderId, text, attachmentUrl, attachmentName } = validated.data;
   
-  if (!text && !attachmentUrl) {
+  if (!text?.trim() && !attachmentUrl) {
     return { success: false, message: 'Message must have either text or an attachment.' };
   }
 

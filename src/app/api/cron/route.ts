@@ -1,3 +1,4 @@
+import { historicalReferralCode } from '@/lib/marketer';
 import { assertAutomationJobsSucceeded } from '@/lib/automation-result';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -370,13 +371,14 @@ async function processRecoveryTasks() {
 // --- Marketer Rating Automation Logic ---
 async function processMarketerRatings() {
   let marketersProcessed = 0;
+  let skipped = 0;
   let errors = 0;
   const details = [];
 
   const usersSnapshot = await adminDb.collection('users').get();
   const marketers = usersSnapshot.docs.filter((doc) => hasPersona(doc.data(), 'MARKETER'));
   if (marketers.length === 0) {
-    return { processed: 0, errors: 0, details: ['No marketers found.'] };
+    return { processed: 0, skipped: 0, errors: 0, details: ['No marketers found.'] };
   }
 
   for (const marketerDoc of marketers) {
@@ -387,8 +389,13 @@ async function processMarketerRatings() {
     let totalDeals = 0;
 
     try {
-      if (typeof marketer.referralCode !== 'string' || !marketer.referralCode.trim()) throw new Error('Marketer referral code is missing. An administrator must review this account configuration.');
-      const referredClientsSnapshot = await adminDb.collection('users').where('referredByCode', '==', marketer.referralCode).get();
+      const referralCode = historicalReferralCode(marketer);
+      if (!referralCode) {
+        skipped++;
+        details.push(`Rating unavailable for ${marketerId}: referral-code signup is paused and no historical attribution key exists. Stored rating unchanged.`);
+        continue;
+      }
+      const referredClientsSnapshot = await adminDb.collection('users').where('referredByCode', '==', referralCode).get();
       const referredClientIds = referredClientsSnapshot.docs
         .filter((doc) => hasPersona(doc.data(), 'CLIENT'))
         .map(doc => doc.id);
@@ -441,7 +448,7 @@ async function processMarketerRatings() {
     }
   }
 
-  return { processed: marketersProcessed, errors, details };
+  return { processed: marketersProcessed, skipped, errors, details };
 }
 
 

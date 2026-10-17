@@ -46,7 +46,6 @@ const signUpSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters."),
   phoneNumber: z.string().optional(),
   inviteToken: z.string().min(20, "Invalid invite token."),
-  referralCode: z.string().optional(),
 }).superRefine((data, ctx) => {
   const required = (field: keyof typeof data, value: string | undefined, message: string) => {
     if (!value?.trim()) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message });
@@ -71,13 +70,6 @@ type ActionResponse = {
     redirectUrl?: string;
 };
 
-// Helper function to generate a unique referral code
-function generateReferralCode(name: string): string {
-    const namePart = name.split(' ')[0].toUpperCase().substring(0, 4).padEnd(4, 'X');
-    const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-    return `MARK-${namePart}-${randomPart}`;
-}
-
 export async function signUpWithEmailAction(
     data: z.infer<typeof signUpSchema>
 ): Promise<ActionResponse> {
@@ -87,7 +79,7 @@ export async function signUpWithEmailAction(
         return { success: false, message: 'Invalid form data provided.' };
     }
 
-    const { name, email, password, inviteToken, phoneNumber, referralCode, accountType,
+    const { name, email, password, inviteToken, phoneNumber, accountType,
       organizationName, organizationRegistrationNumber, organizationAddress,
       representativeName, representativeTitle, representativePhoneNumber,
       representativeIdType, representativeIdNumber, governmentIdType, governmentIdNumber,
@@ -219,7 +211,7 @@ export async function signUpWithEmailAction(
             partyId: userRecord.uid,
             claimedAt: FieldValue.serverTimestamp(),
             invitationStatus: 'USED',
-            pendingEmail: FieldValue.delete(),
+            ...(existingProfileId ? { pendingEmail: FieldValue.delete() } : {}),
         };
         if (requiresKyc) {
             const normalizedGovernmentId = normalizeGovernmentIdNumber(suppliedGovernmentIdNumber);
@@ -252,16 +244,6 @@ export async function signUpWithEmailAction(
         } else if (phoneNumber) {
             userData.phoneNumber = phoneNumber.trim();
         }
-        if (referralCode) {
-            userData.referredByCode = referralCode;
-        }
-        
-        // 4. Generate and add referral code if the user is a Marketer
-        if (role === 'Marketer') {
-            userData.referralCode = generateReferralCode(legalName);
-            userData.rating = 0; // Initialize rating
-        }
-
 
         const batch = adminDb.batch();
         batch.set(adminDb.collection('users').doc(userRecord.uid), userData, { merge: Boolean(existingProfileId) });

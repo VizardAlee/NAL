@@ -107,7 +107,7 @@ If any item here fails → do NOT launch publicly
 ☐ **Financing Modes:** `Murabaha` and `Ijara` logic correctly implemented if they differ.
 ☐ **Admin Funds Management:** Full UI for Administrative Account, including expenses, asset management, and transfers.
 ☐ **Messaging System:** Full real-time chat functionality between users and admins.
-☐ **Marketer Functionality:** Dashboard with performance stats, referral code display, and list of referred users/deals.
+☐ **Marketer Functionality:** Dashboard with attributed deals and historical performance. Referral-code signup/sharing is paused; missing historical metrics show unavailable.
 ☐ **Recovery & Legal Dashboards:** Dedicated views for these roles to manage tasks and log contacts.
 ☐ **AI Deal Analyzer:** A screen for users/admins to analyze financing proposals.
 ☐ **Notifications:** System for receiving in-app and push notifications for key events (new messages, approvals, etc.).

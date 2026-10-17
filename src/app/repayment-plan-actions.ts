@@ -4,9 +4,10 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { adminDb } from '@/firebase/admin-app';
-import { createRestructuredRepaymentPlan, generateAmortizationSchedule } from '@/lib/amortization';
+import { calculateRemainingRepaymentBalance, createRestructuredRepaymentPlan, generateAmortizationSchedule } from '@/lib/amortization';
 import { verifyAdminWrite, verifyPersonaForUser } from '@/lib/server/auth';
 import { notifyAdmins, notifyUser } from '@/lib/server/notification-service';
+import { approvedRepaymentInstallments } from '@/lib/repayment-allocation';
 import type { Deal } from '@/lib/types';
 
 const repaymentFrequency = z.enum(['Daily', 'Weekly', 'Fortnightly', 'Monthly']);
@@ -123,8 +124,11 @@ export async function processRepaymentPlanChangeAction(input: z.infer<typeof dec
     ]);
     if (!pendingRepayments.empty) throw new Error('Process the pending repayment before approving this schedule change.');
     const proposed = z.object({ repaymentFrequency }).parse(request.proposedTerms);
-    const approvedInstallments = [...new Set(approvedRepayments.docs.map((item) => Number(item.data().installmentNumber)).filter(Number.isFinite))];
+    if (deal.status !== 'Active') throw new Error('Only active deals can be restructured.');
+    const paid = approvedRepayments.docs.map(item => item.data());
+    if (calculateRemainingRepaymentBalance(deal, paid).totalRemaining <= 0) throw new Error('This deal has no remaining balance to restructure.');
     const currentSchedule = generateAmortizationSchedule(deal);
+    const approvedInstallments = approvedRepaymentInstallments(paid, currentSchedule);
     const maturityDate = currentSchedule.at(-1)?.dueDate;
     if (!maturityDate || maturityDate <= now.toDate()) throw new Error('The deal has reached its repayment maturity and can no longer change frequency.');
     const plan = createRestructuredRepaymentPlan({

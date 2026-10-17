@@ -10,7 +10,6 @@ const createUserSchema = z.object({
     password: z.string().min(8),
     phoneNumber: z.string().optional(),
     role: z.enum(['Investor', 'Client', 'Marketer', 'Admin', 'Legal', 'Recovery']),
-    referralCode: z.string().optional(),
     isMuslim: z.boolean().optional(),
 }).superRefine((data, ctx) => {
     if (data.role === 'Investor' && typeof data.isMuslim !== 'boolean') {
@@ -39,13 +38,6 @@ function deriveAccessModel(role: z.infer<typeof createUserSchema>['role']) {
     }
 }
 
-// Helper function to generate a unique referral code
-function generateReferralCode(name: string): string {
-    const namePart = name.split(' ')[0].toUpperCase().substring(0, 4).padEnd(4, 'X');
-    const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-    return `MARK-${namePart}-${randomPart}`;
-}
-
 export const createUser = onCall(async (request) => {
     await requireCallableAdmin(request);
     
@@ -54,7 +46,7 @@ export const createUser = onCall(async (request) => {
         throw new HttpsError('invalid-argument', 'Invalid data provided.');
     }
     
-    const { name, email, password, role, phoneNumber, referralCode } = validated.data;
+    const { name, email, password, role, phoneNumber } = validated.data;
     if (role === 'Investor' || role === 'Client') {
         throw new HttpsError(
             'failed-precondition',
@@ -79,11 +71,6 @@ export const createUser = onCall(async (request) => {
 
         const userData: any = { name, email, role, ...accessModel };
         if (phoneNumber) userData.phoneNumber = phoneNumber;
-        if (referralCode) userData.referredByCode = referralCode;
-        if (role === 'Marketer') {
-            userData.referralCode = generateReferralCode(name);
-            userData.rating = 0;
-        }
 
         await admin.firestore().collection('users').doc(userRecord.uid).set(userData);
 

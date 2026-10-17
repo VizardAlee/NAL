@@ -11,7 +11,6 @@ const createUserSchema = zod_1.z.object({
     password: zod_1.z.string().min(8),
     phoneNumber: zod_1.z.string().optional(),
     role: zod_1.z.enum(['Investor', 'Client', 'Marketer', 'Admin', 'Legal', 'Recovery']),
-    referralCode: zod_1.z.string().optional(),
     isMuslim: zod_1.z.boolean().optional(),
 }).superRefine((data, ctx) => {
     if (data.role === 'Investor' && typeof data.isMuslim !== 'boolean') {
@@ -38,19 +37,13 @@ function deriveAccessModel(role) {
             return { accessRole: 'USER', personas: ['MARKETER'], primaryPortal: 'marketer' };
     }
 }
-// Helper function to generate a unique referral code
-function generateReferralCode(name) {
-    const namePart = name.split(' ')[0].toUpperCase().substring(0, 4).padEnd(4, 'X');
-    const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-    return `MARK-${namePart}-${randomPart}`;
-}
 exports.createUser = (0, https_1.onCall)(async (request) => {
     await (0, admin_access_1.requireCallableAdmin)(request);
     const validated = createUserSchema.safeParse(request.data);
     if (!validated.success) {
         throw new https_1.HttpsError('invalid-argument', 'Invalid data provided.');
     }
-    const { name, email, password, role, phoneNumber, referralCode } = validated.data;
+    const { name, email, password, role, phoneNumber } = validated.data;
     if (role === 'Investor' || role === 'Client') {
         throw new https_1.HttpsError('failed-precondition', 'Client and Investor accounts must be created through the invitation workflow so mandatory KYC details are collected.');
     }
@@ -70,12 +63,6 @@ exports.createUser = (0, https_1.onCall)(async (request) => {
         const userData = { name, email, role, ...accessModel };
         if (phoneNumber)
             userData.phoneNumber = phoneNumber;
-        if (referralCode)
-            userData.referredByCode = referralCode;
-        if (role === 'Marketer') {
-            userData.referralCode = generateReferralCode(name);
-            userData.rating = 0;
-        }
         await admin.firestore().collection('users').doc(userRecord.uid).set(userData);
         return { success: true, message: `User ${name} created successfully as ${role}.`, uid: userRecord.uid };
     }

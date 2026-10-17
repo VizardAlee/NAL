@@ -3,26 +3,17 @@
 
 import { useEffect, useState } from 'react';
 import { PageHeader } from "@/components/page-header";
-import { LayoutDashboard, Users, UserPlus, Banknote, Briefcase, Copy, Star } from "lucide-react";
+import { LayoutDashboard, Users, UserPlus, Banknote, Briefcase, Star } from "lucide-react";
 import { useAuth, useUser } from "@/firebase";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { getMarketerStats } from './actions';
-import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 
-type MarketerStats = {
-    referredClientCount: number;
-    referredInvestorCount: number;
-    totalInvestorCapital: number;
-    totalDealValue: number;
-    referredClients: string[];
-    referredInvestors: string[];
-    deals: { dealName: string, clientName: string, status: string, principal: number }[];
-}
+import { historicalReferralCode, type MarketerStats } from '@/lib/marketer';
 
 function StatCard({ title, value, icon: Icon, isLoading }: { title: string, value: string, icon: React.ElementType, isLoading: boolean }) {
     return (
@@ -46,35 +37,23 @@ export default function MarketerDashboardPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (user && user.referralCode && auth?.currentUser) {
-            auth.currentUser.getIdToken().then((authToken) => getMarketerStats({
-                authToken,
-                marketerId: user.uid,
-            })).then(result => {
-                if (result.success) {
-                    setStats(result.data as MarketerStats);
-                } else {
-                    toast({
-                        variant: 'destructive',
-                        title: "Error fetching stats",
-                        description: result.message
-                    });
-                }
-            }).catch(error => {
-                toast({ variant: 'destructive', title: 'Statistics unavailable', description: error instanceof Error ? error.message : 'Please retry.' });
-            }).finally(() => setLoading(false));
+        let active = true;
+        setStats(null);
+        if (user && auth?.currentUser) {
+            setLoading(true);
+            auth.currentUser.getIdToken().then(authToken => getMarketerStats({ authToken, marketerId: user.uid }))
+                .then(result => {
+                    if (!active) return;
+                    if (result.success) setStats(result.data as MarketerStats);
+                    else toast({ variant: 'destructive', title: 'Statistics unavailable', description: result.message });
+                }).catch(error => {
+                    if (active) toast({ variant: 'destructive', title: 'Statistics unavailable', description: error instanceof Error ? error.message : 'Please retry.' });
+                }).finally(() => { if (active) setLoading(false); });
         } else if (!userLoading) {
-            // This case handles when the user is loaded but has no referral code
             setLoading(false);
         }
+        return () => { active = false; };
     }, [auth, user, userLoading, toast]);
-
-    const handleCopyCode = async () => {
-        if (!user?.referralCode) return;
-        try { await navigator.clipboard.writeText(user.referralCode); }
-        catch { toast({ variant: 'destructive', title: 'Could not copy', description: 'Select and copy the code manually.' }); return; }
-        toast({ title: "Copied!", description: "Your referral code has been copied to the clipboard." });
-    };
 
     const isLoading = userLoading || loading;
 
@@ -82,55 +61,39 @@ export default function MarketerDashboardPage() {
         <div>
             <PageHeader
                 title="Marketer Dashboard"
-                description="Track your referrals and performance."
+                description="Review attributed deals and historical performance."
                 icon={LayoutDashboard}
             />
 
-            {!isLoading && !user?.referralCode && <Alert><AlertTitle>Marketer setup incomplete</AlertTitle><AlertDescription>Your referral code is not configured. Contact a NAL administrator before referring customers. Statistics are unavailable.</AlertDescription></Alert>}
+            <Alert className="mb-6"><AlertTitle>Referral-code signup is paused</AlertTitle><AlertDescription>Administrators can still attribute deals to marketers. Historical referral reporting is retained; referral metrics and ratings are unavailable without historical attribution.</AlertDescription></Alert>
             <div className="grid gap-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Your Referral Code</CardTitle>
-                        <CardDescription>Share this code with potential clients and investors. They will enter it during sign-up.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                        {isLoading ? <Skeleton className="h-10 w-64" /> : (
-                             <p className="text-2xl font-mono font-bold p-3 bg-muted rounded-md tracking-widest">{user?.referralCode || 'N/A'}</p>
-                        )}
-                        <Button onClick={handleCopyCode} disabled={isLoading || !user?.referralCode}>
-                            <Copy className="mr-2 h-4 w-4" />
-                            Copy Code
-                        </Button>
-                    </CardContent>
-                </Card>
-
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                    <StatCard title="Referred Clients" value={stats ? stats.referredClientCount.toString() : 'Unavailable'} icon={Users} isLoading={isLoading} />
-                    <StatCard title="Referred Investors" value={stats ? stats.referredInvestorCount.toString() : 'Unavailable'} icon={UserPlus} isLoading={isLoading} />
-                    <StatCard title="Total Investor Capital" value={stats ? new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(stats.totalInvestorCapital) : 'Unavailable'} icon={Banknote} isLoading={isLoading} />
+                    <StatCard title="Referred Clients" value={stats?.referredClientCount != null ? stats.referredClientCount.toString() : 'Unavailable'} icon={Users} isLoading={isLoading} />
+                    <StatCard title="Referred Investors" value={stats?.referredInvestorCount != null ? stats.referredInvestorCount.toString() : 'Unavailable'} icon={UserPlus} isLoading={isLoading} />
+                    <StatCard title="Total Investor Capital" value={stats?.totalInvestorCapital != null ? new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(stats.totalInvestorCapital) : 'Unavailable'} icon={Banknote} isLoading={isLoading} />
                     <StatCard title="Total Deal Value" value={stats ? new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(stats.totalDealValue) : 'Unavailable'} icon={Briefcase} isLoading={isLoading} />
                 </div>
                 
                 <div className="grid gap-6 lg:grid-cols-2">
                      <Card>
                         <CardHeader>
-                            <CardTitle>Referred Users</CardTitle>
+                            <CardTitle>Historical Referrals</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <h4 className="font-semibold mb-2">Investors ({stats?.referredInvestors?.length || 0})</h4>
+                                    <h4 className="font-semibold mb-2">Investors ({stats?.referredInvestors?.length ?? 'Unavailable'})</h4>
                                     <ul className="list-disc list-inside text-sm text-muted-foreground">
                                         {isLoading ? <Skeleton className="h-20 w-full" /> : 
-                                            stats?.referredInvestors?.map((name, i) => <li key={i}>{name}</li>)
+                                            stats?.referredInvestors ? stats.referredInvestors.map((name, i) => <li key={i}>{name}</li>) : <li>Unavailable</li>
                                         }
                                     </ul>
                                 </div>
                                  <div>
-                                    <h4 className="font-semibold mb-2">Clients ({stats?.referredClients?.length || 0})</h4>
+                                    <h4 className="font-semibold mb-2">Clients ({stats?.referredClients?.length ?? 'Unavailable'})</h4>
                                     <ul className="list-disc list-inside text-sm text-muted-foreground">
                                         {isLoading ? <Skeleton className="h-20 w-full" /> : 
-                                            stats?.referredClients?.map((name, i) => <li key={i}>{name}</li>)
+                                            stats?.referredClients ? stats.referredClients.map((name, i) => <li key={i}>{name}</li>) : <li>Unavailable</li>
                                         }
                                     </ul>
                                 </div>
@@ -140,12 +103,12 @@ export default function MarketerDashboardPage() {
                      <Card>
                         <CardHeader>
                             <CardTitle>Performance Rating</CardTitle>
-                             <CardDescription>Your automated rating based on client performance.</CardDescription>
+                             <CardDescription>Historical rating based on referred client performance.</CardDescription>
                         </CardHeader>
                         <CardContent className="text-center">
                             <Star className="mx-auto h-16 w-16 text-yellow-400 fill-yellow-400" />
-                            <p className="text-4xl font-bold mt-2">{typeof user?.rating === 'number' && Number.isFinite(user.rating) ? user.rating.toFixed(1) + ' / 5.0' : 'Not available'}</p>
-                            <p className="text-sm text-muted-foreground mt-1">Rating updates periodically</p>
+                            <p className="text-4xl font-bold mt-2">{historicalReferralCode(user) && typeof user?.rating === 'number' && Number.isFinite(user.rating) ? user.rating.toFixed(1) + ' / 5.0' : 'Not available'}</p>
+                            <p className="text-sm text-muted-foreground mt-1">Accounts without historical attribution are skipped during rating updates.</p>
                         </CardContent>
                     </Card>
                 </div>
@@ -187,7 +150,7 @@ export default function MarketerDashboardPage() {
                                 ) : (
                                     <TableRow>
                                         <TableCell colSpan={4} className="h-24 text-center">
-                                            No deals attributed to you yet.
+                                            {stats ? 'No deals attributed to you yet.' : 'Deal statistics unavailable.'}
                                         </TableCell>
                                     </TableRow>
                                 )}

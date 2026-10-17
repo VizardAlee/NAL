@@ -2,6 +2,7 @@
 'use server';
 
 import { adminDb } from '@/firebase/admin-app';
+import { historicalReferralCode } from '@/lib/marketer';
 import { hasPersona } from '@/lib/access-control';
 import { verifyAdminOrOwner, verifyAuthTokenForUser } from '@/lib/server/auth';
 import { z } from 'zod';
@@ -34,16 +35,15 @@ export async function getMarketerStats(input: z.infer<typeof marketerStatsSchema
     if (!marketerSnapshot.exists || !hasPersona(marketer, 'MARKETER')) {
       return { success: false, message: 'Marketer profile not found.' };
     }
-    const referralCode = typeof marketer?.referralCode === 'string' ? marketer.referralCode : '';
+    const referralCode = historicalReferralCode(marketer);
+    // Historical attribution is retained, but no-code accounts must never query
+    // missing/blank attribution fields and accidentally claim unrelated users.
+    const referredUsers = referralCode
+      ? (await adminDb.collection('users').where('referredByCode', '==', referralCode).get()).docs
+      : [];
 
-    if (!referralCode) return { success: false, message: 'Your marketer referral code is not configured. Contact a NAL administrator.' };
-
-    // 1. Get all users referred by this marketer's code
-    const referredUsersQuery = adminDb.collection('users').where('referredByCode', '==', referralCode);
-    const referredUsersSnapshot = await referredUsersQuery.get();
-
-    const referredClients = referredUsersSnapshot.docs.filter(doc => hasPersona(doc.data(), 'CLIENT'));
-    const referredInvestors = referredUsersSnapshot.docs.filter(doc => hasPersona(doc.data(), 'INVESTOR'));
+    const referredClients = referredUsers.filter(doc => hasPersona(doc.data(), 'CLIENT'));
+    const referredInvestors = referredUsers.filter(doc => hasPersona(doc.data(), 'INVESTOR'));
 
     // 2. Calculate total capital from referred investors
     let totalInvestorCapital = 0;
@@ -86,12 +86,12 @@ export async function getMarketerStats(input: z.infer<typeof marketerStatsSchema
     return {
       success: true,
       data: {
-        referredClientCount: referredClients.length,
-        referredInvestorCount: referredInvestors.length,
-        totalInvestorCapital,
+        referredClientCount: referralCode ? referredClients.length : null,
+        referredInvestorCount: referralCode ? referredInvestors.length : null,
+        totalInvestorCapital: referralCode ? totalInvestorCapital : null,
         totalDealValue,
-        referredClients: referredClients.map(d => d.data().name),
-        referredInvestors: referredInvestors.map(d => d.data().name),
+        referredClients: referralCode ? referredClients.map(d => d.data().name) : null,
+        referredInvestors: referralCode ? referredInvestors.map(d => d.data().name) : null,
         deals: uniqueDeals.map(d => ({dealName: d.dealName, clientName: d.clientName, status: d.status, principal: d.principal})),
       },
     };

@@ -29,6 +29,9 @@ const nextConfig = {
   reactStrictMode: false,
   poweredByHeader: false,
   outputFileTracingRoot: __dirname,
+  async redirects() {
+    return [{ source: '/admin/terminations', destination: '/admin/approvals/terminations', permanent: false }];
+  },
   async headers() {
     const contentSecurityPolicy = [
       "default-src 'self'",

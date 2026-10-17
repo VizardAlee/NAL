@@ -13,6 +13,17 @@ Also run `npm run test:acceptance` (included in CI). It creates synthetic accoun
 - [ ] Confirm the production build performs type and lint validation rather than skipping them.
 - [ ] Complete the backup/restore, monitoring, and rollback preparation in `docs/operations_runbook.md`.
 
+## Financial and legacy-route regressions
+
+`npm run test:financial` (also included in `npm test` / `npm run verify`) runs only guarded `demo-nal-acceptance` loopback emulators with AI and real credentials disabled. It covers owner cash conservation, rounding, concurrent allocation, retry safety and insufficient-cash rollback; ordinary profit, capital, reinvestment and termination paths; annual entitlement, request/approval reservation limits, wrong-user and Staff denial, expired/stale windows and rollback on insufficient cash. It must not run against production or use live accounts.
+
+`npm run test:acceptance` includes the legacy termination HTTP 307/query-string check, canonical rendering at 390/1280 pixels and the client portal boundary. The separate extended workflow browser inventory requires `tests/workflow-simulation.integration.ts` fixtures in the same guarded emulators and `NAL_EXPANDED_WORKFLOW_QA=true`; it is skipped in ordinary acceptance runs.
+
+- [ ] Confirm 100.01 source cash becomes 30.00 platform cash plus 70.01 owner cash, without changing configured shares or percentages.
+- [ ] Confirm a valid annual allowance can be requested and approved once while normal immature-profit withdrawal remains blocked.
+- [ ] Confirm failed financial requests leave balances, ledger entries and approval status unchanged.
+- [ ] Reconcile any historical owner allocations separately before authorizing historical processing; local regression success does not certify historical balances.
+
 ## 1. Test Setup
 
 - [ ] Confirm `.env` / Firebase config values point to the intended test or staging project.
@@ -77,8 +88,8 @@ Also run `npm run test:acceptance` (included in CI). It creates synthetic accoun
 - [ ] User list loads and supports available filters/search/sorting.
 - [ ] Admin can create Investor, Client, Marketer, Admin, Legal, and Recovery users.
 - [ ] Duplicate email, invalid email, short password, and missing required fields are rejected.
-- [ ] Marketer creation generates and stores a referral code.
-- [ ] Referral code input stores `referredByCode` for referred users.
+- [ ] Marketer creation retains its role without generating a referral code or initial rating.
+- [ ] Referral-code input is absent; stale requests cannot set `referredByCode`. Historical attribution remains unchanged.
 - [ ] User detail page loads correct user information.
 - [ ] Admin can update role/profile fields where supported.
 - [ ] Admin cannot accidentally corrupt auth claims or Firestore user role.
@@ -179,7 +190,7 @@ Also run `npm run test:acceptance` (included in CI). It creates synthetic accoun
 ## 14. Marketer Workflows
 
 - [ ] Marketer dashboard loads referred users/deals.
-- [ ] Marketer sees their referral code.
+- [ ] Marketer sees attributed deals and historical performance without code display/sharing. Missing historical metrics show unavailable, and daily ratings skip no-code accounts without changing stored ratings.
 - [ ] Referred users are associated with the correct marketer.
 - [ ] Marketer rating displays and updates according to expected business logic.
 - [ ] Marketer cannot view unrelated clients, investors, or admin pages.
@@ -339,3 +350,10 @@ Also run `npm run test:acceptance` (included in CI). It creates synthetic accoun
 - [ ] Known failures are documented with issue links or owner names.
 - [ ] Test data cleanup plan is complete.
 - [ ] Version, commit SHA, environment, and tester name are recorded.
+
+- In isolated emulators, race two owner demotions: exactly one succeeds, one owner remains, and personas and custom claims agree with the committed profiles. Run the mandatory `npm run test:financial` regression.
+- Change repayment frequency with a remaining term that is not divisible by seven, fourteen or thirty days: the final due date equals the original maturity exactly, paid installments remain unchanged, and principal/profit totals balance to the kobo. Covered by `tests/amortization.test.ts`.
+
+- Run `npm run test:financial` against fresh loopback emulators. The independent-review regressions must refuse direct client reinvestment/message writes, malformed and locked-profit approvals, duplicate/concurrent postings and overcollection after prepayment plus restructuring.
+- Verify the complete real-action lifecycle: receive repayment, withdraw realised profit without changing principal, then redeem the full eligible capital. Reinvesting profit must transfer, rather than duplicate, its availability.
+- Verify pending ordinary/annual withdrawals and reinvestments share reservations at both request and approval. Refused approvals must leave request state, fund batches and ledger unchanged. Rejecting an invalid request may change its status but must not post financial entries.

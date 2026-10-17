@@ -36,3 +36,9 @@ test('allocation-aware records report the amount paid against each future instal
   assert.equal(repaymentAmountForInstallment(repayment, 2), 125);
   assert.equal(repaymentAmountForInstallment(repayment, 3), 0);
 });
+
+test('global contract balance caps approvals even when paid allocation rows disappeared from a legacy replacement plan', () => {
+  const replaced = [schedule[0], ...schedule.slice(1).map((row, i) => ({ ...row, installment: i + 4 }))];
+  const approved = [{ amount: 250, installmentNumber: 1, principalApplied: 200, interestApplied: 50, allocations: [{ installmentNumber: 1, amount: 125, principalApplied: 100, interestApplied: 25 }, { installmentNumber: 2, amount: 125, principalApplied: 100, interestApplied: 25 }] }];
+  assert.throws(() => planRepaymentAllocations({ amount: 200, startingInstallment: 4, schedule: replaced, approvedRepayments: approved }), /remaining deal balance/);
+});

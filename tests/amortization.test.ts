@@ -127,8 +127,7 @@ test('a frequency change preserves the existing maturity window and totals', () 
     effectiveDate: new Date('2026-03-01T00:00:00Z'),
     maturityDate,
   });
-  assert.ok(revised.at(-1)!.dueDate <= maturityDate);
-  assert.ok(maturityDate.getTime() - revised.at(-1)!.dueDate.getTime() < 7 * 24 * 60 * 60 * 1000);
+  assert.equal(revised.at(-1)!.dueDate.getTime(), maturityDate.getTime());
   assert.equal(Math.round(revised.reduce((sum, row) => sum + row.payment, 0) * 100), 112_000_000);
 });
 
@@ -155,4 +154,40 @@ test('a stored compact repayment plan recreates the approved schedule', () => {
     },
   });
   assert.deepEqual(generateAmortizationSchedule(storedDeal), buildRestructuredRepaymentSchedule(input));
+});
+
+
+test('frequency changes preserve exact maturity for remainder intervals, paid rows and compact stored plans', () => {
+  const currentDeal = deal({ principal: 100, profitRate: 20, durationValue: 60, durationUnit: 'Days', repaymentFrequency: 'Daily', createdAt: timestamp(new Date('2026-10-01T12:00:00Z')) });
+  const original = generateAmortizationSchedule(currentDeal);
+  const maturityDate = original.at(-1)!.dueDate;
+  for (const frequency of ['Weekly', 'Fortnightly', 'Monthly'] as const) {
+    for (const approvedInstallmentNumbers of [[], [1]]) {
+      const plan = createRestructuredRepaymentPlan({ deal: currentDeal, approvedInstallmentNumbers, newDurationValue: 60, newDurationUnit: 'Days', newRepaymentFrequency: frequency, effectiveDate: new Date('2026-10-02T12:00:00Z'), maturityDate });
+      const stored = deal({ ...currentDeal, repaymentPlanOverride: {
+        preservedInstallments: plan.preservedInstallments.map(row => ({ ...row, dueDate: timestamp(row.dueDate) })),
+        futureSegment: { ...plan.futureSegment, startDate: timestamp(plan.futureSegment.startDate), endDate: timestamp(maturityDate) },
+      } });
+      const revised = generateAmortizationSchedule(stored);
+      assert.equal(revised.at(-1)!.dueDate.toISOString(), '2026-11-30T12:00:00.000Z');
+      assert.ok(revised.every((row, index) => !index || row.dueDate > revised[index - 1].dueDate));
+      assert.equal(Math.round(revised.reduce((sum, row) => sum + row.principal, 0) * 100), 10000);
+      assert.equal(Math.round(revised.reduce((sum, row) => sum + row.interest, 0) * 100), 2000);
+      if (approvedInstallmentNumbers.length) assert.deepEqual(revised[0], original[0]);
+      assert.equal(revised.at(-1)!.balance, 0);
+    }
+  }
+});
+
+test('remaining balance honors all recorded allocations even without top-level component totals', () => {
+  const current = deal({ principal: 300, profitRate: 25, durationValue: 90, durationUnit: 'Days', repaymentFrequency: 'Monthly' });
+  const repayment = { amount: 250, installmentNumber: 1, allocations: [{ installmentNumber: 1, amount: 125, principalApplied: 100, interestApplied: 25 }, { installmentNumber: 2, amount: 125, principalApplied: 100, interestApplied: 25 }] };
+  assert.deepEqual(calculateRemainingRepaymentBalance(current, [repayment]), { remainingPrincipal: 100, remainingProfit: 25, totalRemaining: 125 });
+});
+
+
+test('ambiguous component totals and negative row allocations fail closed', () => {
+  const current = deal({ principal: 300, profitRate: 25, durationValue: 90, durationUnit: 'Days', repaymentFrequency: 'Monthly' });
+  assert.throws(() => calculateRemainingRepaymentBalance(current, [{ amount: 100, installmentNumber: 1, principalApplied: 0, interestApplied: 0 }]), /do not match/);
+  assert.throws(() => calculateRemainingRepaymentBalance(current, [{ amount: 100, allocations: [{ installmentNumber: 1, amount: 100, principalApplied: 101, interestApplied: -1 }] }]), /review/);
 });

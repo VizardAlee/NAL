@@ -137,6 +137,16 @@ export const roundCurrency = (value: number) => {
   return Math.round((value + Math.sign(value) * Number.EPSILON) * 100) / 100;
 };
 
+/** Accept only finite positive NGN values that can be represented in whole kobo. */
+export function assertPositiveCurrencyAmount(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 ||
+      !Number.isSafeInteger(Math.round(value * 100)) || Math.round(value * 100) <= 0 ||
+      Math.abs(value * 100 - Math.round(value * 100)) > 0.000001) {
+    throw new Error('Amount must be a positive, finite value in whole kobo.');
+  }
+  return roundCurrency(value);
+}
+
 const toCents = roundCurrency;
 
 /**

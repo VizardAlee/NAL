@@ -7,12 +7,12 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { differenceInDays } from 'date-fns';
 import { verifyPersonaForUser } from '@/lib/server/auth';
-import { calculateAvailableProfit } from '@/lib/financial-integrity';
+import { assertPositiveCurrencyAmount } from '@/lib/financial-integrity';
 import { loadFundBatchAnniversaryWindow } from '@/lib/server/fund-batch-anniversary';
 import { ownerWithdrawalRequestId } from '@/lib/server/owner-withdrawal';
 import { capitalLockForBatch } from '@/lib/server/agreement-eligibility';
 import { durationToDays } from '@/lib/deal-duration';
-import { isProfitDistributionLocked, lockedUntilForBatch } from '@/lib/workflow-eligibility';
+import { loadInvestorProfit } from '@/lib/server/investor-profit';
 
 // --- Withdrawal Action ---
 const withdrawalSchema = z.object({
@@ -96,6 +96,7 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
     }
 
     const { authToken, userId, userName, amount, source } = validatedFields.data;
+    try { assertPositiveCurrencyAmount(amount); } catch { return { success: false, message: 'Amount must be a positive value in whole kobo.' }; }
 
     try {
         await verifyPersonaForUser(authToken, userId, 'INVESTOR', true);
@@ -121,7 +122,8 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
         }
 
         await adminDb.runTransaction(async (trx) => {
-            const anniversaryContext = await loadFundBatchAnniversaryWindow(trx, userId);
+            const investorProfit = isOwnerAccount ? null : await loadInvestorProfit(trx, userId);
+            const anniversaryContext = investorProfit || await loadFundBatchAnniversaryWindow(trx, userId);
             const requestRef = ownerRequestId
                 ? adminDb.collection('withdrawalRequests').doc(ownerRequestId)
                 : adminDb.collection('withdrawalRequests').doc();
@@ -143,12 +145,6 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
             const relevantPendingRequests = isOwnerAccount
                 ? pendingRequests.filter((request) => request.type === 'OwnerWithdrawal')
                 : pendingRequests;
-            const batchesById = new Map(anniversaryContext.fundBatches.map((batch) => [batch.id, batch]));
-            const withdrawableEntries = anniversaryContext.entries.filter((entry) => {
-                if (entry.type !== 'ProfitDistribution' || !entry.fundBatchId) return true;
-                const batch = batchesById.get(entry.fundBatchId);
-                return !batch || !isProfitDistributionLocked(batch, entry);
-            });
             const investible = eligibleBatches.reduce(
                 (sum, batch) => sum + Math.max(0, Number(batch.remainingAmount || 0)),
                 0
@@ -157,7 +153,7 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
                 (sum, request) => sum + Number(request.amount || 0),
                 0
             );
-            if (amount > investible - reserved + 0.01) {
+            if (isOwnerAccount && Math.round(amount * 100) > Math.round((investible - reserved) * 100)) {
                 throw new Error('Amount exceeds your available investible balance after pending requests.');
             }
             if (isOwnerAccount) {
@@ -176,20 +172,16 @@ export async function requestWithdrawalAction(prevState: any, formData: FormData
                     if (!anniversaryContext.window.isOpen) {
                         throw new Error('The annual five-day profit withdrawal window is currently closed.');
                     }
-                    const globallyAvailableProfit = calculateAvailableProfit(withdrawableEntries);
                     const anniversaryAvailable = Math.min(
                         anniversaryContext.window.availableToWithdraw,
-                        globallyAvailableProfit
+                        investorProfit!.globallyAvailableProfit
                     );
-                    if (amount > anniversaryAvailable + 0.01) {
+                    if (Math.round(amount * 100) > Math.round(anniversaryAvailable * 100)) {
                         throw new Error('Amount exceeds the remaining 20% allowance for this annual window.');
                     }
                 } else {
-                    const reservedProfit = pendingRequests
-                        .filter((request) => request.source === 'ShortTermProfit' || request.type === 'InvestorWithdrawal')
-                        .reduce((sum, request) => sum + Number(request.amount || 0), 0);
-                    const availableProfit = calculateAvailableProfit(withdrawableEntries, reservedProfit);
-                    if (amount > availableProfit + 0.01) {
+                    const availableProfit = investorProfit!.availableProfit;
+                    if (Math.round(amount * 100) > Math.round(availableProfit * 100)) {
                         throw new Error('Amount exceeds available profit. Ninety-day investment profit unlocks only after each completed 30-day period; longer-term profit remains locked until maturity.');
                     }
                 }
@@ -266,24 +258,9 @@ export async function reinvestAction(input: { authToken: string; amount: number;
     try {
         await verifyPersonaForUser(authToken, userId, 'INVESTOR');
         await adminDb.runTransaction(async (trx) => {
-            const [anniversaryContext, requests] = await Promise.all([
-                loadFundBatchAnniversaryWindow(trx, userId),
-                trx.get(adminDb.collection('reinvestmentRequests').where('investorId', '==', userId)),
-            ]);
-            const reserved = requests.docs
-                .filter((doc) => doc.data().status === 'Pending')
-                .reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0);
-            const batchesById = new Map(anniversaryContext.fundBatches.map((batch) => [batch.id, batch]));
-            const reinvestibleEntries = anniversaryContext.entries.filter((entry) => {
-                if (entry.type !== 'ProfitDistribution' || !entry.fundBatchId) return true;
-                const batch = batchesById.get(entry.fundBatchId);
-                return !batch || !isProfitDistributionLocked(batch, entry);
-            });
-            const available = calculateAvailableProfit(
-                reinvestibleEntries,
-                reserved + anniversaryContext.window.reinvestmentReserve
-            );
-            if (amount > available + 0.01) {
+            assertPositiveCurrencyAmount(amount);
+            const context = await loadInvestorProfit(trx, userId);
+            if (Math.round(amount * 100) > Math.round(context.reinvestibleProfit * 100)) {
                 throw new Error('Amount exceeds your available, unreserved profit.');
             }
             trx.create(adminDb.collection('reinvestmentRequests').doc(), {
