@@ -169,6 +169,9 @@ test('premium admin workspace remains usable across mobile and desktop', async (
 });
 
 test('real emulator tokens enforce admin-only API writes', async ({ request }) => {
+  if (process.env.GCLOUD_PROJECT !== 'demo-nal-acceptance' || process.env.K_SERVICE ||
+      ['FIRESTORE_EMULATOR_HOST', 'FIREBASE_AUTH_EMULATOR_HOST', 'FIREBASE_STORAGE_EMULATOR_HOST']
+        .some(key => !/^127\.0\.0\.1:\d+$/.test(process.env[key] || ''))) throw new Error('Disposable loopback emulators only.');
   let adminToken = '';
   for (const role of roles) {
     const response=await request.post('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-acceptance-key',{data:{email:`${role}@nal.test`,password:'Emulator-only-123!',returnSecureToken:true}});
@@ -179,15 +182,27 @@ test('real emulator tokens enforce admin-only API writes', async ({ request }) =
     expect(upload.status(),role).toBe(role==='admin'?200:403);
     expect((await upload.json()).success,role).toBe(role==='admin');
   }
-  // Demote only the synthetic emulator profile; the old token still claims ADMIN.
+  // A client token must no longer be able to perform this protected update.
   const demotion = await request.patch('http://127.0.0.1:8088/v1/projects/demo-nal-acceptance/databases/(default)/documents/users/admin?updateMask.fieldPaths=accessRole', {
     headers: { Authorization: `Bearer ${adminToken}` },
     data: { fields: { accessRole: { stringValue: 'STAFF' } } },
   });
-  expect(demotion.ok()).toBeTruthy();
-  const staleTokenWrite = await request.post('/api/admin-user-records', {
-    headers: { Authorization: `Bearer ${adminToken}` },
-    multipart: { userId:'client',kind:'GOVERNMENT_ID',reason:'Stale token denial test',file:{name:'id.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-acceptance')} },
-  });
-  expect(staleTokenWrite.status()).toBe(403);
+  expect(demotion.status()).toBe(403);
+  // Set up stale-token state through the privileged fixture connection, not
+  // through the client bypass this correction removes. Never target live data.
+  const fixtureApp = initializeApp({ projectId: 'demo-nal-acceptance' }, 'stale-admin-fixture');
+  const profileRef = getFirestore(fixtureApp).doc('users/admin');
+  const previous = (await profileRef.get()).data()!;
+  expect(previous.accessRole).toBe('ADMIN');
+  try {
+    await profileRef.update({ accessRole: 'STAFF' });
+    const staleTokenWrite = await request.post('/api/admin-user-records', {
+      headers: { Authorization: `Bearer ${adminToken}` },
+      multipart: { userId:'client',kind:'GOVERNMENT_ID',reason:'Stale token denial test',file:{name:'id.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-acceptance')} },
+    });
+    expect(staleTokenWrite.status()).toBe(403);
+  } finally {
+    await profileRef.update({ accessRole: previous.accessRole });
+    await deleteApp(fixtureApp);
+  }
 });
