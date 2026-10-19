@@ -102,3 +102,14 @@ Acceptance coverage uses synthetic loopback emulators only: a mixed Mudaraba/Mur
 ## Financial incident response
 
 Disable approval access, preserve logs, and identify records by `sourceRequestId`. Do not repair balances manually without a reviewed reconciliation. Restore service only after request, transaction, fund-batch, investment, and platform-earning totals agree.
+
+
+## Pending role synchronization and automation reporting
+
+Role changes save the profile, a deterministic `AccessRoleChange` audit event and a server-only `roleChangeOperations/{uid}` intent atomically. A definitive non-mutating Auth rejection, or a reporting failure after confirmed Auth completion, leaves `PENDING`; an authorized administrator can use **Retry access synchronization** on the current role. Another role change is refused until synchronization finishes. Unrelated claims and personas are retained; existing tokens refresh normally. Same-role repair cannot reconstruct missing historical audit facts and does not invent an earlier role-change event.
+
+An interrupted or ambiguous Auth write stays `WORKING` (`claimsOutcome: UNCERTAIN` when recorded) and has no timed lock takeover. A rejected network promise does not prove the remote write has stopped. Confirm the original writer has stopped and review the current profile, intent and Auth outcome before proposing a separately authorized recovery. Do not clear locks merely because they are old. Auth has no transaction or compare-and-swap with Firestore; independent signup/claims writers remain outside this administrator recovery path and require separate review if they conflict. No token revocation or automated historical repair is introduced.
+
+Each daily component records its own outcome. Successful initial components remain visible if a sibling or owner allocation fails; later stages still do not run past a failure gate. Health belongs to the latest started run, with older run results retained separately. A running record older than 15 minutes is displayed as overdue with unknown outcome. Successful health becomes stale after the next existing 15:00 UTC schedule plus a 30-minute reporting allowance; this display does not stop, retry or certify any job. Reporting failures never rerun business work. Check component outcomes before any separately approved retry. Missing owner policy remains a failure; this change supplies no policy or partner configuration.
+
+Reconciliation uses bounded live cursor traversal. Continue empty filtered pages when a continuation exists. Candidate and statement-coverage searches are independent of visible list pages and remain incomplete until traversal finishes. Refresh after other administrators edit documents; pagination is not a cross-request snapshot. Discovery never posts money; the existing transaction still validates a selected bank entry.

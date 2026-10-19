@@ -1,7 +1,7 @@
 'use server';
 
 import { z } from 'zod';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Filter } from 'firebase-admin/firestore';
 import { adminDb } from '@/firebase/admin-app';
 import { verifyAdminWrite } from '@/lib/server/auth';
 import { documentActor, hashDocument, submitFinancialReceipt } from '@/lib/server/financial-documents';
@@ -11,6 +11,7 @@ import { processDepositRequestAction, processRepaymentRequestAction } from '@/ap
 import { approveManagementFeeAction } from '@/app/admin/deals/actions';
 import { notifyAdmins, notifyUser } from '@/lib/server/notification-service';
 import { platformBankAccounts } from '@/lib/platform-bank-accounts';
+import { documentPage } from '@/lib/server/document-pages';
 
 async function safely<T>(work: () => Promise<T>) {
   try { return { success: true as const, data: await work() }; }
@@ -21,35 +22,68 @@ function plain(doc: FirebaseFirestore.DocumentSnapshot) {
   return JSON.parse(JSON.stringify({ id: doc.id, ...data }, (_key, value) => value && typeof value === 'object' && '_seconds' in value ? new Date(value._seconds * 1000).toISOString() : value));
 }
 
-export async function listFinancialDocumentsAction(token: string, bankDate?: string) {
+const pageOptionsSchema = z.object({
+  receiptCursor: z.string().max(4000).optional(), statementCursor: z.string().max(4000).optional(), bankCursor: z.string().max(4000).optional(),
+  search: z.string().trim().max(150).default(''), status: z.enum(['ALL','DRAFT','SUBMITTED','RECONCILED','POSTED','EVIDENCE_ONLY','VERIFIED_EVIDENCE','REJECTED']).default('ALL'),
+}).strict();
+export async function listFinancialDocumentsAction(token: string, bankDate?: string, rawOptions: z.input<typeof pageOptionsSchema> = {}) {
   return safely(async () => {
     const actor = await documentActor(token);
+    const options = pageOptionsSchema.parse(rawOptions);
     if (bankDate) z.string().date().parse(bankDate);
     const bankStart = bankDate ? new Date(Date.parse(bankDate)-3*86400000).toISOString().slice(0,10) : '';
     const bankEnd = bankDate ? new Date(Date.parse(bankDate)+3*86400000).toISOString().slice(0,10) : '';
-    const bankQuery = bankDate ? adminDb.collection('bankEntries').where('date','>=',bankStart).where('date','<=',bankEnd).orderBy('date','desc').limit(400) : adminDb.collection('bankEntries').orderBy('date','desc').limit(400);
-    const receiptQueries = actor.admin ? [adminDb.collection('paymentReceipts').orderBy('uploadedAt', 'desc').limit(100)] : [adminDb.collection('paymentReceipts').where('uploadedBy','==',actor.uid).limit(100), adminDb.collection('paymentReceipts').where('customerId','==',actor.uid).limit(100)];
-    const [receiptResults, deals, users, statements, entries, receivingAccounts] = await Promise.all([
-      Promise.all(receiptQueries.map(query => query.get())),
+    let receiptQuery: FirebaseFirestore.Query = adminDb.collection('paymentReceipts');
+    if (!actor.admin) receiptQuery = receiptQuery.where(Filter.or(Filter.where('uploadedBy','==',actor.uid), Filter.where('customerId','==',actor.uid)));
+    if (actor.admin && options.status !== 'ALL') receiptQuery = receiptQuery.where('status', '==', options.status);
+    const search = options.search.toLowerCase();
+    const [receipts, statements, entries, deals, users, receivingAccounts] = await Promise.all([
+      documentPage(receiptQuery, ['receipts',actor.uid,actor.admin,options.status,search], options.receiptCursor, data =>
+        (options.status === 'ALL' || data.status === options.status) && `${data.originalName || ''} ${data.fields?.reference || ''} ${data.purpose || ''}`.toLowerCase().includes(search)),
+      actor.admin ? documentPage(adminDb.collection('bankStatements'), ['statements',actor.uid], options.statementCursor, () => true, 20) : null,
+      actor.admin ? documentPage(bankDate ? adminDb.collection('bankEntries').where('date','>=',bankStart).where('date','<=',bankEnd) : adminDb.collection('bankEntries'), ['entries',actor.uid,bankDate || ''], options.bankCursor,
+        () => true, 400, bankDate ? 'date' : undefined) : null,
       (actor.admin ? adminDb.collection('deals') : adminDb.collection('deals').where('clientId','==',actor.uid)).get(),
       actor.admin ? adminDb.collection('users').select('name','role','personas').get() : adminDb.collection('users').where('__name__','==',actor.uid).get(),
-      actor.admin ? adminDb.collection('bankStatements').orderBy('uploadedAt','desc').limit(20).get() : null,
-      actor.admin ? bankQuery.get() : null,
       adminDb.doc('platformSettings/bankDetails').get(),
     ]);
-    const bankRows = entries?.docs.map(doc => ({ id: doc.id, ...doc.data() } as BankRow)) || [];
-    const receipts = [...new Map(receiptResults.flatMap(result => result.docs).map(doc => [doc.id, doc])).values()]
-      .sort((a,b) => (b.data()?.uploadedAt?.toMillis?.() || 0) - (a.data()?.uploadedAt?.toMillis?.() || 0))
-      .map(doc => {
-        const fields = receiptFieldsSchema.safeParse(doc.data()?.fields);
-        const data = doc.data()!;
-        const matches = actor.admin && fields.success && data.purpose ? suggestReceiptMatches(fields.data, data.purpose, bankRows) : [];
-        const covered = statements?.docs.some(statement => statement.data().status === 'REVIEWED' && fields.success && fields.data.paymentDate >= statement.data().periodStart && fields.data.paymentDate <= statement.data().periodEnd && (!fields.data.accountNumber || fields.data.accountNumber === statement.data().accountNumber));
-        return { ...plain(doc), matches, reconciliationState: matches.length ? 'MATCH_CANDIDATES' : covered ? 'UNMATCHED' : 'AWAITING_STATEMENT', reversalWarning: bankRows.some(row => row.id === data.bankEntryId && row.reversed) };
-      });
-    return { admin: actor.admin, uid: actor.uid, receipts, statements: statements?.docs.map(plain) || [], bankRows, receivingAccounts: platformBankAccounts(receivingAccounts.data()),
+    const meta = (page: typeof receipts | null) => ({ hasMore: page?.hasMore || false, nextCursor: page?.nextCursor || null, scanned: page?.scanned || 0 });
+    return { admin: actor.admin, uid: actor.uid,
+      receipts: await Promise.all(receipts.docs.map(async doc => {
+        const data = doc.data();
+        const linked = actor.admin && data.bankEntryId ? await adminDb.collection('bankEntries').doc(data.bankEntryId).get() : null;
+        return { ...plain(doc), matches: [], reconciliationState: 'SEARCH_REQUIRED', reversalWarning: linked?.data()?.reversed === true };
+      })),
+      statements: statements?.docs.map(plain) || [], bankRows: entries?.docs.map(doc => ({id:doc.id,...doc.data()} as BankRow)) || [],
+      pages: { receipts: meta(receipts), statements: meta(statements), bankRows: meta(entries) },
+      receivingAccounts: platformBankAccounts(receivingAccounts.data()),
       deals: deals.docs.map(doc => ({ id: doc.id, name: doc.data().dealName, clientId: doc.data().clientId, status: doc.data().status })),
       users: users.docs.map(doc => ({ id: doc.id, name: doc.data().name || doc.id })), aiEnabled: process.env.FINANCIAL_DOCUMENT_AI_ENABLED === 'true' };
+  });
+}
+
+// Candidate/coverage traversal is scoped to one receipt, independent of visible
+// workspace pages. This is advisory only; reconciliation still validates in a transaction.
+export async function findFinancialReceiptMatchesAction(token: string, raw: unknown) {
+  return safely(async () => {
+    await verifyAdminWrite(token);
+    const input = z.object({ id: z.string().regex(/^[a-f0-9]{64}$/), bankCursor: z.string().max(4000).optional(), statementCursor: z.string().max(4000).optional(), bankDone: z.boolean().default(false), statementDone: z.boolean().default(false) }).strict().parse(raw);
+    const receipt = (await adminDb.doc(`paymentReceipts/${input.id}`).get()).data();
+    if (!receipt) throw Error('Receipt unavailable.');
+    const fields = receiptFieldsSchema.parse(receipt.fields);
+    const scope = [input.id, fields, receipt.purpose];
+    const from = new Date(Date.parse(fields.paymentDate)-3*86400000).toISOString().slice(0,10);
+    const to = new Date(Date.parse(fields.paymentDate)+3*86400000).toISOString().slice(0,10);
+    const [entries, statements] = await Promise.all([
+      input.bankDone ? null : documentPage(adminDb.collection('bankEntries').where('date','>=',from).where('date','<=',to), ['candidates', ...scope], input.bankCursor, () => true, 200, 'date'),
+      input.statementDone ? null : documentPage(adminDb.collection('bankStatements').where('status','==','REVIEWED'), ['coverage', ...scope], input.statementCursor, () => true, 200),
+    ]);
+    const rows = entries?.docs.map(doc => ({id:doc.id,...doc.data()} as BankRow)) || [];
+    const matches = suggestReceiptMatches(fields, receipt.purpose, rows);
+    const ids = new Set(matches.map(match => match.id));
+    return { matches, bankRows: rows.filter(row => ids.has(row.id)), covered: statements?.docs.some(doc => { const data = doc.data(); return data.status === 'REVIEWED' && fields.paymentDate >= data.periodStart && fields.paymentDate <= data.periodEnd && (!fields.accountNumber || fields.accountNumber === data.accountNumber); }) || false,
+      bankDone: !entries?.hasMore, statementDone: !statements?.hasMore,
+      bankCursor: entries?.nextCursor || undefined, statementCursor: statements?.nextCursor || undefined };
   });
 }
 

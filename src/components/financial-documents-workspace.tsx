@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { receiptPurposes, type ReceiptFields } from '@/lib/receipt-reconciliation';
-import { listFinancialDocumentsAction, submitFinancialReceiptAction, confirmBankStatementAction, reconcileFinancialReceiptAction, postFinancialReceiptAction, rejectFinancialReceiptAction } from '@/app/common/actions/financial-document-actions';
+import { listFinancialDocumentsAction, findFinancialReceiptMatchesAction, submitFinancialReceiptAction, confirmBankStatementAction, reconcileFinancialReceiptAction, postFinancialReceiptAction, rejectFinancialReceiptAction } from '@/app/common/actions/financial-document-actions';
 import { PlatformBankDetailsCard } from '@/components/platform-bank-details-card';
 
 const names: Record<string,string> = { REPAYMENT:'Client repayment', INVESTOR_CONTRIBUTION:'Investor contribution', MANAGEMENT_FEE:'Management fee', DISBURSEMENT:'NAL disbursement', PROCUREMENT:'Murabaha procurement', HISTORICAL_EVIDENCE:'Historical supporting evidence' };
@@ -42,17 +42,22 @@ export function FinancialDocumentsWorkspace({ portal }: { portal: 'admin'|'clien
   const [notes,setNotes] = useState<Record<string,string>>({});
   const [search,setSearch] = useState('');
   const [filter,setFilter] = useState('ALL');
+  const [candidateSearch,setCandidateSearch] = useState<Record<string,any>>({});
+  const requestVersion = useRef(0);
   const [page,setPage] = useState(0);
   const [preview,setPreview] = useState<{url:string;type:string}|null>(null);
   const previewRef = useRef('');
 
   const refresh = useCallback(async () => {
-    const result = await listFinancialDocumentsAction(await getRequiredIdToken(),bankDate || undefined);
+    const version = ++requestVersion.current;
+    const result = await listFinancialDocumentsAction(await getRequiredIdToken(),bankDate || undefined,{search,status:filter as any});
+    if (version !== requestVersion.current) return;
     if (!result.success) throw new Error(result.message);
-    setWorkspace(result.data); setError('');
+    setWorkspace(result.data); setCandidateSearch({}); setPage(0); setError('');
     setCustomerId(current => current || result.data.uid);
-  },[bankDate]);
-  useEffect(() => { void refresh().catch(error => setError(error.message)); return () => { if (previewRef.current) URL.revokeObjectURL(previewRef.current); }; },[refresh]);
+  },[bankDate,search,filter]);
+  useEffect(() => { const timer = setTimeout(() => void refresh().catch(error => setError(error.message)), 200); return () => { clearTimeout(timer); requestVersion.current++; }; },[refresh]);
+  useEffect(() => () => { if (previewRef.current) URL.revokeObjectURL(previewRef.current); },[]);
   const run = async (work: () => Promise<any>) => {
     setBusy(true);
     try { const result = await work(); if (result?.success === false) throw new Error(result.message); await refresh(); toast({title:'Saved',description:result?.data?.message || 'The document workflow has been updated.'}); }
@@ -81,8 +86,31 @@ export function FinancialDocumentsWorkspace({ portal }: { portal: 'admin'|'clien
     previewRef.current = URL.createObjectURL(await response.blob());
     setPreview({url:previewRef.current,type:response.headers.get('content-type') || ''});
   });
-  const filtered = (workspace?.receipts || []).filter((receipt:any) => (filter === 'ALL' || receipt.status === filter)
-    && `${receipt.originalName} ${receipt.fields?.reference || ''} ${receipt.purpose || ''}`.toLowerCase().includes(search.toLowerCase()));
+  const loadMore = async (section: 'receipts' | 'statements' | 'bankRows') => {
+    const cursor = workspace?.pages[section].nextCursor;
+    if (!cursor || busy) return;
+    const version = requestVersion.current; setBusy(true);
+    try {
+      const key = section === 'receipts' ? 'receiptCursor' : section === 'statements' ? 'statementCursor' : 'bankCursor';
+      const result = await listFinancialDocumentsAction(await getRequiredIdToken(),bankDate || undefined,{search,status:filter as any,[key]:cursor});
+      if (!result.success) throw Error(result.message);
+      if (version !== requestVersion.current) return;
+      setWorkspace(current => current ? { ...current, [section]: [...new Map([...current[section],...result.data[section]].map((item:any) => [item.id,item])).values()], pages: {...current.pages,[section]:result.data.pages[section]} } as Workspace : current);
+    } catch(error) { setError(error instanceof Error ? error.message : 'Could not load the next page.'); }
+    finally { setBusy(false); }
+  };
+  const checkCandidates = async (id: string) => {
+    const previous = candidateSearch[id]; const version = requestVersion.current; setBusy(true);
+    try {
+      const result = await findFinancialReceiptMatchesAction(await getRequiredIdToken(),{id,bankCursor:previous?.bankCursor,statementCursor:previous?.statementCursor,bankDone:previous?.bankDone || false,statementDone:previous?.statementDone || false});
+      if (!result.success) throw Error(result.message);
+      if (version !== requestVersion.current) return;
+      setCandidateSearch(current => ({...current,[id]:{...result.data,covered:previous?.covered || result.data.covered,
+        matches:[...new Map([...(previous?.matches || []),...result.data.matches].map((row:any)=>[row.id,row])).values()],bankRows:[...new Map([...(previous?.bankRows || []),...result.data.bankRows].map((row:any)=>[row.id,row])).values()]}}));
+    } catch(error) { setError(error instanceof Error ? error.message : 'Candidate search failed.'); }
+    finally { setBusy(false); }
+  };
+  const filtered = workspace?.receipts || [];
 
   return <div className="min-w-0 space-y-6">
     <PageHeader title={portal === 'admin' ? 'Bank Reconciliation & Receipts' : 'Payment Receipts'} description="Upload evidence, confirm extracted details, and track administrator verification. Uploading alone does not change balances." icon={FileCheck} />
@@ -99,11 +127,13 @@ export function FinancialDocumentsWorkspace({ portal }: { portal: 'admin'|'clien
       <div className="grid gap-3 md:grid-cols-3"><div><Label>Bank account (10 digits)</Label><Input value={account} onChange={event=>setAccount(event.target.value)} /></div><div><Label>Statement begins</Label><Input type="date" value={periodStart} onChange={event=>setPeriodStart(event.target.value)} /></div><div><Label>Statement ends</Label><Input type="date" value={periodEnd} onChange={event=>setPeriodEnd(event.target.value)} /></div></div>
       <Input type="file" accept=".csv,application/pdf,image/jpeg,image/png" disabled={busy || account.length!==10 || !periodStart || !periodEnd} onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)void upload(file,'STATEMENT');}} />
       {workspace.statements.map((statement:any)=><div key={statement.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3"><div><p>{statement.originalName} <Badge variant="outline">{statement.status}</Badge></p><p className="text-xs text-muted-foreground">Account ending {statement.accountNumber.slice(-4)} · {statement.periodStart} — {statement.periodEnd}</p></div><div className="flex gap-2"><Button variant="outline" disabled={busy} onClick={()=>void view(statement.id,'STATEMENT')}>View</Button>{statement.status==='DRAFT' && <Button disabled={busy} onClick={()=>{setStatementEdit(statement);setRows(statement.rows || []);}}>Review rows</Button>}</div></div>)}
+      <div className="flex gap-2"><Button variant="outline" disabled={busy || !workspace.pages.statements.hasMore} onClick={()=>void loadMore('statements')}>Load more statements</Button><Button variant="outline" disabled={busy || !workspace.pages.bankRows.hasMore} onClick={()=>void loadMore('bankRows')}>Load more bank entries</Button></div>
+      <p className="text-xs text-muted-foreground">Statements: {workspace.pages.statements.hasMore ? 'more pages available' : 'all pages loaded'} · Bank entries: {workspace.pages.bankRows.hasMore ? 'scan incomplete' : 'scan complete'}</p>
       <Label>Find older bank entries around a payment date<Input type="date" value={bankDate} onChange={event=>setBankDate(event.target.value)} /></Label>
-      {bankDate && <Button variant="outline" onClick={()=>setBankDate('')}>Show latest entries</Button>}
-      <p className="text-xs text-muted-foreground">Shows 20 recent statements and up to 400 bank rows in the selected period (three days either side). Unassigned entries remain available for manual identification; nothing is automatically posted.</p>
+      {bankDate && <Button variant="outline" onClick={()=>setBankDate('')}>Show all entry dates</Button>}
+      <p className="text-xs text-muted-foreground">Lists use bounded pages. Continue loading until complete; date filtering may produce an empty intermediate page. Lists can change during review; refresh after changes. Nothing is automatically posted.</p>
     </CardContent></Card>}
-    <Card><CardHeader><CardTitle>Receipt history and verification</CardTitle></CardHeader><CardContent className="space-y-4">
+    <Card><CardHeader><CardTitle>Receipt history and verification</CardTitle><Button variant="outline" disabled={busy} onClick={()=>void refresh().catch(error=>setError(error.message))}>Refresh lists</Button></CardHeader><CardContent className="space-y-4">
       <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,12rem)]"><Input className="min-w-0" aria-label="Search receipts" placeholder="Search filename or reference" value={search} onChange={event=>{setSearch(event.target.value);setPage(0);}} /><select aria-label="Filter receipt status" className={selectClass} value={filter} onChange={event=>{setFilter(event.target.value);setPage(0);}}>{['ALL','DRAFT','SUBMITTED','RECONCILED','POSTED','EVIDENCE_ONLY','VERIFIED_EVIDENCE','REJECTED'].map(status=><option key={status}>{status}</option>)}</select></div>
       {filtered.slice(page*10,page*10+10).map((receipt:any)=><div key={receipt.id} className="space-y-3 rounded-xl border p-4">
         <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-medium">{receipt.originalName}</p><p className="text-sm">{names[receipt.purpose] || 'Details awaiting confirmation'} · {money(receipt.fields?.amount)} · {receipt.fields?.paymentDate || 'Date not confirmed'}</p><p className="text-xs text-muted-foreground">{receipt.fields?.reference}</p></div><Badge variant="outline">{receipt.status.replaceAll('_',' ')}</Badge></div>
@@ -115,13 +145,13 @@ export function FinancialDocumentsWorkspace({ portal }: { portal: 'admin'|'clien
         <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={busy} onClick={()=>void view(receipt.id,'RECEIPT')}>View original</Button>{['DRAFT','REJECTED'].includes(receipt.status) && <Button disabled={busy} onClick={()=>openReceipt(receipt)}>{receipt.status==='REJECTED'?'Correct and resubmit':'Confirm details'}</Button>}</div>
         {workspace?.admin && ['SUBMITTED','RECONCILED'].includes(receipt.status) && <div className="space-y-2 rounded-lg bg-muted p-3">
           {receipt.reconciliationState==='AWAITING_STATEMENT' && <p className="text-sm text-amber-700">Awaiting a reviewed statement covering this payment date.</p>}
-          {receipt.status==='SUBMITTED' && <><p className="text-sm">{receipt.matches?.some((match:any)=>match.strong) ? 'Strong candidate found — verify before selecting.' : 'No unique strong match. Check coverage, references and account ownership.'}</p><select aria-label="Select bank entry" className={selectClass} value={bankSelections[receipt.id] || ''} onChange={event=>setBankSelections({...bankSelections,[receipt.id]:event.target.value})}><option value="">Select a reviewed bank entry</option>{workspace.bankRows.filter(row=>!row.reversed && row.amount>(row.allocatedAmount || 0)).map(row=><option key={row.id} value={row.id}>{row.date} · {row.direction} · {money(row.amount-(row.allocatedAmount || 0))} · {row.reference || row.description} · …{row.accountNumber.slice(-4)}</option>)}</select></>}
+          {receipt.status==='SUBMITTED' && <><p className="text-sm">{!candidateSearch[receipt.id] ? 'Candidate search has not been run.' : !(candidateSearch[receipt.id].bankDone && candidateSearch[receipt.id].statementDone) ? 'Candidate and coverage search is incomplete. Continue searching.' : candidateSearch[receipt.id].matches.length ? 'Candidates found — verify before selecting.' : candidateSearch[receipt.id].covered ? 'No candidates found in reviewed coverage.' : 'No candidates or reviewed statement coverage found.'}</p><Button variant="outline" disabled={busy || Boolean(candidateSearch[receipt.id]?.bankDone && candidateSearch[receipt.id]?.statementDone)} onClick={()=>void checkCandidates(receipt.id)}>{candidateSearch[receipt.id] ? 'Continue candidate search' : 'Search candidates and coverage'}</Button><select aria-label="Select bank entry" className={selectClass} value={bankSelections[receipt.id] || ''} onChange={event=>setBankSelections({...bankSelections,[receipt.id]:event.target.value})}><option value="">Select a reviewed bank entry</option>{[...new Map([...workspace.bankRows,...(candidateSearch[receipt.id]?.bankRows || [])].map((row:any)=>[row.id,row])).values()].filter((row:any)=>!row.reversed && row.amount>(row.allocatedAmount || 0)).map((row:any)=><option key={row.id} value={row.id}>{row.date} · {row.direction} · {money(row.amount-(row.allocatedAmount || 0))} · {row.reference || row.description} · …{row.accountNumber.slice(-4)}</option>)}</select></>}
           <Input aria-label="Reconciliation note or rejection reason" placeholder="Record how you verified this payment (or rejection reason)" value={notes[receipt.id] || ''} onChange={event=>setNotes({...notes,[receipt.id]:event.target.value})} />
           <div className="flex flex-wrap gap-2">{receipt.status==='SUBMITTED' ? <Button disabled={busy || !bankSelections[receipt.id] || (notes[receipt.id] || '').length<5} onClick={()=>void run(async()=>reconcileFinancialReceiptAction(await getRequiredIdToken(),{id:receipt.id,bankEntryId:bankSelections[receipt.id],note:notes[receipt.id]}))}>Confirm bank match</Button> : <Button disabled={busy} onClick={()=>void run(async()=>postFinancialReceiptAction(await getRequiredIdToken(),receipt.id))}>Approve {['DISBURSEMENT','PROCUREMENT'].includes(receipt.purpose) ? 'evidence' : 'financial posting'}</Button>}<Button variant="destructive" disabled={busy || (notes[receipt.id] || '').length<5} onClick={()=>void run(async()=>rejectFinancialReceiptAction(await getRequiredIdToken(),receipt.id,notes[receipt.id]))}>Reject</Button></div>
         </div>}
       </div>)}
-      {!filtered.length && <p className="py-6 text-center text-muted-foreground">No receipts in this category.</p>}
-      <div className="flex items-center justify-between"><Button variant="outline" disabled={page===0} onClick={()=>setPage(page-1)}>Previous</Button><span className="text-sm">Page {page+1}</span><Button variant="outline" disabled={(page+1)*10>=filtered.length} onClick={()=>setPage(page+1)}>Next</Button></div>
+      {!filtered.length && <p className="py-6 text-center text-muted-foreground">{workspace?.pages.receipts.hasMore ? 'No matches in this loaded page. Continue the search.' : 'No matching receipts.'}</p>}
+      <div className="flex items-center justify-between"><Button variant="outline" disabled={page===0} onClick={()=>setPage(page-1)}>Previous</Button><span className="text-sm">Page {page+1} · {workspace?.pages.receipts.hasMore ? 'Search incomplete; more records available' : 'All matching records loaded'}</span><Button variant="outline" disabled={busy || ((page+1)*10>=filtered.length && !workspace?.pages.receipts.hasMore)} onClick={()=>{if((page+1)*10>=filtered.length && workspace?.pages.receipts.hasMore) void loadMore('receipts'); else setPage(page+1);}}>Next</Button></div>
     </CardContent></Card>
     <Dialog open={Boolean(edit)} onOpenChange={open=>{if(!open&&!busy)setEdit(null);}}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Review receipt details</DialogTitle><DialogDescription>Check these against the original. Uncertain information must be corrected before submission. Older legacy payments are stored as evidence only.</DialogDescription></DialogHeader>
       <Label>Transaction purpose<select className={selectClass} value={purpose} onChange={event=>setPurpose(event.target.value)}>{receiptPurposes.filter(value=>workspace?.admin || value!=='DISBURSEMENT').map(value=><option key={value} value={value}>{names[value]}</option>)}</select></Label>

@@ -10,7 +10,8 @@ import { useCollection } from "@/firebase/firestore/use-collection";
 import { useDoc } from "@/firebase/firestore/use-doc";
 import { collection, doc, query, Timestamp, DocumentData, where, orderBy, limit } from "firebase/firestore";
 import { useAuth, useFirestore } from "@/firebase";
-import { useMemo, useTransition } from "react";
+import { useMemo, useTransition, useState, useEffect } from "react";
+import { automationHealthDisplay } from "@/lib/automation-health";
 import { format, subDays, startOfMonth, subMonths, formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -103,6 +104,8 @@ type AutomationHealth = DocumentData & {
     lastSucceededAt?: Timestamp;
     lastFailedAt?: Timestamp;
     lastError?: string;
+    lastStartedAt?: Timestamp;
+    components?: Record<string,{status?:string}>;
 };
 
 const activityIcons: { [key: string]: React.ElementType } = {
@@ -253,6 +256,9 @@ export default function AdminDashboardPage() {
     const { data: investorDeposits, loading: investorDepositsLoading } = useCollection<Transaction>(investorDepositsQuery);
     const { data: overdueRepayments, loading: overdueRepaymentsLoading } = useCollection<DocumentData>(overdueRepaymentsQuery);
     const { data: automationHealth, loading: automationHealthLoading } = useDoc<AutomationHealth>(automationHealthRef);
+    const [healthClock,setHealthClock] = useState(() => Date.now());
+    useEffect(() => { const timer = setInterval(() => setHealthClock(Date.now()),60_000); return () => clearInterval(timer); },[]);
+    const healthDisplay = automationHealthDisplay(automationHealth,healthClock);
     
     const isLoading = [fundBatchesLoading, usersLoading, transactionsLoading, dealRequestsLoading, depositRequestsLoading, withdrawalRequestsLoading, reinvestmentRequestsLoading, terminationsLoading, recentBatchesLoading, earningsLoading, investorDepositsLoading, overdueRepaymentsLoading].some(Boolean);
 
@@ -564,7 +570,7 @@ export default function AdminDashboardPage() {
       <div className="mt-8 grid gap-4 lg:grid-cols-3">
         <Link href="/recovery/dashboard"><Card className="h-full transition hover:border-primary/40 hover:bg-muted/40"><CardHeader className="flex-row items-center justify-between"><CardTitle className="text-base">Recovery operations</CardTitle><ShieldAlert className="h-5 w-5 text-amber-600" /></CardHeader><CardContent><p className="text-sm text-muted-foreground">Open the assigned recovery queue, follow-ups, promises and escalations.</p></CardContent></Card></Link>
         <Link href="/legal/dashboard"><Card className="h-full transition hover:border-primary/40 hover:bg-muted/40"><CardHeader className="flex-row items-center justify-between"><CardTitle className="text-base">Legal cases</CardTitle><Gavel className="h-5 w-5 text-purple-700" /></CardHeader><CardContent><p className="text-sm text-muted-foreground">Review evidence, agreements, notices, proceedings and settlements.</p></CardContent></Card></Link>
-        <Card className={automationHealth?.status === 'FAILED' ? 'border-destructive' : ''}><CardHeader className="flex-row items-center justify-between"><CardTitle className="text-base">Daily automation</CardTitle>{automationHealth?.status === 'FAILED' ? <AlertTriangle className="h-5 w-5 text-destructive" /> : <CheckCircle2 className="h-5 w-5 text-emerald-600" />}</CardHeader><CardContent>{automationHealthLoading ? <Skeleton className="h-10" /> : automationHealth ? <><p className="font-semibold">{automationHealth.status === 'HEALTHY' ? 'Healthy' : automationHealth.status || 'Unknown'}</p><p className="mt-1 text-xs text-muted-foreground">{automationHealth.lastSucceededAt?.toDate ? `Last succeeded ${formatDistanceToNow(automationHealth.lastSucceededAt.toDate(), { addSuffix: true })}` : 'No successful run has been recorded yet.'}</p>{automationHealth.lastError && <p className="mt-2 text-xs text-destructive">{automationHealth.lastError}</p>}</> : <p className="text-sm text-amber-700">No automation health record yet. It will appear after the next scheduled run.</p>}<Button className="mt-3" size="sm" variant="outline" disabled={automationPending || !auth?.currentUser} onClick={() => startAutomationTransition(async () => { const result = await runDailyAutomationNowAction({ authToken: await auth!.currentUser!.getIdToken() }); toast({ variant: result.success ? 'default' : 'destructive', title: result.success ? 'Automation complete' : 'Automation failed', description: result.message }); })}>{automationPending ? 'Running…' : 'Run now'}</Button></CardContent></Card>
+        <Card className={healthDisplay.attention ? 'border-destructive' : ''}><CardHeader className="flex-row items-center justify-between"><CardTitle className="text-base">Daily automation</CardTitle>{healthDisplay.label === 'Running' ? <Activity className="h-5 w-5 text-amber-600" /> : healthDisplay.attention ? <AlertTriangle className="h-5 w-5 text-destructive" /> : <CheckCircle2 className="h-5 w-5 text-emerald-600" />}</CardHeader><CardContent>{automationHealthLoading ? <Skeleton className="h-10" /> : automationHealth ? <><p className="font-semibold">{healthDisplay.label}</p><p className="mt-1 text-xs text-muted-foreground">{automationHealth.lastSucceededAt?.toDate ? `Last succeeded ${formatDistanceToNow(automationHealth.lastSucceededAt.toDate(), { addSuffix: true })}` : 'No successful run has been recorded yet.'}</p><p className="mt-2 text-xs">{healthDisplay.description}</p>{Object.entries(automationHealth.components || {}).map(([name,value]) => <p key={name} className="text-xs text-muted-foreground">{name}: {value.status || 'Unknown'}</p>)}</> : <p className="text-sm text-amber-700">No automation health record yet. It will appear after the next scheduled run.</p>}<Button className="mt-3" size="sm" variant="outline" disabled={automationPending || !auth?.currentUser} onClick={() => startAutomationTransition(async () => { const result = await runDailyAutomationNowAction({ authToken: await auth!.currentUser!.getIdToken() }); toast({ variant: result.success ? 'default' : 'destructive', title: result.success ? 'Automation complete' : 'Automation failed', description: result.message }); })}>{automationPending ? 'Running…' : 'Run now'}</Button></CardContent></Card>
       </div>
 
       <Card className="mt-8">

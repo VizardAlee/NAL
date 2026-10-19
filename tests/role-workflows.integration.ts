@@ -48,7 +48,7 @@ before(async () => {
   await db.doc('platformSettings/bankDetails').set({accounts:[{id:'synthetic',bankName:'Synthetic Bank',accountName:'Synthetic NAL',accountNumber:'0000000000',active:true}],defaultAccountId:'synthetic'});
 });
 after(async () => {
-  for (const collection of ['fundBatches','investments','transactions','deals','dealRequests','depositRequests','withdrawalRequests','reinvestmentRequests','repayments','notifications','bankEntries','paymentReceipts','agreementEnvelopes','agreementSigningInvites','recoveryTasks','customerRequestSubmissions','automationRuns','automationHealth']) {
+  for (const collection of ['fundBatches','investments','transactions','deals','dealRequests','depositRequests','withdrawalRequests','reinvestmentRequests','repayments','notifications','bankEntries','paymentReceipts','agreementEnvelopes','agreementSigningInvites','recoveryTasks','customerRequestSubmissions','automationRuns','automationHealth','roleChangeOperations']) {
     for (const doc of (await db.collection(collection).get()).docs) await db.recursiveDelete(doc.ref);
   }
   for (const [uid, profile] of originals) { if (profile) await db.doc(`users/${uid}`).set(profile); else await db.doc(`users/${uid}`).delete(); }
@@ -263,29 +263,38 @@ test('supported server role changes retain final owner, personas, claims and acc
   } finally { await target.set(original); await auth.setCustomUserClaims('client2', oldClaims); }
 });
 
-test('existing role-change claims and audit partial-failure limitations remain explicit without weakening final-owner checks', async () => {
+test('role change recovers settled claims failure without duplicating audit and serializes competing writers', async () => {
   const auth = getAuth(getAdminApp()); const target = db.doc('users/client2'); const original = (await target.get()).data()!;
   const oldClaims = (await auth.getUser('client2')).customClaims || {};
   const countAudit = async () => (await db.collection('transactions').where('type', '==', 'AccessRoleChange').get()).size;
   const before = await countAudit(); const originalClaimsMethod = auth.setCustomUserClaims;
-  const collectionPrototype = Object.getPrototypeOf(db.collection('transactions')); const originalAdd = collectionPrototype.add;
+  const change = (newAccessRole: 'STAFF' | 'USER') => updateAccessRoleAction({ authToken: tokens.admin, actorId: 'admin', targetUserId: 'client2', newAccessRole });
   try {
-    auth.setCustomUserClaims = async () => { throw new Error('Synthetic claims service failure'); };
-    const claimsFailure = await updateAccessRoleAction({ authToken: tokens.admin, actorId: 'admin', targetUserId: 'client2', newAccessRole: 'STAFF' });
-    assert.equal(claimsFailure.success, false);
-    assert.equal((await target.get()).data()!.accessRole, 'STAFF', 'Existing transaction commits before claims update');
-    assert.deepEqual((await auth.getUser('client2')).customClaims || {}, oldClaims);
-    assert.equal(await countAudit(), before);
-    auth.setCustomUserClaims = originalClaimsMethod; await target.set(original);
-    collectionPrototype.add = function(data: unknown) { if (this.path === 'transactions') return Promise.reject(new Error('Synthetic audit write failure')); return originalAdd.call(this, data); };
-    const auditFailure = await updateAccessRoleAction({ authToken: tokens.admin, actorId: 'admin', targetUserId: 'client2', newAccessRole: 'STAFF' });
-    assert.equal(auditFailure.success, false);
+    auth.setCustomUserClaims = async () => { throw Object.assign(new Error('Synthetic claims service rejection'),{code:'auth/insufficient-permission'}); };
+    assert.equal((await change('STAFF')).success, false);
     assert.equal((await target.get()).data()!.accessRole, 'STAFF');
+    assert.equal(await countAudit(), before + 1, 'Audit is atomic with profile even when claims fail');
+    assert.equal((await db.doc('roleChangeOperations/client2').get()).data()!.status, 'PENDING');
+    assert.equal((await change('USER')).success, false, 'A later role cannot overtake pending synchronization');
+    auth.setCustomUserClaims = originalClaimsMethod;
+    assert.equal((await change('STAFF')).success, true);
     assert.equal((await auth.getUser('client2')).customClaims!.accessRole, 'STAFF');
-    assert.equal(await countAudit(), before, 'Existing audit write remains separate from profile/claims');
+    assert.equal(await countAudit(), before + 1);
+    let release!: () => void; const blocked = new Promise<void>(resolve => { release = resolve; });
+    let entered!: () => void; const started = new Promise<void>(resolve => { entered = resolve; });
+    auth.setCustomUserClaims = async function(uid, claims) { entered(); await blocked; return originalClaimsMethod.call(this, uid, claims); };
+    const first = change('USER'); await started;
+    assert.equal((await change('STAFF')).success, false);
+    assert.equal((await change('USER')).success, false);
+    release(); assert.equal((await first).success, true);
+    assert.equal(await countAudit(), before + 2);
+    auth.setCustomUserClaims = originalClaimsMethod;
+    assert.equal((await change('USER')).success, true);
+    assert.equal(await countAudit(), before + 2, 'Same role repair does not add a role-change event');
     assert.equal((await db.doc('users/owner').get()).data()!.accessRole, 'OWNER');
   } finally {
-    collectionPrototype.add = originalAdd; auth.setCustomUserClaims = originalClaimsMethod;
+    auth.setCustomUserClaims = originalClaimsMethod;
     await target.set(original); await auth.setCustomUserClaims('client2', oldClaims);
+    await db.doc('roleChangeOperations/client2').delete();
   }
 });

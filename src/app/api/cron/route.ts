@@ -1,5 +1,5 @@
 import { historicalReferralCode } from '@/lib/marketer';
-import { assertAutomationJobsSucceeded } from '@/lib/automation-result';
+import { executeDailyAutomation } from '@/lib/server/daily-automation';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/firebase/admin-app';
@@ -349,65 +349,21 @@ async function handleCron(request: NextRequest) {
         return NextResponse.json({ success: false, message: 'Daily automation authentication was rejected. No tasks were started.' }, { status: 401 });
     }
 
-    const runRef = adminDb.collection('automationRuns').doc();
-    const healthRef = adminDb.collection('automationHealth').doc('daily');
-    const startedAt = Timestamp.now();
-    await Promise.all([
-        runRef.set({ status: 'RUNNING', startedAt, source: 'runDailyAutomation' }),
-        healthRef.set({ status: 'RUNNING', lastStartedAt: startedAt, lastRunId: runRef.id }, { merge: true }),
-    ]);
-    let summary: Record<string, unknown> = {};
-    const withoutDetails = <T extends Record<string, unknown>>(value: T) => Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'details'));
-    try {
-        const [zakatResult, recoveryResult, marketerResult] = await Promise.all([
-            processZakat(),
-            processRecoveryTasks(),
-            processMarketerRatings()
-        ]);
-        summary = { zakat: withoutDetails(zakatResult), recovery: withoutDetails(recoveryResult), marketerRating: withoutDetails(marketerResult) };
-        assertAutomationJobsSucceeded({ zakat: zakatResult, recovery: recoveryResult, marketerRating: marketerResult });
-        const ownerProfitResult = await processOwnerProfitAllocations({ includeHistorical: false, limit: 500 });
-        summary.ownerProfit = withoutDetails(ownerProfitResult as unknown as Record<string, unknown>);
-        assertAutomationJobsSucceeded({ ownerProfit: ownerProfitResult });
-        const whatsappReminders = await prepareWhatsAppReminders(adminDb);
-        summary.whatsappReminders = whatsappReminders;
-        assertAutomationJobsSucceeded({ whatsappReminders });
-
-        const completedAt = Timestamp.now();
-        summary = {
-            zakat: withoutDetails(zakatResult), recovery: withoutDetails(recoveryResult),
-            marketerRating: withoutDetails(marketerResult), ownerProfit: withoutDetails(ownerProfitResult as unknown as Record<string, unknown>),
-            whatsappReminders,
-        };
-        await Promise.all([
-            runRef.set({ status: 'SUCCEEDED', completedAt, summary }, { merge: true }),
-            healthRef.set({ status: 'HEALTHY', lastSucceededAt: completedAt, lastCompletedAt: completedAt, lastRunId: runRef.id, lastError: FieldValue.delete(), summary }, { merge: true }),
-        ]);
-
-        return NextResponse.json({
-            success: true,
-            message: 'Cron jobs executed successfully.',
-            zakat: zakatResult,
-            recovery: recoveryResult,
-            marketerRating: marketerResult,
-            ownerProfit: ownerProfitResult,
-            whatsappReminders,
-        });
-    } catch (error) {
-        console.error('CRON JOB FAILED:', error);
-        const failedAt = Timestamp.now();
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        await Promise.allSettled([
-            runRef.set({ status: 'FAILED', failedAt, error: message, summary }, { merge: true }),
-            healthRef.set({ status: 'FAILED', lastFailedAt: failedAt, lastCompletedAt: failedAt, lastRunId: runRef.id, lastError: message, summary }, { merge: true }),
-            notifyAdmins('Daily automation failed', message, '/admin/dashboard', 'system'),
-        ]);
-        return NextResponse.json({ success: false, message: 'Cron job failed.', error: message }, { status: 500 });
+    const result = await executeDailyAutomation(adminDb, {
+        zakat: processZakat, recovery: processRecoveryTasks, marketerRating: processMarketerRatings,
+        ownerProfit: () => processOwnerProfitAllocations({ includeHistorical: false, limit: 500 }),
+        whatsappReminders: () => prepareWhatsAppReminders(adminDb),
+    });
+    if (!result.success) {
+        console.error('CRON JOB FAILED:', result.error);
+        await notifyAdmins('Daily automation failed', result.error || 'Unknown error', '/admin/dashboard', 'system').catch(error => console.error('Automation notification failed', error));
+        return NextResponse.json({success:false,message:'Cron job failed.',error:result.error,runId:result.runId},{status:500});
     }
+    return NextResponse.json({success:true,message:'Cron jobs executed successfully.',...result.results,runId:result.runId});
 }
 
 // Cloud Scheduler invokes POST. GET remains available for an authenticated
-// manual health check without maintaining a second implementation.
+// manual invocation of the same processing handler. It is not a read-only probe.
 export const POST = handleCron;
 export const GET = handleCron;
 

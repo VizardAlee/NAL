@@ -7,13 +7,10 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import {
-  normalizeAccessModel,
   hasPersona,
-  resolvePrimaryPortalFromPersonas,
-  toLegacyRoleFromAccess,
-  type AccessRole,
 } from '@/lib/access-control';
 import { verifyAdminWrite } from '@/lib/server/auth';
+import { changeAccessRole } from '@/lib/server/role-change';
 
 const createDepositRequestSchema = z.object({
   authToken: z.string().min(1),
@@ -101,7 +98,7 @@ export async function uploadLegalDocumentAction(input: z.infer<typeof uploadDocu
 const updateAccessRoleSchema = z.object({
   authToken: z.string().min(1),
   actorId: z.string().min(1),
-  targetUserId: z.string().min(1),
+  targetUserId: z.string().min(1).max(128).refine(value => !value.includes('/')),
   newAccessRole: z.enum(['OWNER', 'ADMIN', 'STAFF', 'USER']),
 });
 
@@ -118,82 +115,13 @@ export async function updateAccessRoleAction(input: z.infer<typeof updateAccessR
     if (verifiedActor.uid !== actorId) {
       return { success: false, message: 'Invalid actor identity.' };
     }
-    const actorRef = adminDb.collection('users').doc(actorId);
-    const targetRef = adminDb.collection('users').doc(targetUserId);
-    const change = await adminDb.runTransaction(async (transaction) => {
-      const [actorSnap, targetSnap] = await Promise.all([transaction.get(actorRef), transaction.get(targetRef)]);
-
-      if (!actorSnap.exists || !targetSnap.exists) {
-        throw new Error('Actor or target user was not found.');
-      }
-
-      const actor = actorSnap.data() || {};
-      const target = targetSnap.data() || {};
-      const actorModel = normalizeAccessModel(actor as any);
-      const targetModel = normalizeAccessModel(target as any);
-
-      if (!(actorModel.accessRole === 'ADMIN' || actorModel.accessRole === 'OWNER')) {
-        throw new Error('You are not allowed to manage owner assignments.');
-      }
-
-      if (targetModel.accessRole === newAccessRole) {
-        return null;
-      }
-
-      // Read every current owner inside the transaction. Concurrent demotions
-      // conflict on these reads, so the loser retries against the new count.
-      const ownerCountSnapshot = await transaction.get(
-        adminDb.collection('users').where('accessRole', '==', 'OWNER')
-      );
-      const ownerCount = ownerCountSnapshot.size;
-
-      const demotingOwner = targetModel.accessRole === 'OWNER' && newAccessRole !== 'OWNER';
-      if (demotingOwner && ownerCount <= 1) {
-        throw new Error('Cannot remove the last owner.');
-      }
-
-      const updatedModel = {
-        accessRole: newAccessRole as AccessRole,
-        personas: targetModel.personas,
-        primaryPortal:
-          newAccessRole === 'OWNER'
-            ? 'owner'
-            : newAccessRole === 'ADMIN' || newAccessRole === 'STAFF'
-            ? 'admin'
-            : resolvePrimaryPortalFromPersonas(targetModel.personas),
-      };
-      const updatedRole = toLegacyRoleFromAccess(updatedModel);
-
-      transaction.update(targetRef, {
-        role: updatedRole,
-        accessRole: updatedModel.accessRole,
-        personas: updatedModel.personas,
-        primaryPortal: updatedModel.primaryPortal,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      return { updatedModel, updatedRole, target, targetModel };
-    });
-    if (!change) return { success: true, message: 'No role change needed.' };
-    const { updatedModel, updatedRole, target, targetModel } = change;
-    await getAuth(getAdminApp()).setCustomUserClaims(targetUserId, {
-      role: updatedRole,
-      accessRole: updatedModel.accessRole,
-      personas: updatedModel.personas,
-      primaryPortal: updatedModel.primaryPortal,
-    });
-
-    await adminDb.collection('transactions').add({
-      userId: actorId,
-      type: 'AccessRoleChange',
-      amount: 0,
-      details: `Changed ${target.name || target.email || targetUserId} accessRole from ${targetModel.accessRole} to ${newAccessRole}.`,
-      createdAt: FieldValue.serverTimestamp(),
-    });
+    const result = await changeAccessRole(adminDb, getAuth(getAdminApp()), actorId, targetUserId, newAccessRole);
+    if (!result.success) return result;
 
     revalidatePath('/admin/users');
     revalidatePath(`/admin/users/${targetUserId}`);
 
-    return { success: true, message: `Access role updated to ${newAccessRole}.` };
+    return result;
   } catch (error: any) {
     console.error('Update access role error:', error);
     return { success: false, message: error?.message || 'Failed to update access role.' };

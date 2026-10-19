@@ -542,6 +542,7 @@ export default function UserDetailPage() {
                             <CardContent className="space-y-3">
                                 <div className="text-sm text-muted-foreground">
                                     Current access role: <span className="font-medium text-foreground">{targetAccess.accessRole}</span>
+                                    <Button className="ml-2" size="sm" variant="outline" disabled={isRoleUpdating} onClick={() => handleAccessRoleUpdate(targetAccess.accessRole)}>Retry access synchronization</Button>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                     <Button

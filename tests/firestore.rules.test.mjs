@@ -438,3 +438,16 @@ test('direct SDK deletion cannot remove the final owner or an ordinary user, inc
     assert.equal((await getDoc(doc(db, 'users', 'client'))).exists(), true);
   });
 });
+
+
+test('role recovery intents remain server-only even for administrator clients', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(),'roleChangeOperations','client'),{status:'PENDING',claims:{accessRole:'STAFF'}});
+  });
+  for (const uid of ['admin','legacy-admin','owner','staff','client']) {
+    const db = env.authenticatedContext(uid,{accessRole:'ADMIN'}).firestore();
+    await assertFails(getDoc(doc(db,'roleChangeOperations','client')));
+    await assertFails(setDoc(doc(db,'roleChangeOperations','client'),{status:'COMPLETE'}));
+    await assertFails(deleteDoc(doc(db,'roleChangeOperations','client')));
+  }
+});
