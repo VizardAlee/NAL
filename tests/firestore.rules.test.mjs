@@ -6,7 +6,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, orderBy, query, runTransaction, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, orderBy, query, runTransaction, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
 
 let env;
 test('removing modern personas revokes stale legacy role reads but leaves true legacy profiles usable', async () => {
@@ -91,8 +91,8 @@ test('modern roles override legacy Admin and stale admin claims for writes', asy
     await assertFails(updateDoc(doc(db, 'users', uid), { accessRole: 'ADMIN' }));
     await assertFails(setDoc(doc(db, 'platformSettings', 'zakat'), { nisab: 1 }));
   }
-  await assertSucceeds(updateDoc(doc(env.authenticatedContext('legacy-admin').firestore(), 'users', 'client'), { name: 'Legacy admin edit' }));
-  await assertSucceeds(updateDoc(doc(env.authenticatedContext('admin').firestore(), 'users', 'client'), { name: 'Full admin edit' }));
+  await assertFails(updateDoc(doc(env.authenticatedContext('legacy-admin').firestore(), 'users', 'client'), { name: 'Legacy admin edit' }));
+  await assertFails(updateDoc(doc(env.authenticatedContext('admin').firestore(), 'users', 'client'), { name: 'Full admin edit' }));
 });
 
 test('users may edit safe profile fields but not access fields', async () => {
@@ -365,4 +365,76 @@ test('reinvestment requests and message creation are server-only at every browse
   }
   const db = env.authenticatedContext('client').firestore();
   for (const [i, text] of ['', ' \n\t', '\u00a0', 'valid text'].entries()) await assertFails(setDoc(doc(db, 'conversations/conversation/messages/' + i), { senderId: 'client', text }));
+});
+
+
+const safeProfile = { name: 'Synthetic Profile', phoneNumber: '08000000000', address: 'Synthetic valid address', bankName: '', bankAccountName: '', bankAccountNumber: '' };
+
+test('all roles retain validated self-service editing while administrators cannot edit another profile directly', async () => {
+  const actors = ['admin', 'legacy-admin', 'staff', 'owner', 'modern-owner', 'client', 'recovery', 'legal'];
+  await env.withSecurityRulesDisabled(async context => {
+    for (const uid of actors) await setDoc(doc(context.firestore(), 'users', uid), safeProfile, { merge: true });
+  });
+  for (const uid of actors) {
+    const db = env.authenticatedContext(uid).firestore();
+    await assertSucceeds(updateDoc(doc(db, 'users', uid), { ...safeProfile, name: `Edited ${uid}`, fcmTokens: ['synthetic-token'], preferredLanguage: 'ha' }));
+    await assertFails(updateDoc(doc(db, 'users', uid), { name: '' }));
+    await assertFails(updateDoc(doc(db, 'users', uid), { bankAccountNumber: 'invalid' }));
+    await assertFails(updateDoc(doc(db, 'users', uid), { preferredLanguage: 'invalid' }));
+    await assertFails(updateDoc(doc(db, 'users', uid === 'client' ? 'admin' : 'client'), { ...safeProfile, name: 'Forbidden cross-profile edit' }));
+  }
+});
+
+test('protected fields, field removal and mixed updates are denied even for administrators on their own profiles', async () => {
+  const actors = ['admin', 'legacy-admin', 'staff', 'owner', 'modern-owner', 'client'];
+  const defaults = { ...safeProfile, roles: [], personas: [], email: 'before@nal.test', accountType: 'Individual', isMuslim: false,
+    kycStatus: 'SUBMITTED', bvnLast4: '0000', tinLast4: '0000', referralCode: 'before', referredByCode: 'before', balance: 1,
+    lastZakatAssessmentDate: Timestamp.fromMillis(1000), lastZakatPaymentDate: Timestamp.fromMillis(1000), lastZakatFundingNoticeDate: Timestamp.fromMillis(1000), serverOnlyFutureField: 'before' };
+  const originals = new Map();
+  await env.withSecurityRulesDisabled(async context => {
+    for (const uid of actors) {
+      const ref = doc(context.firestore(), 'users', uid); const original = (await getDoc(ref)).data();
+      const data = { ...defaults, ...original, primaryPortal: original.accessRole === 'OWNER' ? 'owner' : ['ADMIN', 'STAFF'].includes(original.accessRole) || uid === 'legacy-admin' ? 'admin' : 'client' };
+      originals.set(uid, data); await setDoc(ref, data);
+    }
+  });
+  for (const uid of actors) {
+    // Stale admin claims must not restore access to protected profile fields.
+    const db = env.authenticatedContext(uid, { role: 'Admin', accessRole: 'ADMIN' }).firestore();
+    const original = originals.get(uid);
+    const mutations = { accessRole: original.accessRole === 'ADMIN' ? 'USER' : 'ADMIN', role: original.role === 'Admin' ? 'Investor' : 'Admin', roles: ['Recovery'],
+      personas: ['MARKETER'], primaryPortal: 'marketer', email: 'after@nal.test', accountType: 'Organization', isMuslim: true, kycStatus: 'VERIFIED',
+      bvnLast4: '1111', tinLast4: '1111', referralCode: 'after', referredByCode: 'after', balance: 2,
+      lastZakatAssessmentDate: Timestamp.fromMillis(2000), lastZakatPaymentDate: Timestamp.fromMillis(2000), lastZakatFundingNoticeDate: Timestamp.fromMillis(2000), serverOnlyFutureField: 'after' };
+    for (const [field, value] of Object.entries(mutations)) {
+      const ref = doc(db, 'users', uid);
+      await assertFails(updateDoc(ref, { [field]: value }));
+      await assertFails(updateDoc(ref, { fcmTokens: ['forged-mixed-update'], [field]: value }));
+      // A legacy profile may lack accessRole; use the other present fields for removal checks.
+      if (field in original) await assertFails(updateDoc(ref, { [field]: deleteField() }));
+    }
+    await assertFails(deleteDoc(doc(db, 'users', uid)));
+    await env.withSecurityRulesDisabled(async context => assert.deepEqual((await getDoc(doc(context.firestore(), 'users', uid))).data(), original));
+  }
+  const anonymous = env.unauthenticatedContext().firestore();
+  await assertFails(updateDoc(doc(anonymous, 'users', 'client'), { ...safeProfile, accessRole: 'ADMIN' }));
+  await assertFails(deleteDoc(doc(anonymous, 'users', 'client')));
+});
+
+test('direct SDK deletion cannot remove the final owner or an ordinary user, including administrator callers', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await updateDoc(doc(db, 'users', 'modern-owner'), { accessRole: 'USER' });
+    assert.equal((await getDocs(query(collection(db, 'users'), where('accessRole', '==', 'OWNER')))).size, 1);
+  });
+  for (const uid of ['admin', 'legacy-admin', 'staff', 'owner', 'client', null]) {
+    const db = uid ? env.authenticatedContext(uid).firestore() : env.unauthenticatedContext().firestore();
+    await assertFails(deleteDoc(doc(db, 'users', 'owner')));
+    await assertFails(deleteDoc(doc(db, 'users', 'client')));
+  }
+  await env.withSecurityRulesDisabled(async context => {
+    const db = context.firestore(); assert.equal((await getDoc(doc(db, 'users', 'owner'))).data().accessRole, 'OWNER');
+    assert.equal((await getDocs(query(collection(db, 'users'), where('accessRole', '==', 'OWNER')))).size, 1);
+    assert.equal((await getDoc(doc(db, 'users', 'client'))).exists(), true);
+  });
 });

@@ -109,9 +109,9 @@ service cloud.firestore {
       // User profiles and access fields are created only by trusted server code.
       allow create: if false;
 
-      // Only the user themself or an Admin can update a user document.
-      allow update: if isAdmin()
-        || (isOwner(userId)
+      // Only validated self-service profile fields may be changed by clients.
+      // Administrative changes use authenticated, audited server workflows.
+      allow update: if (isOwner(userId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'fcmTokens', 'name', 'phoneNumber', 'address', 'bankName',
             'bankAccountName', 'bankAccountNumber', 'photoURL', 'photoStoragePath',
@@ -186,8 +186,8 @@ service cloud.firestore {
             )
           ));
 
-      // Only admins can delete users.
-      allow delete: if isAdmin();
+      // Deletion requires the guarded server workflow, including the final-owner check.
+      allow delete: if false;
     }
 
     // Full BVN, TIN and government-ID values are available only to trusted

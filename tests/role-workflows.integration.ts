@@ -20,6 +20,9 @@ import { startAgreementSigningAction, createExternalSigningInviteAction, submitA
 import { claimRecoveryCaseAction, addRecoveryLogAction, recordRecoveryContactAction, escalateRecoveryCaseAction, updateLegalCaseAction, createDemandNoticeAction, issueDemandNoticeAction, resolveLegalCaseAction } from '../src/app/recovery/dashboard/actions';
 import { lodgePaymentAction } from '../src/app/client/dashboard/actions';
 import { setRoleAction } from '../src/app/signup/role/actions';
+import { updateAccessRoleAction } from '../src/app/admin/users/[userId]/actions';
+import { getAdminUserRecordAction, saveAdminUserRecordAction } from '../src/app/admin/users/[userId]/record-actions';
+import { updateProfileAction } from '../src/components/common-actions';
 import { generateAmortizationSchedule } from '../src/lib/amortization';
 import type { Deal } from '../src/lib/types';
 
@@ -197,4 +200,92 @@ test('blank chat text is rejected without message or notification writes and val
   assert.equal(messages.size, 1);
   assert.equal(messages.docs[0].data().text, text);
   assert.equal((await db.collection('notifications').get()).size, notificationsBefore + 1);
+});
+
+
+test('guarded administrator profile correction preserves access and writes audit history while denying unsupported fields and callers', async () => {
+  const userRef = db.doc('users/client2'); const kycRef = db.doc('userKycProfiles/client2');
+  const original = (await userRef.get()).data()!; const originalKyc = await kycRef.get();
+  const input = { userId: 'client2', reason: 'Synthetic reviewed profile correction', name: 'Corrected Synthetic Client', revision: 0, status: 'SUBMITTED' };
+  try {
+    for (const actor of ['staff', 'owner', 'client']) {
+      assert.equal((await getAdminUserRecordAction(tokens[actor], 'client2')).success, false);
+      assert.equal((await saveAdminUserRecordAction(tokens[actor], input)).success, false);
+    }
+    assert.equal((await saveAdminUserRecordAction('', input)).success, false);
+    assert.equal((await getAdminUserRecordAction(tokens.admin, 'client2')).success, true);
+    const saved = await saveAdminUserRecordAction(tokens.admin, input); assert.equal(saved.success, true, JSON.stringify(saved));
+    const profile = (await userRef.get()).data()!;
+    for (const key of ['role', 'accessRole', 'personas']) assert.deepEqual(profile[key], original[key]);
+    assert.equal(profile.name, input.name);
+    const history = await kycRef.collection('history').get(); assert.equal(history.size, 1);
+    assert.equal(history.docs[0].data().actorId, 'admin'); assert.equal(history.docs[0].data().reason, input.reason);
+    assert.equal(history.docs[0].data().previousProfile.name, original.name);
+    assert.equal((await saveAdminUserRecordAction(tokens.admin, { ...input, revision: 1, accessRole: 'ADMIN' })).success, false);
+    assert.equal((await saveAdminUserRecordAction(tokens.admin, input)).success, false, 'Stale revisions remain rejected');
+    assert.equal((await kycRef.collection('history').get()).size, 1);
+    const selfInput = { authToken: tokens.client2, userId: 'client2', name: 'Synthetic self edit', phoneNumber: '', address: 'Synthetic valid address', bankName: '', bankAccountName: '', bankAccountNumber: '' };
+    assert.equal((await updateProfileAction({ ...selfInput, authToken: tokens.client })).success, false);
+    assert.equal((await updateProfileAction(selfInput)).success, true);
+    assert.deepEqual((await userRef.get()).data()!.personas, original.personas);
+  } finally {
+    await userRef.set(original);
+    await db.recursiveDelete(kycRef); if (originalKyc.exists) await kycRef.set(originalKyc.data()!);
+  }
+});
+
+test('supported server role changes retain final owner, personas, claims and access-change audit', async () => {
+  const auth = getAuth(getAdminApp()); const target = db.doc('users/client2'); const original = (await target.get()).data()!;
+  const oldClaims = (await auth.getUser('client2')).customClaims || {};
+  const audit = () => db.collection('transactions').where('type', '==', 'AccessRoleChange').get();
+  const before = (await audit()).size;
+  const change = (newAccessRole: 'STAFF' | 'USER', authToken = tokens.admin) => updateAccessRoleAction({ authToken, actorId: 'admin', targetUserId: 'client2', newAccessRole });
+  try {
+    assert.equal((await change('STAFF', tokens.staff)).success, false);
+    assert.equal((await change('STAFF', tokens.client)).success, false);
+    assert.equal((await updateAccessRoleAction({ authToken: tokens.admin, actorId: 'client', targetUserId: 'client2', newAccessRole: 'STAFF' })).success, false);
+    assert.equal((await updateAccessRoleAction({ authToken: tokens.admin, actorId: 'admin', targetUserId: 'client2', newAccessRole: 'INVALID' as any })).success, false);
+    const ownerBefore = (await db.doc('users/owner').get()).data();
+    assert.equal((await db.collection('users').where('accessRole', '==', 'OWNER').get()).size, 1);
+    const refusal = await updateAccessRoleAction({ authToken: tokens.admin, actorId: 'admin', targetUserId: 'owner', newAccessRole: 'USER' });
+    assert.equal(refusal.success, false); assert.match(refusal.message, /last owner/);
+    assert.deepEqual((await db.doc('users/owner').get()).data(), ownerBefore);
+    assert.equal((await audit()).size, before);
+    for (const role of ['STAFF', 'USER'] as const) {
+      assert.equal((await change(role)).success, true);
+      const profile = (await target.get()).data()!; const claims = (await auth.getUser('client2')).customClaims!;
+      assert.equal(profile.accessRole, role); assert.deepEqual(profile.personas, original.personas);
+      assert.equal(claims.accessRole, role); assert.deepEqual(claims.personas, original.personas);
+      assert.equal(claims.primaryPortal, profile.primaryPortal);
+    }
+    const rows = (await audit()).docs; assert.equal(rows.length, before + 2);
+    for (const row of rows.slice(before)) { assert.equal(row.data().userId, 'admin'); assert.equal(row.data().amount, 0); }
+  } finally { await target.set(original); await auth.setCustomUserClaims('client2', oldClaims); }
+});
+
+test('existing role-change claims and audit partial-failure limitations remain explicit without weakening final-owner checks', async () => {
+  const auth = getAuth(getAdminApp()); const target = db.doc('users/client2'); const original = (await target.get()).data()!;
+  const oldClaims = (await auth.getUser('client2')).customClaims || {};
+  const countAudit = async () => (await db.collection('transactions').where('type', '==', 'AccessRoleChange').get()).size;
+  const before = await countAudit(); const originalClaimsMethod = auth.setCustomUserClaims;
+  const collectionPrototype = Object.getPrototypeOf(db.collection('transactions')); const originalAdd = collectionPrototype.add;
+  try {
+    auth.setCustomUserClaims = async () => { throw new Error('Synthetic claims service failure'); };
+    const claimsFailure = await updateAccessRoleAction({ authToken: tokens.admin, actorId: 'admin', targetUserId: 'client2', newAccessRole: 'STAFF' });
+    assert.equal(claimsFailure.success, false);
+    assert.equal((await target.get()).data()!.accessRole, 'STAFF', 'Existing transaction commits before claims update');
+    assert.deepEqual((await auth.getUser('client2')).customClaims || {}, oldClaims);
+    assert.equal(await countAudit(), before);
+    auth.setCustomUserClaims = originalClaimsMethod; await target.set(original);
+    collectionPrototype.add = function(data: unknown) { if (this.path === 'transactions') return Promise.reject(new Error('Synthetic audit write failure')); return originalAdd.call(this, data); };
+    const auditFailure = await updateAccessRoleAction({ authToken: tokens.admin, actorId: 'admin', targetUserId: 'client2', newAccessRole: 'STAFF' });
+    assert.equal(auditFailure.success, false);
+    assert.equal((await target.get()).data()!.accessRole, 'STAFF');
+    assert.equal((await auth.getUser('client2')).customClaims!.accessRole, 'STAFF');
+    assert.equal(await countAudit(), before, 'Existing audit write remains separate from profile/claims');
+    assert.equal((await db.doc('users/owner').get()).data()!.accessRole, 'OWNER');
+  } finally {
+    collectionPrototype.add = originalAdd; auth.setCustomUserClaims = originalClaimsMethod;
+    await target.set(original); await auth.setCustomUserClaims('client2', oldClaims);
+  }
 });
