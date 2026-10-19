@@ -1,4 +1,5 @@
-import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { createHash } from 'node:crypto';
+import { FieldPath, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from '@/firebase/admin-app';
 import { assertValidOwnerConfiguration } from '@/lib/owner-accounting';
 
@@ -91,216 +92,254 @@ export async function processOwnerProfitAllocations(options: ProcessOptions = {}
   // state prevents already processed history from permanently occupying the
   // first page and starving later earnings.
   if (!includeHistorical) earningsQuery = earningsQuery.where('ownerAllocationId', '==', null);
-  const txSnapshot = await earningsQuery.orderBy('createdAt', 'asc').limit(limit).get();
-
+  const workLimit = Math.max(1, Math.min(500, Math.floor(limit) || 200));
+  const scanLimit = workLimit * 4;
+  // Bound each invocation while retaining progress across daily runs. A completed
+  // sweep resets the cursor, so transient failures are revisited on the next sweep.
+  // Each date/policy scope keeps separate progress; changing scope starts a new sweep.
+  const scope = createHash('sha256').update(JSON.stringify({ includeHistorical,
+    from: fromDate?.toISOString(), to: toDate?.toISOString(),
+    start: !includeHistorical ? policy.allocationStartDate?.toMillis() : null,
+  })).digest('hex');
+  const checkpointRef = adminDb.doc(`automationCursors/ownerProfit_${scope}`);
+  const checkpoint = (await checkpointRef.get()).data();
+  const lowerBound = [fromDate, !includeHistorical ? policy.allocationStartDate?.toDate() : undefined]
+    .filter((date): date is Date => Boolean(date)).sort((a, b) => b.getTime() - a.getTime())[0];
+  if (lowerBound) earningsQuery = earningsQuery.where('createdAt', '>=', Timestamp.fromDate(lowerBound));
+  if (toDate) earningsQuery = earningsQuery.where('createdAt', '<=', Timestamp.fromDate(toDate));
+  const orderedQuery = earningsQuery.orderBy('createdAt', 'asc').orderBy(FieldPath.documentId(), 'asc');
+  let cursor = checkpoint?.createdAt && checkpoint?.documentId
+    ? { createdAt: checkpoint.createdAt as Timestamp, documentId: String(checkpoint.documentId) } : undefined;
+  let scanned = 0;
+  let exhausted = false;
+  let permanentlyExcluded = 0;
   let processed = 0;
   let skipped = 0;
   let errors = 0;
   const details: string[] = [];
 
-  for (const txDoc of txSnapshot.docs) {
-    const tx = txDoc.data() as any;
+  while (scanned < scanLimit && processed + errors < workLimit && !exhausted) {
+    const pageQuery = cursor ? orderedQuery.startAfter(cursor.createdAt, cursor.documentId) : orderedQuery;
+    const pageSize = Math.min(100, scanLimit - scanned);
+    const page = await pageQuery.limit(pageSize).get();
+    if (page.empty) { exhausted = true; break; }
+    for (const txDoc of page.docs) {
+      if (scanned >= scanLimit || processed + errors >= workLimit) break;
+      scanned++;
+      cursor = { createdAt: txDoc.data().createdAt as Timestamp, documentId: txDoc.id };
+      const tx = txDoc.data() as any;
 
-    try {
-      const amount = Number(tx.amount || 0);
-      const txCreatedAt = tx.createdAt as Timestamp | undefined;
-      if (!txCreatedAt || !Number.isFinite(amount)) {
-        skipped += 1;
-        continue;
-      }
-      if (amount <= 0) {
-        skipped += 1;
-        continue;
-      }
-      if (tx.ownerAllocatable === false) {
-        skipped += 1;
-        continue;
-      }
-      if (tx.ownerAllocationId) {
-        skipped += 1;
-        continue;
-      }
-
-      const txDate = txCreatedAt.toDate();
-      if (fromDate && txDate < fromDate) {
-        skipped += 1;
-        continue;
-      }
-      if (toDate && txDate > toDate) {
-        skipped += 1;
-        continue;
-      }
-      if (!includeHistorical && policy.allocationStartDate && txDate < policy.allocationStartDate.toDate()) {
-        skipped += 1;
-        continue;
-      }
-
-      const distributable = round2((amount * policy.distributablePercent) / 100);
-      const retained = round2(amount - distributable);
-      const distributableKobo = Math.max(0, Math.round(distributable * 100));
-
-      const allocationId = `tx_${txDoc.id}`;
-      const allocated = await adminDb.runTransaction(async (trx) => {
-        const freshTxSnap = await trx.get(txDoc.ref);
-        const freshTx = freshTxSnap.data() as any;
-        if (!freshTxSnap.exists || freshTx?.ownerAllocationId) {
-          return false;
+      try {
+        const amount = Number(tx.amount || 0);
+        const txCreatedAt = tx.createdAt as Timestamp | undefined;
+        if (!txCreatedAt || !Number.isFinite(amount)) {
+          skipped += 1;
+          permanentlyExcluded += 1;
+          continue;
+        }
+        if (amount <= 0) {
+          skipped += 1;
+          permanentlyExcluded += 1;
+          continue;
+        }
+        if (tx.ownerAllocatable === false) {
+          skipped += 1;
+          permanentlyExcluded += 1;
+          continue;
+        }
+        if (tx.ownerAllocationId) {
+          skipped += 1;
+          permanentlyExcluded += 1;
+          continue;
         }
 
-        const allocationRef = adminDb.collection('ownerProfitAllocations').doc(allocationId);
-        const existingAllocation = await trx.get(allocationRef);
-        if (existingAllocation.exists) {
+        const txDate = txCreatedAt.toDate();
+        if (fromDate && txDate < fromDate) {
+          skipped += 1;
+          permanentlyExcluded += 1;
+          continue;
+        }
+        if (toDate && txDate > toDate) {
+          skipped += 1;
+          permanentlyExcluded += 1;
+          continue;
+        }
+        if (!includeHistorical && policy.allocationStartDate && txDate < policy.allocationStartDate.toDate()) {
+          skipped += 1;
+          permanentlyExcluded += 1;
+          continue;
+        }
+
+        const distributable = round2((amount * policy.distributablePercent) / 100);
+        const retained = round2(amount - distributable);
+        const distributableKobo = Math.max(0, Math.round(distributable * 100));
+
+        const allocationId = `tx_${txDoc.id}`;
+        const allocated = await adminDb.runTransaction(async (trx) => {
+          const freshTxSnap = await trx.get(txDoc.ref);
+          const freshTx = freshTxSnap.data() as any;
+          if (!freshTxSnap.exists || freshTx?.ownerAllocationId) {
+            return false;
+          }
+
+          const allocationRef = adminDb.collection('ownerProfitAllocations').doc(allocationId);
+          const existingAllocation = await trx.get(allocationRef);
+          if (existingAllocation.exists) {
+            trx.update(txDoc.ref, {
+              ownerAllocationId: allocationId,
+              ownerAllocationProcessedAt: FieldValue.serverTimestamp(),
+              retainedAmount: retained,
+              distributableAmount: distributable,
+            });
+            return false;
+          }
+
+          // Platform earnings already have cash batches. Transfer that availability
+          // in the same transaction as the owner credits; a ledger adjustment alone
+          // would leave the same cash available to fund deals twice.
+          const platformCash = distributableKobo > 0
+            ? await trx.get(adminDb.collection('fundBatches').where('sourceId', '==', 'platform'))
+            : null;
+          const availableBatches = (platformCash?.docs || [])
+            .filter((doc) => Number(doc.data().remainingAmount) > 0)
+            .sort((a, b) => (a.data().createdAt?.toMillis?.() || 0) - (b.data().createdAt?.toMillis?.() || 0) || a.id.localeCompare(b.id));
+          let cashToTransfer = distributableKobo;
+          const platformCashDeductions: Array<{ fundBatchId: string; amount: number }> = [];
+          for (const batch of availableBatches) {
+            if (cashToTransfer <= 0) break;
+            const availableKobo = Math.round(Number(batch.data().remainingAmount) * 100);
+            if (!Number.isSafeInteger(availableKobo)) throw new Error('Invalid platform cash balance; allocation stopped.');
+            const deductedKobo = Math.min(availableKobo, cashToTransfer);
+            platformCashDeductions.push({ fundBatchId: batch.id, amount: deductedKobo / 100 });
+            cashToTransfer -= deductedKobo;
+          }
+          if (cashToTransfer > 0) throw new Error('Insufficient available platform cash for owner allocation; allocation remains pending.');
+          for (const deduction of platformCashDeductions) {
+            trx.update(adminDb.collection('fundBatches').doc(deduction.fundBatchId), {
+              remainingAmount: round2(Number(platformCash!.docs.find((doc) => doc.id === deduction.fundBatchId)!.data().remainingAmount) - deduction.amount),
+            });
+          }
+
+          let remainingKobo = distributableKobo;
+          const partnerSnapshot: Array<{ userId: string; displayName: string; shareUnits: number; ratio: number; allocatedAmount: number }> = [];
+
+          const sortedPartners = [...partners].sort((a, b) => a.userId.localeCompare(b.userId));
+
+          for (let i = 0; i < sortedPartners.length; i++) {
+            const partner = sortedPartners[i]!;
+            const shareUnits = Number(partner.shareUnits || 0);
+            const ratio = shareUnits / policy.totalShares;
+            let kobo = 0;
+
+            if (i === sortedPartners.length - 1) {
+              kobo = remainingKobo;
+            } else {
+              kobo = Math.floor(distributableKobo * ratio);
+              remainingKobo -= kobo;
+            }
+
+            const allocatedAmount = round2(kobo / 100);
+            if (allocatedAmount <= 0) {
+              partnerSnapshot.push({
+                userId: partner.userId,
+                displayName: partner.displayName,
+                shareUnits,
+                ratio,
+                allocatedAmount: 0,
+              });
+              continue;
+            }
+
+            const fundBatchRef = adminDb.collection('fundBatches').doc();
+            trx.set(fundBatchRef, {
+              sourceId: partner.userId,
+              amount: allocatedAmount,
+              remainingAmount: allocatedAmount,
+              tenureValue: 10,
+              tenureUnit: 'Years',
+              createdAt: txCreatedAt,
+              sourceType: 'OwnerProfitAutoAllocation',
+              allocationId,
+              details: `Owner profit allocation from platform earning ${txDoc.id}`,
+            });
+
+            const partnerTxRef = adminDb.collection('transactions').doc();
+            trx.set(partnerTxRef, {
+              userId: partner.userId,
+              type: 'Deposit',
+              amount: allocatedAmount,
+              createdAt: txCreatedAt,
+              details: `Owner profit allocation (${allocationId})`,
+              ownerAllocatable: false,
+              ownerAllocationId: allocationId,
+              sourceType: 'OwnerProfitAutoAllocation',
+            });
+
+            partnerSnapshot.push({
+              userId: partner.userId,
+              displayName: partner.displayName,
+              shareUnits,
+              ratio,
+              allocatedAmount,
+            });
+          }
+
+          if (distributable > 0) {
+            const distributionTxRef = adminDb.collection('transactions').doc();
+            trx.set(distributionTxRef, {
+              userId: 'platform',
+              type: 'PlatformEarning',
+              amount: -Math.abs(distributable),
+              createdAt: txCreatedAt,
+              details: `Owner profit distribution for source earning ${txDoc.id}`,
+              ownerAllocatable: false,
+              ownerAllocationId: allocationId,
+              platformEarningKind: 'OwnerDistributionAdjustment',
+            });
+          }
+
+          trx.set(allocationRef, {
+            sourceTransactionId: txDoc.id,
+            platformCashDeductions,
+            sourceEarningAmount: amount,
+            retainedAmount: retained,
+            distributableAmount: distributable,
+            policySnapshot: {
+              retainedPercent: policy.retainedPercent,
+              distributablePercent: policy.distributablePercent,
+              totalShares: policy.totalShares,
+            },
+            partnerSnapshot,
+            status: 'Completed',
+            createdAt: FieldValue.serverTimestamp(),
+            sourceCreatedAt: txCreatedAt,
+            includeHistorical,
+          });
+
           trx.update(txDoc.ref, {
             ownerAllocationId: allocationId,
             ownerAllocationProcessedAt: FieldValue.serverTimestamp(),
             retainedAmount: retained,
             distributableAmount: distributable,
           });
-          return false;
-        }
-
-        // Platform earnings already have cash batches. Transfer that availability
-        // in the same transaction as the owner credits; a ledger adjustment alone
-        // would leave the same cash available to fund deals twice.
-        const platformCash = distributableKobo > 0
-          ? await trx.get(adminDb.collection('fundBatches').where('sourceId', '==', 'platform'))
-          : null;
-        const availableBatches = (platformCash?.docs || [])
-          .filter((doc) => Number(doc.data().remainingAmount) > 0)
-          .sort((a, b) => (a.data().createdAt?.toMillis?.() || 0) - (b.data().createdAt?.toMillis?.() || 0) || a.id.localeCompare(b.id));
-        let cashToTransfer = distributableKobo;
-        const platformCashDeductions: Array<{ fundBatchId: string; amount: number }> = [];
-        for (const batch of availableBatches) {
-          if (cashToTransfer <= 0) break;
-          const availableKobo = Math.round(Number(batch.data().remainingAmount) * 100);
-          if (!Number.isSafeInteger(availableKobo)) throw new Error('Invalid platform cash balance; allocation stopped.');
-          const deductedKobo = Math.min(availableKobo, cashToTransfer);
-          platformCashDeductions.push({ fundBatchId: batch.id, amount: deductedKobo / 100 });
-          cashToTransfer -= deductedKobo;
-        }
-        if (cashToTransfer > 0) throw new Error('Insufficient available platform cash for owner allocation; allocation remains pending.');
-        for (const deduction of platformCashDeductions) {
-          trx.update(adminDb.collection('fundBatches').doc(deduction.fundBatchId), {
-            remainingAmount: round2(Number(platformCash!.docs.find((doc) => doc.id === deduction.fundBatchId)!.data().remainingAmount) - deduction.amount),
-          });
-        }
-
-        let remainingKobo = distributableKobo;
-        const partnerSnapshot: Array<{ userId: string; displayName: string; shareUnits: number; ratio: number; allocatedAmount: number }> = [];
-
-        const sortedPartners = [...partners].sort((a, b) => a.userId.localeCompare(b.userId));
-
-        for (let i = 0; i < sortedPartners.length; i++) {
-          const partner = sortedPartners[i]!;
-          const shareUnits = Number(partner.shareUnits || 0);
-          const ratio = shareUnits / policy.totalShares;
-          let kobo = 0;
-
-          if (i === sortedPartners.length - 1) {
-            kobo = remainingKobo;
-          } else {
-            kobo = Math.floor(distributableKobo * ratio);
-            remainingKobo -= kobo;
-          }
-
-          const allocatedAmount = round2(kobo / 100);
-          if (allocatedAmount <= 0) {
-            partnerSnapshot.push({
-              userId: partner.userId,
-              displayName: partner.displayName,
-              shareUnits,
-              ratio,
-              allocatedAmount: 0,
-            });
-            continue;
-          }
-
-          const fundBatchRef = adminDb.collection('fundBatches').doc();
-          trx.set(fundBatchRef, {
-            sourceId: partner.userId,
-            amount: allocatedAmount,
-            remainingAmount: allocatedAmount,
-            tenureValue: 10,
-            tenureUnit: 'Years',
-            createdAt: txCreatedAt,
-            sourceType: 'OwnerProfitAutoAllocation',
-            allocationId,
-            details: `Owner profit allocation from platform earning ${txDoc.id}`,
-          });
-
-          const partnerTxRef = adminDb.collection('transactions').doc();
-          trx.set(partnerTxRef, {
-            userId: partner.userId,
-            type: 'Deposit',
-            amount: allocatedAmount,
-            createdAt: txCreatedAt,
-            details: `Owner profit allocation (${allocationId})`,
-            ownerAllocatable: false,
-            ownerAllocationId: allocationId,
-            sourceType: 'OwnerProfitAutoAllocation',
-          });
-
-          partnerSnapshot.push({
-            userId: partner.userId,
-            displayName: partner.displayName,
-            shareUnits,
-            ratio,
-            allocatedAmount,
-          });
-        }
-
-        if (distributable > 0) {
-          const distributionTxRef = adminDb.collection('transactions').doc();
-          trx.set(distributionTxRef, {
-            userId: 'platform',
-            type: 'PlatformEarning',
-            amount: -Math.abs(distributable),
-            createdAt: txCreatedAt,
-            details: `Owner profit distribution for source earning ${txDoc.id}`,
-            ownerAllocatable: false,
-            ownerAllocationId: allocationId,
-            platformEarningKind: 'OwnerDistributionAdjustment',
-          });
-        }
-
-        trx.set(allocationRef, {
-          sourceTransactionId: txDoc.id,
-          platformCashDeductions,
-          sourceEarningAmount: amount,
-          retainedAmount: retained,
-          distributableAmount: distributable,
-          policySnapshot: {
-            retainedPercent: policy.retainedPercent,
-            distributablePercent: policy.distributablePercent,
-            totalShares: policy.totalShares,
-          },
-          partnerSnapshot,
-          status: 'Completed',
-          createdAt: FieldValue.serverTimestamp(),
-          sourceCreatedAt: txCreatedAt,
-          includeHistorical,
+          return true;
         });
 
-        trx.update(txDoc.ref, {
-          ownerAllocationId: allocationId,
-          ownerAllocationProcessedAt: FieldValue.serverTimestamp(),
-          retainedAmount: retained,
-          distributableAmount: distributable,
-        });
-        return true;
-      });
-
-      if (allocated) {
-        processed += 1;
-        details.push(`Allocated owner profit for transaction ${txDoc.id}.`);
-      } else {
-        skipped += 1;
+        if (allocated) {
+          processed += 1;
+          details.push(`Allocated owner profit for transaction ${txDoc.id}.`);
+        } else {
+          skipped += 1;
+        }
+      } catch (error: any) {
+        errors += 1;
+        details.push(`Error for transaction ${txDoc.id}: ${error?.message || 'Unknown error'}`);
       }
-    } catch (error: any) {
-      errors += 1;
-      details.push(`Error for transaction ${txDoc.id}: ${error?.message || 'Unknown error'}`);
     }
-  }
 
-  return { success: true, processed, skipped, errors, details };
+    if (page.size < pageSize && cursor?.documentId === page.docs.at(-1)?.id) exhausted = true;
+  }
+  if (exhausted) await checkpointRef.delete();
+  else if (cursor) await checkpointRef.set(cursor);
+  return { success: true, processed, skipped, errors, details, scanned, permanentlyExcluded, retryableFailures: errors, hasMore: !exhausted };
 }

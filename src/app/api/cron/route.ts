@@ -4,13 +4,12 @@ import { assertAutomationJobsSucceeded } from '@/lib/automation-result';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/firebase/admin-app';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { differenceInCalendarDays, differenceInDays, isBefore, isEqual } from 'date-fns';
+import { differenceInCalendarDays, isBefore, isEqual } from 'date-fns';
 import { processOwnerProfitAllocations } from '@/lib/server/owner-profit';
 import { notifyAdmins, notifyOperationalTeam, notifyUser } from '@/lib/server/notification-service';
 import { hasPersona } from '@/lib/access-control';
 import { isZakatApplicable } from '@/lib/zakat-eligibility';
-import { calculateInvestorPortfolioValue, roundCurrency } from '@/lib/financial-integrity';
-import { calculateZakatAmount, isZakatDue } from '@/lib/zakat';
+import { assessInvestorZakat } from '@/lib/server/zakat-assessment';
 import { calculateInstallmentOutstanding, deriveAutomatedRecoveryStatus, isClosedRecoveryStatus, recoveryStatusLabel, recoveryTaskId } from '@/lib/recovery';
 import { isRepaymentReminderDue, repaymentReminderText } from '@/lib/repayment-reminders';
 import { prepareWhatsAppReminders } from '@/lib/server/whatsapp-reminder-outbox';
@@ -41,133 +40,21 @@ async function processZakat() {
         const userId = userDoc.id;
 
         try {
-            const lastPayment = user.lastZakatPaymentDate?.toDate();
-            const lastAssessment = user.lastZakatAssessmentDate?.toDate?.() || lastPayment;
-            const firstDepositSnapshot = await adminDb.collection('transactions')
-                .where('userId', '==', userId)
-                .where('type', '==', 'Deposit')
-                .orderBy('createdAt', 'asc')
-                .limit(1)
-                .get();
-            
-            const firstDepositDate = firstDepositSnapshot.empty ? null : firstDepositSnapshot.docs[0].data().createdAt.toDate();
-            if (!isZakatDue({ firstDepositDate, lastAssessmentDate: lastAssessment })) {
+            const result = await assessInvestorZakat(adminDb, userDoc.ref);
+            const zakatAmount = result.amount;
+            if (result.status === 'insufficient') {
                 skippedCount++;
-                continue; // Not yet a year
-            }
-
-            const transactionsSnapshot = await adminDb.collection('transactions').where('userId', '==', userId).get();
-            const portfolioValue = calculateInvestorPortfolioValue(
-                transactionsSnapshot.docs.map((doc) => doc.data())
-            );
-
-            const zakatAmount = calculateZakatAmount(portfolioValue, nisab);
-            if (zakatAmount <= 0) {
-                // An annual assessment below Nisab is complete even though no
-                // payment is due. Record it so the next assessment is annual.
-                await adminDb.runTransaction(async (transaction) => {
-                    const currentUserSnapshot = await transaction.get(userDoc.ref);
-                    if (!currentUserSnapshot.exists || !isZakatApplicable(currentUserSnapshot.data())) return;
-                    const currentUser = currentUserSnapshot.data();
-                    const currentAssessment = currentUser?.lastZakatAssessmentDate?.toDate?.()
-                        || currentUser?.lastZakatPaymentDate?.toDate?.()
-                        || null;
-                    if (isZakatDue({ firstDepositDate, lastAssessmentDate: currentAssessment })) {
-                        transaction.update(userDoc.ref, { lastZakatAssessmentDate: FieldValue.serverTimestamp() });
-                    }
-                });
-                skippedCount++;
-                continue; // Below Nisab threshold
-            }
-            
-            const batchesSnapshot = await adminDb.collection('fundBatches').where('sourceId', '==', userId).get();
-            const investibleBalance = roundCurrency(
-                batchesSnapshot.docs.reduce((sum, doc) => sum + Number(doc.data().remainingAmount || 0), 0)
-            );
-
-            if (investibleBalance < zakatAmount) {
                 details.push(`Skipped Zakat for ${user.name} (${userId}): Insufficient investible balance.`);
-                skippedCount++;
-                const shouldNotify = await adminDb.runTransaction(async (transaction) => {
-                    const currentUserSnapshot = await transaction.get(userDoc.ref);
-                    if (!currentUserSnapshot.exists || !isZakatApplicable(currentUserSnapshot.data())) return false;
-                    const lastNotice = currentUserSnapshot.data()?.lastZakatFundingNoticeDate?.toDate?.() || null;
-                    if (lastNotice && differenceInDays(new Date(), lastNotice) < 7) return false;
-                    transaction.update(userDoc.ref, { lastZakatFundingNoticeDate: FieldValue.serverTimestamp() });
-                    return true;
-                });
-                if (shouldNotify) {
+                if (result.shouldNotify) {
                     const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(zakatAmount);
                     await Promise.allSettled([
-                        notifyUser(
-                            userId,
-                            'Zakat payment requires available funds',
-                            `${formattedAmount} is due for annual Zakat, but your currently investible balance is insufficient. No deduction was made.`,
-                            '/investor/transactions',
-                            'system'
-                        ),
-                        notifyAdmins(
-                            'Zakat payment needs attention',
-                            `${user.name || userId} has ${formattedAmount} due for Zakat but insufficient investible funds. No deduction was made.`,
-                            `/admin/users/${userId}`,
-                            'system'
-                        ),
+                        notifyUser(userId, 'Zakat payment requires available funds', `${formattedAmount} is due for annual Zakat, but your currently investible balance is insufficient. No deduction was made.`, '/investor/transactions', 'system'),
+                        notifyAdmins('Zakat payment needs attention', `${user.name || userId} has ${formattedAmount} due for Zakat but insufficient investible funds. No deduction was made.`, `/admin/users/${userId}`, 'system'),
                     ]);
                 }
                 continue;
             }
-
-            const deducted = await adminDb.runTransaction(async (transaction) => {
-                let amountToDeduct = zakatAmount;
-                const currentUserSnapshot = await transaction.get(userDoc.ref);
-                if (!currentUserSnapshot.exists || !isZakatApplicable(currentUserSnapshot.data())) {
-                    throw new Error('Zakat applies only to investors explicitly registered as Muslim.');
-                }
-
-                // This read is the idempotency guard. If two scheduler attempts overlap,
-                // Firestore retries the loser and it sees that this annual payment is done.
-                const currentUser = currentUserSnapshot.data();
-                const currentLastAssessment = currentUser?.lastZakatAssessmentDate?.toDate?.()
-                    || currentUser?.lastZakatPaymentDate?.toDate?.()
-                    || null;
-                if (!isZakatDue({ firstDepositDate, lastAssessmentDate: currentLastAssessment })) {
-                    return false;
-                }
-
-                const fundBatchesQuery = adminDb.collection('fundBatches').where('sourceId', '==', userId).where('remainingAmount', '>', 0).orderBy('createdAt', 'asc');
-                const userBatches = await transaction.get(fundBatchesQuery);
-                
-                for (const batchDoc of userBatches.docs) {
-                    if (amountToDeduct <= 0) break;
-                    const deduction = roundCurrency(Math.min(amountToDeduct, Number(batchDoc.data().remainingAmount || 0)));
-                    transaction.update(batchDoc.ref, { remainingAmount: FieldValue.increment(-deduction) });
-                    amountToDeduct = roundCurrency(amountToDeduct - deduction);
-                }
-
-                if (amountToDeduct > 0) throw new Error("Full Zakat amount could not be deducted.");
-
-                const zakatTxRef = adminDb.collection('transactions').doc();
-                transaction.set(zakatTxRef, {
-                    userId: userId,
-                    type: 'Zakat',
-                    amount: -zakatAmount,
-                    createdAt: FieldValue.serverTimestamp(),
-                    details: 'Annual Zakat Payment (Automatic)',
-                    metadata: {
-                        rate: 0.025,
-                        nisab,
-                        portfolioValue,
-                        mode: 'automatic',
-                    },
-                });
-
-                transaction.update(userDoc.ref, {
-                    lastZakatAssessmentDate: FieldValue.serverTimestamp(),
-                    lastZakatPaymentDate: FieldValue.serverTimestamp(),
-                    lastZakatFundingNoticeDate: FieldValue.delete(),
-                });
-                return true;
-            });
+            const deducted = result.status === 'paid';
 
             if (!deducted) {
                 skippedCount++;

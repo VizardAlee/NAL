@@ -14,5 +14,5 @@ const env = {
   FIREBASE_CLIENT_EMAIL: '', FIREBASE_PRIVATE_KEY: '', FIREBASE_SERVICE_ACCOUNT_JSON: '', CRON_SECRET: '',
 };
 const result = spawnSync('node', ['-r', './tests/server-action-context.cjs', '--import', 'tsx', '--test',
-  '--test-concurrency=1', 'tests/financial-positive-simulation.integration.ts', 'tests/review-blockers.integration.ts'], { env, stdio: 'inherit' });
+  '--test-concurrency=1', 'tests/financial-positive-simulation.integration.ts', 'tests/review-blockers.integration.ts', 'tests/automation-consistency.integration.ts'], { env, stdio: 'inherit' });
 process.exit(result.status ?? 1);
