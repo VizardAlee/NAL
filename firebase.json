@@ -13,7 +13,8 @@
         "playwright-report",
         "firebase-debug.log",
         "firebase-debug.*.log",
-        "functions"
+        "functions/node_modules",
+        "functions/lib"
       ],
       "alwaysDeployFromSource": true
     }

@@ -4,6 +4,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { adminDb } from '@/firebase/admin-app';
 import { processOwnerProfitAllocations } from '@/lib/server/owner-profit';
+import { transferPlatformFunds } from '@/lib/server/platform-fund-transfer';
 import { verifyAdminWrite } from '@/lib/server/auth';
 
 const ownerPolicySchema = z.object({
@@ -141,4 +142,11 @@ export async function runOwnerProfitAllocationAction(input?: Partial<z.infer<typ
   } catch (error: any) {
     return { success: false, message: error?.message || 'Allocation run failed.' };
   }
+}
+
+/** Current balances, including marketing reservations, are enforced on the server. */
+export async function transferPlatformFundsAction(input: unknown) {
+  const value = z.object({ authToken: z.string().min(1), operationId: z.string().regex(/^[a-zA-Z0-9_-]{8,180}$/), direction: z.enum(['toInvestible', 'fromInvestible']), amount: z.number().finite().positive() }).strict().parse(input);
+  const actor = await verifyAdminWrite(value.authToken);
+  return transferPlatformFunds(adminDb, actor.uid, value);
 }

@@ -47,10 +47,10 @@ test('paused signup, historical reporting, roles, and daily component outcomes r
     assert.equal(stats.data!.totalDealValue, 125);
     const historical = await getMarketerStats({ authToken: token, marketerId: history });
     assert.equal(historical.success, true);
-    assert.equal(historical.data!.referredClientCount, 1);
-    assert.equal(historical.data!.referredInvestorCount, 1);
-    assert.equal(historical.data!.totalInvestorCapital, 250);
-    assert.equal(historical.data!.totalDealValue, 425);
+    assert.equal(historical.data!.referredClientCount, null);
+    assert.equal(historical.data!.referredInvestorCount, null);
+    assert.equal(historical.data!.totalInvestorCapital, null);
+    assert.equal(historical.data!.totalDealValue, 0);
     const legacySignIn = await fetch(`http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: `${legacy}@nal.test`, password: 'Emulator-only-123!', returnSecureToken: true }) });
     const legacyToken = (await legacySignIn.json()).idToken;
     const selfStats = await getMarketerStats({ authToken: legacyToken, marketerId: legacy });

@@ -8,3 +8,5 @@ export * from "./users";
 export * from "./deals";
 export * from "./automation";
 export * from "./legacy-funding";
+
+export * from "./marketing";

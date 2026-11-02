@@ -5,6 +5,8 @@ import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { createServer } from 'node:http';
+import { gzipSync } from 'node:zlib';
 
 const require = createRequire(import.meta.url);
 const fromNext = createRequire(require.resolve('next/package.json'));
@@ -83,5 +85,41 @@ test('Firebase Node gRPC handles optional client certificates without authentica
     for (const client of clients) client.close();
     server.forceShutdown();
     rmSync(dir,{recursive:true,force:true});
+  }
+});
+
+test('the patched image optimizer uses fixed sharp and rasterizes a normal SVG', async () => {
+  const sharp = fromNext('sharp');
+  const [major, minor, patch] = sharp.versions.sharp.split('.').map(Number);
+  assert.ok(major > 0 || minor > 35 || (minor === 35 && patch >= 5), 'GHSA-2464-fhr4-w9xw requires sharp >= 0.35.5');
+  const input = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="#15513b"/></svg>');
+  const output = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  assert.equal(output.info.width, 2);
+  assert.equal(output.info.height, 2);
+  assert.deepEqual([...output.data.subarray(0, 4)], [21, 81, 59, 255]);
+});
+
+
+test('the patched body parser handles normal and corrupt compressed JSON without an unhandled error', async () => {
+  const parse = require('body-parser').json({ limit: '1kb' });
+  const server = createServer((request, response) => parse(request, response, (error?: Error) => {
+    response.statusCode = error ? 400 : 200;
+    response.setHeader('content-type', 'application/json');
+    response.end(JSON.stringify(error ? { invalid: true } : (request as typeof request & { body: unknown }).body));
+  }));
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== 'string');
+    const send = (body: Buffer) => fetch(`http://127.0.0.1:${address.port}`, { method: 'POST', headers: { 'content-type': 'application/json', 'content-encoding': 'gzip' }, body });
+    const normal = gzipSync(Buffer.from('{"ok":true}'));
+    const valid = await send(normal);
+    assert.equal(valid.status, 200);
+    assert.deepEqual(await valid.json(), { ok: true });
+    const invalid = await send(Buffer.concat([normal, Buffer.from('invalid-trailing-gzip-data')]));
+    assert.equal(invalid.status, 400);
+    assert.deepEqual(await invalid.json(), { invalid: true });
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
 });

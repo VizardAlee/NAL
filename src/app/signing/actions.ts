@@ -4,6 +4,7 @@ import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto
 import { headers } from 'next/headers';
 import { z } from 'zod';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { prepareCommissionAccrual } from '@/lib/server/marketing-fund';
 import { adminDb, adminStorageBucket } from '@/firebase/admin-app';
 import { verifyAdminOrOwner, verifyAdminWrite, verifyAuthToken } from '@/lib/server/auth';
 import { normalizeAccessModel, hasPersona } from '@/lib/access-control';
@@ -533,6 +534,9 @@ export async function submitAuthenticatedSignatureAction(input: {
         signatureHash: signatureDigest,
         authenticationMethod: 'firebase-reauthentication',
       };
+      const accrueCommission = status === 'EXECUTED' && envelope.agreementType === 'MURABAHA'
+        ? await prepareCommissionAccrual(transaction, envelope.sourceId, envelope) : () => {};
+      accrueCommission();
       transaction.create(envelopeReference.collection('signatures').doc(validated.data.role), signature);
       transaction.create(envelopeReference.collection('events').doc(), {
         event: 'SIGNATURE_APPLIED', role: validated.data.role, actorUserId: decoded.uid,

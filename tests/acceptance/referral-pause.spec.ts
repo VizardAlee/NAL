@@ -10,11 +10,9 @@ test('no-code marketer sees usable deal reporting without a code prompt or inven
   const later = page.getByRole('button', { name: 'Continue later', exact: true });
   await expect(later).toBeVisible({ timeout: 20000 });
   await later.click();
-  await expect(page.getByText('Referral-code signup is paused', { exact: true })).toBeVisible();
+  await expect(page.getByText('Commission earned', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Copy Code', exact: true })).toHaveCount(0);
-  await expect(page.getByText('Marketer setup incomplete', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Not available', { exact: true })).toBeVisible();
-  await expect(page.getByText('No deals attributed to you yet.', { exact: true })).toBeVisible({ timeout: 30000 });
-  expect(await page.getByText('Unavailable', { exact: true }).count()).toBeGreaterThanOrEqual(3);
+  await expect(page.getByText('No clients assigned to you yet.', { exact: true })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText('No eligible signed commissions yet.', { exact: true })).toBeVisible();
   await page.screenshot({ path: '/tmp/nal-referral-pause-marketer.png', fullPage: true });
 });

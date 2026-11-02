@@ -27,7 +27,7 @@ const inviteSchema = z
     authToken: z.string().min(1),
     email: z.string().email(),
     accessRole: z.enum(['OWNER', 'ADMIN', 'STAFF', 'USER']),
-    personas: z.array(z.enum(['INVESTOR', 'CLIENT', 'LEGAL', 'RECOVERY', 'MARKETER', 'STAFF_MEMBER'])).default([]),
+    personas: z.array(z.enum(['INVESTOR', 'CLIENT', 'LEGAL', 'RECOVERY', 'MARKETER', 'STAFF_MEMBER'])).max(7).default([]),
     primaryPortal: z.enum(['owner', 'admin', 'investor', 'client', 'legal', 'recovery', 'marketer']).optional(),
     accountType: z.enum(['Individual', 'Organization']).default('Individual'),
     isMuslim: z.boolean().optional(),
@@ -50,13 +50,17 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
   message: string;
   inviteLink?: string;
 }> {
+  // Reject oversized collections before validating individual elements.
+  if (Array.isArray(data?.personas) && data.personas.length > 7) {
+    return { success: false, message: 'Invalid invite data.' };
+  }
+  const actor = await verifyAdminWrite(typeof data?.authToken === 'string' ? data.authToken : '');
   const validated = inviteSchema.safeParse(data);
   if (!validated.success) {
     return { success: false, message: 'Invalid invite data.' };
   }
 
   const {
-    authToken,
     email,
     accessRole,
     personas,
@@ -67,7 +71,6 @@ export async function createInviteLinkAction(data: z.infer<typeof inviteSchema>)
     inviterName,
     existingProfileId,
   } = validated.data;
-  const actor = await verifyAdminWrite(authToken);
   if (actor.uid !== inviterId) {
     return { success: false, message: 'Invalid inviter identity.' };
   }
