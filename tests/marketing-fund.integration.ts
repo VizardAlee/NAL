@@ -100,7 +100,16 @@ test('admin-only allocations cannot spend investor cash, cannot overdraft and ar
 test('partial funding and late payment catchup use commission actually paid; duplicates remain idempotent',async()=>{
  await accrue('m-main');await db.doc('repayments/m-receipt').set({dealId:'m-main',clientId:uid('client'),status:'Approved',amount:300000});
  await pay('m-main',20000,'m-payment-partial');let c=await commission('m-main');assert.equal(c.fundedKobo,2000000);assert.equal(c.replenishedKobo,200000);
- await Promise.all([pay('m-main',30000,'m-payment-rest'),pay('m-main',30000,'m-payment-rest')]);
+ const concurrent=await Promise.allSettled([pay('m-main',30000,'m-payment-rest'),pay('m-main',30000,'m-payment-rest')]);
+ assert.ok(concurrent.some(result=>result.status==='fulfilled'),'A duplicate request must commit successfully.');
+ // The emulator can close the losing read transaction with gRPC INVALID_ARGUMENT
+ // instead of ABORTED. Model a client retry with the SAME idempotency key, never
+ // accepting arbitrary failures or relaxing the exact ledger/balance assertions.
+ for(const result of concurrent)if(result.status==='rejected'){
+  assert.equal(result.reason?.code,3);assert.match(String(result.reason?.message),/Transaction is invalid or closed/);
+  assert.equal((await commission('m-main')).fundedKobo,5000000);
+  await pay('m-main',30000,'m-payment-rest');
+ }
  c=await commission('m-main');assert.equal(c.fundedKobo,5000000);assert.equal(c.replenishedKobo,500000);
  await assert.rejects(()=>pay('m-main',1,'m-overpaid-test'),/exceeds/);
  await assert.rejects(()=>pay('m-fixed',1,'m-duplicate-ref','m-payment-rest'),/already been recorded/);
