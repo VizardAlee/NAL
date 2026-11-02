@@ -60,7 +60,8 @@ export async function recordMarketingPayoutAction(input: unknown) {
   await adminDb.runTransaction(async trx => {
     const op = adminDb.doc(`marketingOperations/${value.operationId}`), ref = obligationRef(value.dealId);
     const reference = adminDb.doc(`marketingPayoutReferences/${hash(value.reference.toUpperCase())}`);
-    const [prior, obligation, pool, duplicate] = await Promise.all([trx.get(op), trx.get(ref), trx.get(poolRef()), trx.get(reference)]);
+    // Read the initial documents in one batch instead of competing read streams.
+    const [prior, obligation, pool, duplicate] = await trx.getAll(op, ref, poolRef(), reference);
     const fingerprint = hash(JSON.stringify(payload));
     if (prior.exists) { if (prior.data()?.fingerprint !== fingerprint) throw new Error('Operation ID was already used for different data.'); return; }
     if (duplicate.exists) throw new Error('This external payment reference has already been recorded.');

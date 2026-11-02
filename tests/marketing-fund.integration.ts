@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { Timestamp } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { adminDb as db, getAdminApp } from '../src/firebase/admin-app';
+import { createInviteLinkAction } from '../src/app/admin/users/actions';
 import { transferPlatformFundsAction } from '../src/app/admin/funds/actions';
 import { allocateMarketingFundsAction, recordMarketingPayoutAction, reconcileMarketingReceiptsAction, assignDealMarketerAction, loadMarketingAdminAction } from '../src/app/admin/marketing/actions';
 import { loadMarketerWorkspaceAction, recordMarketerFollowUpAction, getMarketerStats } from '../src/app/marketer/dashboard/actions';
@@ -40,6 +41,15 @@ before(async()=>{
  await db.doc('fundBatches/m-source').set({sourceId:'platform',amount:1000000,remainingAmount:1000000,createdAt:Timestamp.now()});
 });
 after(async()=>{if (functionAdmin.app() !== getAdminApp()) await functionAdmin.app().delete(); await getAdminApp().delete();});
+
+test('onboarding rejects oversized personas before element validation and authorizes before parsing',async()=>{
+ const base={authToken:tokens.admin,email:'invalid-email',accessRole:'USER',personas:[],inviterId:uid('admin'),inviterName:'Fictional admin'};
+ const oversized=new Proxy(new Array(100000),{get(target,key,receiver){if(typeof key==='string'&&/^\d+$/.test(key))throw new Error('Oversized elements must not be visited');return Reflect.get(target,key,receiver);}});
+ assert.equal((await createInviteLinkAction({...base,personas:oversized} as any)).success,false);
+ const untrusted=new Proxy([null],{get(target,key,receiver){if(key==='0')throw new Error('Unprivileged elements must not be visited');return Reflect.get(target,key,receiver);}});
+ await assert.rejects(()=>createInviteLinkAction({...base,authToken:tokens.one,personas:untrusted} as any),/Forbidden/);
+ assert.equal((await createInviteLinkAction(base as any)).success,false);
+});
 
 test('unsigned and historical contracts do not receive retrospective obligations; final signed terms are immutable',async()=>{
  await accrue('m-historical',{marketingCommissionPolicy:0});assert.equal((await db.doc('marketingCommissions/m-historical').get()).exists,false);
@@ -101,15 +111,7 @@ test('partial funding and late payment catchup use commission actually paid; dup
  await accrue('m-main');await db.doc('repayments/m-receipt').set({dealId:'m-main',clientId:uid('client'),status:'Approved',amount:300000});
  await pay('m-main',20000,'m-payment-partial');let c=await commission('m-main');assert.equal(c.fundedKobo,2000000);assert.equal(c.replenishedKobo,200000);
  const concurrent=await Promise.allSettled([pay('m-main',30000,'m-payment-rest'),pay('m-main',30000,'m-payment-rest')]);
- assert.ok(concurrent.some(result=>result.status==='fulfilled'),'A duplicate request must commit successfully.');
- // The emulator can close the losing read transaction with gRPC INVALID_ARGUMENT
- // instead of ABORTED. Model a client retry with the SAME idempotency key, never
- // accepting arbitrary failures or relaxing the exact ledger/balance assertions.
- for(const result of concurrent)if(result.status==='rejected'){
-  assert.equal(result.reason?.code,3);assert.match(String(result.reason?.message),/Transaction is invalid or closed/);
-  assert.equal((await commission('m-main')).fundedKobo,5000000);
-  await pay('m-main',30000,'m-payment-rest');
- }
+ for (const result of concurrent) assert.equal(result.status, 'fulfilled', result.status === 'rejected' ? String(result.reason?.stack || result.reason) : undefined);
  c=await commission('m-main');assert.equal(c.fundedKobo,5000000);assert.equal(c.replenishedKobo,500000);
  await assert.rejects(()=>pay('m-main',1,'m-overpaid-test'),/exceeds/);
  await assert.rejects(()=>pay('m-fixed',1,'m-duplicate-ref','m-payment-rest'),/already been recorded/);
