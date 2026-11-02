@@ -17,7 +17,7 @@ for(const width of [1440,390]) {
   await page.getByLabel('Assigned recovery task').selectOption('m-task');await page.getByLabel('Outcome',{exact:true}).selectOption('PROMISE_TO_PAY');
   await page.getByLabel('Contact notes').fill(`Fictional browser follow-up at ${width}px`);await page.getByLabel('Next follow-up').fill('2027-01-02T11:00');
   await page.getByLabel('Promise amount (only for a promise)').fill('1234.56');await page.getByLabel('Promise due date').fill('2027-01-03T11:00');await page.getByRole('button',{name:'Save follow-up',exact:true}).click();
-  await expect(page.getByRole('status')).toContainText('Follow-up saved',{timeout:30000});
+  await expect(page.getByRole('status').filter({hasText:'Follow-up saved'})).toContainText('Follow-up saved',{timeout:30000});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await page.screenshot({path:`/tmp/nal-marketer-${width}.png`,fullPage:true});
   await page.goto('/admin/marketing');await expect(page).not.toHaveURL(/\/admin\/marketing/,{timeout:30000});
@@ -28,14 +28,14 @@ for(const width of [1440,390]) {
   await expect(page.getByText('Commission unpaid',{exact:true})).toBeVisible();
   await page.getByLabel('Available company fund batch').selectOption('m-source');await page.getByLabel('Allocation amount',{exact:true}).fill('100');
   await page.getByLabel('Source evidence and reason').fill(`Fictional acceptance source at ${width}px`);await page.getByRole('button',{name:'Allocate to marketing pool',exact:true}).click();
-  await expect(page.getByRole('status')).toContainText('No shareholder loan was created',{timeout:30000});
+  await expect(page.getByRole('status').filter({hasText:'No shareholder loan was created'})).toContainText('No shareholder loan was created',{timeout:30000});
   await page.getByLabel('Signed commission',{exact:true}).selectOption('m-fixed');await page.getByLabel('Amount paid',{exact:true}).fill('50');await page.getByLabel('External payment reference',{exact:true}).fill(`FICTIONAL-BROWSER-PAYOUT-${width}`);await page.getByRole('button',{name:'Record verified commission payment',exact:true}).click();
-  await expect(page.getByRole('status')).toContainText('No money transfer was performed',{timeout:30000});
+  await expect(page.getByRole('status').filter({hasText:'No money transfer was performed'})).toContainText('No money transfer was performed',{timeout:30000});
   const assignment=page.getByLabel('Marketer for Fictional Private Other Contract',{exact:true});
   await assignment.selectOption('marketing-one');
-  await expect(page.getByRole('status')).toContainText('Assignment updated',{timeout:30000});
+  await expect(page.getByRole('status').filter({hasText:'Assignment updated'})).toContainText('Assignment updated',{timeout:30000});
   await assignment.selectOption('marketing-two');
-  await expect(page.getByRole('status')).toContainText('Assignment updated',{timeout:30000});
+  await expect(page.getByRole('status').filter({hasText:'Assignment updated'})).toContainText('Assignment updated',{timeout:30000});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await page.screenshot({path:`/tmp/nal-marketing-admin-${width}.png`,fullPage:true});
   await page.goto('/admin/funds');
