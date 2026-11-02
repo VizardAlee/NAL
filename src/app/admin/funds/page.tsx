@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { PageHeader } from "@/components/page-header";
 import { Banknote, History, Landmark, Wallet, PlusCircle, ArrowRightLeft, MinusCircle, HandCoins, Library, PiggyBank, Building, Star, DollarSign, Info, FileText, Zap, ListFilter, Users, Briefcase, Settings, PieChart } from "lucide-react";
 import { useCollection } from "@/firebase/firestore/use-collection";
-import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, getDocs, orderBy, updateDoc } from 'firebase/firestore';
+import { collection, query, where, DocumentData, Timestamp, writeBatch, serverTimestamp, doc, addDoc, orderBy, updateDoc } from 'firebase/firestore';
 import { useFirestore, useUser } from "@/firebase";
 import { useMemo, useState, useEffect, useTransition } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,7 +46,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useDoc } from "@/firebase/firestore/use-doc";
-import { runOwnerProfitAllocationAction, setOwnershipPartnerActiveAction, upsertOwnershipPartnerAction, upsertOwnerProfitPolicyAction } from "./actions";
+import { transferPlatformFundsAction, runOwnerProfitAllocationAction, setOwnershipPartnerActiveAction, upsertOwnershipPartnerAction, upsertOwnerProfitPolicyAction } from "./actions";
 import { canWriteAdmin } from "@/lib/access-control";
 import { getRequiredIdToken } from '@/firebase/auth-token';
 import { MoneyInput } from '@/components/ui/money-input';
@@ -626,7 +627,8 @@ function TransferFundsForm({
 }) {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
-    const firestore = useFirestore();
+    const [operationId, setOperationId] = useState('');
+    useEffect(() => { setOperationId(crypto.randomUUID()); }, []);
 
     const dynamicSchema = transferSchema.extend({
         amount: z.coerce.number().positive().max(maxAmount, { message: "Amount exceeds available balance." }),
@@ -639,64 +641,13 @@ function TransferFundsForm({
 
     async function onSubmit(values: z.infer<typeof dynamicSchema>) {
         setIsLoading(true);
-        if (!firestore) return;
+
 
         const { amount } = values;
 
         try {
-            const batch = writeBatch(firestore);
-            const now = serverTimestamp();
-
-            if (direction === 'toInvestible') {
-                // Move from Admin to Investible
-                // 1. Debit Admin Account
-                const adminTxRef = doc(collection(firestore, "administrativeTransactions"));
-                batch.set(adminTxRef, {
-                    type: 'TransferToInvestible',
-                    amount: -amount,
-                    description: `Transfer to Investible Capital`,
-                    createdAt: now,
-                });
-                // 2. Create a new platform fund batch
-                const fundBatchRef = doc(collection(firestore, "fundBatches"));
-                batch.set(fundBatchRef, {
-                    sourceId: 'platform',
-                    amount: amount,
-                    remainingAmount: amount,
-                    tenureValue: 10,
-                    tenureUnit: 'Years',
-                    createdAt: now,
-                });
-            } else {
-                // Move from Investible to Admin
-                let amountToWithdraw = amount;
-                const fundBatchesQuery = query(collection(firestore, 'fundBatches'), where('sourceId', '==', 'platform'), where('remainingAmount', '>', 0), orderBy('createdAt'));
-                const batchesSnapshot = await getDocs(fundBatchesQuery);
-
-                for (const batchDoc of batchesSnapshot.docs) {
-                    if (amountToWithdraw <= 0) break;
-                    const batchData = batchDoc.data();
-                    const amountToDeduct = Math.min(amountToWithdraw, batchData.remainingAmount);
-
-                    batch.update(batchDoc.ref, { remainingAmount: batchData.remainingAmount - amountToDeduct });
-                    amountToWithdraw -= amountToDeduct;
-                }
-
-                if (amountToWithdraw > 0) {
-                    throw new Error("Insufficient funds in batches to complete transfer.");
-                }
-
-                // 2. Credit Admin Account
-                const adminTxRef = doc(collection(firestore, "administrativeTransactions"));
-                batch.set(adminTxRef, {
-                    type: 'TransferFromInvestible',
-                    amount: amount,
-                    description: `Transfer from Investible Capital`,
-                    createdAt: now,
-                });
-            }
-
-            await batch.commit();
+            await transferPlatformFundsAction({ authToken: await getRequiredIdToken(), operationId, direction, amount });
+            setOperationId(crypto.randomUUID());
             toast({ title: "Success", description: `Transfer of ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount)} completed.` });
             onTransferComplete();
         } catch (error) {
@@ -1323,6 +1274,8 @@ export default function PlatformFundsPage() {
     const ownerAllocationsQuery = useMemo(() => firestore ? query(collection(firestore, 'ownerProfitAllocations')) : null, [firestore]);
 
 
+    const marketingPoolRef = useMemo(() => firestore ? doc(firestore, 'marketingPools', 'main') : null, [firestore]);
+    const { data: marketingPool } = useDoc<{ balanceKobo: number }>(marketingPoolRef);
     const { data: platformFundBatches, loading: platformBatchesLoading } = useCollection<PlatformFundBatch>(platformFundBatchesQuery);
     const { data: adminTransactions, loading: adminTransactionsLoading } = useCollection<AdministrativeTransaction>(adminTransactionsQuery);
     const { data: zakatTransactions, loading: zakatLoading } = useCollection<GenericTransaction>(zakatTransactionsQuery);
@@ -1342,7 +1295,8 @@ export default function PlatformFundsPage() {
     const isLoading = platformBatchesLoading || adminTransactionsLoading || zakatLoading || allFundBatchesLoading || assetsLoading || dealsLoading || repaymentsLoading || earningsLoading || depositsLoading || allocationsLoading;
 
     const metrics = useMemo(() => {
-        const administrativeBalance = adminTransactions?.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0) || 0;
+        const administrativeLedgerBalance = adminTransactions?.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0) || 0;
+        const administrativeBalance = administrativeLedgerBalance - Math.max(0, Number(marketingPool?.balanceKobo || 0)) / 100;
 
         const platformEarnings = earningsTransactions?.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0) || 0;
 
@@ -1397,7 +1351,7 @@ export default function PlatformFundsPage() {
             activeLoanCount,
             totalOwnerAllocated,
         };
-    }, [platformFundBatches, adminTransactions, zakatTransactions, allFundBatches, assets, deals, repayments, earningsTransactions, allInvestorDeposits, interAccountLoans, ownerAllocations]);
+    }, [platformFundBatches, adminTransactions, zakatTransactions, allFundBatches, assets, deals, repayments, earningsTransactions, allInvestorDeposits, interAccountLoans, ownerAllocations, marketingPool]);
 
     const activeInterAccountLoans = useMemo(() => {
         return (interAccountLoans || []).filter((loan) => loan.status === 'Active' && loan.outstanding > 0);
@@ -1462,7 +1416,8 @@ export default function PlatformFundsPage() {
 
     return (
         <div>
-            <PageHeader
+            <Button variant="outline" asChild><Link href="/admin/marketing">Marketing fund and commissions</Link></Button>
+                <PageHeader
                 title="Platform Funds"
                 description="An overview of the platform's internal funds, earnings, and investments."
                 icon={Banknote}

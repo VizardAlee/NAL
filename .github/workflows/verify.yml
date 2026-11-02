@@ -30,6 +30,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run verify
       - run: npm run test:acceptance
+      - run: npm run test:marketing:acceptance
 
   deploy-firebase-backend:
     name: Deploy Firebase backend
@@ -63,7 +64,7 @@ jobs:
         run: >-
           firebase deploy
           --project studio-1298078893-e7941
-          --only functions:createUser,functions:createDeal,functions:autoFundDeal,functions:previewAutoFundDeal,functions:runDailyAutomation,firestore:rules,storage
+          --only functions:createUser,functions:createDeal,functions:autoFundDeal,functions:previewAutoFundDeal,functions:runDailyAutomation,functions:reconcileMarketingReceipt,firestore:rules,storage
           --non-interactive
       - name: Deploy App Hosting frontend
         run: >-

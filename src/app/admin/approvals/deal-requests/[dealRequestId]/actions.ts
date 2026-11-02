@@ -63,6 +63,7 @@ export async function approveDealAction(
         : 0;
       transaction.set(newDealRef, {
         ...validated.data,
+        marketingCommissionPolicy: 1,
         managementFeeAmount,
         managementFeePaid: false,
         agreementSigningRequired: true,

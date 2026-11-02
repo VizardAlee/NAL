@@ -61,8 +61,17 @@ exports.createDeal = (0, https_1.onCall)({
     if (!validated.data.agreementSigningRequired && (!parsedStartDate || parsedStartDate >= new Date())) {
         throw new https_1.HttpsError('failed-precondition', 'Agreement signing can be waived only for a genuinely back-dated deal.');
     }
+    if (restOfData.marketerId) {
+        const marketer = (await admin.firestore().doc(`users/${restOfData.marketerId}`).get()).data();
+        const modern = marketer && ('accessRole' in marketer || 'personas' in marketer);
+        const eligible = modern ? Array.isArray(marketer.personas) && marketer.personas.includes('MARKETER')
+            : marketer?.role === 'Marketer' || marketer?.roles?.includes('Marketer');
+        if (!eligible)
+            throw new https_1.HttpsError('failed-precondition', 'Select an existing marketer.');
+    }
     const dealData = {
         ...restOfData,
+        marketingCommissionPolicy: validated.data.agreementSigningRequired && (!parsedStartDate || parsedStartDate.getTime() >= Date.now() - 86400000) ? 1 : 0,
         principal,
         managementFeeRate,
         managementFeeAmount,

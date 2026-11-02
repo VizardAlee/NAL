@@ -4,6 +4,7 @@ import { recordedInvestmentCapitalLock } from '@/lib/investment-maturity';
 
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { z } from 'zod';
+import { prepareMarketingReplenishment } from '@/lib/server/marketing-fund';
 import { adminDb } from '@/firebase/admin-app';
 import { verifyAdminWrite } from '@/lib/server/auth';
 import { calculateRemainingRepaymentBalance, generateAmortizationSchedule } from '@/lib/amortization';
@@ -226,7 +227,7 @@ export async function processWithdrawalRequestAction(input: DecisionInput) {
 
 export async function processRepaymentRequestAction(input: Omit<DecisionInput, 'specialInvestment'>) {
   const data = parseDecision({ ...input, specialInvestment: false });
-  await verifyAdminWrite(data.authToken);
+  const approver = await verifyAdminWrite(data.authToken);
   await adminDb.runTransaction(async (trx) => {
     const repaymentRef = adminDb.collection('repayments').doc(data.requestId);
     const repaymentSnapshot = await trx.get(repaymentRef);
@@ -294,6 +295,12 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
       investments.map((investment) => investment.weight)
     );
     const now = Timestamp.now();
+    const marketing = await prepareMarketingReplenishment(trx, {
+      dealId: repayment.dealId, actorId: approver.uid, reason: `Approved repayment ${data.requestId}`,
+      receiptOverride: { id: data.requestId, data: { ...repayment, status: 'Approved' } },
+      incomingPlatformKobo: Math.round((allocation.interest - investorProfitPool) * 100), deferInsufficientCash: true,
+    });
+    marketing.write();
     postReceipt();
     for (const [index, item] of investments.entries()) {
       const investmentSnapshot = item.snapshot;
@@ -321,7 +328,7 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
       platformEarningKind: 'Operating', sourceRequestId: data.requestId,
     });
     trx.set(adminDb.collection('fundBatches').doc(), {
-      sourceId: 'platform', amount: platformProfit, remainingAmount: platformProfit, createdAt: now,
+      sourceId: 'platform', amount: platformProfit, remainingAmount: platformProfit - marketing.incomingUsed / 100, createdAt: now,
       tenureValue: 10, tenureUnit: 'Years', sourceRequestId: data.requestId,
     });
     trx.set(adminDb.collection('transactions').doc(), {
@@ -344,7 +351,7 @@ export async function processRepaymentRequestAction(input: Omit<DecisionInput, '
 
 export async function processTerminationRequestAction(input: Omit<DecisionInput, 'specialInvestment'>) {
   const data = parseDecision({ ...input, specialInvestment: false });
-  await verifyAdminWrite(data.authToken);
+  const approver = await verifyAdminWrite(data.authToken);
   let confirmedSettlementAmount: number | null = null;
   await adminDb.runTransaction(async (trx) => {
     const requestRef = adminDb.collection('terminationRequests').doc(data.requestId);
@@ -394,6 +401,13 @@ export async function processTerminationRequestAction(input: Omit<DecisionInput,
       settlement.remainingPrincipal,
       investments.map((investment) => investment.weight)
     );
+    const settlementRef = adminDb.collection('repayments').doc();
+    const marketing = await prepareMarketingReplenishment(trx, {
+      dealId: deal.id, actorId: approver.uid, reason: `Confirmed termination settlement ${data.requestId}`,
+      receiptOverride: { id: settlementRef.id, data: { status: 'Approved', amount: settlement.totalRemaining } },
+      incomingPlatformKobo: Math.round((settlement.remainingProfit - investorProfitPool) * 100), deferInsufficientCash: true,
+    });
+    marketing.write();
     for (const [index, item] of investments.entries()) {
       const investmentSnapshot = item.snapshot;
       const investment = item.data;
@@ -421,7 +435,7 @@ export async function processTerminationRequestAction(input: Omit<DecisionInput,
         platformEarningKind: 'Operating', sourceRequestId: data.requestId,
       });
       trx.set(adminDb.collection('fundBatches').doc(), {
-        sourceId: 'platform', amount: platformProfit, remainingAmount: platformProfit, createdAt: now,
+        sourceId: 'platform', amount: platformProfit, remainingAmount: platformProfit - marketing.incomingUsed / 100, createdAt: now,
         tenureValue: 10, tenureUnit: 'Years', sourceRequestId: data.requestId,
       });
     }
@@ -430,7 +444,7 @@ export async function processTerminationRequestAction(input: Omit<DecisionInput,
         trx.update(snapshot.ref, { status: 'Cancelled', processedAt: now });
       }
     }
-    trx.set(adminDb.collection('repayments').doc(), {
+    trx.set(settlementRef, {
       dealId: deal.id,
       clientId: deal.clientId,
       amount: settlement.totalRemaining,

@@ -10,6 +10,7 @@ import { getOutstandingDealAgreements } from '@/lib/server/agreement-eligibility
 import { requiresManagementFee } from '@/lib/workflow-eligibility';
 import { agreementEnvelopeId } from '@/lib/agreements/signing';
 import { requiredDealAgreementTypes } from '@/lib/workflow-eligibility';
+import { hasPersona } from '@/lib/access-control';
 import { prepareReceiptPosting } from '@/lib/server/receipt-posting';
 
 const formSchema = z.object({
@@ -72,7 +73,9 @@ export async function createDealAction(authToken: string, clientName: string, va
     const managementFeeAmount = validated.data.requiresManagementFee ? (principal * managementFeeRate) / 100 : 0;
 
     try {
+        if (restOfData.marketerId && !hasPersona((await adminDb.doc(`users/${restOfData.marketerId}`).get()).data(), 'MARKETER')) throw new Error('Select an existing marketer.');
         const dealRef = await adminDb.collection('deals').add({
+            marketingCommissionPolicy: validated.data.agreementSigningRequired && (!startDate || startDate.getTime() >= Date.now() - 86400000) ? 1 : 0,
             ...restOfData,
             clientName,
             createdBy: authorizedUserId,
@@ -125,18 +128,19 @@ export async function updateDealAction(authToken: string, dealId: string, client
 
     try {
         const dealRef = adminDb.collection('deals').doc(dealId);
-        const existing = await dealRef.get();
-        if (!existing.exists) return { success: false, message: 'Deal not found.' };
-        const newlyWaived = existing.data()?.agreementSigningRequired !== false && validated.data.agreementSigningRequired === false;
-        await dealRef.update({
-            ...restOfData,
-            principal,
-            managementFeeRate,
-            managementFeeAmount,
-            clientName, // Keep client name in sync
+        await adminDb.runTransaction(async transaction => {
+          const existing = await transaction.get(dealRef);
+          if (!existing.exists) throw new Error('Deal not found.');
+          const signing = await transaction.get(adminDb.collection('agreementEnvelopes').doc(agreementEnvelopeId('MURABAHA', dealId)));
+          if (signing.exists) throw new Error('Contract signing has started. Use Marketing assignments to reassign recovery access; signed terms cannot be edited.');
+          if (restOfData.marketerId && !hasPersona((await transaction.get(adminDb.doc(`users/${restOfData.marketerId}`))).data(), 'MARKETER')) throw new Error('Select an existing marketer.');
+          const newlyWaived = existing.data()?.agreementSigningRequired !== false && validated.data.agreementSigningRequired === false;
+          transaction.update(dealRef, {
+            ...restOfData, principal, managementFeeRate, managementFeeAmount, clientName,
             agreementSigningWaived: validated.data.agreementSigningRequired === false,
             ...(newlyWaived ? { agreementSigningWaivedBy: authorized.uid, agreementSigningWaivedAt: FieldValue.serverTimestamp() } : {}),
-            startDate: validated.data.startDate ? validated.data.startDate : FieldValue.serverTimestamp()
+            startDate: validated.data.startDate || existing.data()?.startDate || FieldValue.serverTimestamp(),
+          });
         });
 
         revalidatePath('/admin/deals');

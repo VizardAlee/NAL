@@ -185,7 +185,9 @@ test('non-admin users cannot write financial ledgers', async () => {
   const adminDb = env.authenticatedContext('admin').firestore();
   await assertFails(setDoc(doc(clientDb, 'fundBatches', 'forged'), { sourceId: 'client', remainingAmount: 999999 }));
   await assertFails(setDoc(doc(adminDb, 'fundBatches', 'investor-bypass'), { sourceId: 'client', remainingAmount: 100 }));
-  await assertSucceeds(setDoc(doc(adminDb, 'fundBatches', 'platform'), { sourceId: 'platform', remainingAmount: 100 }));
+  await assertFails(setDoc(doc(adminDb, 'fundBatches', 'platform'), { sourceId: 'platform', remainingAmount: 100 }));
+  await env.withSecurityRulesDisabled(async context => setDoc(doc(context.firestore(), 'fundBatches', 'platform'), { sourceId: 'platform', remainingAmount: 40 }));
+  await assertFails(updateDoc(doc(adminDb, 'fundBatches', 'platform'), { remainingAmount: 20 }));
   await assertFails(setDoc(doc(adminDb, 'investments', 'bypass'), { investorId: 'client', dealId: 'deal' }));
   await assertFails(setDoc(doc(adminDb, 'transactions', 'deposit-bypass'), { userId: 'client', type: 'Deposit', amount: 100 }));
   await assertSucceeds(setDoc(doc(adminDb, 'transactions', 'earning'), { userId: 'platform', type: 'PlatformEarning', amount: 100 }));
@@ -450,4 +452,19 @@ test('role recovery intents remain server-only even for administrator clients', 
     await assertFails(setDoc(doc(db,'roleChangeOperations','client'),{status:'COMPLETE'}));
     await assertFails(deleteDoc(doc(db,'roleChangeOperations','client')));
   }
+});
+
+test('marketers cannot read full deal, client, commission, pool or recovery documents through direct APIs',async()=>{
+  await env.withSecurityRulesDisabled(async context=>{
+    const db=context.firestore();
+    await setDoc(doc(db,'users','marketer'),{accessRole:'USER',personas:['MARKETER']});
+    await setDoc(doc(db,'deals','marketing-assigned'),{marketerId:'marketer',clientId:'client',investments:[{investorId:'private-investor'}]});
+    await setDoc(doc(db,'marketingPools','main'),{balanceKobo:500000});
+    await setDoc(doc(db,'marketingCommissions','marketing-assigned'),{marketerId:'marketer',earnedKobo:50000});
+    await setDoc(doc(db,'recoveryTasks','marketing-task'),{dealId:'marketing-assigned',clientId:'client',status:'OVERDUE',assigneeId:null});
+  });
+  const db=env.authenticatedContext('marketer').firestore();
+  for(const path of ['deals/marketing-assigned','users/client','marketingPools/main','marketingCommissions/marketing-assigned','recoveryTasks/marketing-task'])await assertFails(getDoc(doc(db,path)));
+  await assertFails(getDocs(query(collection(db,'deals'),where('marketerId','==','marketer'))));
+  await assertFails(setDoc(doc(db,'marketingOperations','forged'),{kind:'COMMISSION_PAYMENT',amountKobo:100}));
 });

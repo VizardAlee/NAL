@@ -242,7 +242,7 @@ service cloud.firestore {
     match /deals/{dealId} {
         // Admins, Investors, and Legal can list all deals. Marketers can see deals they are linked to.
         // Clients can see deals they are associated with.
-        allow list: if canAdminRead() || isInvestor() || (isMarketer() && resource.data.marketerId == request.auth.uid) || (isClient() && resource.data.clientId == request.auth.uid);
+        allow list: if canAdminRead() || isInvestor() || (isClient() && resource.data.clientId == request.auth.uid);
         
         // Admins, Investors, Legal can get any single deal.
         // Clients can only get deals they are associated with.
@@ -251,6 +251,15 @@ service cloud.firestore {
         // Contractual and financial deal transitions run only through trusted server actions.
         allow create, update, delete: if false;
     }
+
+    match /platformFundTransfers/{id} { allow read, write: if false; }
+    match /marketingPools/{id} { allow read: if canAdminRead(); allow write: if false; }
+    match /marketingCommissions/{id} {
+      allow read, write: if false;
+      match /{nested=**} { allow read, write: if false; }
+    }
+    match /marketingOperations/{id} { allow read, write: if false; }
+    match /marketingPayoutReferences/{id} { allow read, write: if false; }
 
     // Rules for the 'dealRequests' collection
     match /dealRequests/{dealRequestId} {
@@ -284,9 +293,9 @@ service cloud.firestore {
     // Rules for 'fundBatches' and 'transactions'
     match /fundBatches/{batchId} {
         // Investor batches are created only after the signed-deposit workflow.
-        // Browser admins retain only the existing platform-capital transfer workflow.
-        allow create: if isAdmin() && request.resource.data.sourceId == 'platform';
-        allow update: if isAdmin() && resource.data.sourceId == 'platform' && request.resource.data.sourceId == 'platform';
+        // Platform capital transfers also use current-balance server transactions.
+        allow create: if false;
+        allow update: if false;
         allow delete: if false;
         // Investor can read their own fund batches, Admins can read all.
         allow read: if canAdminRead() || (isInvestor() && resource.data.sourceId == request.auth.uid);

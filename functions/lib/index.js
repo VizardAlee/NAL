@@ -21,4 +21,5 @@ __exportStar(require("./users"), exports);
 __exportStar(require("./deals"), exports);
 __exportStar(require("./automation"), exports);
 __exportStar(require("./legacy-funding"), exports);
+__exportStar(require("./marketing"), exports);
 //# sourceMappingURL=index.js.map
